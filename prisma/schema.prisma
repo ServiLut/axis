@@ -1,0 +1,858 @@
+generator client {
+  provider = "prisma-client"
+  output   = "./generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Tenant {
+  id                                                      Int                              @id @default(autoincrement())
+  nombre                                                  String
+  createdAt                                               DateTime                         @default(now())
+  updatedAt                                               DateTime                         @updatedAt
+  correo                                                  String?
+  nit                                                     String?
+  numero                                                  String?
+  pagina                                                  String?
+  Anticipos                                               Anticipos[]
+  auditorias                                              Auditoria[]
+  CitasPsicologos                                         CitasPsicologos[]
+  clientes                                                Cliente[]
+  consignacionesEfectivo                                  ConsignacionEfectivo[]
+  cuentasCobro                                            CuentaCobro[]
+  CuentasPago                                             CuentasPago[]
+  declaracionesEfectivo                                   DeclaracionEfectivo[]
+  direcciones                                             Direccion[]
+  Egresos                                                 Egresos[]
+  empresas                                                Empresa[]
+  EstadoServicio                                          EstadoServicio[]
+  geolocalizaciones                                       Geolocalizacion[]
+  metodosPago                                             MetodoPago[]
+  nominas                                                 Nomina[]
+  ordenesServicio                                         OrdenServicio[]
+  PaqueteAdquirido                                        PaqueteAdquirido[]
+  permisos                                                Permiso[]
+  PicoPlaca                                               PicoPlaca[]
+  ProductosFumigacion                                     ProductosFumigacion[]
+  ProductosFumigacionSolicitados                          ProductosFumigacionSolicitados[]
+  Proveedores                                             Proveedores[]
+  servicios                                               Servicio[]
+  TerapiasPsicologos_TerapiasPsicologos_tenantIdToEmpresa TerapiasPsicologos[]             @relation("TerapiasPsicologos_tenantIdToEmpresa")
+  tiposServicios                                          TipoServicio[]
+  turnos                                                  Turno[]
+  usuarios                                                Usuario[]
+  vehiculos                                               Vehiculo[]
+  zonas                                                   Zona[]
+  consultorios                                            consultorios[]
+
+  @@map("Tenant")
+}
+
+model Zona {
+  id        Int             @id @default(autoincrement())
+  tenantId  Int
+  nombre    String
+  estado    Boolean         @default(true)
+  deletedAt DateTime?
+  ordenes   OrdenServicio[]
+  tenant    Tenant          @relation(fields: [tenantId], references: [id])
+
+  @@map("Zona")
+}
+
+model Empresa {
+  id                                                       Int                  @id @default(autoincrement())
+  nombre                                                   String
+  tenantId                                                 Int
+  createdAt                                                DateTime             @default(now())
+  estado                                                   Boolean?             @default(true)
+  CitasPsicologos                                          CitasPsicologos[]
+  clientes                                                 Cliente[]
+  tenant                                                   Tenant               @relation(fields: [tenantId], references: [id])
+  EstadoServicio                                           EstadoServicio[]
+  MetodoPago                                               MetodoPago[]
+  ordenesServicio                                          OrdenServicio[]
+  servicios                                                Servicio[]
+  TerapiasPsicologos_TerapiasPsicologos_empresaIdToEmpresa TerapiasPsicologos[] @relation("TerapiasPsicologos_empresaIdToEmpresa")
+  TipoServicio                                             TipoServicio[]
+  usuarios                                                 Usuario[]
+  consultorios                                             consultorios[]
+
+  @@map("Empresa")
+}
+
+model Usuario {
+  id                                                   Int                              @id @default(autoincrement())
+  tenantId                                             Int
+  username                                             String                           @unique
+  email                                                String                           @unique
+  password                                             String
+  activo                                               Boolean                          @default(true)
+  nombre                                               String
+  apellido                                             String
+  telefono                                             String?
+  tipoDocumento                                        String?
+  numeroDocumento                                      String?                          @unique
+  rol                                                  Rol?
+  empresaId                                            Int?
+  createdAt                                            DateTime                         @default(now())
+  aprobado                                             Boolean?                         @default(false)
+  numberId                                             String?
+  whatsappGroupId                                      String?
+  pushToken                                            String?
+  placa                                                String?
+  moto                                                 Boolean?
+  codigoReferido                                       String?
+  Anticipos                                            Anticipos[]
+  auditorias                                           Auditoria[]
+  CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario CitasPsicologos[]                @relation("CitasPsicologos_creadoPorIdToUsuario")
+  CitasPsicologos_CitasPsicologos_psicologoIdToUsuario CitasPsicologos[]                @relation("CitasPsicologos_psicologoIdToUsuario")
+  Cliente                                              Cliente[]
+  ConfiguracionPagos                                   ConfiguracionPagos[]
+  consignacionesCreadas                                ConsignacionEfectivo[]           @relation("ConsignacionCreador")
+  consignacionesTecnico                                ConsignacionEfectivo[]           @relation("ConsignacionTecnico")
+  cuentasCobro                                         CuentaCobro[]
+  CuentasPago                                          CuentasPago[]
+  declaracionesEfectivo                                DeclaracionEfectivo[]
+  Egresos                                              Egresos[]
+  geolocalizaciones                                    Geolocalizacion[]
+  nominas                                              Nomina[]
+  serviciosCreados                                     OrdenServicio[]                  @relation("ServiciosCreados")
+  serviciosAsignados                                   OrdenServicio[]                  @relation("ServiciosAsignados")
+  PaqueteAdquirido                                     PaqueteAdquirido[]
+  permisosAprobados                                    Permiso[]                        @relation("PermisosAprobados")
+  permisosSolicitados                                  Permiso[]                        @relation("PermisosSolicitados")
+  ProductosFumigacionSolicitados                       ProductosFumigacionSolicitados[]
+  referidos                                            Referidos[]
+  SesionActividad                                      SesionActividad[]
+  turnos                                               Turno[]
+  empresa                                              Empresa?                         @relation(fields: [empresaId], references: [id])
+  tenant                                               Tenant                           @relation(fields: [tenantId], references: [id])
+
+  @@map("Usuario")
+}
+
+model Cliente {
+  id                Int                @id @default(autoincrement())
+  tenantId          Int
+  nombre            String?
+  apellido          String?
+  telefono          String
+  correo            String?
+  empresaId         Int?
+  createdAt         DateTime           @default(now())
+  numeroDocumento   String?
+  tipoDocumento     String?
+  deletedAt         DateTime?
+  creadoPorId       Int?
+  telefono2         String?
+  registroDocumento String?
+  documentoPath     String?
+  CitasPsicologos   CitasPsicologos[]
+  Usuario           Usuario?           @relation(fields: [creadoPorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  empresa           Empresa?           @relation(fields: [empresaId], references: [id])
+  tenant            Tenant             @relation(fields: [tenantId], references: [id])
+  direcciones       Direccion[]
+  servicios         OrdenServicio[]
+  PaqueteAdquirido  PaqueteAdquirido[]
+  vehiculos         Vehiculo[]
+
+  @@index([tenantId, numeroDocumento], map: "idx_cliente_busqueda")
+  @@index([tenantId, nombre, apellido], map: "idx_cliente_nombres")
+  @@map("Cliente")
+}
+
+model Vehiculo {
+  id              Int             @id @default(autoincrement())
+  tenantId        Int
+  clienteId       Int
+  placa           String
+  marca           String?
+  modelo          String?
+  color           String?
+  tipo            String?
+  createdAt       DateTime        @default(now())
+  ordenesServicio OrdenServicio[]
+  cliente         Cliente         @relation(fields: [clienteId], references: [id])
+  tenant          Tenant          @relation(fields: [tenantId], references: [id])
+
+  @@map("Vehiculo")
+}
+
+model Direccion {
+  id              Int             @id @default(autoincrement())
+  tenantId        Int
+  clienteId       Int
+  direccion       String
+  piso            String?
+  bloque          String?
+  unidad          String?
+  barrio          String?
+  municipio       String?
+  createdAt       DateTime        @default(now())
+  linkMaps        String?
+  cliente         Cliente         @relation(fields: [clienteId], references: [id])
+  tenant          Tenant          @relation(fields: [tenantId], references: [id])
+  ordenesServicio OrdenServicio[]
+
+  @@map("Direccion")
+}
+
+model Servicio {
+  id                                                     Int               @id @default(autoincrement())
+  tenantId                                               Int
+  nombre                                                 String
+  activo                                                 Boolean           @default(true)
+  empresaId                                              Int?
+  deleteAt                                               DateTime?         @db.Timestamptz(6)
+  CitasPsicologos_CitasPsicologos_servicioIdToServicio   CitasPsicologos[] @relation("CitasPsicologos_servicioIdToServicio")
+  CitasPsicologos_CitasPsicologos_tipoServicioToServicio CitasPsicologos[] @relation("CitasPsicologos_tipoServicioToServicio")
+  ordenes                                                OrdenServicio[]
+  empresa                                                Empresa?          @relation(fields: [empresaId], references: [id])
+  tenant                                                 Tenant            @relation(fields: [tenantId], references: [id])
+
+  @@map("Servicio")
+}
+
+model TipoServicio {
+  id        Int             @id @default(autoincrement())
+  tenantId  Int
+  nombre    String
+  activo    Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  empresaId Int?
+  ordenes   OrdenServicio[]
+  Empresa   Empresa?        @relation(fields: [empresaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tenant    Tenant          @relation(fields: [tenantId], references: [id])
+
+  @@map("TipoServicio")
+}
+
+model OrdenServicio {
+  id                    Int                  @id @default(autoincrement())
+  tenantId              Int
+  clienteId             Int
+  servicioId            Int
+  creadoPorId           Int?
+  tecnicoId             Int?
+  direccionId           Int?
+  direccionTexto        String
+  piso                  String?
+  bloque                String?
+  unidad                String?
+  barrio                String?
+  municipio             String?
+  departamento          String?
+  tipoServicioId        Int?
+  fechaVisita           DateTime?
+  horaInicio            DateTime?
+  horaFin               DateTime?
+  observacion           String?
+  nivelInfestacion      String?
+  condicionesHigiene    String?
+  condicionesLocal      String?
+  valorCotizado         Decimal?
+  valorPagado           Decimal?
+  valorRepuestos        Decimal?             @default(0)
+  metodoPagoId          Int?
+  numeroOrden           String?
+  empresaId             Int?
+  createdAt             DateTime             @default(now())
+  zonaId                Int?
+  estadoServicioId      Int
+  vehiculoId            Int?
+  facturaPath           String?
+  ordenPadreId          Int?
+  seguimientoRevisado   Boolean?             @default(false)
+  facturaElectronica    String?
+  linkMaps              String?
+  comprobantePago       String?
+  valorRepuestosTecnico Decimal?             @default(0)
+  evidenciaPath         String?
+  estadoPago            EstadoPagoOrden      @default(PENDIENTE)
+  observacionFinal      String?
+  consignacionOrden     ConsignacionOrden?
+  declaracionEfectivo   DeclaracionEfectivo?
+  geolocalizaciones     Geolocalizacion[]
+  nominaDetalles        NominaDetalle[]
+  cliente               Cliente              @relation(fields: [clienteId], references: [id])
+  creadoPor             Usuario?             @relation("ServiciosCreados", fields: [creadoPorId], references: [id])
+  direccion             Direccion?           @relation(fields: [direccionId], references: [id])
+  empresa               Empresa?             @relation(fields: [empresaId], references: [id])
+  estadoServicio        EstadoServicio       @relation(fields: [estadoServicioId], references: [id])
+  metodoPago            MetodoPago?          @relation(fields: [metodoPagoId], references: [id])
+  ordenPadre            OrdenServicio?       @relation("OrdenRefuerzo", fields: [ordenPadreId], references: [id])
+  ordenesHijas          OrdenServicio[]      @relation("OrdenRefuerzo")
+  servicio              Servicio             @relation(fields: [servicioId], references: [id])
+  tecnico               Usuario?             @relation("ServiciosAsignados", fields: [tecnicoId], references: [id])
+  tenant                Tenant               @relation(fields: [tenantId], references: [id])
+  tipoServicio          TipoServicio?        @relation(fields: [tipoServicioId], references: [id])
+  vehiculo              Vehiculo?            @relation(fields: [vehiculoId], references: [id])
+  zona                  Zona?                @relation(fields: [zonaId], references: [id])
+
+  @@index([clienteId], map: "idx_orden_cliente")
+  @@index([empresaId], map: "idx_orden_empresa")
+  @@index([estadoServicioId], map: "idx_orden_estado")
+  @@index([tenantId, numeroOrden], map: "idx_orden_numero")
+  @@index([tecnicoId], map: "idx_orden_tecnico")
+  @@index([tenantId, fechaVisita(sort: Desc)], map: "idx_orden_tenant_fecha")
+  @@index([tenantId, id(sort: Desc)], map: "idx_orden_tenant_id")
+  @@index([tipoServicioId], map: "idx_orden_tipo")
+  @@map("OrdenServicio")
+}
+
+model Geolocalizacion {
+  id          Int           @id @default(autoincrement())
+  tenantId    Int
+  usuarioId   Int
+  ordenId     Int
+  latitud     Decimal?
+  longitud    Decimal?
+  llegada     DateTime
+  salida      DateTime?
+  createdAt   DateTime      @default(now())
+  fotoLlegada String?
+  fotoSalida  String?
+  linkMaps    String?
+  orden       OrdenServicio @relation(fields: [ordenId], references: [id])
+  tenant      Tenant        @relation(fields: [tenantId], references: [id])
+  usuario     Usuario       @relation(fields: [usuarioId], references: [id])
+
+  @@map("Geolocalizacion")
+}
+
+model MetodoPago {
+  id        Int             @id @default(autoincrement())
+  tenantId  Int
+  nombre    String
+  activo    Boolean         @default(true)
+  empresaId Int?
+  createdAt DateTime?       @db.Timestamptz(6)
+  Empresa   Empresa?        @relation(fields: [empresaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tenant    Tenant          @relation(fields: [tenantId], references: [id])
+  ordenes   OrdenServicio[]
+
+  @@map("MetodoPago")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model EstadoServicio {
+  id        Int             @id @default(autoincrement())
+  tenantId  Int
+  nombre    String
+  activo    Boolean
+  empresaId Int
+  createdAt DateTime        @default(now()) @db.Timestamptz(6)
+  Empresa   Empresa         @relation(fields: [empresaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Tenant    Tenant          @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ordenes   OrdenServicio[]
+
+  @@map("EstadoServicio")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model PicoPlaca {
+  id         Int      @id @default(autoincrement())
+  tenantId   Int?
+  dia        String?
+  numeroUno  Int?
+  numeroDos  Int?
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  activo     Boolean? @default(true)
+  Tenant     Tenant?  @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("PicoPlaca")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ConfiguracionPagos {
+  id                 Int       @id @default(autoincrement())
+  usuarioId          Int?
+  tipo               TipoPago?
+  valorParticipacion Float?
+  salarioBase        Float?
+  created_at         DateTime  @default(now()) @db.Timestamptz(6)
+  Usuario            Usuario?  @relation(fields: [usuarioId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("ConfiguracionPagos")
+}
+
+model Nomina {
+  id                 Int             @id @default(autoincrement())
+  tenantId           Int
+  usuarioId          Int
+  fechaInicio        DateTime
+  fechaFin           DateTime
+  fechaGeneracion    DateTime        @default(now())
+  totalServicios     Int
+  totalValorPagado   Decimal         @db.Decimal(12, 2)
+  totalRepuestos     Decimal         @db.Decimal(12, 2)
+  totalIva           Decimal         @default(0) @db.Decimal(12, 2)
+  baseComisionable   Decimal         @db.Decimal(12, 2)
+  porcentajeAplicado Decimal?        @db.Decimal(5, 2)
+  salarioFijo        Decimal?        @db.Decimal(12, 2)
+  totalPagar         Decimal         @db.Decimal(12, 2)
+  estado             EstadoNomina    @default(BORRADOR)
+  observaciones      String?
+  tenant             Tenant          @relation(fields: [tenantId], references: [id])
+  usuario            Usuario         @relation(fields: [usuarioId], references: [id])
+  detalles           NominaDetalle[]
+
+  @@map("Nomina")
+}
+
+model NominaDetalle {
+  id            Int              @id @default(autoincrement())
+  nominaId      Int
+  ordenId       Int?
+  valorServicio Decimal          @db.Decimal(12, 2)
+  citaId        BigInt?
+  cita          CitasPsicologos? @relation(fields: [citaId], references: [id])
+  nomina        Nomina           @relation(fields: [nominaId], references: [id])
+  orden         OrdenServicio?   @relation(fields: [ordenId], references: [id])
+
+  @@map("NominaDetalle")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Anticipos {
+  id             BigInt                @id(map: "adelantos_pkey") @default(autoincrement())
+  tenantId       Int?
+  usuarioId      Int?
+  monto          Float?
+  razon          String?
+  created_at     DateTime              @default(now()) @db.Timestamptz(6)
+  consignacionId Int?
+  Consignacion   ConsignacionEfectivo? @relation(fields: [consignacionId], references: [id])
+  Tenant         Tenant?               @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "adelantos_tenantId_fkey")
+  Usuario        Usuario?              @relation(fields: [usuarioId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "adelantos_usuarioId_fkey")
+
+  @@map("Anticipos")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model CuentasPago {
+  id           BigInt    @id @default(autoincrement())
+  tenantId     Int?
+  userId       Int?
+  banco        String?
+  tipoCuenta   String?
+  numeroCuenta String?
+  valorHora    Float?
+  createdAt    DateTime? @db.Timestamp(6)
+  Tenant       Tenant?   @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Usuario      Usuario?  @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("CuentasPago")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model CitasPsicologos {
+  id                                              BigInt            @id @default(autoincrement())
+  tenantId                                        Int?
+  empresaId                                       Int?
+  pacienteId                                      Int?
+  servicioId                                      Int?
+  creadoPorId                                     Int?
+  psicologoId                                     Int?
+  tipoServicio                                    Int?
+  fechaCita                                       DateTime?         @db.Timestamptz(6)
+  horaInicio                                      DateTime?         @db.Timestamptz(6)
+  horaFin                                         DateTime?         @db.Timestamptz(6)
+  valor                                           Decimal?          @db.Decimal(12, 2)
+  observacion                                     String?
+  metodoPago                                      String?
+  comprobantePath                                 String?
+  createdAt                                       DateTime          @default(now()) @db.Timestamptz(6)
+  paqueteId                                       BigInt?
+  consultorioId                                   BigInt?
+  realizada                                       Boolean?          @default(false)
+  estadoPago                                      EstadoPagoOrden?  @default(PENDIENTE)
+  consultorios                                    consultorios?     @relation(fields: [consultorioId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Usuario_CitasPsicologos_creadoPorIdToUsuario    Usuario?          @relation("CitasPsicologos_creadoPorIdToUsuario", fields: [creadoPorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Empresa                                         Empresa?          @relation(fields: [empresaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Cliente                                         Cliente?          @relation(fields: [pacienteId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  PaqueteAdquirido                                PaqueteAdquirido? @relation(fields: [paqueteId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Usuario_CitasPsicologos_psicologoIdToUsuario    Usuario?          @relation("CitasPsicologos_psicologoIdToUsuario", fields: [psicologoId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Servicio_CitasPsicologos_servicioIdToServicio   Servicio?         @relation("CitasPsicologos_servicioIdToServicio", fields: [servicioId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Tenant                                          Tenant?           @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Servicio_CitasPsicologos_tipoServicioToServicio Servicio?         @relation("CitasPsicologos_tipoServicioToServicio", fields: [tipoServicio], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  nominaDetalles                                  NominaDetalle[]
+
+  @@map("CitasPsicologos")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model consultorios {
+  id              BigInt            @id @default(autoincrement())
+  tenantId        Int?
+  empresaId       Int?
+  nombre          String?
+  createdAt       DateTime          @default(now()) @db.Timestamptz(6)
+  CitasPsicologos CitasPsicologos[]
+  Empresa         Empresa?          @relation(fields: [empresaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Tenant          Tenant?           @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("consultorios")
+}
+
+model Turno {
+  id             Int          @id @default(autoincrement())
+  tenantId       Int
+  usuarioId      Int
+  fecha          DateTime
+  horaEntrada    DateTime
+  horaSalida     DateTime
+  tiempoDescanso Int
+  observaciones  String?
+  createdAt      DateTime     @default(now())
+  valorTotal     Float?
+  cuentaCobroId  Int?
+  fotoEntrada    String?
+  fotoSalida     String?
+  cuentaCobro    CuentaCobro? @relation(fields: [cuentaCobroId], references: [id])
+  tenant         Tenant       @relation(fields: [tenantId], references: [id])
+  usuario        Usuario      @relation(fields: [usuarioId], references: [id])
+
+  @@index([tenantId, usuarioId])
+  @@map("Turno")
+}
+
+model CuentaCobro {
+  id          Int               @id @default(autoincrement())
+  tenantId    Int
+  usuarioId   Int
+  fechaInicio DateTime
+  fechaFin    DateTime
+  valorTotal  Float
+  estado      EstadoCuentaCobro @default(GENERADA)
+  createdAt   DateTime          @default(now())
+  tenant      Tenant            @relation(fields: [tenantId], references: [id])
+  usuario     Usuario           @relation(fields: [usuarioId], references: [id])
+  turnos      Turno[]
+
+  @@index([tenantId, usuarioId])
+  @@map("CuentaCobro")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model PaqueteAdquirido {
+  id                 BigInt             @id @default(autoincrement())
+  tenantId           Int
+  clienteId          Int?
+  catalogoId         BigInt
+  sesionesTotales    Int
+  sesionesConsumidas Int?               @default(0)
+  saldoRestante      Int
+  fechaCompra        DateTime?          @default(now()) @db.Timestamptz(6)
+  fechaVencimiento   DateTime?          @db.Timestamptz(6)
+  precioPagado       Decimal            @db.Decimal(12, 2)
+  estado             EstadoPaquete?     @default(ACTIVO)
+  created_at         DateTime           @default(now()) @db.Timestamptz(6)
+  usuarioId          Int?
+  CitasPsicologos    CitasPsicologos[]
+  TerapiasPsicologos TerapiasPsicologos @relation(fields: [catalogoId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Cliente            Cliente?           @relation(fields: [clienteId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Tenant             Tenant             @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Usuario            Usuario?           @relation(fields: [usuarioId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("PaqueteAdquirido")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model TerapiasPsicologos {
+  id                                            BigInt             @id @default(autoincrement())
+  tenantId                                      Int
+  empresaId                                     Int?
+  nombre                                        String
+  descripcion                                   String?
+  categoria                                     String?
+  cantidadSesiones                              Int                @default(1)
+  precioBase                                    Decimal            @db.Decimal(12, 2)
+  activo                                        Boolean?           @default(true)
+  created_at                                    DateTime           @default(now()) @db.Timestamptz(6)
+  PaqueteAdquirido                              PaqueteAdquirido[]
+  Empresa_TerapiasPsicologos_empresaIdToEmpresa Empresa?           @relation("TerapiasPsicologos_empresaIdToEmpresa", fields: [empresaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Empresa_TerapiasPsicologos_tenantIdToEmpresa  Tenant             @relation("TerapiasPsicologos_tenantIdToEmpresa", fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("TerapiasPsicologos")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model LogEvento {
+  id              Int             @id @default(autoincrement())
+  sesionId        Int
+  tipo            String
+  descripcion     String?
+  ruta            String?
+  createdAt       DateTime        @default(now())
+  SesionActividad SesionActividad @relation(fields: [sesionId], references: [id])
+
+  @@index([sesionId])
+  @@map("LogEvento")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model SesionActividad {
+  id             Int         @id @default(autoincrement())
+  usuarioId      Int
+  fechaInicio    DateTime    @default(now())
+  duracionMin    Int?
+  tiempoInactivo Int         @default(0)
+  dispositivo    String?
+  ip             String?
+  fechaFin       DateTime?
+  LogEvento      LogEvento[]
+  Usuario        Usuario     @relation(fields: [usuarioId], references: [id])
+
+  @@index([fechaInicio])
+  @@index([usuarioId])
+  @@map("SesionActividad")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Egresos {
+  id         BigInt   @id @default(autoincrement())
+  tenantId   Int?
+  userId     Int?
+  titulo     String?
+  monto      Float?
+  razon      String?
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  Tenant     Tenant?  @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Usuario    Usuario? @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("Egresos")
+}
+
+model Auditoria {
+  id        Int      @id @default(autoincrement())
+  tenantId  Int
+  usuarioId Int?
+  accion    String
+  entidad   String
+  entidadId String
+  detalles  Json?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  Tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  Usuario   Usuario? @relation(fields: [usuarioId], references: [id])
+
+  @@index([tenantId])
+  @@index([createdAt])
+  @@index([entidad, entidadId])
+  @@map("Auditoria")
+}
+
+model Referidos {
+  id            BigInt   @id @default(autoincrement())
+  nombre        String?
+  apellido      String?
+  telefono      String?
+  referidoPorId Int?
+  codigo        String?
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+  Usuario       Usuario? @relation(fields: [referidoPorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("Referidos")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ProductosFumigacion {
+  id                             BigInt                           @id @default(autoincrement())
+  tenantId                       Int?
+  categoria                      String?
+  nombre                         String?
+  descripcion                    String?
+  unidadMedida                   String?
+  precio                         Float?
+  Moneda                         String?
+  stockActual                    BigInt?
+  stockMinimo                    BigInt?
+  tiempoReposicion               BigInt?
+  provedorId                     BigInt?
+  activo                         Boolean?
+  created_at                     DateTime                         @db.Timestamptz(6)
+  Proveedores                    Proveedores?                     @relation(fields: [provedorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Tenant                         Tenant?                          @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ProductosFumigacionSolicitados ProductosFumigacionSolicitados[]
+
+  @@map("ProductosFumigacion")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ProductosFumigacionSolicitados {
+  id                  BigInt                    @id @default(autoincrement())
+  tenantId            Int?
+  userId              Int?
+  productoId          BigInt?
+  cantidad            String?
+  unidadMedida        String?
+  created_at          DateTime                  @default(now()) @db.Timestamptz(6)
+  estado              EstadoSolicitudProductos?
+  ProductosFumigacion ProductosFumigacion?      @relation(fields: [productoId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Tenant              Tenant?                   @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  Usuario             Usuario?                  @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("ProductosFumigacionSolicitados")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Proveedores {
+  id                  BigInt                @id @default(autoincrement())
+  tenantId            Int?
+  nombre              String?
+  nit                 String?
+  pais                String?
+  ciudad              String?
+  direccion           String?
+  telefono            String?
+  email               String?
+  activo              Boolean?
+  created_at          DateTime              @default(now()) @db.Timestamptz(6)
+  update_at           DateTime?             @db.Timestamptz(6)
+  Departamento        String?
+  ProductosFumigacion ProductosFumigacion[]
+  Tenant              Tenant?               @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("Proveedores")
+}
+
+model Permiso {
+  id              Int           @id @default(autoincrement())
+  tenantId        Int
+  usuarioId       Int
+  adminId         Int?
+  tipo            TipoPermiso
+  entidadId       String?
+  estado          EstadoPermiso @default(PENDIENTE)
+  fechaSolicitud  DateTime      @default(now())
+  fechaAprobacion DateTime?
+  fechaExpiracion DateTime?
+  motivo          String?
+  admin           Usuario?      @relation("PermisosAprobados", fields: [adminId], references: [id])
+  tenant          Tenant        @relation(fields: [tenantId], references: [id])
+  usuario         Usuario       @relation("PermisosSolicitados", fields: [usuarioId], references: [id])
+
+  @@index([tenantId, usuarioId])
+  @@index([estado])
+  @@map("Permiso")
+}
+
+model DeclaracionEfectivo {
+  id               Int           @id @default(autoincrement())
+  tenantId         Int
+  ordenId          Int           @unique
+  tecnicoId        Int
+  valorDeclarado   Decimal       @db.Decimal(12, 2)
+  fechaDeclaracion DateTime      @default(now())
+  evidenciaPath    String
+  observacion      String?
+  consignado       Boolean       @default(false)
+  orden            OrdenServicio @relation(fields: [ordenId], references: [id])
+  tecnico          Usuario       @relation(fields: [tecnicoId], references: [id])
+  tenant           Tenant        @relation(fields: [tenantId], references: [id])
+
+  @@index([tecnicoId])
+  @@index([consignado])
+  @@map("DeclaracionEfectivo")
+}
+
+model ConsignacionEfectivo {
+  id                Int                 @id @default(autoincrement())
+  tenantId          Int
+  tecnicoId         Int
+  fechaConsignacion DateTime
+  valorConsignado   Decimal             @db.Decimal(12, 2)
+  referenciaBanco   String
+  comprobantePath   String
+  estado            EstadoConsignacion  @default(PENDIENTE)
+  diferencia        Decimal?            @db.Decimal(12, 2)
+  observacion       String?
+  creadoPorId       Int
+  createdAt         DateTime            @default(now())
+  anticipos         Anticipos[]
+  creadoPor         Usuario             @relation("ConsignacionCreador", fields: [creadoPorId], references: [id])
+  tecnico           Usuario             @relation("ConsignacionTecnico", fields: [tecnicoId], references: [id])
+  tenant            Tenant              @relation(fields: [tenantId], references: [id])
+  ordenes           ConsignacionOrden[]
+
+  @@index([tenantId, tecnicoId, estado])
+  @@map("ConsignacionEfectivo")
+}
+
+model ConsignacionOrden {
+  id             Int                  @id @default(autoincrement())
+  consignacionId Int
+  ordenId        Int                  @unique
+  consignacion   ConsignacionEfectivo @relation(fields: [consignacionId], references: [id])
+  orden          OrdenServicio        @relation(fields: [ordenId], references: [id])
+
+  @@map("ConsignacionOrden")
+}
+
+enum Rol {
+  SU_ADMIN
+  ADMIN
+  ASESOR
+  TECNICO
+}
+
+enum TipoPago {
+  PORCENTAJE
+  SALARIO_FIJO
+}
+
+enum EstadoNomina {
+  BORRADOR
+  PAGADO
+  ANULADO
+}
+
+enum EstadoPaquete {
+  ACTIVO
+  FINALIZADO
+  CANCELADO
+  VENCIDO
+}
+
+enum EstadoCuentaCobro {
+  PAGADA
+  PENDIENTE
+  RECHAZADA
+  GENERADA
+}
+
+enum EstadoSolicitudProductos {
+  PENDIENTE
+  RECHAZADA
+  ACEPTADA
+}
+
+enum TipoPermiso {
+  EDITAR_VALOR_COTIZADO
+  EDITAR_TIPO_SERVICIO
+  DESCARGAR_EXCEL
+}
+
+enum EstadoPermiso {
+  PENDIENTE
+  APROBADO
+  RECHAZADO
+  EXPIRADO
+}
+
+enum EstadoPagoOrden {
+  PENDIENTE
+  EFECTIVO_DECLARADO
+  CONSIGNADO
+  CONCILIADO
+}
+
+enum EstadoConsignacion {
+  PENDIENTE
+  VALIDADA
+  OBSERVADA
+}

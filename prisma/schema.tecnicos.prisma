@@ -1,0 +1,326 @@
+generator client {
+  provider = "prisma-client"
+  output   = "./generated/prisma-tecnicos"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model asesor {
+  id_asesor           Int                   @id @default(autoincrement())
+  codigo              String                @db.VarChar(20)
+  Nombre              String                @db.VarChar(20)
+  Apellido            String                @db.VarChar(20)
+  Telefono            String                @db.VarChar(10)
+  CorreoElectronico   String                @unique(map: "CorreoElectronico") @db.VarChar(100)
+  TipodeDocu          String                @db.VarChar(20)
+  NumeroDoc           String                @db.VarChar(20)
+  Tipo_sangre         String                @db.VarChar(15)
+  Contacto_emerg      String                @db.VarChar(10)
+  Alergias            String                @db.VarChar(200)
+  registros_llamada   registros_llamada[]
+  servicios_prestados servicios_prestados[]
+  users               users[]
+}
+
+model barrios {
+  id_barrio           Int                   @id @default(autoincrement())
+  id_municipio        Int
+  Nombre              String                @db.VarChar(40)
+  municipios          municipios            @relation(fields: [id_municipio], references: [id_municipio], onUpdate: Restrict, map: "barrios_ibfk_1")
+  clientes            clientes[]
+  servicios_prestados servicios_prestados[]
+
+  @@index([id_municipio], map: "id_municipio")
+}
+
+model clientes {
+  Id_cliente          Int                   @id @default(autoincrement())
+  nombre              String?               @db.VarChar(28)
+  apellido            String?               @db.VarChar(28)
+  telefono            String                @db.VarChar(28)
+  segundo_tel         String?               @db.VarChar(28)
+  chat_verde          String?               @db.VarChar(150)
+  genero              String?               @db.VarChar(25)
+  tipo_de_documento   String?               @db.VarChar(20)
+  numero_de_documento String?               @db.VarChar(25)
+  correo_electronico  String?               @db.VarChar(350)
+  direccion           String?               @db.VarChar(250)
+  numero_piso         String?               @db.VarChar(50)
+  bloque              String?               @db.VarChar(25)
+  unidad_residencial  String?               @db.VarChar(55)
+  departamento        Int?
+  municipio           Int?
+  barrio              Int?
+  barrios             barrios?              @relation(fields: [barrio], references: [id_barrio], onDelete: Restrict, onUpdate: Restrict, map: "clientes_ibfk_1")
+  municipios          municipios?           @relation(fields: [municipio], references: [id_municipio], onDelete: Restrict, onUpdate: Restrict, map: "clientes_ibfk_2")
+  departamentos       departamentos?        @relation(fields: [departamento], references: [id_departamento], onDelete: Restrict, onUpdate: Restrict, map: "clientes_ibfk_3")
+  registros_llamada   registros_llamada[]
+  servicios_prestados servicios_prestados[]
+
+  @@index([barrio], map: "barrio")
+  @@index([departamento, municipio, barrio], map: "departamento")
+  @@index([municipio], map: "municipio")
+}
+
+model control_calidad {
+  id_control             Int                @id @default(autoincrement())
+  fecha                  DateTime?          @db.Date
+  tecnico                Int?
+  telefono_cliente       String?            @db.VarChar(20)
+  empresa                Int?
+  tipo_servicio          Int?
+  status_servicio        Int?
+  hora_llegada           DateTime?          @db.Time(0)
+  hora_salida            DateTime?          @db.Time(0)
+  duracion_servicio      String?            @db.VarChar(60)
+  puntualidad            String?            @db.VarChar(10)
+  foto_llegada           String?            @db.VarChar(10)
+  foto_salida            String?            @db.VarChar(10)
+  foto_evidencias        String?            @db.VarChar(10)
+  audio_cliente          String?            @db.VarChar(10)
+  foto_orden_servicio    String?            @db.VarChar(10)
+  cumplimiento           String?            @db.VarChar(15)
+  evidencia_servicio     String?            @db.VarChar(15)
+  nivel_plaga            String?            @db.VarChar(20)
+  condiciones_higienicas String?            @db.VarChar(20)
+  condiciones_locativas  String?            @db.VarChar(20)
+  observaciones_tecnico  String?            @db.VarChar(400)
+  proximo_control        DateTime?          @db.Date
+  tipo_de_servicio       String?            @db.VarChar(35)
+  calificacion_tecnico   String?            @db.VarChar(10)
+  valor_servicio         Decimal?           @db.Decimal(28, 0)
+  numero_orden           String?            @db.VarChar(50)
+  forma_pago             String?            @db.VarChar(40)
+  numero_cuenta          String?            @db.VarChar(40)
+  confirmado_por         Int?
+  llamada_usuario        String?            @db.VarChar(25)
+  observacion_llamada    String?            @db.VarChar(400)
+  atencion_call_center   String?            @db.VarChar(60)
+  feedback_excelencia    String?            @db.VarChar(400)
+  atencion_tecnico       String?            @db.VarChar(40)
+  solucion_tecnico       String?            @db.VarChar(50)
+  capacidad_tecnico      String?            @db.VarChar(50)
+  feedback_tecnico       String?            @db.VarChar(400)
+  dia_subido             DateTime?          @db.Date
+  hora_subido            DateTime?          @db.Time(0)
+  marca                  Int?
+  repuestos              String?            @db.VarChar(150)
+  num_comprobante        String?            @db.VarChar(25)
+  trabajadores           trabajadores?      @relation(fields: [tecnico], references: [id_trabajador], onDelete: Restrict, onUpdate: Restrict, map: "control_calidad_ibfk_1")
+  tipo_de_servicios      tipo_de_servicios? @relation(fields: [tipo_servicio], references: [id_servicio], onDelete: Restrict, onUpdate: Restrict, map: "control_calidad_ibfk_2")
+  estatus                estatus?           @relation(fields: [status_servicio], references: [id_status], onDelete: Restrict, onUpdate: Restrict, map: "control_calidad_ibfk_3")
+  especializacion        especializacion?   @relation(fields: [empresa], references: [id_tiposervicio], onDelete: Restrict, onUpdate: Restrict, map: "control_calidad_ibfk_4")
+  marcas                 marcas?            @relation(fields: [marca], references: [id_marca], onDelete: Restrict, onUpdate: Restrict, map: "control_calidad_ibfk_5")
+
+  @@index([empresa], map: "empresa")
+  @@index([marca], map: "marca")
+  @@index([status_servicio], map: "status_servicio")
+  @@index([tecnico, tipo_servicio, status_servicio], map: "tecnico")
+  @@index([tipo_servicio], map: "tipo_servicio")
+}
+
+model departamentos {
+  id_departamento     Int                   @id @default(autoincrement())
+  Nombre              String                @db.VarChar(40)
+  clientes            clientes[]
+  municipios          municipios[]
+  servicios_prestados servicios_prestados[]
+}
+
+model especializacion {
+  id_tiposervicio     Int                   @id @default(autoincrement())
+  nombre              String                @db.VarChar(20)
+  acceso              Boolean               @default(false)
+  control_calidad     control_calidad[]
+  servicios_prestados servicios_prestados[]
+  tipo_de_servicios   tipo_de_servicios[]
+  trabajadores        trabajadores[]
+}
+
+model estatus {
+  id_status           Int                   @id @default(autoincrement())
+  Nombre              String                @db.VarChar(50)
+  control_calidad     control_calidad[]
+  servicios_prestados servicios_prestados[]
+}
+
+model historial_de_cambios {
+  id                 Int      @id @default(autoincrement())
+  fecha_cambio       DateTime @db.DateTime(0)
+  id_usuario         Int
+  tipo_cambio        String   @db.VarChar(255)
+  descripcion_cambio String   @db.Text
+  seccion_afectada   String   @db.VarChar(255)
+  users              users    @relation(fields: [id_usuario], references: [id], onUpdate: Restrict, map: "historial_de_cambios_ibfk_1")
+
+  @@index([id_usuario], map: "id_usuario")
+}
+
+model marcas {
+  id_marca            Int                   @id @default(autoincrement())
+  nombre              String                @db.VarChar(255)
+  control_calidad     control_calidad[]
+  servicios_marcas    servicios_marcas[]
+  servicios_prestados servicios_prestados[]
+}
+
+model metodos_de_pago {
+  id_metodo           Int                   @id @default(autoincrement())
+  Nombre              String                @db.VarChar(25)
+  servicios_prestados servicios_prestados[]
+}
+
+model municipios {
+  id_municipio        Int                   @id @default(autoincrement())
+  id_departamento     Int
+  Nombre              String                @db.VarChar(40)
+  barrios             barrios[]
+  clientes            clientes[]
+  departamentos       departamentos         @relation(fields: [id_departamento], references: [id_departamento], onUpdate: Restrict, map: "municipios_ibfk_1")
+  servicios_prestados servicios_prestados[]
+
+  @@index([id_departamento], map: "id_departamento")
+}
+
+model registros_llamada {
+  id_registro   Int      @id @default(autoincrement())
+  id_cliente    Int
+  id_asesor     Int
+  observacion   String   @db.VarChar(800)
+  fecha_llamada DateTime @db.Date
+  hora_llamada  DateTime @db.Time(0)
+  fecha_subida  DateTime @db.Date
+  hora_subida   DateTime @db.Time(0)
+  asesor        asesor   @relation(fields: [id_asesor], references: [id_asesor], onUpdate: Restrict, map: "registros_llamada_ibfk_1")
+  clientes      clientes @relation(fields: [id_cliente], references: [Id_cliente], onUpdate: Restrict, map: "registros_llamada_ibfk_2")
+
+  @@index([id_asesor], map: "id_asesor")
+  @@index([id_cliente, id_asesor], map: "id_cliente")
+}
+
+model servicios_marcas {
+  id                Int                @id @default(autoincrement())
+  id_servicio       Int?
+  id_marca          Int?
+  tipo_de_servicios tipo_de_servicios? @relation(fields: [id_servicio], references: [id_servicio], onDelete: Restrict, onUpdate: Restrict, map: "servicios_marcas_ibfk_1")
+  marcas            marcas?            @relation(fields: [id_marca], references: [id_marca], onDelete: Restrict, onUpdate: Restrict, map: "servicios_marcas_ibfk_2")
+
+  @@index([id_marca], map: "id_marca")
+  @@index([id_servicio], map: "id_servicio")
+}
+
+model servicios_prestados {
+  id_servicio_prestado  Int                                @id @default(autoincrement())
+  Id_cliente            Int?
+  id_asesor             Int?
+  id_tipodeservicio     Int?
+  id_servicio           Int?
+  id_status             Int?
+  id_trabajador         Int?
+  direccion             String?                            @db.VarChar(250)
+  piso                  String?                            @db.VarChar(50)
+  bloque                String?                            @db.VarChar(35)
+  unidad_residencial    String?                            @db.VarChar(35)
+  id_departamento       Int?
+  id_municipio          Int?
+  id_barrio             Int?
+  id_metodo_depago      Int?
+  numero_cuenta         String?                            @db.VarChar(25)
+  total_cotizado        Decimal?                           @db.Decimal(28, 0)
+  costo                 Decimal?                           @db.Decimal(28, 0)
+  valor_repuestos       Decimal?                           @db.Decimal(15, 0)
+  observaciones         String?                            @db.VarChar(350)
+  repuestos             String?                            @db.VarChar(250)
+  dia_visita            DateTime?                          @db.Date
+  hora_visita           DateTime?                          @db.Time(2)
+  Numero_fac            String?                            @db.VarChar(15)
+  id_marca              Int?
+  control_y_calidad     String?                            @db.VarChar(750)
+  servicio_realizado    String?                            @db.VarChar(750)
+  google_maps           String?                            @db.VarChar(200)
+  fecha_actual          DateTime                           @db.Date
+  hora_subida           DateTime?                          @db.Time(0)
+  observaciones_llegada String?                            @db.VarChar(75)
+  es_referido           Boolean?                           @default(false)
+  id_referido           String?                            @db.VarChar(65)
+  tipo_referido         servicios_prestados_tipo_referido?
+  observaciones_coti    String?                            @db.VarChar(400)
+  asesor                asesor?                            @relation(fields: [id_asesor], references: [id_asesor], onDelete: Restrict, onUpdate: Restrict, map: "servicios_prestados_ibfk_1")
+  marcas                marcas?                            @relation(fields: [id_marca], references: [id_marca], onDelete: Restrict, onUpdate: Restrict, map: "servicios_prestados_ibfk_10")
+  clientes              clientes?                          @relation(fields: [Id_cliente], references: [Id_cliente], onDelete: Restrict, onUpdate: Restrict, map: "servicios_prestados_ibfk_11")
+  especializacion       especializacion?                   @relation(fields: [id_tipodeservicio], references: [id_tiposervicio], onDelete: Restrict, onUpdate: Restrict, map: "servicios_prestados_ibfk_2")
+  tipo_de_servicios     tipo_de_servicios?                 @relation(fields: [id_servicio], references: [id_servicio], onDelete: Restrict, onUpdate: Restrict, map: "servicios_prestados_ibfk_3")
+  trabajadores          trabajadores?                      @relation(fields: [id_trabajador], references: [id_trabajador], onDelete: Restrict, onUpdate: Restrict, map: "servicios_prestados_ibfk_4")
+  departamentos         departamentos?                     @relation(fields: [id_departamento], references: [id_departamento], onDelete: Restrict, onUpdate: Restrict, map: "servicios_prestados_ibfk_5")
+  municipios            municipios?                        @relation(fields: [id_municipio], references: [id_municipio], onDelete: Restrict, onUpdate: Restrict, map: "servicios_prestados_ibfk_6")
+  barrios               barrios?                           @relation(fields: [id_barrio], references: [id_barrio], onDelete: Restrict, onUpdate: Restrict, map: "servicios_prestados_ibfk_7")
+  metodos_de_pago       metodos_de_pago?                   @relation(fields: [id_metodo_depago], references: [id_metodo], onDelete: Restrict, onUpdate: Restrict, map: "servicios_prestados_ibfk_8")
+  estatus               estatus?                           @relation(fields: [id_status], references: [id_status], onDelete: Restrict, onUpdate: Restrict, map: "servicios_prestados_ibfk_9")
+
+  @@index([Id_cliente], map: "Id_cliente")
+  @@index([id_asesor], map: "id_asesor")
+  @@index([id_barrio], map: "id_barrio")
+  @@index([id_departamento], map: "id_departamento")
+  @@index([id_marca], map: "id_marca")
+  @@index([id_metodo_depago], map: "id_metodo_depago")
+  @@index([id_municipio], map: "id_municipio")
+  @@index([id_servicio], map: "id_servicio")
+  @@index([id_status], map: "id_status")
+  @@index([id_tipodeservicio, id_servicio, id_trabajador, id_departamento, id_municipio, id_barrio], map: "id_tipodeservicio")
+  @@index([id_trabajador], map: "id_trabajador")
+}
+
+model tipo_de_servicios {
+  id_servicio         Int                   @id @default(autoincrement())
+  id_tipode_servicio  Int
+  Servicio            String                @db.VarChar(50)
+  acceso              Boolean?              @default(true)
+  control_calidad     control_calidad[]
+  servicios_marcas    servicios_marcas[]
+  servicios_prestados servicios_prestados[]
+  especializacion     especializacion       @relation(fields: [id_tipode_servicio], references: [id_tiposervicio], onUpdate: Restrict, map: "tipo_de_servicios_ibfk_1")
+
+  @@index([id_tipode_servicio], map: "id_tipode_servicio")
+}
+
+model trabajadores {
+  id_trabajador       Int                   @id @default(autoincrement())
+  id_servicio         Int
+  porcentaje          Decimal?              @default(0.00) @db.Decimal(5, 2)
+  Nombre              String?               @db.VarChar(60)
+  Apellido            String?               @db.VarChar(20)
+  Telefono            String?               @db.VarChar(15)
+  CorreoElectronico   String?               @unique(map: "CorreoElectronico") @db.VarChar(100)
+  TipodeDocu          String?               @db.VarChar(20)
+  NumeroDoc           String?               @db.VarChar(25)
+  Tipo_Sangre         String?               @db.VarChar(10)
+  Contacto_emerg      String?               @db.VarChar(15)
+  Alergias            String?               @db.VarChar(200)
+  acceso              Boolean               @default(true)
+  control_calidad     control_calidad[]
+  servicios_prestados servicios_prestados[]
+  especializacion     especializacion       @relation(fields: [id_servicio], references: [id_tiposervicio], onUpdate: Restrict, map: "trabajadores_ibfk_1")
+
+  @@index([id_servicio], map: "id_servicio")
+}
+
+model users {
+  id                   Int                    @id @default(autoincrement())
+  username             String                 @db.VarChar(50)
+  password             String                 @db.VarChar(255)
+  role                 String                 @db.VarChar(25)
+  id_perfil            Int
+  acceso               Boolean?               @default(true)
+  historial_de_cambios historial_de_cambios[]
+  asesor               asesor                 @relation(fields: [id_perfil], references: [id_asesor], onUpdate: Restrict, map: "users_ibfk_1")
+
+  @@index([id_perfil], map: "id_asesor")
+}
+
+enum servicios_prestados_tipo_referido {
+  tecnico
+  asesor
+  cliente
+}

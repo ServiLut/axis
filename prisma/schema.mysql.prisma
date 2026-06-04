@@ -1,0 +1,276 @@
+generator client {
+  provider = "prisma-client"
+  output   = "./generated/prisma-mysql"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model barrios {
+  id_barrio           Int                   @id @default(autoincrement())
+  id_municipio        Int
+  Nombre              String                @db.VarChar(40)
+  municipios          municipios            @relation(fields: [id_municipio], references: [id_municipio], onUpdate: Restrict, map: "barrios_ibfk_1")
+  clientes            clientes[]
+  direcciones         direcciones[]
+  servicios_prestados servicios_prestados[]
+
+  @@index([id_municipio], map: "id_municipio")
+}
+
+model clientes {
+  Id_cliente          Int                   @id @default(autoincrement())
+  tipo                clientes_tipo?
+  nombre              String?               @db.VarChar(28)
+  apellido            String?               @db.VarChar(28)
+  telefono            String                @db.VarChar(28)
+  segundo_tel         String?               @db.VarChar(28)
+  chat_verde          String?               @db.VarChar(40)
+  genero              String?               @db.VarChar(25)
+  tipo_de_documento   String?               @db.VarChar(20)
+  numero_de_documento String?               @unique(map: "numero_de_documento") @db.VarChar(25)
+  correo_electronico  String?               @db.VarChar(350)
+  direccion           String?               @db.VarChar(250)
+  numero_piso         String?               @db.VarChar(50)
+  bloque              String?               @db.VarChar(25)
+  unidad_residencial  String?               @db.VarChar(55)
+  departamento        Int?
+  municipio           Int?
+  barrio              Int?
+  municipios          municipios?           @relation(fields: [municipio], references: [id_municipio], onDelete: Restrict, onUpdate: Restrict, map: "clientes_ibfk_1")
+  barrios             barrios?              @relation(fields: [barrio], references: [id_barrio], onDelete: Restrict, onUpdate: Restrict, map: "clientes_ibfk_2")
+  departamentos       departamentos?        @relation(fields: [departamento], references: [id_departamento], onDelete: Restrict, onUpdate: Restrict, map: "clientes_ibfk_3")
+  direcciones         direcciones[]
+  servicios_prestados servicios_prestados[]
+
+  @@index([barrio], map: "id_barrio")
+  @@index([departamento, municipio, barrio], map: "id_departamento")
+  @@index([municipio], map: "id_municipio")
+}
+
+model departamentos {
+  id_departamento     Int                   @id @default(autoincrement())
+  Nombre              String                @db.VarChar(40)
+  clientes            clientes[]
+  direcciones         direcciones[]
+  municipios          municipios[]
+  servicios_prestados servicios_prestados[]
+}
+
+model direcciones {
+  id_direccion       Int            @id @default(autoincrement())
+  cliente_id         Int
+  direccion          String         @db.VarChar(250)
+  piso               String?        @db.VarChar(50)
+  bloque             String?        @db.VarChar(50)
+  unidad_residencial String?        @db.VarChar(100)
+  departamento_id    Int?
+  municipio_id       Int?
+  barrio_id          Int?
+  barrios            barrios?       @relation(fields: [barrio_id], references: [id_barrio], onDelete: Restrict, onUpdate: Restrict, map: "fk_direccion_barrio")
+  clientes           clientes       @relation(fields: [cliente_id], references: [Id_cliente], onDelete: Cascade, onUpdate: Restrict, map: "fk_direccion_cliente")
+  departamentos      departamentos? @relation(fields: [departamento_id], references: [id_departamento], onDelete: Restrict, onUpdate: Restrict, map: "fk_direccion_departamento")
+  municipios         municipios?    @relation(fields: [municipio_id], references: [id_municipio], onDelete: Restrict, onUpdate: Restrict, map: "fk_direccion_municipio")
+
+  @@index([barrio_id], map: "fk_direccion_barrio")
+  @@index([cliente_id], map: "fk_direccion_cliente")
+  @@index([departamento_id], map: "fk_direccion_departamento")
+  @@index([municipio_id], map: "fk_direccion_municipio")
+}
+
+model empresa {
+  id                  Int                   @id @default(autoincrement())
+  nombre              String                @db.VarChar(100)
+  perfil_trabajador   perfil_trabajador[]
+  servicios           servicios[]
+  servicios_prestados servicios_prestados[]
+}
+
+model estado_inicial_servicio {
+  id_inicial          Int                   @id @default(autoincrement())
+  estado              String                @db.VarChar(80)
+  servicios_prestados servicios_prestados[]
+}
+
+model estado_servicio {
+  id_estado_servicio  Int                   @id @default(autoincrement())
+  estado_servicio     String                @db.VarChar(85)
+  servicios_prestados servicios_prestados[]
+}
+
+model geolocalizacion_servicios {
+  id                  Int                 @id @default(autoincrement())
+  id_servicio         Int
+  id_fumigador        Int
+  fecha_hora_llegada  DateTime            @db.DateTime(0)
+  fecha_hora_salida   DateTime?           @db.DateTime(0)
+  latitud             Decimal?            @db.Decimal(10, 8)
+  longitud            Decimal?            @db.Decimal(11, 8)
+  servicios_prestados servicios_prestados @relation(fields: [id_servicio], references: [id], onUpdate: Restrict, map: "geolocalizacion_servicios_ibfk_1")
+  perfil_trabajador   perfil_trabajador   @relation(fields: [id_fumigador], references: [id], onUpdate: Restrict, map: "geolocalizacion_servicios_ibfk_2")
+
+  @@index([id_fumigador], map: "id_fumigador")
+  @@index([id_servicio], map: "id_servicio")
+}
+
+model metodos_de_pago {
+  id                  Int                   @id @default(autoincrement())
+  metodo_pago         String                @db.VarChar(75)
+  servicios_prestados servicios_prestados[]
+}
+
+model municipios {
+  id_municipio        Int                   @id @default(autoincrement())
+  id_departamento     Int
+  Nombre              String                @db.VarChar(40)
+  barrios             barrios[]
+  clientes            clientes[]
+  direcciones         direcciones[]
+  departamentos       departamentos         @relation(fields: [id_departamento], references: [id_departamento], onUpdate: Restrict, map: "municipios_ibfk_1")
+  servicios_prestados servicios_prestados[]
+
+  @@index([id_departamento], map: "id_departamento")
+}
+
+model perfil_trabajador {
+  id                                                                      Int                         @id @default(autoincrement())
+  nombre                                                                  String                      @db.VarChar(75)
+  apellido                                                                String                      @db.VarChar(75)
+  telefono                                                                String                      @db.VarChar(75)
+  tipo_documento                                                          String                      @db.VarChar(25)
+  numero_documento                                                        String                      @db.VarChar(40)
+  rol                                                                     Int
+  acceso                                                                  Boolean?                    @default(false)
+  id_empresa                                                              Int?
+  geolocalizacion_servicios                                               geolocalizacion_servicios[]
+  empresa                                                                 empresa?                    @relation(fields: [id_empresa], references: [id], map: "fk_perfil_empresa")
+  rol_perfil_trabajador_rolTorol                                          rol                         @relation("perfil_trabajador_rolTorol", fields: [rol], references: [id_rol], onUpdate: Restrict, map: "perfil_trabajador_ibfk_1")
+  servicios_prestados_servicios_prestados_id_asesorToperfil_trabajador    servicios_prestados[]       @relation("servicios_prestados_id_asesorToperfil_trabajador")
+  servicios_prestados_servicios_prestados_id_fumigadorToperfil_trabajador servicios_prestados[]       @relation("servicios_prestados_id_fumigadorToperfil_trabajador")
+  usuarios                                                                usuarios[]
+
+  @@index([id_empresa], map: "fk_perfil_empresa")
+  @@index([rol], map: "rol")
+}
+
+model rol {
+  id_rol                                       Int                 @id @default(autoincrement())
+  tipo_rol                                     String              @db.VarChar(50)
+  perfil_trabajador_perfil_trabajador_rolTorol perfil_trabajador[] @relation("perfil_trabajador_rolTorol")
+  usuarios                                     usuarios[]
+}
+
+model servicios {
+  id                  Int                   @id @default(autoincrement())
+  servicio            String                @db.VarChar(250)
+  estado              Boolean?              @default(true)
+  id_empresa          Int?
+  empresa             empresa?              @relation(fields: [id_empresa], references: [id], map: "fk_servicios_empresa")
+  servicios_prestados servicios_prestados[]
+
+  @@index([id_empresa], map: "fk_servicios_empresa")
+}
+
+model servicios_prestados {
+  id                                                                    Int                         @id @default(autoincrement())
+  id_asesor                                                             Int?
+  id_cliente                                                            Int?
+  id_servicio                                                           Int?
+  id_zona_locativa                                                      Int?
+  id_estado_inicial                                                     Int?
+  id_estado_servicio                                                    Int?
+  id_fumigador                                                          Int?
+  direccion_servicio                                                    String?                     @db.VarChar(100)
+  numero_piso                                                           String?                     @db.VarChar(100)
+  bloque_o_torre                                                        String?                     @db.VarChar(100)
+  unidad_residencial                                                    String?                     @db.VarChar(100)
+  id_barrio                                                             Int?
+  id_municipio                                                          Int?
+  id_departamento                                                       Int?
+  google_maps                                                           String?                     @db.VarChar(450)
+  implementos                                                           String?                     @db.VarChar(450)
+  observacion_cotizacion                                                String?                     @db.VarChar(450)
+  valor_cotizacion                                                      Decimal?                    @db.Decimal(10, 0)
+  fecha_visita                                                          DateTime?                   @db.Date
+  hora_visita                                                           DateTime?                   @db.Time(0)
+  numero_cuenta                                                         String?                     @db.VarChar(75)
+  observacion_final                                                     String?                     @db.VarChar(550)
+  valor_pagado                                                          Decimal?                    @db.Decimal(10, 0)
+  id_metodo_de_pago                                                     Int?                        @default(9)
+  numero_orden                                                          String?                     @db.VarChar(20)
+  hora_entrada                                                          DateTime?                   @db.Time(0)
+  hora_salida                                                           DateTime?                   @db.Time(0)
+  duracion_servicio                                                     String?                     @db.VarChar(50)
+  nivel_infestacion                                                     String?                     @db.VarChar(50)
+  condiciones_hige                                                      String?                     @db.VarChar(50)
+  condiciones_loca                                                      String?                     @db.VarChar(50)
+  foto_llegada                                                          String?                     @db.VarChar(20)
+  foto_salida                                                           String?                     @db.VarChar(20)
+  foto_evidencia                                                        String?                     @db.VarChar(25)
+  audio_cliente                                                         String?                     @db.VarChar(30)
+  foto_orden                                                            String?                     @db.VarChar(35)
+  hora_subida                                                           DateTime                    @default(dbgenerated("(curtime())")) @db.Time(0)
+  fecha_subida                                                          DateTime                    @default(dbgenerated("(curdate())")) @db.Date
+  id_empresa                                                            Int?
+  valor_repuestos                                                       Decimal?                    @default(0.00) @db.Decimal(18, 2)
+  repuestos                                                             String?                     @db.Text
+  que_se_hizo                                                           String?                     @db.Text
+  geolocalizacion_servicios                                             geolocalizacion_servicios[]
+  empresa                                                               empresa?                    @relation(fields: [id_empresa], references: [id], map: "fk_sp_empresa")
+  perfil_trabajador_servicios_prestados_id_asesorToperfil_trabajador    perfil_trabajador?          @relation("servicios_prestados_id_asesorToperfil_trabajador", fields: [id_asesor], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "servicios_prestados_ibfk_1")
+  barrios                                                               barrios?                    @relation(fields: [id_barrio], references: [id_barrio], onDelete: Restrict, onUpdate: Restrict, map: "servicios_prestados_ibfk_10")
+  departamentos                                                         departamentos?              @relation(fields: [id_departamento], references: [id_departamento], onDelete: Restrict, onUpdate: Restrict, map: "servicios_prestados_ibfk_11")
+  clientes                                                              clientes?                   @relation(fields: [id_cliente], references: [Id_cliente], onDelete: Restrict, onUpdate: Restrict, map: "servicios_prestados_ibfk_2")
+  servicios                                                             servicios?                  @relation(fields: [id_servicio], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "servicios_prestados_ibfk_3")
+  zonas_locativas                                                       zonas_locativas?            @relation(fields: [id_zona_locativa], references: [id_zona], onDelete: Restrict, onUpdate: Restrict, map: "servicios_prestados_ibfk_4")
+  estado_inicial_servicio                                               estado_inicial_servicio?    @relation(fields: [id_estado_inicial], references: [id_inicial], onDelete: Restrict, onUpdate: Restrict, map: "servicios_prestados_ibfk_5")
+  estado_servicio                                                       estado_servicio?            @relation(fields: [id_estado_servicio], references: [id_estado_servicio], onDelete: Restrict, onUpdate: Restrict, map: "servicios_prestados_ibfk_6")
+  perfil_trabajador_servicios_prestados_id_fumigadorToperfil_trabajador perfil_trabajador?          @relation("servicios_prestados_id_fumigadorToperfil_trabajador", fields: [id_fumigador], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "servicios_prestados_ibfk_7")
+  metodos_de_pago                                                       metodos_de_pago?            @relation(fields: [id_metodo_de_pago], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "servicios_prestados_ibfk_8")
+  municipios                                                            municipios?                 @relation(fields: [id_municipio], references: [id_municipio], onDelete: Restrict, onUpdate: Restrict, map: "servicios_prestados_ibfk_9")
+
+  @@index([id_empresa], map: "fk_sp_empresa")
+  @@index([id_asesor, id_cliente, id_servicio, id_zona_locativa, id_estado_inicial, id_estado_servicio, id_fumigador, id_metodo_de_pago], map: "id_asesor")
+  @@index([id_barrio, id_municipio, id_departamento], map: "id_barrio")
+  @@index([id_barrio, id_municipio, id_departamento], map: "id_barrio_2")
+  @@index([id_cliente], map: "id_cliente")
+  @@index([id_departamento], map: "id_departamento")
+  @@index([id_estado_inicial], map: "id_estado_inicial")
+  @@index([id_estado_servicio], map: "id_estado_servicio")
+  @@index([id_fumigador], map: "id_fumigador")
+  @@index([id_metodo_de_pago], map: "id_metodo_de_pago")
+  @@index([id_municipio], map: "id_municipio")
+  @@index([id_servicio], map: "id_servicio")
+  @@index([id_zona_locativa], map: "id_zona_locativa")
+}
+
+model usuarios {
+  id                Int               @id @default(autoincrement())
+  username          String            @db.VarChar(75)
+  password          String            @db.VarChar(150)
+  id_rol            Int
+  id_perfil         Int
+  logged_in         Boolean?          @default(false)
+  can_schedule      Boolean?          @default(true)
+  rol               rol               @relation(fields: [id_rol], references: [id_rol], onUpdate: Restrict, map: "usuarios_ibfk_1")
+  perfil_trabajador perfil_trabajador @relation(fields: [id_perfil], references: [id], onUpdate: Restrict, map: "usuarios_ibfk_2")
+
+  @@index([id_perfil], map: "id_perfil")
+  @@index([id_rol, id_perfil], map: "id_rol")
+}
+
+model zonas_locativas {
+  id_zona             Int                   @id @default(autoincrement())
+  zona                String                @db.VarChar(75)
+  habilitada          Boolean               @default(true)
+  servicios_prestados servicios_prestados[]
+}
+
+enum clientes_tipo {
+  N_A     @map("N/A")
+  Sr
+  Sra
+  Empresa
+}
