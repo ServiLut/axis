@@ -82,6 +82,12 @@ import { PaginationControls } from "@/components/ui/pagination-controls";
 import { useUserRole } from "@/hooks/use-user-role";
 import { checkPermission, requestPermission, getMyPermissionStatus } from "@/app/(protected)/dashboard/configuracion/permisos/actions";
 
+type PaqueteCita = PaqueteAdquirido & {
+  TerapiasPsicologos: TerapiasPsicologos;
+  precioPagado: number;
+  sesionesRealizadas?: number | null;
+};
+
 // Interfaces adaptadas
 interface Cita {
   id: number;
@@ -111,7 +117,7 @@ interface Cita {
   comprobantePath?: string | null; // CitasPsicologos field
   metodoPago?: string | null;
   estadoPago?: EstadoPagoOrden | null;
-  PaqueteAdquirido?: (PaqueteAdquirido & { TerapiasPsicologos: TerapiasPsicologos, precioPagado: number }) | null;
+  PaqueteAdquirido?: PaqueteCita | null;
   consultorioNombre?: string | null;
   paqueteNombre?: string | null;
 }
@@ -151,6 +157,22 @@ const formatTimeBogota = (dateString: Date | string | null) => {
   } catch {
     return "--:--";
   }
+};
+
+const getSesionesRealizadas = (paquete?: PaqueteCita | null) => {
+  if (!paquete) return 0;
+
+  const realizadas = paquete.sesionesRealizadas ?? 0;
+
+  return Math.max(0, Math.min(paquete.sesionesTotales, realizadas));
+};
+
+const getSesionesBadgeClass = (paquete: PaqueteCita) => {
+  const sesionesRealizadas = getSesionesRealizadas(paquete);
+
+  return sesionesRealizadas >= paquete.sesionesTotales
+    ? "bg-green-100 text-green-700"
+    : "bg-blue-50 text-blue-700";
 };
 
 export default function CitasPage() {
@@ -435,7 +457,7 @@ export default function CitasPage() {
       { header: "Correo", key: "correo", width: 25 },
       { header: "Paquete", key: "paquete", width: 25 },
       { header: "Valor x Sesión", key: "valorSesion", width: 15 },
-      { header: "Sesiones Rest.", key: "sesionesRestantes", width: 15 },
+      { header: "Sesiones Realizadas", key: "sesionesRealizadas", width: 18 },
       { header: "Consultorio", key: "consultorio", width: 20 },
       { header: "Fecha", key: "fecha", width: 15 },
       { header: "Hora", key: "hora", width: 15 },
@@ -471,7 +493,7 @@ export default function CitasPage() {
         correo: cita.cliente?.correo || "N/A",
         paquete: cita.paqueteNombre || "N/A",
         valorSesion: cita.PaqueteAdquirido ? (cita.PaqueteAdquirido.precioPagado / cita.PaqueteAdquirido.sesionesTotales) : 0,
-        sesionesRestantes: cita.PaqueteAdquirido ? `${cita.PaqueteAdquirido.saldoRestante} / ${cita.PaqueteAdquirido.sesionesTotales}` : "N/A",
+        sesionesRealizadas: cita.PaqueteAdquirido ? `${getSesionesRealizadas(cita.PaqueteAdquirido)} / ${cita.PaqueteAdquirido.sesionesTotales}` : "N/A",
         consultorio: cita.consultorioNombre || "N/A",
         fecha: formatDateBogota(cita.fechaVisita),
         hora: formatTimeBogota(cita.horaInicio),
@@ -947,7 +969,7 @@ export default function CitasPage() {
                      <th className="px-6 py-4">Paciente</th>
                      <th className="px-6 py-4">Paquete</th>
                      <th className="px-6 py-4">Valor x Sesión</th>
-                     <th className="px-6 py-4 text-center">Sesiones Rest.</th>
+                     <th className="px-6 py-4 text-center">Sesiones Real.</th>
                      <th className="px-6 py-4">Consultorio</th>
                      <th className="px-6 py-4">Fecha</th>
                      <th className="px-6 py-4">Psicólogo</th>
@@ -970,8 +992,8 @@ export default function CitasPage() {
                        </td>
                        <td className="px-6 py-4 text-center">
                           {cita.PaqueteAdquirido ? (
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${cita.PaqueteAdquirido.saldoRestante <= 1 ? "bg-red-100 text-red-700" : "bg-blue-50 text-blue-700"}`}>
-                               {cita.PaqueteAdquirido.saldoRestante} / {cita.PaqueteAdquirido.sesionesTotales}
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${getSesionesBadgeClass(cita.PaqueteAdquirido)}`}>
+                               {getSesionesRealizadas(cita.PaqueteAdquirido)} / {cita.PaqueteAdquirido.sesionesTotales}
                             </span>
                           ) : 'N/A'}
                        </td>
@@ -1155,6 +1177,12 @@ export default function CitasPage() {
                            <div>
                                <span className="text-xs text-blue-500 block uppercase tracking-wider">Sesiones Totales</span>
                                <span className="font-medium text-blue-900">{selectedCita.PaqueteAdquirido.sesionesTotales}</span>
+                           </div>
+                           <div>
+                               <span className="text-xs text-blue-500 block uppercase tracking-wider">Sesiones Realizadas</span>
+                               <span className="font-medium text-blue-900">
+                                   {getSesionesRealizadas(selectedCita.PaqueteAdquirido)} / {selectedCita.PaqueteAdquirido.sesionesTotales}
+                               </span>
                            </div>
                            <div>
                                <span className="text-xs text-blue-500 block uppercase tracking-wider">Saldo Restante</span>

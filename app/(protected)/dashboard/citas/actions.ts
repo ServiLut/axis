@@ -185,9 +185,45 @@ export async function getCitas(
       }),
     ]);
 
+    const paqueteIds = Array.from(
+      new Set(
+        citas
+          .map((cita) => cita.paqueteId)
+          .filter((paqueteId): paqueteId is bigint => paqueteId != null)
+          .map((paqueteId) => paqueteId.toString())
+      )
+    ).map((paqueteId) => BigInt(paqueteId));
+
+    const sesionesRealizadasRows =
+      paqueteIds.length > 0
+        ? await prisma.citasPsicologos.groupBy({
+            by: ["paqueteId"],
+            where: {
+              paqueteId: { in: paqueteIds },
+              realizada: true,
+            },
+            _count: { _all: true },
+          })
+        : [];
+
+    const sesionesRealizadasPorPaquete = new Map(
+      sesionesRealizadasRows
+        .filter((row) => row.paqueteId != null)
+        .map((row) => [row.paqueteId!.toString(), row._count._all])
+    );
+
     // Map to structure expected by UI (similar to OrdenServicio)
     const citasSerialized: CitaSerialized[] = citas.map((cita) => {
       const serialized = serializeBigInt(cita) as Record<string, unknown>;
+      const paqueteAdquirido =
+        serialized["PaqueteAdquirido"] && typeof serialized["PaqueteAdquirido"] === "object"
+          ? {
+              ...(serialized["PaqueteAdquirido"] as Record<string, unknown>),
+              sesionesRealizadas: cita.paqueteId
+                ? sesionesRealizadasPorPaquete.get(cita.paqueteId.toString()) ?? 0
+                : 0,
+            }
+          : serialized["PaqueteAdquirido"];
       
       const terapiaNombre = cita.PaqueteAdquirido?.TerapiasPsicologos?.nombre;
       const servicioNombre = cita.Servicio_CitasPsicologos_servicioIdToServicio?.nombre;
@@ -220,7 +256,7 @@ export async function getCitas(
         estadoServicio: { id: 0, nombre: "Programado" },
         createdAt: serialized['createdAt'],
         comprobantePath: (serialized['comprobantePath'] as string) || null,
-        PaqueteAdquirido: serialized['PaqueteAdquirido'],
+        PaqueteAdquirido: paqueteAdquirido,
         consultorioNombre: cita.consultorios?.nombre || null,
         paqueteNombre: terapiaNombre || null,
       };
@@ -263,7 +299,23 @@ export async function getCita(token: string, id: number) {
 
     if (!cita) return { error: "Cita no encontrada" };
 
+    const sesionesRealizadas = cita.paqueteId
+      ? await prisma.citasPsicologos.count({
+          where: {
+            paqueteId: cita.paqueteId,
+            realizada: true,
+          },
+        })
+      : 0;
+
     const serialized = serializeBigInt(cita) as Record<string, unknown>;
+    const paqueteAdquirido =
+      serialized["PaqueteAdquirido"] && typeof serialized["PaqueteAdquirido"] === "object"
+        ? {
+            ...(serialized["PaqueteAdquirido"] as Record<string, unknown>),
+            sesionesRealizadas,
+          }
+        : serialized["PaqueteAdquirido"];
     
     const terapiaNombre = cita.PaqueteAdquirido?.TerapiasPsicologos?.nombre;
     const servicioNombre = cita.Servicio_CitasPsicologos_servicioIdToServicio?.nombre;
@@ -288,6 +340,7 @@ export async function getCita(token: string, id: number) {
       estado: "PROGRAMADO",
       estadoServicio: { id: 0, nombre: "Programado" },
       direccionTexto: "Consultorio",
+      PaqueteAdquirido: paqueteAdquirido,
     };
 
     return { orden: citaMapped };
