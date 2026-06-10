@@ -134,6 +134,8 @@ interface Stats {
   paquetesMes: number;
 }
 
+type EstadoPagoFilter = EstadoPagoOrden | "all";
+
 const formatDateBogota = (dateString: Date | string | null, formatStr: string = "dd/MM/yyyy") => {
   if (!dateString) return "Sin agendar";
   try {
@@ -258,10 +260,20 @@ export default function CitasPage() {
   const termParam = searchParams.get("term");
 
   const getInitialFilters = () => {
-    if (typeof window === "undefined") return { term: "", psicologo: "all", consultorio: "all", paquete: "all", start: "", end: "" };
+    const defaultFilters = {
+      term: "",
+      psicologo: "all",
+      consultorio: "all",
+      paquete: "all",
+      estadoPago: "all" as EstadoPagoFilter,
+      start: "",
+      end: "",
+    };
+
+    if (typeof window === "undefined") return defaultFilters;
     
     const saved = localStorage.getItem("citasFilters");
-    let parsed = { term: "", psicologo: "all", consultorio: "all", paquete: "all", start: "", end: "" };
+    let parsed = { ...defaultFilters };
     
     if (saved) {
       try {
@@ -286,6 +298,7 @@ export default function CitasPage() {
   const [selectedPsicologo, setSelectedPsicologo] = useState(initialFilters.psicologo);
   const [selectedConsultorio, setSelectedConsultorio] = useState(initialFilters.consultorio);
   const [selectedPaquete, setSelectedPaquete] = useState(initialFilters.paquete);
+  const [selectedEstadoPago, setSelectedEstadoPago] = useState<EstadoPagoFilter>(initialFilters.estadoPago);
   const [startDate, setStartDate] = useState(initialFilters.start);
   const [endDate, setEndDate] = useState(initialFilters.end);
 
@@ -341,11 +354,12 @@ export default function CitasPage() {
       psicologo: selectedPsicologo,
       consultorio: selectedConsultorio,
       paquete: selectedPaquete,
+      estadoPago: selectedEstadoPago,
       start: startDate,
       end: endDate,
     };
     localStorage.setItem("citasFilters", JSON.stringify(filters));
-  }, [debouncedSearchTerm, selectedPsicologo, selectedConsultorio, selectedPaquete, startDate, endDate, isRestored]);
+  }, [debouncedSearchTerm, selectedPsicologo, selectedConsultorio, selectedPaquete, selectedEstadoPago, startDate, endDate, isRestored]);
 
   // Sync URL (Pagination only)
   useEffect(() => {
@@ -370,6 +384,7 @@ export default function CitasPage() {
     setSelectedPsicologo("all");
     setSelectedConsultorio("all");
     setSelectedPaquete("all");
+    setSelectedEstadoPago("all");
     setStartDate("");
     setEndDate("");
 
@@ -391,6 +406,7 @@ export default function CitasPage() {
       psicologoId: selectedPsicologo,
       consultorioId: selectedConsultorio,
       paqueteId: selectedPaquete,
+      estadoPago: selectedEstadoPago,
       startDate,
       endDate,
     };
@@ -404,7 +420,7 @@ export default function CitasPage() {
       setTotalRecords(result.total || 0);
     }
     setLoading(false);
-  }, [currentPage, debouncedSearchTerm, selectedPsicologo, selectedConsultorio, selectedPaquete, startDate, endDate, router, isRestored]);
+  }, [currentPage, debouncedSearchTerm, selectedPsicologo, selectedConsultorio, selectedPaquete, selectedEstadoPago, startDate, endDate, router, isRestored]);
 
   const fetchAux = useCallback(async () => {
     const token = localStorage.getItem("token");
@@ -582,6 +598,7 @@ export default function CitasPage() {
         psicologoId: selectedPsicologo,
         consultorioId: selectedConsultorio,
         paqueteId: selectedPaquete,
+        estadoPago: selectedEstadoPago,
         startDate,
         endDate,
       };
@@ -612,6 +629,7 @@ export default function CitasPage() {
       startDate: exportStartDate,
       endDate: exportEndDate,
       tenantId: exportTenantId,
+      estadoPago: selectedEstadoPago,
     });
 
     if (res.error) {
@@ -928,6 +946,22 @@ export default function CitasPage() {
                      {c.nombre}
                    </SelectItem>
                  ))}
+               </SelectContent>
+             </Select>
+           </div>
+
+           <div className="flex items-center gap-2">
+             <span className="text-xs font-medium text-slate-500">Estado pago:</span>
+             <Select value={selectedEstadoPago} onValueChange={(value) => setSelectedEstadoPago(value as EstadoPagoFilter)}>
+               <SelectTrigger className="w-[180px] bg-white">
+                 <SelectValue placeholder="Estado pago" />
+               </SelectTrigger>
+               <SelectContent>
+                 <SelectItem value="all">Todos</SelectItem>
+                 <SelectItem value={EstadoPagoOrden.PENDIENTE}>Pendiente</SelectItem>
+                 <SelectItem value={EstadoPagoOrden.EFECTIVO_DECLARADO}>Efectivo declarado</SelectItem>
+                 <SelectItem value={EstadoPagoOrden.CONSIGNADO}>Consignado</SelectItem>
+                 <SelectItem value={EstadoPagoOrden.CONCILIADO}>Conciliado</SelectItem>
                </SelectContent>
              </Select>
            </div>

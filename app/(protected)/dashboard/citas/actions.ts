@@ -69,6 +69,7 @@ export async function getCitas(
     psicologoId?: string; // equivalent to tecnicoId
     consultorioId?: string;
     paqueteId?: string; // actually terapiaId (catalogoId)
+    estadoPago?: EstadoPagoOrden | "all";
     startDate?: string;
     endDate?: string;
     tenantId?: string;
@@ -85,6 +86,14 @@ export async function getCitas(
     if (!usuario) return { error: "Usuario no encontrado" };
 
     const where: Prisma.CitasPsicologosWhereInput = {};
+    const appendAndFilter = (filter: Prisma.CitasPsicologosWhereInput) => {
+      const currentAnd = where.AND;
+      where.AND = currentAnd
+        ? Array.isArray(currentAnd)
+          ? [...currentAnd, filter]
+          : [currentAnd, filter]
+        : [filter];
+    };
 
     if (usuario.rol === Rol.SU_ADMIN) {
         if (filters.tenantId && filters.tenantId !== "all") {
@@ -135,6 +144,23 @@ export async function getCitas(
     if (filters.paqueteId && filters.paqueteId !== "all") {
         // Filter by the type of therapy (catalogoId) in the acquired package
         where.PaqueteAdquirido = { catalogoId: BigInt(filters.paqueteId) };
+    }
+
+    if (
+      filters.estadoPago &&
+      filters.estadoPago !== "all" &&
+      Object.values(EstadoPagoOrden).includes(filters.estadoPago)
+    ) {
+      if (filters.estadoPago === EstadoPagoOrden.PENDIENTE) {
+        appendAndFilter({
+          OR: [
+            { estadoPago: EstadoPagoOrden.PENDIENTE },
+            { estadoPago: null },
+          ],
+        });
+      } else {
+        appendAndFilter({ estadoPago: filters.estadoPago });
+      }
     }
 
     // Date Filter
@@ -779,6 +805,9 @@ export async function getAllCitasForExport(token: string, filters: {
     term?: string;
     empresaId?: string;
     psicologoId?: string;
+    consultorioId?: string;
+    paqueteId?: string;
+    estadoPago?: EstadoPagoOrden | "all";
     startDate?: string;
     endDate?: string;
     tenantId?: string;
