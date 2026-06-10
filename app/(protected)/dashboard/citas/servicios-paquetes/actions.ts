@@ -107,6 +107,22 @@ const tenantWhere = (
   return parsedTenantId ? { tenantId: parsedTenantId } : {};
 };
 
+const terapiasCatalogWhere = (
+  user: AdminUser,
+  requestedTenantId?: string,
+): { tenantId?: number } => {
+  if (user.rol === Rol.SU_ADMIN) {
+    const parsedTenantId = parseOptionalInt(requestedTenantId || "");
+    return parsedTenantId ? { tenantId: parsedTenantId } : {};
+  }
+
+  // El flujo actual de citas del tenant de psicólogos carga TerapiasPsicologos
+  // como catálogo global; mantenerlo igual evita ocultar datos existentes.
+  if (user.tenantId === 4) return {};
+
+  return { tenantId: user.tenantId };
+};
+
 const writableTenantId = (user: AdminUser, requestedTenantId: string) => {
   if (user.rol !== Rol.SU_ADMIN) return user.tenantId;
   return parseOptionalInt(requestedTenantId) || user.tenantId;
@@ -120,7 +136,9 @@ const getOwnedTerapia = async (
   return prisma.terapiasPsicologos.findFirst({
     where: {
       id: BigInt(id),
-      ...(user.rol === Rol.SU_ADMIN && targetTenantId
+      ...(user.tenantId === 4
+        ? {}
+        : user.rol === Rol.SU_ADMIN && targetTenantId
         ? { tenantId: targetTenantId }
         : tenantWhere(user)),
     },
@@ -189,7 +207,10 @@ export async function getManagementOptions(token: string, tenantId?: string) {
         orderBy: { nombre: "asc" },
       }),
       prisma.terapiasPsicologos.findMany({
-        where: { tenantId: targetTenantId, activo: true },
+        where: {
+          ...terapiasCatalogWhere(context.user, tenantId),
+          activo: true,
+        },
         select: {
           id: true,
           nombre: true,
@@ -234,7 +255,7 @@ export async function getTerapiasPsicologos(
 
   try {
     const where: Prisma.TerapiasPsicologosWhereInput = {
-      ...tenantWhere(context.user, filters.tenantId),
+      ...terapiasCatalogWhere(context.user, filters.tenantId),
     };
 
     if (filters.estado === "active") where.activo = true;
