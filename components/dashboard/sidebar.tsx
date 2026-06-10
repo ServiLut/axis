@@ -216,21 +216,31 @@ export function Sidebar({ className }: SidebarProps) {
           return {
             ...item,
             label: "Gestión de Citas",
-            items: item.items?.map((subItem) => {
-              const newHref = subItem.href.replace(
-                "/dashboard/servicios",
-                "/dashboard/citas",
-              );
+            items: [
+              ...(item.items?.map((subItem) => {
+                const newHref = subItem.href.replace(
+                  "/dashboard/servicios",
+                  "/dashboard/citas",
+                );
 
-              if (subItem.label === "Registrar Servicio") {
-                return { ...subItem, label: "Registrar Cita", href: newHref };
-              }
-              if (subItem.label === "Ver Servicios") {
-                return { ...subItem, label: "Ver Citas", href: newHref };
-              }
-              // For Programación and Seguimiento, just update href
-              return { ...subItem, href: newHref };
-            }),
+                if (subItem.label === "Registrar Servicio") {
+                  return { ...subItem, label: "Registrar Cita", href: newHref };
+                }
+                if (subItem.label === "Ver Servicios") {
+                  return { ...subItem, label: "Ver Citas", href: newHref };
+                }
+                // For Programación and Seguimiento, just update href
+                return { ...subItem, href: newHref };
+              }) || []),
+              ...(role === "ADMIN" || role === "SU_ADMIN"
+                ? [
+                    {
+                      href: "/dashboard/citas/servicios-paquetes",
+                      label: "Servicios y Paquetes",
+                    },
+                  ]
+                : []),
+            ],
           };
         }
 
