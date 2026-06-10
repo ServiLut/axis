@@ -3,12 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  CalendarDays,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -47,7 +42,11 @@ interface CitaProgramacion {
   barrio: string | null;
   estado: string;
   realizada: boolean;
-  cliente: { nombre: string | null; apellido: string | null; numeroDocumento: string | null };
+  cliente: {
+    nombre: string | null;
+    apellido: string | null;
+    numeroDocumento: string | null;
+  };
   tecnico: { nombre: string; apellido: string } | null;
   servicio: { nombre: string };
   tipoServicio: { nombre: string; id: number } | null;
@@ -80,7 +79,9 @@ export default function ProgramacionCitasPage() {
 
   // Assign Modal State
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
-  const [selectedCita, setSelectedCita] = useState<CitaProgramacion | null>(null);
+  const [selectedCita, setSelectedCita] = useState<CitaProgramacion | null>(
+    null,
+  );
   const [assignConsultorioId, setAssignConsultorioId] = useState<string>("");
   const [assignStartTime, setAssignStartTime] = useState<string>("");
   const [assignEndTime, setAssignEndTime] = useState<string>("");
@@ -115,12 +116,13 @@ export default function ProgramacionCitasPage() {
       return;
     }
 
-    const tecnicoId = selectedTecnicoId === "all" ? undefined : Number(selectedTecnicoId);
+    const tecnicoId =
+      selectedTecnicoId === "all" ? undefined : Number(selectedTecnicoId);
 
     // Format local date to YYYY-MM-DD
     const year = currentDate.getFullYear();
-    const month = String(currentDate.getMonth() + 1).padStart(2, '0');
-    const day = String(currentDate.getDate()).padStart(2, '0');
+    const month = String(currentDate.getMonth() + 1).padStart(2, "0");
+    const day = String(currentDate.getDate()).padStart(2, "0");
     const dateStr = `${year}-${month}-${day}`;
 
     const result = await getCitasByDateRange(token, dateStr, tecnicoId);
@@ -155,7 +157,7 @@ export default function ProgramacionCitasPage() {
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.value) {
-      const [year, month, day] = e.target.value.split('-').map(Number);
+      const [year, month, day] = e.target.value.split("-").map(Number);
       const newDate = new Date(year, month - 1, day);
       setCurrentDate(newDate);
     }
@@ -196,7 +198,9 @@ export default function ProgramacionCitasPage() {
     ordenes.forEach((orden) => {
       // If no consultorio, maybe put in a "Sin Asignar" group or ignore?
       // Assuming 0 or "0" for unassigned if needed, but lets use ID string
-      const cId = orden.consultorioId ? orden.consultorioId.toString() : "unassigned";
+      const cId = orden.consultorioId
+        ? orden.consultorioId.toString()
+        : "unassigned";
       if (!groups[cId]) groups[cId] = [];
       groups[cId].push(orden);
     });
@@ -205,7 +209,7 @@ export default function ProgramacionCitasPage() {
 
   // Constants for Time Grid
   const GRID_START = 6; // Start at 6 AM
-  const GRID_END = 20;  // End at 8 PM
+  const GRID_END = 20; // End at 8 PM
 
   const HOURS = Array.from(
     { length: GRID_END - GRID_START + 1 },
@@ -244,12 +248,12 @@ export default function ProgramacionCitasPage() {
   const handleOpenAssignModal = (cita: CitaProgramacion) => {
     setSelectedCita(cita);
     setAssignConsultorioId(cita.consultorioId?.toString() || "");
-    
+
     // Set default times from cita or defaults
     if (cita.horaInicio) {
       const start = new Date(cita.horaInicio);
-      const h = String(start.getHours()).padStart(2, '0');
-      const m = String(start.getMinutes()).padStart(2, '0');
+      const h = String(start.getHours()).padStart(2, "0");
+      const m = String(start.getMinutes()).padStart(2, "0");
       setAssignStartTime(`${h}:${m}`);
     } else {
       setAssignStartTime("08:00");
@@ -257,18 +261,23 @@ export default function ProgramacionCitasPage() {
 
     if (cita.horaFin) {
       const end = new Date(cita.horaFin);
-      const h = String(end.getHours()).padStart(2, '0');
-      const m = String(end.getMinutes()).padStart(2, '0');
+      const h = String(end.getHours()).padStart(2, "0");
+      const m = String(end.getMinutes()).padStart(2, "0");
       setAssignEndTime(`${h}:${m}`);
     } else {
       setAssignEndTime("09:00");
     }
-    
+
     setIsAssignModalOpen(true);
   };
 
   const handleAssignSubmit = async () => {
-    if (!selectedCita || !assignConsultorioId || !assignStartTime || !assignEndTime) {
+    if (
+      !selectedCita ||
+      !assignConsultorioId ||
+      !assignStartTime ||
+      !assignEndTime
+    ) {
       toast.error("Por favor complete todos los campos");
       return;
     }
@@ -277,26 +286,32 @@ export default function ProgramacionCitasPage() {
     if (!token) return;
 
     const year = currentDate.getFullYear();
-    const month = String(currentDate.getMonth() + 1).padStart(2, '0');
-    const day = String(currentDate.getDate()).padStart(2, '0');
+    const month = String(currentDate.getMonth() + 1).padStart(2, "0");
+    const day = String(currentDate.getDate()).padStart(2, "0");
     const dateStr = `${year}-${month}-${day}`;
-    
+
     const startIso = `${dateStr}T${assignStartTime}:00`;
     const endIso = `${dateStr}T${assignEndTime}:00`;
 
-    const promise = moveCita(token, selectedCita.id, Number(assignConsultorioId), startIso, endIso);
+    const promise = moveCita(
+      token,
+      selectedCita.id,
+      Number(assignConsultorioId),
+      startIso,
+      endIso,
+    );
 
     toast.promise(promise, {
-      loading: 'Asignando cita...',
-      success: 'Cita asignada correctamente',
-      error: 'Error al asignar cita'
+      loading: "Asignando cita...",
+      success: "Cita asignada correctamente",
+      error: "Error al asignar cita",
     });
 
     await promise;
     setIsAssignModalOpen(false);
     fetchOrdenes();
   };
-  
+
   const unassignedOrders = ordersByConsultorio["unassigned"] || [];
 
   return (
@@ -351,16 +366,16 @@ export default function ProgramacionCitasPage() {
                 Hoy
               </Button>
               <div className="h-4 w-[1px] bg-slate-300 mx-1" />
-              
-               <div className="relative">
-                 <Input 
-                   type="date"
-                   value={currentDate.toISOString().split("T")[0]} 
-                   onChange={handleDateChange}
-                   className="h-8 w-[140px] text-xs border-0 bg-transparent shadow-none focus-visible:ring-0 p-1 pl-8 text-center font-medium cursor-pointer"
-                 />
-                 <CalendarDays className="h-4 w-4 absolute left-2 top-2 text-slate-500 pointer-events-none" />
-               </div>
+
+              <div className="relative">
+                <Input
+                  type="date"
+                  value={currentDate.toISOString().split("T")[0]}
+                  onChange={handleDateChange}
+                  className="h-8 w-[140px] text-xs border-0 bg-transparent shadow-none focus-visible:ring-0 p-1 pl-8 text-center font-medium cursor-pointer"
+                />
+                <CalendarDays className="h-4 w-4 absolute left-2 top-2 text-slate-500 pointer-events-none" />
+              </div>
 
               <Button
                 variant="ghost"
@@ -377,105 +392,152 @@ export default function ProgramacionCitasPage() {
 
       <div className="flex-1 overflow-auto p-4 md:p-6">
         <div className="max-w-7xl mx-auto h-full flex flex-col gap-6">
-          
           {/* Unassigned Orders Section */}
-           <div 
-             className={cn(
-               "flex-none border rounded-lg p-4 transition-colors",
-               unassignedOrders.length > 0 ? "bg-orange-50 border-orange-200" : "bg-slate-50 border-slate-200 border-dashed"
-             )}
-           >
-               <h3 className={cn(
-                 "text-sm font-semibold mb-3 flex items-center gap-2",
-                 unassignedOrders.length > 0 ? "text-orange-800" : "text-slate-500"
-               )}>
-                  {unassignedOrders.length > 0 && <span className="flex h-2 w-2 rounded-full bg-orange-500 animate-pulse" />}
-                  Citas Sin Consultorio Asignado ({unassignedOrders.length})
-               </h3>
-               
-               {unassignedOrders.length > 0 ? (
-                 <div className="flex gap-3 overflow-x-auto pb-2 min-h-[100px]">
-                    {unassignedOrders.map((orden) => (
-                        <div 
-                            key={orden.id} 
-                            className="min-w-[280px] bg-white rounded-md border border-orange-100 shadow-sm p-3 flex flex-col gap-2 hover:shadow-md transition-shadow"
-                        >
-                             <div className="flex justify-between items-start">
-                                 <Badge variant="outline" className={cn("text-[10px]", getStatusColor(orden))}>
-                                     {getStatusText(orden)}
-                                 </Badge>
-                                 <span className="text-xs font-bold text-slate-700">
-                                     {orden.horaInicio ? new Date(orden.horaInicio).toLocaleTimeString("es-CO", {hour: '2-digit', minute:'2-digit', hour12: true}) : "Sin hora"}
-                                 </span>
-                             </div>
-                             <div>
-                                 <div className="font-semibold text-sm truncate text-slate-800" title={`${orden.cliente?.nombre} ${orden.cliente?.apellido}`}>
-                                     {orden.cliente?.nombre} {orden.cliente?.apellido}
-                                 </div>
-                                 <div className="text-xs text-slate-500 truncate" title={orden.servicio.nombre}>
-                                     {orden.servicio.nombre}
-                                 </div>
-                             </div>
-                             <div className="mt-auto pt-2 flex items-center justify-between border-t border-slate-50">
-                                 <span className="text-xs text-slate-400 font-medium">
-                                     {orden.tecnico?.nombre || 'Sin psicólogo'}
-                                 </span>
-                                 <Button 
-                                    size="sm" 
-                                    variant="ghost" 
-                                    className="h-6 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 px-2"
-                                    onClick={() => handleOpenAssignModal(orden)}
-                                 >
-                                     Asignar Consultorio
-                                 </Button>
-                             </div>
-                        </div>
-                    ))}
-                 </div>
-               ) : (
-                  <div className="h-20 flex items-center justify-center text-slate-400 text-sm border-2 border-dashed border-slate-200 rounded-md">
-                    No hay citas sin asignar
+          <div
+            className={cn(
+              "flex-none border rounded-lg p-4 transition-colors",
+              unassignedOrders.length > 0
+                ? "bg-orange-50 border-orange-200"
+                : "bg-slate-50 border-slate-200 border-dashed",
+            )}
+          >
+            <h3
+              className={cn(
+                "text-sm font-semibold mb-3 flex items-center gap-2",
+                unassignedOrders.length > 0
+                  ? "text-orange-800"
+                  : "text-slate-500",
+              )}
+            >
+              {unassignedOrders.length > 0 && (
+                <span className="flex h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
+              )}
+              Citas Sin Consultorio Asignado ({unassignedOrders.length})
+            </h3>
+
+            {unassignedOrders.length > 0 ? (
+              <div className="flex gap-3 overflow-x-auto pb-2 min-h-[100px]">
+                {unassignedOrders.map((orden) => (
+                  <div
+                    key={orden.id}
+                    className="min-w-[280px] bg-white rounded-md border border-orange-100 shadow-sm p-3 flex flex-col gap-2 hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex justify-between items-start">
+                      <Badge
+                        variant="outline"
+                        className={cn("text-[10px]", getStatusColor(orden))}
+                      >
+                        {getStatusText(orden)}
+                      </Badge>
+                      <span className="text-xs font-bold text-slate-700">
+                        {orden.horaInicio
+                          ? new Date(orden.horaInicio).toLocaleTimeString(
+                              "es-CO",
+                              {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                hour12: true,
+                              },
+                            )
+                          : "Sin hora"}
+                      </span>
+                    </div>
+                    <div>
+                      <div
+                        className="font-semibold text-sm truncate text-slate-800"
+                        title={`${orden.cliente?.nombre} ${orden.cliente?.apellido}`}
+                      >
+                        {orden.cliente?.nombre} {orden.cliente?.apellido}
+                      </div>
+                      <div
+                        className="text-xs text-slate-500 truncate"
+                        title={orden.servicio.nombre}
+                      >
+                        {orden.servicio.nombre}
+                      </div>
+                    </div>
+                    <div className="mt-auto pt-2 flex items-center justify-between border-t border-slate-50">
+                      <span className="text-xs text-slate-400 font-medium">
+                        {orden.tecnico?.nombre || "Sin psicólogo"}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 px-2"
+                        onClick={() => handleOpenAssignModal(orden)}
+                      >
+                        Asignar Consultorio
+                      </Button>
+                    </div>
                   </div>
-               )}
-           </div>
+                ))}
+              </div>
+            ) : (
+              <div className="h-20 flex items-center justify-center text-slate-400 text-sm border-2 border-dashed border-slate-200 rounded-md">
+                No hay citas sin asignar
+              </div>
+            )}
+          </div>
 
           {/* Mobile View - List */}
           <div className="md:hidden space-y-4">
-             {/* Simple list view for mobile for now, prioritized by time */}
+            {/* Simple list view for mobile for now, prioritized by time */}
             {loading ? (
-                <div className="p-4 text-center text-slate-500">Cargando...</div>
+              <div className="p-4 text-center text-slate-500">Cargando...</div>
             ) : ordenes.length === 0 ? (
-                <div className="p-8 text-center text-slate-500 bg-white rounded-lg border">
-                    No hay citas programadas para este día.
-                </div>
+              <div className="p-8 text-center text-slate-500 bg-white rounded-lg border">
+                No hay citas programadas para este día.
+              </div>
             ) : (
-                <div className="space-y-3">
-                    {ordenes.map((orden) => (
-                        <div key={orden.id} className={cn("bg-white p-4 rounded-lg border shadow-sm flex flex-col gap-2", getStatusColor(orden))}>
-                            <div className="flex justify-between items-center font-bold text-slate-800">
-                                <div className="flex flex-col">
-                                  <span>
-                                  {orden.horaInicio
-                                      ? new Date(orden.horaInicio)
-                                          .toLocaleTimeString("es-CO", {
-                                            hour: "2-digit",
-                                            minute: "2-digit",
-                                            hour12: true,
-                                          })
-                                      : "--:--"}
-                                  </span>
-                                  <span className="text-xs font-normal text-slate-500">{orden.consultorio?.nombre || "Sin consultorio"}</span>
-                                </div>
-                                <Badge variant="outline" className={cn("text-xs font-bold", getStatusColor(orden))}>
-                                    {getStatusText(orden)}
-                                </Badge>
-                            </div>
-                            <div className="font-medium">{orden.cliente?.nombre} {orden.cliente?.apellido}</div>
-                            <div className="text-sm text-slate-600">{orden.servicio.nombre}</div>
-                            <div className="text-xs text-slate-500 mt-1">{orden.tecnico?.nombre} {orden.tecnico?.apellido}</div>
-                        </div>
-                    ))}
-                </div>
+              <div className="space-y-3">
+                {ordenes.map((orden) => (
+                  <div
+                    key={orden.id}
+                    className={cn(
+                      "bg-white p-4 rounded-lg border shadow-sm flex flex-col gap-2",
+                      getStatusColor(orden),
+                    )}
+                  >
+                    <div className="flex justify-between items-center font-bold text-slate-800">
+                      <div className="flex flex-col">
+                        <span>
+                          {orden.horaInicio
+                            ? new Date(orden.horaInicio).toLocaleTimeString(
+                                "es-CO",
+                                {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  hour12: true,
+                                },
+                              )
+                            : "--:--"}
+                        </span>
+                        <span className="text-xs font-normal text-slate-500">
+                          {orden.consultorio?.nombre || "Sin consultorio"}
+                        </span>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-xs font-bold",
+                          getStatusColor(orden),
+                        )}
+                      >
+                        {getStatusText(orden)}
+                      </Badge>
+                    </div>
+                    <div className="font-medium">
+                      {orden.cliente?.nombre} {orden.cliente?.apellido}
+                    </div>
+                    <div className="text-sm text-slate-600">
+                      {orden.servicio.nombre}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1">
+                      {orden.tecnico?.nombre} {orden.tecnico?.apellido}
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
@@ -491,20 +553,26 @@ export default function ProgramacionCitasPage() {
               <div className="w-20 flex-none border-r border-slate-200 bg-slate-100" />
               <div
                 className="flex-1 grid divide-x divide-slate-200"
-                style={{ gridTemplateColumns: `repeat(${Math.max(1, consultorios.length)}, minmax(0, 1fr))` }}
+                style={{
+                  gridTemplateColumns: `repeat(${Math.max(1, consultorios.length)}, minmax(0, 1fr))`,
+                }}
               >
                 {consultorios.length === 0 ? (
-                    <div className="p-3 text-center text-sm text-slate-500 italic">No hay consultorios configurados</div>
-                ) : consultorios.map((consultorio) => (
-                    <div
-                      key={consultorio.id}
-                      className="py-3 text-center px-2"
-                    >
-                      <span className="block text-sm font-bold text-slate-700 truncate" title={consultorio.nombre}>
+                  <div className="p-3 text-center text-sm text-slate-500 italic">
+                    No hay consultorios configurados
+                  </div>
+                ) : (
+                  consultorios.map((consultorio) => (
+                    <div key={consultorio.id} className="py-3 text-center px-2">
+                      <span
+                        className="block text-sm font-bold text-slate-700 truncate"
+                        title={consultorio.nombre}
+                      >
                         {consultorio.nombre}
                       </span>
                     </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
 
@@ -533,7 +601,9 @@ export default function ProgramacionCitasPage() {
                 {/* Grid */}
                 <div
                   className="flex-1 grid divide-x divide-slate-200 relative bg-white"
-                  style={{ gridTemplateColumns: `repeat(${Math.max(1, consultorios.length)}, minmax(0, 1fr))` }}
+                  style={{
+                    gridTemplateColumns: `repeat(${Math.max(1, consultorios.length)}, minmax(0, 1fr))`,
+                  }}
                 >
                   {/* Horizontal Lines */}
                   <div className="absolute inset-0 pointer-events-none z-0 flex flex-col w-full">
@@ -567,10 +637,13 @@ export default function ProgramacionCitasPage() {
                               >
                                 <div className="flex justify-between items-start gap-1">
                                   <div className="font-bold truncate text-xs flex-1">
-                                    {orden.cliente?.nombre || 'Paciente'}{" "}
-                                    {orden.cliente?.apellido || ''}
+                                    {orden.cliente?.nombre || "Paciente"}{" "}
+                                    {orden.cliente?.apellido || ""}
                                   </div>
-                                  <Badge variant="outline" className="text-[8px] h-4 px-1 bg-white/50 border-0">
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[8px] h-4 px-1 bg-white/50 border-0"
+                                  >
                                     {getStatusText(orden)}
                                   </Badge>
                                 </div>
@@ -579,14 +652,15 @@ export default function ProgramacionCitasPage() {
                                 </div>
                                 <div className="flex items-center gap-1 opacity-75 truncate mt-auto">
                                   <Clock className="h-3 w-3" />
-                                   {orden.horaInicio
-                                        ? new Date(orden.horaInicio)
-                                            .toLocaleTimeString("es-CO", {
-                                              hour: "2-digit",
-                                              minute: "2-digit",
-                                              hour12: true,
-                                            })
-                                        : "--"}
+                                  {orden.horaInicio
+                                    ? new Date(
+                                        orden.horaInicio,
+                                      ).toLocaleTimeString("es-CO", {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                        hour12: true,
+                                      })
+                                    : "--"}
                                 </div>
                               </div>
                             </PopoverTrigger>
@@ -599,7 +673,13 @@ export default function ProgramacionCitasPage() {
                                 <span className="font-semibold text-sm">
                                   Detalle de Cita
                                 </span>
-                                <Badge variant="outline" className={cn("text-xs", getStatusColor(orden))}>
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    "text-xs",
+                                    getStatusColor(orden),
+                                  )}
+                                >
                                   {getStatusText(orden)}
                                 </Badge>
                               </div>
@@ -609,11 +689,11 @@ export default function ProgramacionCitasPage() {
                                     Paciente
                                   </div>
                                   <div className="font-medium text-sm">
-                                    {orden.cliente?.nombre || 'N/A'}{" "}
-                                    {orden.cliente?.apellido || ''}
+                                    {orden.cliente?.nombre || "N/A"}{" "}
+                                    {orden.cliente?.apellido || ""}
                                   </div>
                                   <div className="text-xs text-slate-500">
-                                      {orden.cliente?.numeroDocumento}
+                                    {orden.cliente?.numeroDocumento}
                                   </div>
                                 </div>
                                 <div>
@@ -631,21 +711,23 @@ export default function ProgramacionCitasPage() {
                                     </div>
                                     <div className="font-medium text-sm flex items-center gap-1">
                                       {orden.horaInicio
-                                        ? new Date(orden.horaInicio)
-                                            .toLocaleTimeString("es-CO", {
-                                              hour: "2-digit",
-                                              minute: "2-digit",
-                                              hour12: true,
-                                            })
+                                        ? new Date(
+                                            orden.horaInicio,
+                                          ).toLocaleTimeString("es-CO", {
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                            hour12: true,
+                                          })
                                         : "--"}{" "}
                                       -
                                       {orden.horaFin
-                                        ? new Date(orden.horaFin)
-                                            .toLocaleTimeString("es-CO", {
-                                              hour: "2-digit",
-                                              minute: "2-digit",
-                                              hour12: true,
-                                            })
+                                        ? new Date(
+                                            orden.horaFin,
+                                          ).toLocaleTimeString("es-CO", {
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                            hour12: true,
+                                          })
                                         : "--"}
                                     </div>
                                   </div>
@@ -654,18 +736,20 @@ export default function ProgramacionCitasPage() {
                                       Consultorio
                                     </div>
                                     <div className="font-medium text-sm">
-                                      {orden.consultorio?.nombre || "Sin asignar"}
+                                      {orden.consultorio?.nombre ||
+                                        "Sin asignar"}
                                     </div>
                                   </div>
                                 </div>
-                                
+
                                 <div>
-                                    <div className="text-xs text-slate-500 uppercase font-semibold">
-                                      Psicólogo
-                                    </div>
-                                    <div className="font-medium text-sm">
-                                      {orden.tecnico?.nombre} {orden.tecnico?.apellido}
-                                    </div>
+                                  <div className="text-xs text-slate-500 uppercase font-semibold">
+                                    Psicólogo
+                                  </div>
+                                  <div className="font-medium text-sm">
+                                    {orden.tecnico?.nombre}{" "}
+                                    {orden.tecnico?.apellido}
+                                  </div>
                                 </div>
 
                                 <div className="pt-2 flex justify-end border-t mt-2 gap-2">
@@ -680,11 +764,10 @@ export default function ProgramacionCitasPage() {
                                     size="sm"
                                     onClick={() => {
                                       localStorage.removeItem("citasFilters");
-                                      const searchTerm = 
-                                        orden.id?.toString() || 
-                                        "";
+                                      const searchTerm =
+                                        orden.id?.toString() || "";
                                       router.push(
-                                        `/dashboard/citas?term=${encodeURIComponent(searchTerm)}`
+                                        `/dashboard/citas?term=${encodeURIComponent(searchTerm)}`,
                                       );
                                     }}
                                   >
@@ -711,44 +794,55 @@ export default function ProgramacionCitasPage() {
             <DialogTitle>Asignar Consultorio y Horario</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-             <div className="grid gap-2">
-               <Label htmlFor="consultorio">Consultorio</Label>
-               <Select value={assignConsultorioId} onValueChange={setAssignConsultorioId}>
-                 <SelectTrigger>
-                   <SelectValue placeholder="Seleccione un consultorio" />
-                 </SelectTrigger>
-                 <SelectContent>
-                   {consultorios.map((consultorio) => (
-                     <SelectItem key={consultorio.id} value={consultorio.id.toString()}>
-                       {consultorio.nombre}
-                     </SelectItem>
-                   ))}
-                 </SelectContent>
-               </Select>
-             </div>
-             <div className="grid grid-cols-2 gap-4">
-               <div className="grid gap-2">
-                 <Label htmlFor="startTime">Hora Inicio</Label>
-                 <Input 
-                   id="startTime" 
-                   type="time" 
-                   value={assignStartTime}
-                   onChange={(e) => setAssignStartTime(e.target.value)}
-                 />
-               </div>
-               <div className="grid gap-2">
-                 <Label htmlFor="endTime">Hora Fin</Label>
-                 <Input 
-                   id="endTime" 
-                   type="time" 
-                   value={assignEndTime}
-                   onChange={(e) => setAssignEndTime(e.target.value)}
-                 />
-               </div>
-             </div>
+            <div className="grid gap-2">
+              <Label htmlFor="consultorio">Consultorio</Label>
+              <Select
+                value={assignConsultorioId}
+                onValueChange={setAssignConsultorioId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccione un consultorio" />
+                </SelectTrigger>
+                <SelectContent>
+                  {consultorios.map((consultorio) => (
+                    <SelectItem
+                      key={consultorio.id}
+                      value={consultorio.id.toString()}
+                    >
+                      {consultorio.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="startTime">Hora Inicio</Label>
+                <Input
+                  id="startTime"
+                  type="time"
+                  value={assignStartTime}
+                  onChange={(e) => setAssignStartTime(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="endTime">Hora Fin</Label>
+                <Input
+                  id="endTime"
+                  type="time"
+                  value={assignEndTime}
+                  onChange={(e) => setAssignEndTime(e.target.value)}
+                />
+              </div>
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAssignModalOpen(false)}>Cancelar</Button>
+            <Button
+              variant="outline"
+              onClick={() => setIsAssignModalOpen(false)}
+            >
+              Cancelar
+            </Button>
             <Button onClick={handleAssignSubmit}>Guardar Cambios</Button>
           </DialogFooter>
         </DialogContent>
