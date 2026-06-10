@@ -2,19 +2,51 @@
 
 import prisma from "@/lib/prisma"; // Changed from named import to default to match existing pattern if needed, or check lib/prisma.ts
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 import { verifyToken } from "@/lib/auth";
 import { Prisma } from "@/prisma/generated/prisma/client";
 
 // Schema de validación
-const nominaSchema = z.object({
-  usuarioId: z.number(),
-  tipo: z.enum(["PORCENTAJE", "SALARIO_FIJO"]),
-  valorParticipacion: z.number().min(0).max(100).optional(),
-  salarioBase: z.number().min(0).optional(),
-});
+type TipoPagoNomina = "PORCENTAJE" | "SALARIO_FIJO";
 
-export type NominaFormData = z.infer<typeof nominaSchema>;
+export interface NominaFormData {
+  usuarioId: number;
+  tipo: TipoPagoNomina;
+  valorParticipacion?: number;
+  salarioBase?: number;
+}
+
+const validateNominaData = (data: NominaFormData): NominaFormData | null => {
+  if (!Number.isInteger(data.usuarioId) || data.usuarioId <= 0) return null;
+  if (data.tipo !== "PORCENTAJE" && data.tipo !== "SALARIO_FIJO") return null;
+
+  const valorParticipacion =
+    data.valorParticipacion === undefined ? undefined : Number(data.valorParticipacion);
+  const salarioBase =
+    data.salarioBase === undefined ? undefined : Number(data.salarioBase);
+
+  if (
+    valorParticipacion !== undefined &&
+    (!Number.isFinite(valorParticipacion) ||
+      valorParticipacion < 0 ||
+      valorParticipacion > 100)
+  ) {
+    return null;
+  }
+
+  if (
+    salarioBase !== undefined &&
+    (!Number.isFinite(salarioBase) || salarioBase < 0)
+  ) {
+    return null;
+  }
+
+  return {
+    usuarioId: data.usuarioId,
+    tipo: data.tipo,
+    valorParticipacion,
+    salarioBase,
+  };
+};
 
 export async function getUsuariosNomina(token: string) {
   const payload = verifyToken(token);
@@ -87,10 +119,10 @@ export async function saveConfiguracionNomina(token: string, data: NominaFormDat
    const payload = verifyToken(token);
    if (!payload) return { error: "No autorizado" };
 
-   const parsed = nominaSchema.safeParse(data);
-   if (!parsed.success) return { error: "Datos inválidos" };
+   const parsed = validateNominaData(data);
+   if (!parsed) return { error: "Datos inválidos" };
 
-   const { usuarioId, tipo, valorParticipacion, salarioBase } = parsed.data;
+   const { usuarioId, tipo, valorParticipacion, salarioBase } = parsed;
 
    try {
      // Verificamos si ya existe una configuración para actualizarla o crear una nueva

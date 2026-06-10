@@ -36,7 +36,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useUserRole } from "@/hooks/use-user-role";
-import { EstadoPaquete } from "@/prisma/generated/prisma/client";
+import { EstadoPaquete } from "@/prisma/generated/prisma/enums";
 import { searchClientes } from "../actions";
 import {
   cancelPaqueteAdquirido,

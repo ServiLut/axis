@@ -281,7 +281,7 @@ export default function NominaPage() {
                     <Label>Tipo de Pago</Label>
                     <Select 
                         value={formData.tipo} 
-                        onValueChange={(val) => setFormData(prev => ({ ...prev, tipo: val as "PORCENTAJE" | "SALARIO_FIJO" }))}
+                        onValueChange={(val) => setFormData((prev: Partial<NominaFormData>) => ({ ...prev, tipo: val as "PORCENTAJE" | "SALARIO_FIJO" }))}
                     >
                         <SelectTrigger>
                             <SelectValue />
@@ -303,7 +303,7 @@ export default function NominaPage() {
                                 max="100"
                                 step="0.1"
                                 value={formData.valorParticipacion}
-                                onChange={(e) => setFormData(prev => ({ ...prev, valorParticipacion: e.target.value === "" ? 0 : parseFloat(e.target.value) }))}
+                                onChange={(e) => setFormData((prev: Partial<NominaFormData>) => ({ ...prev, valorParticipacion: e.target.value === "" ? 0 : parseFloat(e.target.value) }))}
                                 required
                             />
                             <Percent className="absolute right-3 top-2.5 h-4 w-4 text-slate-400" />
@@ -322,7 +322,7 @@ export default function NominaPage() {
                                 type="number" 
                                 min="0"
                                 value={formData.salarioBase}
-                                onChange={(e) => setFormData(prev => ({ ...prev, salarioBase: e.target.value === "" ? 0 : parseFloat(e.target.value) }))}
+                                onChange={(e) => setFormData((prev: Partial<NominaFormData>) => ({ ...prev, salarioBase: e.target.value === "" ? 0 : parseFloat(e.target.value) }))}
                                 required
                             />
                             <DollarSign className="absolute right-3 top-2.5 h-4 w-4 text-slate-400" />
