@@ -228,7 +228,9 @@ export default function TerapiasTratamientosPage() {
 
   useEffect(() => {
     if (!roleLoading && !canManage) {
-      toast.error("Acceso denegado. Solo administradores pueden gestionar terapias y tratamientos.");
+      toast.error(
+        "Acceso denegado. Solo administradores pueden gestionar terapias y tratamientos.",
+      );
       router.push("/dashboard");
     }
   }, [canManage, roleLoading, router]);
@@ -277,7 +279,11 @@ export default function TerapiasTratamientosPage() {
   };
 
   const handleTenantChange = (value: string) => {
-    setFormData((current) => ({ ...current, tenantId: value, empresaId: "none" }));
+    setFormData((current) => ({
+      ...current,
+      tenantId: value,
+      empresaId: "none",
+    }));
     refreshOptionsForTenant(value);
   };
 
@@ -322,7 +328,11 @@ export default function TerapiasTratamientosPage() {
     if (!token) return;
 
     setIsDeleting(true);
-    const result = await toggleTerapiaPsicologosActivo(token, terapia.id, active);
+    const result = await toggleTerapiaPsicologosActivo(
+      token,
+      terapia.id,
+      active,
+    );
 
     if ("error" in result) {
       toast.error(result.error);
@@ -352,7 +362,8 @@ export default function TerapiasTratamientosPage() {
               Terapias y Tratamientos
             </h1>
             <p className="mt-1 text-sm text-slate-600">
-              Información de la tabla TerapiasPsicologos: nombre, categoría, sesiones y precio base.
+              Gestiona las terapias y tratamientos del centro psicológico,
+              configurando categorías, sesiones, tarifas y disponibilidad.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -369,7 +380,7 @@ export default function TerapiasTratamientosPage() {
               className="bg-blue-600 hover:bg-blue-700"
               onClick={() => handleOpenModal(undefined, "Tratamiento")}
             >
-              <Plus className="mr-2 h-4 w-4" />
+              <Plus className="mr-2 h-4 w-4 bg-gray-400" />
               Nuevo Tratamiento
             </Button>
           </div>
@@ -388,7 +399,10 @@ export default function TerapiasTratamientosPage() {
             />
           </div>
           <div className="flex flex-col gap-3 md:flex-row">
-            <Select value={categoriaSeleccionada} onValueChange={setCategoriaFilter}>
+            <Select
+              value={categoriaSeleccionada}
+              onValueChange={setCategoriaFilter}
+            >
               <SelectTrigger className="w-full bg-white md:w-56">
                 <SelectValue placeholder="Categoría" />
               </SelectTrigger>
@@ -406,7 +420,7 @@ export default function TerapiasTratamientosPage() {
                 <SelectValue placeholder="Estado" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="all">Todos los estados</SelectItem>
                 <SelectItem value="active">Activos</SelectItem>
                 <SelectItem value="inactive">Inactivos</SelectItem>
               </SelectContent>
@@ -440,7 +454,9 @@ export default function TerapiasTratamientosPage() {
             ) : terapiasFiltradas.length === 0 ? (
               <div className="flex h-64 flex-col items-center justify-center text-slate-500">
                 <BookOpen className="mb-3 h-10 w-10 text-slate-300" />
-                <p className="font-medium">No hay terapias ni tratamientos registrados</p>
+                <p className="font-medium">
+                  No hay terapias ni tratamientos registrados
+                </p>
                 <p className="text-sm">
                   Crea un registro para que aparezca en el catálogo de citas.
                 </p>
@@ -449,10 +465,10 @@ export default function TerapiasTratamientosPage() {
               <table className="w-full text-left text-sm">
                 <thead className="border-b border-slate-200 bg-slate-50 text-slate-700">
                   <tr>
-                    <th className="px-5 py-3">nombre</th>
-                    <th className="px-5 py-3">categoria</th>
-                    <th className="px-5 py-3">cantidadSesiones</th>
-                    <th className="px-5 py-3">precioBase</th>
+                    <th className="px-5 py-3">Nombre</th>
+                    <th className="px-5 py-3">Categoria</th>
+                    <th className="px-5 py-3">Cantidad de Sesiones</th>
+                    <th className="px-5 py-3">Precio Base</th>
                     <th className="px-5 py-3">Estado</th>
                     <th className="px-5 py-3 text-right">Acciones</th>
                   </tr>
@@ -467,7 +483,11 @@ export default function TerapiasTratamientosPage() {
                         {isSuperAdmin &&
                           terapia.Empresa_TerapiasPsicologos_tenantIdToEmpresa && (
                             <div className="mt-1 text-xs text-slate-500">
-                              {terapia.Empresa_TerapiasPsicologos_tenantIdToEmpresa.nombre}
+                              {
+                                terapia
+                                  .Empresa_TerapiasPsicologos_tenantIdToEmpresa
+                                  .nombre
+                              }
                             </div>
                           )}
                       </td>
@@ -540,7 +560,9 @@ export default function TerapiasTratamientosPage() {
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              {editingTerapia ? "Editar Terapia o Tratamiento" : "Nueva Terapia o Tratamiento"}
+              {editingTerapia
+                ? "Editar Terapia o Tratamiento"
+                : "Nueva Terapia o Tratamiento"}
             </DialogTitle>
             <DialogDescription>
               Estos campos se guardan en la tabla TerapiasPsicologos.
@@ -571,7 +593,7 @@ export default function TerapiasTratamientosPage() {
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="nombre">nombre</Label>
+                <Label htmlFor="nombre">Nombre</Label>
                 <Input
                   id="nombre"
                   value={formData.nombre}
@@ -585,7 +607,7 @@ export default function TerapiasTratamientosPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="categoria">categoria</Label>
+                <Label htmlFor="categoria">Categoria</Label>
                 <Input
                   id="categoria"
                   value={formData.categoria}
@@ -599,7 +621,7 @@ export default function TerapiasTratamientosPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="cantidadSesiones">cantidadSesiones</Label>
+                <Label htmlFor="cantidadSesiones">Cantidad Sesiones</Label>
                 <Input
                   id="cantidadSesiones"
                   type="number"
@@ -615,7 +637,7 @@ export default function TerapiasTratamientosPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="precioBase">precioBase</Label>
+                <Label htmlFor="precioBase">Precio Base</Label>
                 <Input
                   id="precioBase"
                   type="number"
@@ -645,7 +667,10 @@ export default function TerapiasTratamientosPage() {
                   <SelectContent>
                     <SelectItem value="none">Sin empresa</SelectItem>
                     {options.empresas.map((empresa) => (
-                      <SelectItem key={empresa.id} value={empresa.id.toString()}>
+                      <SelectItem
+                        key={empresa.id}
+                        value={empresa.id.toString()}
+                      >
                         {empresa.nombre}
                       </SelectItem>
                     ))}
