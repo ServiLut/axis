@@ -147,6 +147,8 @@ type PaqueteFormState = {
   estado: EstadoPaquete;
 };
 
+type CatalogoTipo = "all" | "terapia" | "tratamiento" | "servicio";
+
 const emptyOptions: OptionsState = {
   empresas: [],
   terapias: [],
@@ -208,6 +210,26 @@ const estadoBadgeClass = (estado: EstadoPaquete | null) => {
   return "bg-amber-100 text-amber-700";
 };
 
+const getCatalogoTipo = (item: { nombre: string; categoria: string | null }) => {
+  const value = `${item.categoria || ""} ${item.nombre}`.toLowerCase();
+  if (value.includes("tratamiento")) return "tratamiento";
+  if (value.includes("terapia")) return "terapia";
+  return "servicio";
+};
+
+const catalogoTipoLabel = (tipo: CatalogoTipo | ReturnType<typeof getCatalogoTipo>) => {
+  if (tipo === "terapia") return "Terapia";
+  if (tipo === "tratamiento") return "Tratamiento";
+  if (tipo === "servicio") return "Servicio";
+  return "Todos";
+};
+
+const catalogoTipoClass = (tipo: ReturnType<typeof getCatalogoTipo>) => {
+  if (tipo === "terapia") return "bg-indigo-100 text-indigo-700";
+  if (tipo === "tratamiento") return "bg-emerald-100 text-emerald-700";
+  return "bg-slate-100 text-slate-700";
+};
+
 export default function ServiciosPaquetesPage() {
   const router = useRouter();
   const { role, tenantId, loading: roleLoading } = useUserRole();
@@ -222,6 +244,7 @@ export default function ServiciosPaquetesPage() {
   const [tenantFilter, setTenantFilter] = useState("all");
   const [terapiaSearch, setTerapiaSearch] = useState("");
   const [paqueteSearch, setPaqueteSearch] = useState("");
+  const [catalogoTipo, setCatalogoTipo] = useState<CatalogoTipo>("all");
   const [terapiaEstado, setTerapiaEstado] = useState("all");
   const [paqueteEstado, setPaqueteEstado] = useState("all");
   const [debouncedTerapiaSearch] = useDebounce(terapiaSearch, 400);
@@ -281,6 +304,24 @@ export default function ServiciosPaquetesPage() {
       ? options.terapias
       : [editingPaquete.TerapiasPsicologos, ...options.terapias];
   }, [editingPaquete, options.terapias]);
+
+  const terapiasFiltradasPorTipo = useMemo(() => {
+    if (catalogoTipo === "all") return terapias;
+    return terapias.filter((terapia) => getCatalogoTipo(terapia) === catalogoTipo);
+  }, [catalogoTipo, terapias]);
+
+  const catalogoResumen = useMemo(
+    () => ({
+      terapia: terapias.filter((terapia) => getCatalogoTipo(terapia) === "terapia")
+        .length,
+      tratamiento: terapias.filter(
+        (terapia) => getCatalogoTipo(terapia) === "tratamiento",
+      ).length,
+      servicio: terapias.filter((terapia) => getCatalogoTipo(terapia) === "servicio")
+        .length,
+    }),
+    [terapias],
+  );
 
   const paqueteSaldoPreview = useMemo(() => {
     const total = Number(paqueteForm.sesionesTotales);
@@ -418,7 +459,10 @@ export default function ServiciosPaquetesPage() {
   const defaultTenantId = () =>
     options.currentTenantId?.toString() || tenantId?.toString() || "";
 
-  const handleOpenTerapiaModal = (terapia?: TerapiaRow) => {
+  const handleOpenTerapiaModal = (
+    terapia?: TerapiaRow,
+    defaultCategoria: "Servicio" | "Terapia" | "Tratamiento" = "Servicio",
+  ) => {
     if (terapia) {
       setEditingTerapia(terapia);
       setTerapiaForm({
@@ -439,7 +483,7 @@ export default function ServiciosPaquetesPage() {
         tenantId: tenant,
         nombre: "",
         descripcion: "",
-        categoria: "",
+        categoria: defaultCategoria,
         cantidadSesiones: "1",
         precioBase: "0",
         empresaId: "none",
@@ -645,7 +689,7 @@ export default function ServiciosPaquetesPage() {
         <div className="mx-auto flex max-w-7xl flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">
-              Servicios y Paquetes
+              Terapias, Tratamientos y Paquetes
             </h1>
             <p className="mt-1 text-sm text-slate-600">
               Administra el catálogo de atención psicológica y los paquetes activos.
@@ -662,8 +706,24 @@ export default function ServiciosPaquetesPage() {
             </Button>
             <Button
               type="button"
+              variant="outline"
+              onClick={() => handleOpenTerapiaModal(undefined, "Terapia")}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Nueva Terapia
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleOpenTerapiaModal(undefined, "Tratamiento")}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Nuevo Tratamiento
+            </Button>
+            <Button
+              type="button"
               className="bg-blue-600 hover:bg-blue-700"
-              onClick={() => handleOpenTerapiaModal()}
+              onClick={() => handleOpenTerapiaModal(undefined, "Servicio")}
             >
               <Plus className="mr-2 h-4 w-4" />
               Nuevo Servicio
@@ -676,7 +736,7 @@ export default function ServiciosPaquetesPage() {
         <div className="mx-auto flex max-w-7xl flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList>
-              <TabsTrigger value="terapias">Servicios/Terapias</TabsTrigger>
+              <TabsTrigger value="terapias">Terapias y Tratamientos</TabsTrigger>
               <TabsTrigger value="paquetes">Paquetes</TabsTrigger>
             </TabsList>
           </Tabs>
@@ -704,26 +764,68 @@ export default function ServiciosPaquetesPage() {
       <div className="flex-1 overflow-auto bg-slate-50 px-8 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mx-auto max-w-7xl">
           <TabsContent value="terapias" className="space-y-4">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase text-indigo-600">
+                  Terapias
+                </div>
+                <div className="mt-1 text-2xl font-bold text-indigo-900">
+                  {catalogoResumen.terapia}
+                </div>
+              </div>
+              <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3">
+                <div className="text-xs font-medium uppercase text-emerald-600">
+                  Tratamientos
+                </div>
+                <div className="mt-1 text-2xl font-bold text-emerald-900">
+                  {catalogoResumen.tratamiento}
+                </div>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
+                <div className="text-xs font-medium uppercase text-slate-500">
+                  Servicios
+                </div>
+                <div className="mt-1 text-2xl font-bold text-slate-900">
+                  {catalogoResumen.servicio}
+                </div>
+              </div>
+            </div>
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="relative w-full md:max-w-md">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <Input
                   value={terapiaSearch}
                   onChange={(event) => setTerapiaSearch(event.target.value)}
-                  placeholder="Buscar por servicio, categoría o empresa..."
+                  placeholder="Buscar por terapia, tratamiento, servicio o empresa..."
                   className="bg-white pl-10"
                 />
               </div>
-              <Select value={terapiaEstado} onValueChange={setTerapiaEstado}>
-                <SelectTrigger className="w-full bg-white md:w-48">
-                  <SelectValue placeholder="Estado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="active">Activos</SelectItem>
-                  <SelectItem value="inactive">Inactivos</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex flex-col gap-3 md:flex-row">
+                <Select
+                  value={catalogoTipo}
+                  onValueChange={(value) => setCatalogoTipo(value as CatalogoTipo)}
+                >
+                  <SelectTrigger className="w-full bg-white md:w-48">
+                    <SelectValue placeholder="Tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="terapia">Terapias</SelectItem>
+                    <SelectItem value="tratamiento">Tratamientos</SelectItem>
+                    <SelectItem value="servicio">Servicios</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={terapiaEstado} onValueChange={setTerapiaEstado}>
+                  <SelectTrigger className="w-full bg-white md:w-48">
+                    <SelectValue placeholder="Estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="active">Activos</SelectItem>
+                    <SelectItem value="inactive">Inactivos</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -731,17 +833,18 @@ export default function ServiciosPaquetesPage() {
                 <div className="flex h-64 items-center justify-center">
                   <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
                 </div>
-              ) : terapias.length === 0 ? (
+              ) : terapiasFiltradasPorTipo.length === 0 ? (
                 <div className="flex h-64 flex-col items-center justify-center text-slate-500">
                   <Package className="mb-3 h-10 w-10 text-slate-300" />
-                  <p className="font-medium">No hay servicios registrados</p>
-                  <p className="text-sm">Crea un servicio para que aparezca al registrar citas.</p>
+                  <p className="font-medium">No hay terapias ni tratamientos registrados</p>
+                  <p className="text-sm">Crea una terapia, tratamiento o servicio para que aparezca al registrar citas.</p>
                 </div>
               ) : (
                 <table className="w-full text-left text-sm">
                   <thead className="border-b border-slate-200 bg-slate-50 text-slate-700">
                     <tr>
-                      <th className="px-5 py-3">Servicio</th>
+                      <th className="px-5 py-3">Terapia / Tratamiento</th>
+                      <th className="px-5 py-3">Tipo</th>
                       <th className="px-5 py-3">Sesiones</th>
                       <th className="px-5 py-3">Precio base</th>
                       <th className="px-5 py-3">Empresa</th>
@@ -751,82 +854,91 @@ export default function ServiciosPaquetesPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {terapias.map((terapia) => (
-                      <tr key={terapia.id} className="hover:bg-slate-50">
-                        <td className="px-5 py-4">
-                          <div className="font-medium text-slate-900">{terapia.nombre}</div>
-                          <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
-                            {terapia.categoria && <span>{terapia.categoria}</span>}
-                            {isSuperAdmin &&
-                              terapia.Empresa_TerapiasPsicologos_tenantIdToEmpresa && (
-                                <span>
-                                  {terapia.Empresa_TerapiasPsicologos_tenantIdToEmpresa.nombre}
-                                </span>
-                              )}
-                          </div>
-                        </td>
-                        <td className="px-5 py-4 text-slate-700">
-                          {terapia.cantidadSesiones}
-                        </td>
-                        <td className="px-5 py-4 font-medium text-slate-900">
-                          {formatCurrency(terapia.precioBase)}
-                        </td>
-                        <td className="px-5 py-4 text-slate-600">
-                          {terapia.Empresa_TerapiasPsicologos_empresaIdToEmpresa?.nombre ||
-                            "Sin empresa"}
-                        </td>
-                        <td className="px-5 py-4">
-                          <Badge
-                            className={
-                              terapia.activo === false
-                                ? "bg-red-100 text-red-700"
-                                : "bg-green-100 text-green-700"
-                            }
-                          >
-                            {terapia.activo === false ? "Inactivo" : "Activo"}
-                          </Badge>
-                        </td>
-                        <td className="px-5 py-4 text-slate-700">
-                          {terapia._count.PaqueteAdquirido}
-                        </td>
-                        <td className="px-5 py-4">
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleOpenTerapiaModal(terapia)}
-                              title="Editar servicio"
+                    {terapiasFiltradasPorTipo.map((terapia) => {
+                      const tipo = getCatalogoTipo(terapia);
+
+                      return (
+                        <tr key={terapia.id} className="hover:bg-slate-50">
+                          <td className="px-5 py-4">
+                            <div className="font-medium text-slate-900">{terapia.nombre}</div>
+                            <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
+                              {terapia.categoria && <span>{terapia.categoria}</span>}
+                              {isSuperAdmin &&
+                                terapia.Empresa_TerapiasPsicologos_tenantIdToEmpresa && (
+                                  <span>
+                                    {terapia.Empresa_TerapiasPsicologos_tenantIdToEmpresa.nombre}
+                                  </span>
+                                )}
+                            </div>
+                          </td>
+                          <td className="px-5 py-4">
+                            <Badge className={catalogoTipoClass(tipo)}>
+                              {catalogoTipoLabel(tipo)}
+                            </Badge>
+                          </td>
+                          <td className="px-5 py-4 text-slate-700">
+                            {terapia.cantidadSesiones}
+                          </td>
+                          <td className="px-5 py-4 font-medium text-slate-900">
+                            {formatCurrency(terapia.precioBase)}
+                          </td>
+                          <td className="px-5 py-4 text-slate-600">
+                            {terapia.Empresa_TerapiasPsicologos_empresaIdToEmpresa?.nombre ||
+                              "Sin empresa"}
+                          </td>
+                          <td className="px-5 py-4">
+                            <Badge
+                              className={
+                                terapia.activo === false
+                                  ? "bg-red-100 text-red-700"
+                                  : "bg-green-100 text-green-700"
+                              }
                             >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            {terapia.activo === false ? (
+                              {terapia.activo === false ? "Inactivo" : "Activo"}
+                            </Badge>
+                          </td>
+                          <td className="px-5 py-4 text-slate-700">
+                            {terapia._count.PaqueteAdquirido}
+                          </td>
+                          <td className="px-5 py-4">
+                            <div className="flex justify-end gap-2">
                               <Button
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                className="text-green-600 hover:text-green-700"
-                                onClick={() => toggleTerapia(terapia, true)}
-                                title="Reactivar servicio"
+                                onClick={() => handleOpenTerapiaModal(terapia)}
+                                title="Editar terapia, tratamiento o servicio"
                               >
-                                <Power className="h-4 w-4" />
+                                <Edit className="h-4 w-4" />
                               </Button>
-                            ) : (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="text-red-500 hover:text-red-700"
-                                onClick={() => setTerapiaToDeactivate(terapia)}
-                                title="Desactivar servicio"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                              {terapia.activo === false ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-green-600 hover:text-green-700"
+                                  onClick={() => toggleTerapia(terapia, true)}
+                                  title="Reactivar terapia, tratamiento o servicio"
+                                >
+                                  <Power className="h-4 w-4" />
+                                </Button>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-red-500 hover:text-red-700"
+                                  onClick={() => setTerapiaToDeactivate(terapia)}
+                                  title="Desactivar terapia, tratamiento o servicio"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               )}
@@ -875,7 +987,7 @@ export default function ServiciosPaquetesPage() {
                   <thead className="border-b border-slate-200 bg-slate-50 text-slate-700">
                     <tr>
                       <th className="px-5 py-3">Titular</th>
-                      <th className="px-5 py-3">Servicio</th>
+                      <th className="px-5 py-3">Terapia / Tratamiento</th>
                       <th className="px-5 py-3">Sesiones</th>
                       <th className="px-5 py-3">Precio</th>
                       <th className="px-5 py-3">Estado</th>
@@ -968,10 +1080,10 @@ export default function ServiciosPaquetesPage() {
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              {editingTerapia ? "Editar Servicio" : "Nuevo Servicio"}
+              {editingTerapia ? "Editar Terapia o Tratamiento" : "Nueva Terapia, Tratamiento o Servicio"}
             </DialogTitle>
             <DialogDescription>
-              Define el nombre, sesiones y precio base disponible para nuevas citas.
+              Define el nombre, tipo, sesiones y precio base disponible para nuevas citas.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleTerapiaSubmit} className="space-y-4">
@@ -1013,7 +1125,7 @@ export default function ServiciosPaquetesPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="terapia-categoria">Categoría</Label>
+                <Label htmlFor="terapia-categoria">Tipo o categoría</Label>
                 <Input
                   id="terapia-categoria"
                   value={terapiaForm.categoria}
@@ -1023,7 +1135,7 @@ export default function ServiciosPaquetesPage() {
                       categoria: event.target.value,
                     }))
                   }
-                  placeholder="Ej: Terapia individual"
+                  placeholder="Ej: Terapia, Tratamiento, Servicio"
                 />
               </div>
               <div className="space-y-2">
@@ -1166,18 +1278,18 @@ export default function ServiciosPaquetesPage() {
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label>Servicio/Terapia</Label>
+                <Label>Terapia / Tratamiento / Servicio</Label>
                 <Select
                   value={paqueteForm.catalogoId}
                   onValueChange={handlePackageCatalogChange}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar servicio" />
+                    <SelectValue placeholder="Seleccionar terapia, tratamiento o servicio" />
                   </SelectTrigger>
                   <SelectContent>
                     {packageTerapiaOptions.map((terapia) => (
                       <SelectItem key={terapia.id} value={terapia.id.toString()}>
-                        {terapia.nombre}
+                        {terapia.nombre} - {catalogoTipoLabel(getCatalogoTipo(terapia))}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1388,7 +1500,7 @@ export default function ServiciosPaquetesPage() {
               </div>
               <div>
                 <span className="block text-xs uppercase tracking-wide text-slate-500">
-                  Servicio
+                  Terapia / Tratamiento
                 </span>
                 <span className="font-medium text-slate-900">
                   {viewingPaquete.TerapiasPsicologos.nombre}
@@ -1467,7 +1579,7 @@ export default function ServiciosPaquetesPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Desactivar Servicio</DialogTitle>
+            <DialogTitle>Desactivar Terapia, Tratamiento o Servicio</DialogTitle>
             <DialogDescription>
               El servicio dejará de aparecer al registrar nuevas citas, pero el historial
               de citas y paquetes existentes se conservará.
