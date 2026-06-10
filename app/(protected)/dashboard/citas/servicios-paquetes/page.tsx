@@ -380,7 +380,7 @@ export default function TerapiasTratamientosPage() {
               className="bg-blue-600 hover:bg-blue-700"
               onClick={() => handleOpenModal(undefined, "Tratamiento")}
             >
-              <Plus className="mr-2 h-4 w-4 bg-white/20" />
+              <Plus className="mr-2 h-4 w-4" />
               Nuevo Tratamiento
             </Button>
           </div>
