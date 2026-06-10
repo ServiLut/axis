@@ -63,7 +63,7 @@
     --accent: oklch(0.97 0.001 106.424);
     --accent-foreground: oklch(0.216 0.006 56.043);
     --destructive: oklch(
-        0.577 0.17 27.325
+        0.55 0.14 38
     ); /* Cambio color de la seccion clientes de sesiones */
     --border: oklch(0.923 0.003 48.717);
     --input: oklch(0.923 0.003 48.717);
