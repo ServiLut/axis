@@ -380,7 +380,7 @@ export default function TerapiasTratamientosPage() {
               className="bg-blue-600 hover:bg-blue-700"
               onClick={() => handleOpenModal(undefined, "Tratamiento")}
             >
-              <Plus className="mr-2 h-4 w-4 bg-gray-400" />
+              <Plus className="mr-2 h-4 w-4 bg-gray-300" />
               Nuevo Tratamiento
             </Button>
           </div>
@@ -462,12 +462,14 @@ export default function TerapiasTratamientosPage() {
                 </p>
               </div>
             ) : (
-              <table className="w-full text-left text-sm">
+              <table className="w-full text-center text-sm">
                 <thead className="border-b border-slate-200 bg-slate-50 text-slate-700">
                   <tr>
                     <th className="px-5 py-3">Nombre</th>
                     <th className="px-5 py-3">Categoria</th>
-                    <th className="px-5 py-3">Cantidad de Sesiones</th>
+                    <th className="px-5 py-3 text-center">
+                      Cantidad de Sesiones
+                    </th>
                     <th className="px-5 py-3">Precio Base</th>
                     <th className="px-5 py-3">Estado</th>
                     <th className="px-5 py-3 text-right">Acciones</th>
@@ -494,7 +496,7 @@ export default function TerapiasTratamientosPage() {
                       <td className="px-5 py-4 text-slate-700">
                         {terapia.categoria || "Sin categoría"}
                       </td>
-                      <td className="px-5 py-4 text-slate-700">
+                      <td className="px-5 py-4 text-center text-slate-700">
                         {terapia.cantidadSesiones}
                       </td>
                       <td className="px-5 py-4 font-medium text-slate-900">

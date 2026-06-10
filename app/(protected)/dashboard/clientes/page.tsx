@@ -5,12 +5,43 @@ import { saveAs } from "file-saver";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Search, User, FileText, Phone, Mail, MapPin, Eye, EyeOff, Trash2, Edit, Users, Building2, Map, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Car, MoreVertical, Briefcase, ExternalLink, Download } from "lucide-react";
+import {
+  Plus,
+  Search,
+  User,
+  FileText,
+  Phone,
+  Mail,
+  MapPin,
+  Eye,
+  EyeOff,
+  Trash2,
+  Edit,
+  Users,
+  Building2,
+  Map,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Car,
+  MoreVertical,
+  Briefcase,
+  ExternalLink,
+  Download,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { getClientes, getCliente, deleteCliente, getClientesStats, getClienteServicios, getAllClientesForExport } from "./actions";
+import {
+  getClientes,
+  getCliente,
+  deleteCliente,
+  getClientesStats,
+  getClienteServicios,
+  getAllClientesForExport,
+} from "./actions";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,12 +56,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Combobox } from "@/components/ui/combobox";
@@ -106,13 +132,18 @@ interface Stats {
 export default function ClientesPage() {
   const { tenantId, userId } = useUserRole();
   const [clientes, setClientes] = useState<Cliente[]>([]);
-  
+
   // Logic to block delete
-  const blockedUserIds = process.env.NEXT_PUBLIC_USER_ID_BLOCK_DELETE?.split(",").map(id => id.trim()) || [];
-  const isBlockedToDelete = userId ? blockedUserIds.includes(userId.toString()) : false;
+  const blockedUserIds =
+    process.env.NEXT_PUBLIC_USER_ID_BLOCK_DELETE?.split(",").map((id) =>
+      id.trim(),
+    ) || [];
+  const isBlockedToDelete = userId
+    ? blockedUserIds.includes(userId.toString())
+    : false;
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
-  
+
   // Search & Pagination State
   const [searchTerm, setSearchTerm] = useState("");
   const [showOnlyNoServices, setShowOnlyNoServices] = useState(false);
@@ -121,7 +152,7 @@ export default function ClientesPage() {
   const [barrioFilter, setBarrioFilter] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  
+
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
@@ -146,12 +177,17 @@ export default function ClientesPage() {
       return;
     }
 
-    const result = await getAllClientesForExport(token, debouncedSearchTerm, showOnlyNoServices, {
-      municipio: selectedMunicipio,
-      barrio: barrioFilter,
-      startDate,
-      endDate
-    });
+    const result = await getAllClientesForExport(
+      token,
+      debouncedSearchTerm,
+      showOnlyNoServices,
+      {
+        municipio: selectedMunicipio,
+        barrio: barrioFilter,
+        startDate,
+        endDate,
+      },
+    );
 
     if (result.error) {
       toast.error(result.error);
@@ -184,9 +220,11 @@ export default function ClientesPage() {
     ];
 
     if (tenantId === 4) {
-      columns.splice(8, 0, 
+      columns.splice(
+        8,
+        0,
         { header: "Paquete", key: "paquete", width: 25 },
-        { header: "Sesiones Restantes", key: "sesiones", width: 15 }
+        { header: "Sesiones Restantes", key: "sesiones", width: 15 },
       );
     }
 
@@ -202,8 +240,12 @@ export default function ClientesPage() {
         telefono2: cliente.telefono2 || "",
         correo: cliente.correo || "",
         createdAt: new Date(cliente.createdAt).toLocaleString(),
-        direcciones: cliente.direcciones.map((d) => `${d.direccion} (${d.municipio || ""})`).join(" | "),
-        vehiculos: cliente.vehiculos.map((v) => `${v.placa} ${v.marca || ""} ${v.modelo || ""}`).join(" | "),
+        direcciones: cliente.direcciones
+          .map((d) => `${d.direccion} (${d.municipio || ""})`)
+          .join(" | "),
+        vehiculos: cliente.vehiculos
+          .map((v) => `${v.placa} ${v.marca || ""} ${v.modelo || ""}`)
+          .join(" | "),
       };
 
       if (tenantId === 4 && cliente.PaqueteAdquirido?.[0]) {
@@ -216,19 +258,21 @@ export default function ClientesPage() {
 
     worksheet.getRow(1).font = { bold: true };
     worksheet.getRow(1).fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'F2F2F2' }
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "F2F2F2" },
     };
 
     const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-    saveAs(blob, `clientes_${new Date().toISOString().split('T')[0]}.xlsx`);
+    const blob = new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    saveAs(blob, `clientes_${new Date().toISOString().split("T")[0]}.xlsx`);
     setIsExporting(false);
   };
 
   const [showKPIs, setShowKPIs] = useState(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       const saved = localStorage.getItem("showKPIs_clientes");
       return saved !== null ? saved === "true" : true;
     }
@@ -272,13 +316,20 @@ export default function ClientesPage() {
         return;
       }
 
-      const result = await getClientes(token, currentPage, itemsPerPage, debouncedSearchTerm, showOnlyNoServices, {
-        municipio: selectedMunicipio,
-        barrio: barrioFilter,
-        startDate,
-        endDate
-      });
-      
+      const result = await getClientes(
+        token,
+        currentPage,
+        itemsPerPage,
+        debouncedSearchTerm,
+        showOnlyNoServices,
+        {
+          municipio: selectedMunicipio,
+          barrio: barrioFilter,
+          startDate,
+          endDate,
+        },
+      );
+
       if (result.error) {
         toast.error(result.error);
         if (result.error === "No autorizado") {
@@ -294,7 +345,17 @@ export default function ClientesPage() {
     };
 
     fetchClientes();
-  }, [router, currentPage, debouncedSearchTerm, refreshTrigger, showOnlyNoServices, selectedMunicipio, barrioFilter, startDate, endDate]);
+  }, [
+    router,
+    currentPage,
+    debouncedSearchTerm,
+    refreshTrigger,
+    showOnlyNoServices,
+    selectedMunicipio,
+    barrioFilter,
+    startDate,
+    endDate,
+  ]);
 
   const handleViewCliente = async (id: number) => {
     const token = localStorage.getItem("token");
@@ -345,10 +406,13 @@ export default function ClientesPage() {
     } else {
       toast.success(result.message);
       // Actualizar la lista localmente
-      setRefreshTrigger(prev => prev + 1); // Trigger refresh
+      setRefreshTrigger((prev) => prev + 1); // Trigger refresh
       // Also update stats if needed or just decrement locally
       if (stats) {
-          setStats({...stats, totalClientes: Math.max(0, stats.totalClientes - 1)});
+        setStats({
+          ...stats,
+          totalClientes: Math.max(0, stats.totalClientes - 1),
+        });
       }
       setIsDeleteModalOpen(false);
       setClientToDelete(null);
@@ -374,7 +438,11 @@ export default function ClientesPage() {
               className="gap-2"
               title={showKPIs ? "Ocultar indicadores" : "Mostrar indicadores"}
             >
-              {showKPIs ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              {showKPIs ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
               <span className="hidden sm:inline">
                 {showKPIs ? "Ocultar KPIs" : "Mostrar KPIs"}
               </span>
@@ -392,7 +460,7 @@ export default function ClientesPage() {
               )}
               <span className="hidden sm:inline">Exportar Excel</span>
             </Button>
-            <Button 
+            <Button
               onClick={() => router.push("/dashboard/clientes/nuevo")}
               className="bg-blue-600 hover:bg-blue-700"
             >
@@ -409,31 +477,44 @@ export default function ClientesPage() {
           <div className="max-w-7xl mx-auto grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Clientes</CardTitle>
+                <CardTitle className="text-sm font-medium">
+                  Total Clientes
+                </CardTitle>
                 <Users className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{stats.totalClientes}</div>
-                <p className="text-xs text-muted-foreground">Registrados en el sistema</p>
+                <p className="text-xs text-muted-foreground">
+                  Registrados en el sistema
+                </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Municipios Frecuentes</CardTitle>
+                <CardTitle className="text-sm font-medium">
+                  Municipios Frecuentes
+                </CardTitle>
                 <Map className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
                   {stats.municipios.length > 0 ? (
                     stats.municipios.slice(0, 3).map((m, i) => (
-                      <div key={i} className="flex items-center justify-between text-sm">
-                        <span className="truncate text-muted-foreground">{m.nombre}</span>
+                      <div
+                        key={i}
+                        className="flex items-center justify-between text-sm"
+                      >
+                        <span className="truncate text-muted-foreground">
+                          {m.nombre}
+                        </span>
                         <span className="font-bold">{m.cantidad}</span>
                       </div>
                     ))
                   ) : (
-                    <span className="text-xs text-muted-foreground">Sin datos registrados</span>
+                    <span className="text-xs text-muted-foreground">
+                      Sin datos registrados
+                    </span>
                   )}
                 </div>
               </CardContent>
@@ -441,20 +522,29 @@ export default function ClientesPage() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Barrios Frecuentes</CardTitle>
+                <CardTitle className="text-sm font-medium">
+                  Barrios Frecuentes
+                </CardTitle>
                 <Building2 className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
                   {stats.barrios.length > 0 ? (
                     stats.barrios.slice(0, 3).map((b, i) => (
-                      <div key={i} className="flex items-center justify-between text-sm">
-                        <span className="truncate text-muted-foreground">{b.nombre}</span>
+                      <div
+                        key={i}
+                        className="flex items-center justify-between text-sm"
+                      >
+                        <span className="truncate text-muted-foreground">
+                          {b.nombre}
+                        </span>
                         <span className="font-bold">{b.cantidad}</span>
                       </div>
                     ))
                   ) : (
-                    <span className="text-xs text-muted-foreground">Sin datos registrados</span>
+                    <span className="text-xs text-muted-foreground">
+                      Sin datos registrados
+                    </span>
                   )}
                 </div>
               </CardContent>
@@ -475,7 +565,7 @@ export default function ClientesPage() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          
+
           <Combobox
             options={[
               { value: "all", label: "Todos los municipios" },
@@ -517,17 +607,17 @@ export default function ClientesPage() {
               className="w-[130px] border-0 focus-visible:ring-0 h-7 p-1 text-xs"
             />
           </div>
-          
+
           <div className="flex items-center space-x-2 bg-white px-3 py-1.5 rounded-md border border-slate-200 shadow-sm">
-            <Checkbox 
-              id="no-services" 
+            <Checkbox
+              id="no-services"
               checked={showOnlyNoServices}
               onCheckedChange={(checked) => {
                 setShowOnlyNoServices(checked as boolean);
                 setCurrentPage(1);
               }}
             />
-            <Label 
+            <Label
               htmlFor="no-services"
               className="text-xs font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer whitespace-nowrap"
             >
@@ -535,7 +625,12 @@ export default function ClientesPage() {
             </Label>
           </div>
 
-          {(searchTerm || selectedMunicipio !== "all" || barrioFilter || startDate || endDate || showOnlyNoServices) && (
+          {(searchTerm ||
+            selectedMunicipio !== "all" ||
+            barrioFilter ||
+            startDate ||
+            endDate ||
+            showOnlyNoServices) && (
             <Button
               variant="ghost"
               size="sm"
@@ -637,149 +732,186 @@ export default function ClientesPage() {
             </div>
           ) : (
             <>
-            <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-slate-50 text-slate-700 border-b border-slate-200 font-medium">
-                  <tr>
-                    <th className="px-6 py-4">Cliente</th>
-                    {tenantId === 4 && (
-                      <>
-                        <th className="px-6 py-4">Paquete</th>
-                        <th className="px-6 py-4">Sesiones</th>
-                      </>
-                    )}
-                    <th className="px-6 py-4">Documento</th>
-                    <th className="px-6 py-4">Contacto</th>
-                    <th className="px-6 py-4">Ubicación</th>
-                    <th className="px-6 py-4 text-right">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {clientes.map((cliente) => (
-                    <tr 
-                      key={cliente.id} 
-                      className="hover:bg-slate-50 transition-colors"
-                    >
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-semibold shrink-0">
-                            {cliente.nombre?.[0]?.toUpperCase()}{cliente.apellido?.[0]?.toUpperCase()}
-                          </div>
-                          <div>
-                            <div className="font-medium text-slate-900">
-                              {cliente.nombre} {cliente.apellido}
-                            </div>
-                            <div className="text-slate-500 text-xs mt-0.5">
-                              Registrado el {new Date(cliente.createdAt).toLocaleDateString()}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
+              <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-slate-50 text-slate-700 border-b border-slate-200 font-medium">
+                    <tr>
+                      <th className="px-6 py-4">Cliente</th>
                       {tenantId === 4 && (
                         <>
-                          <td className="px-6 py-4">
-                            {cliente.PaqueteAdquirido?.[0] ? (
-                              <span className="font-medium text-blue-600">
-                                {cliente.PaqueteAdquirido[0].TerapiasPsicologos.nombre}
-                              </span>
-                            ) : (
-                              <span className="text-slate-400 text-xs">Sin paquete activo</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4">
-                            {cliente.PaqueteAdquirido?.[0] ? (
-                              <Badge variant={cliente.PaqueteAdquirido[0].saldoRestante <= 1 ? "destructive" : "secondary"}>
-                                {cliente.PaqueteAdquirido[0].saldoRestante} / {cliente.PaqueteAdquirido[0].sesionesTotales}
-                              </Badge>
-                            ) : (
-                              "-"
-                            )}
-                          </td>
+                          <th className="px-6 py-4">Paquete</th>
+                          <th className="px-6 py-4">Sesiones</th>
                         </>
                       )}
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2 text-slate-600">
-                          <FileText className="h-4 w-4 text-slate-400 shrink-0" />
-                          <div className="flex flex-col">
-                            <span className="font-medium text-slate-900">{cliente.numeroDocumento}</span>
-                            <span className="text-xs text-slate-500">{cliente.tipoDocumento}</span>
+                      <th className="px-6 py-4">Documento</th>
+                      <th className="px-6 py-4">Contacto</th>
+                      <th className="px-6 py-4">Ubicación</th>
+                      <th className="px-6 py-4 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {clientes.map((cliente) => (
+                      <tr
+                        key={cliente.id}
+                        className="hover:bg-slate-50 transition-colors"
+                      >
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-semibold shrink-0">
+                              {cliente.nombre?.[0]?.toUpperCase()}
+                              {cliente.apellido?.[0]?.toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="font-medium text-slate-900">
+                                {cliente.nombre} {cliente.apellido}
+                              </div>
+                              <div className="text-slate-500 text-xs mt-0.5">
+                                Registrado el{" "}
+                                {new Date(
+                                  cliente.createdAt,
+                                ).toLocaleDateString()}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="space-y-1">
+                        </td>
+                        {tenantId === 4 && (
+                          <>
+                            <td className="px-6 py-4">
+                              {cliente.PaqueteAdquirido?.[0] ? (
+                                <span className="font-medium text-blue-600">
+                                  {
+                                    cliente.PaqueteAdquirido[0]
+                                      .TerapiasPsicologos.nombre
+                                  }
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 text-xs">
+                                  Sin paquete activo
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4">
+                              {cliente.PaqueteAdquirido?.[0] ? (
+                                <Badge
+                                  variant={
+                                    cliente.PaqueteAdquirido[0].saldoRestante <=
+                                    1
+                                      ? "destructive"
+                                      : "secondary"
+                                  }
+                                >
+                                  {cliente.PaqueteAdquirido[0].saldoRestante} /{" "}
+                                  {cliente.PaqueteAdquirido[0].sesionesTotales}
+                                </Badge>
+                              ) : (
+                                "-"
+                              )}
+                            </td>
+                          </>
+                        )}
+                        <td className="px-6 py-4">
                           <div className="flex items-center gap-2 text-slate-600">
-                            <Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                            <span>{cliente.telefono}</span>
+                            <FileText className="h-4 w-4 text-slate-400 shrink-0" />
+                            <div className="flex flex-col">
+                              <span className="font-medium text-slate-900">
+                                {cliente.numeroDocumento}
+                              </span>
+                              <span className="text-xs text-slate-500">
+                                {cliente.tipoDocumento}
+                              </span>
+                            </div>
                           </div>
-                          {cliente.telefono2 && cliente.telefono2 !== "No Concretado" && (
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="space-y-1">
                             <div className="flex items-center gap-2 text-slate-600">
                               <Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                              <span>{cliente.telefono2}</span>
+                              <span>{cliente.telefono}</span>
                             </div>
-                          )}
-                          {cliente.correo && (
-                            <div className="flex items-center gap-2 text-slate-600">
-                              <Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                              <span className="truncate max-w-[180px]">{cliente.correo}</span>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        {cliente.direcciones[0] ? (
-                          <div className="flex items-start gap-2 text-slate-600 max-w-[200px]">
-                            <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0 mt-0.5" />
-                            <span className="line-clamp-2 text-sm">
-                              {cliente.direcciones[0].direccion}
-                              {cliente.direcciones[0].municipio && `, ${cliente.direcciones[0].municipio}`}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-slate-400 italic text-xs">Sin dirección</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreVertical className="h-4 w-4" />
-                              <span className="sr-only">Abrir menú</span>
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleViewCliente(cliente.id)}>
-                              <Eye className="mr-2 h-4 w-4" />
-                              Ver detalles
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleViewServices(cliente)}>
-                              <Briefcase className="mr-2 h-4 w-4" />
-                              Servicios
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => router.push(`/dashboard/clientes/${cliente.id}/editar`)}>
-                              <Edit className="mr-2 h-4 w-4" />
-                              Editar
-                            </DropdownMenuItem>
-                            {!isBlockedToDelete && (
-                              <DropdownMenuItem 
-                                className="text-red-600 focus:text-red-600"
-                                onClick={() => handleDeleteClick(cliente.id)}
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Eliminar
-                              </DropdownMenuItem>
+                            {cliente.telefono2 &&
+                              cliente.telefono2 !== "No Concretado" && (
+                                <div className="flex items-center gap-2 text-slate-600">
+                                  <Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                  <span>{cliente.telefono2}</span>
+                                </div>
+                              )}
+                            {cliente.correo && (
+                              <div className="flex items-center gap-2 text-slate-600">
+                                <Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                <span className="truncate max-w-[180px]">
+                                  {cliente.correo}
+                                </span>
+                              </div>
                             )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          {cliente.direcciones[0] ? (
+                            <div className="flex items-start gap-2 text-slate-600 max-w-[200px]">
+                              <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0 mt-0.5" />
+                              <span className="line-clamp-2 text-sm">
+                                {cliente.direcciones[0].direccion}
+                                {cliente.direcciones[0].municipio &&
+                                  `, ${cliente.direcciones[0].municipio}`}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 italic text-xs">
+                              Sin dirección
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreVertical className="h-4 w-4" />
+                                <span className="sr-only">Abrir menú</span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => handleViewCliente(cliente.id)}
+                              >
+                                <Eye className="mr-2 h-4 w-4" />
+                                Ver detalles
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleViewServices(cliente)}
+                              >
+                                <Briefcase className="mr-2 h-4 w-4" />
+                                Servicios
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  router.push(
+                                    `/dashboard/clientes/${cliente.id}/editar`,
+                                  )
+                                }
+                              >
+                                Editar
+                                <Edit className="mr-2 h-4 w-4" />
+                              </DropdownMenuItem>
+                              {!isBlockedToDelete && (
+                                <DropdownMenuItem
+                                  className="text-red-600 focus:text-red-600"
+                                  onClick={() => handleDeleteClick(cliente.id)}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Eliminar
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
                 <div className="flex items-center justify-between border-t border-slate-200 bg-white px-4 py-3 sm:px-6 rounded-lg shadow-sm">
                   <div className="flex flex-1 justify-between sm:hidden">
                     <Button
@@ -805,17 +937,14 @@ export default function ClientesPage() {
                     <div>
                       <p className="text-sm text-slate-700">
                         Mostrando{" "}
-                        <span className="font-medium">{((currentPage - 1) * itemsPerPage) + 1}</span> a{" "}
                         <span className="font-medium">
-                          {Math.min(
-                            currentPage * itemsPerPage,
-                            totalRecords,
-                          )}
+                          {(currentPage - 1) * itemsPerPage + 1}
                         </span>{" "}
-                        de{" "}
+                        a{" "}
                         <span className="font-medium">
-                          {totalRecords}
+                          {Math.min(currentPage * itemsPerPage, totalRecords)}
                         </span>{" "}
+                        de <span className="font-medium">{totalRecords}</span>{" "}
                         resultados
                       </p>
                     </div>
@@ -885,54 +1014,69 @@ export default function ClientesPage() {
           <DialogHeader>
             <DialogTitle>Historial de Servicios</DialogTitle>
             <DialogDescription>
-              Servicios realizados para {selectedCliente?.nombre} {selectedCliente?.apellido}
+              Servicios realizados para {selectedCliente?.nombre}{" "}
+              {selectedCliente?.apellido}
             </DialogDescription>
           </DialogHeader>
 
           <div className="mt-4">
-             {clientServices.length > 0 ? (
-                <div className="rounded-md border">
-                  <table className="w-full text-sm text-left">
-                    <thead className="bg-slate-50 border-b font-medium text-slate-500">
-                      <tr>
-                        <th className="px-4 py-3">No. Orden</th>
-                        <th className="px-4 py-3">Fecha</th>
-                        <th className="px-4 py-3">Servicio</th>
-                        <th className="px-4 py-3">Técnico</th>
-                        <th className="px-4 py-3">Estado</th>
+            {clientServices.length > 0 ? (
+              <div className="rounded-md border">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-slate-50 border-b font-medium text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3">No. Orden</th>
+                      <th className="px-4 py-3">Fecha</th>
+                      <th className="px-4 py-3">Servicio</th>
+                      <th className="px-4 py-3">Técnico</th>
+                      <th className="px-4 py-3">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {clientServices.map((servicio) => (
+                      <tr key={servicio.id} className="hover:bg-slate-50">
+                        <td className="px-4 py-3 font-medium">
+                          {servicio.numeroOrden || "N/A"}
+                        </td>
+                        <td className="px-4 py-3">
+                          {servicio.fechaVisita
+                            ? new Date(
+                                servicio.fechaVisita,
+                              ).toLocaleDateString()
+                            : "-"}
+                        </td>
+                        <td className="px-4 py-3">
+                          {servicio.servicio?.nombre}
+                        </td>
+                        <td className="px-4 py-3">
+                          {servicio.tecnico
+                            ? `${servicio.tecnico.nombre} ${servicio.tecnico.apellido}`
+                            : "Sin asignar"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge
+                            variant={
+                              servicio.estadoServicio?.nombre === "Terminado"
+                                ? "default"
+                                : "secondary"
+                            }
+                          >
+                            {servicio.estadoServicio?.nombre}
+                          </Badge>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {clientServices.map((servicio) => (
-                        <tr key={servicio.id} className="hover:bg-slate-50">
-                          <td className="px-4 py-3 font-medium">
-                            {servicio.numeroOrden || "N/A"}
-                          </td>
-                          <td className="px-4 py-3">
-                            {servicio.fechaVisita ? new Date(servicio.fechaVisita).toLocaleDateString() : "-"}
-                          </td>
-                          <td className="px-4 py-3">
-                            {servicio.servicio?.nombre}
-                          </td>
-                          <td className="px-4 py-3">
-                            {servicio.tecnico ? `${servicio.tecnico.nombre} ${servicio.tecnico.apellido}` : "Sin asignar"}
-                          </td>
-                          <td className="px-4 py-3">
-                            <Badge variant={servicio.estadoServicio?.nombre === "Terminado" ? "default" : "secondary"}>
-                              {servicio.estadoServicio?.nombre}
-                            </Badge>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-             ) : (
-                <div className="flex flex-col items-center justify-center py-10 text-slate-500 border rounded-md border-dashed">
-                  <Briefcase className="h-10 w-10 mb-2 opacity-50" />
-                  <p>No se encontraron servicios registrados para este cliente.</p>
-                </div>
-             )}
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-10 text-slate-500 border rounded-md border-dashed">
+                <Briefcase className="h-10 w-10 mb-2 opacity-50" />
+                <p>
+                  No se encontraron servicios registrados para este cliente.
+                </p>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -956,56 +1100,66 @@ export default function ClientesPage() {
                 </h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <span className="text-sm text-slate-500 block">Nombre Completo</span>
+                    <span className="text-sm text-slate-500 block">
+                      Nombre Completo
+                    </span>
                     <span className="text-base font-medium text-slate-900">
                       {selectedCliente.nombre} {selectedCliente.apellido}
                     </span>
                   </div>
                   <div>
-                    <span className="text-sm text-slate-500 block">Documento</span>
+                    <span className="text-sm text-slate-500 block">
+                      Documento
+                    </span>
                     <span className="text-base font-medium text-slate-900">
-                      {selectedCliente.tipoDocumento}: {selectedCliente.numeroDocumento}
+                      {selectedCliente.tipoDocumento}:{" "}
+                      {selectedCliente.numeroDocumento}
                     </span>
                   </div>
                 </div>
               </div>
 
               {/* Documentos */}
-              {tenantId === 4 && (selectedCliente.documentoPath || selectedCliente.registroDocumento) && (
+              {tenantId === 4 &&
+                (selectedCliente.documentoPath ||
+                  selectedCliente.registroDocumento) && (
                   <div className="space-y-3">
-                      <h3 className="text-sm font-medium text-slate-500 uppercase tracking-wider border-b pb-2">
-                        Documentos
-                      </h3>
-                      <div className="grid grid-cols-2 gap-4">
-                          {selectedCliente.documentoPath && selectedCliente.documentoPath !== "No Concretado" && (
-                              <div className="flex items-center gap-2">
-                                  <FileText className="h-4 w-4 text-blue-600" />
-                                  <a 
-                                      href={selectedCliente.documentoPath}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-sm text-blue-600 hover:underline font-medium"
-                                  >
-                                      Ver Documento de Identidad
-                                  </a>
-                              </div>
-                          )}
-                          {selectedCliente.registroDocumento && selectedCliente.registroDocumento !== "No Concretado" && (
-                              <div className="flex items-center gap-2">
-                                  <FileText className="h-4 w-4 text-blue-600" />
-                                  <a 
-                                      href={selectedCliente.registroDocumento}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-sm text-blue-600 hover:underline font-medium"
-                                  >
-                                      Ver Registro (RUT/Cámara)
-                                  </a>
-                              </div>
-                          )}
-                      </div>
+                    <h3 className="text-sm font-medium text-slate-500 uppercase tracking-wider border-b pb-2">
+                      Documentos
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      {selectedCliente.documentoPath &&
+                        selectedCliente.documentoPath !== "No Concretado" && (
+                          <div className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-blue-600" />
+                            <a
+                              href={selectedCliente.documentoPath}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-blue-600 hover:underline font-medium"
+                            >
+                              Ver Documento de Identidad
+                            </a>
+                          </div>
+                        )}
+                      {selectedCliente.registroDocumento &&
+                        selectedCliente.registroDocumento !==
+                          "No Concretado" && (
+                          <div className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-blue-600" />
+                            <a
+                              href={selectedCliente.registroDocumento}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-blue-600 hover:underline font-medium"
+                            >
+                              Ver Registro (RUT/Cámara)
+                            </a>
+                          </div>
+                        )}
+                    </div>
                   </div>
-              )}
+                )}
 
               {/* Contacto */}
               <div className="space-y-3">
@@ -1014,26 +1168,37 @@ export default function ClientesPage() {
                 </h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <span className="text-sm text-slate-500 block">Teléfonos</span>
+                    <span className="text-sm text-slate-500 block">
+                      Teléfonos
+                    </span>
                     <div className="space-y-1 mt-1">
                       <div className="flex items-center gap-2">
                         <Phone className="h-4 w-4 text-slate-400" />
-                        <span className="text-base font-medium text-slate-900">{selectedCliente.telefono}</span>
+                        <span className="text-base font-medium text-slate-900">
+                          {selectedCliente.telefono}
+                        </span>
                       </div>
-                      {selectedCliente.telefono2 && selectedCliente.telefono2 !== "No Concretado" && (
-                        <div className="flex items-center gap-2">
-                          <Phone className="h-4 w-4 text-slate-400" />
-                          <span className="text-base font-medium text-slate-900">{selectedCliente.telefono2}</span>
-                        </div>
-                      )}
+                      {selectedCliente.telefono2 &&
+                        selectedCliente.telefono2 !== "No Concretado" && (
+                          <div className="flex items-center gap-2">
+                            <Phone className="h-4 w-4 text-slate-400" />
+                            <span className="text-base font-medium text-slate-900">
+                              {selectedCliente.telefono2}
+                            </span>
+                          </div>
+                        )}
                     </div>
                   </div>
                   {selectedCliente.correo && (
                     <div>
-                      <span className="text-sm text-slate-500 block">Correo Electrónico</span>
+                      <span className="text-sm text-slate-500 block">
+                        Correo Electrónico
+                      </span>
                       <div className="flex items-center gap-2 mt-1">
                         <Mail className="h-4 w-4 text-slate-400" />
-                        <span className="text-base font-medium text-slate-900">{selectedCliente.correo}</span>
+                        <span className="text-base font-medium text-slate-900">
+                          {selectedCliente.correo}
+                        </span>
                       </div>
                     </div>
                   )}
@@ -1047,35 +1212,57 @@ export default function ClientesPage() {
                 </h3>
                 <div className="grid grid-cols-1 gap-4">
                   {selectedCliente.direcciones.map((direccion, idx) => (
-                    <div key={idx} className="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                    <div
+                      key={idx}
+                      className="bg-slate-50 p-4 rounded-lg border border-slate-100"
+                    >
                       <div className="flex items-start gap-3">
                         <MapPin className="h-5 w-5 text-slate-400 mt-0.5 shrink-0" />
                         <div className="space-y-1">
-                          <p className="font-medium text-slate-900">{direccion.direccion}</p>
+                          <p className="font-medium text-slate-900">
+                            {direccion.direccion}
+                          </p>
                           <div className="text-sm text-slate-600 flex flex-wrap gap-x-4 gap-y-1">
-                            {direccion.municipio && <span>{direccion.municipio}</span>}
-                            {direccion.barrio && <span>Barrio: {direccion.barrio}</span>}
+                            {direccion.municipio && (
+                              <span>{direccion.municipio}</span>
+                            )}
+                            {direccion.barrio && (
+                              <span>Barrio: {direccion.barrio}</span>
+                            )}
                           </div>
-                          {(direccion.bloque || direccion.unidad || direccion.piso) && (
+                          {(direccion.bloque ||
+                            direccion.unidad ||
+                            direccion.piso) && (
                             <div className="text-xs text-slate-500 flex flex-wrap gap-x-3 mt-1">
-                              {direccion.bloque && <span>Bloque: {direccion.bloque}</span>}
-                              {direccion.piso && <span>Piso: {direccion.piso}</span>}
-                              {direccion.unidad && <span>Unidad: {direccion.unidad}</span>}
+                              {direccion.bloque && (
+                                <span>Bloque: {direccion.bloque}</span>
+                              )}
+                              {direccion.piso && (
+                                <span>Piso: {direccion.piso}</span>
+                              )}
+                              {direccion.unidad && (
+                                <span>Unidad: {direccion.unidad}</span>
+                              )}
                             </div>
                           )}
-                          {direccion.linkMaps && direccion.linkMaps !== "No Concretado" && (
-                            <div className="mt-2">
-                              <a 
-                                href={direccion.linkMaps.startsWith('http') ? direccion.linkMaps : `https://${direccion.linkMaps}`} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"
-                              >
-                                <ExternalLink className="h-3.5 w-3.5" />
-                                Ver en Google Maps
-                              </a>
-                            </div>
-                          )}
+                          {direccion.linkMaps &&
+                            direccion.linkMaps !== "No Concretado" && (
+                              <div className="mt-2">
+                                <a
+                                  href={
+                                    direccion.linkMaps.startsWith("http")
+                                      ? direccion.linkMaps
+                                      : `https://${direccion.linkMaps}`
+                                  }
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                                >
+                                  <ExternalLink className="h-3.5 w-3.5" />
+                                  Ver en Google Maps
+                                </a>
+                              </div>
+                            )}
                         </div>
                       </div>
                     </div>
@@ -1091,7 +1278,10 @@ export default function ClientesPage() {
                 {selectedCliente.vehiculos.length > 0 ? (
                   <div className="grid grid-cols-1 gap-4">
                     {selectedCliente.vehiculos.map((vehiculo, idx) => (
-                      <div key={idx} className="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                      <div
+                        key={idx}
+                        className="bg-slate-50 p-4 rounded-lg border border-slate-100"
+                      >
                         <div className="flex items-start gap-3">
                           <Car className="h-5 w-5 text-slate-400 mt-0.5 shrink-0" />
                           <div className="space-y-1">
@@ -1126,22 +1316,25 @@ export default function ClientesPage() {
 
               <div className="pt-4 border-t border-slate-100">
                 <div className="text-xs text-slate-400 text-right">
-                  Registrado el {new Date(selectedCliente.createdAt).toLocaleDateString()}
+                  Registrado el{" "}
+                  {new Date(selectedCliente.createdAt).toLocaleDateString()}
                 </div>
               </div>
             </div>
           )}
           <DialogFooter className="mt-6">
-            <Button 
-                onClick={() => {
-                  if (selectedCliente) {
-                    router.push(`/dashboard/clientes/nuevo?fixClientId=${selectedCliente.id}`);
-                  }
-                }}
-                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700"
+            <Button
+              onClick={() => {
+                if (selectedCliente) {
+                  router.push(
+                    `/dashboard/clientes/nuevo?fixClientId=${selectedCliente.id}`,
+                  );
+                }
+              }}
+              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700"
             >
-                <MapPin className="mr-2 h-4 w-4" />
-                Registrar Direcciones
+              <MapPin className="mr-2 h-4 w-4" />
+              Registrar Direcciones
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1153,7 +1346,8 @@ export default function ClientesPage() {
           <DialogHeader>
             <DialogTitle>¿Estás seguro?</DialogTitle>
             <DialogDescription>
-              Esta acción no se puede deshacer. Esto eliminará permanentemente al cliente y todas sus direcciones asociadas.
+              Esta acción no se puede deshacer. Esto eliminará permanentemente
+              al cliente y todas sus direcciones asociadas.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex gap-2 sm:justify-end">
