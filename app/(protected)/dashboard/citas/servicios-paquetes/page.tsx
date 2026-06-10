@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDebounce } from "use-debounce";
 import { toast } from "sonner";
@@ -99,6 +99,7 @@ export default function TerapiasTratamientosPage() {
   const [terapias, setTerapias] = useState<TerapiaRow[]>([]);
   const [tenantFilter, setTenantFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [categoriaFilter, setCategoriaFilter] = useState("all");
   const [estadoFilter, setEstadoFilter] = useState("all");
   const [debouncedSearchTerm] = useDebounce(searchTerm, 400);
 
@@ -124,6 +125,35 @@ export default function TerapiasTratamientosPage() {
 
   const defaultTenantId = () =>
     options.currentTenantId?.toString() || tenantId?.toString() || "";
+
+  const categorias = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          terapias
+            .map((terapia) => terapia.categoria?.trim())
+            .filter((categoria): categoria is string => Boolean(categoria)),
+        ),
+      ).sort((a, b) => a.localeCompare(b, "es")),
+    [terapias],
+  );
+
+  const categoriaSeleccionada =
+    categoriaFilter !== "all" && categorias.includes(categoriaFilter)
+      ? categoriaFilter
+      : "all";
+
+  const terapiasFiltradas = useMemo(
+    () =>
+      categoriaSeleccionada === "all"
+        ? terapias
+        : terapias.filter(
+            (terapia) =>
+              (terapia.categoria?.trim() || "Sin categoría") ===
+              categoriaSeleccionada,
+          ),
+    [categoriaSeleccionada, terapias],
+  );
 
   const loadData = useCallback(async () => {
     const token = localStorage.getItem("token");
@@ -358,6 +388,19 @@ export default function TerapiasTratamientosPage() {
             />
           </div>
           <div className="flex flex-col gap-3 md:flex-row">
+            <Select value={categoriaSeleccionada} onValueChange={setCategoriaFilter}>
+              <SelectTrigger className="w-full bg-white md:w-56">
+                <SelectValue placeholder="Categoría" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las categorías</SelectItem>
+                {categorias.map((categoria) => (
+                  <SelectItem key={categoria} value={categoria}>
+                    {categoria}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select value={estadoFilter} onValueChange={setEstadoFilter}>
               <SelectTrigger className="w-full bg-white md:w-48">
                 <SelectValue placeholder="Estado" />
@@ -394,7 +437,7 @@ export default function TerapiasTratamientosPage() {
               <div className="flex h-64 items-center justify-center">
                 <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
               </div>
-            ) : terapias.length === 0 ? (
+            ) : terapiasFiltradas.length === 0 ? (
               <div className="flex h-64 flex-col items-center justify-center text-slate-500">
                 <BookOpen className="mb-3 h-10 w-10 text-slate-300" />
                 <p className="font-medium">No hay terapias ni tratamientos registrados</p>
@@ -415,7 +458,7 @@ export default function TerapiasTratamientosPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {terapias.map((terapia) => (
+                  {terapiasFiltradas.map((terapia) => (
                     <tr key={terapia.id} className="hover:bg-slate-50">
                       <td className="px-5 py-4">
                         <div className="font-medium text-slate-900">
