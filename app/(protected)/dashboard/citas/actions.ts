@@ -220,23 +220,37 @@ export async function getCitas(
       )
     ).map((paqueteId) => BigInt(paqueteId));
 
-    const sesionesRealizadasRows =
+    const citasRealizadasDelPaquete =
       paqueteIds.length > 0
-        ? await prisma.citasPsicologos.groupBy({
-            by: ["paqueteId"],
+        ? await prisma.citasPsicologos.findMany({
             where: {
               paqueteId: { in: paqueteIds },
               realizada: true,
             },
-            _count: { _all: true },
+            orderBy: [
+              { fechaCita: "asc" },
+              { horaInicio: "asc" },
+              { id: "asc" },
+            ],
+            select: {
+              id: true,
+              paqueteId: true,
+            },
           })
         : [];
 
-    const sesionesRealizadasPorPaquete = new Map(
-      sesionesRealizadasRows
-        .filter((row) => row.paqueteId != null)
-        .map((row) => [row.paqueteId!.toString(), row._count._all])
-    );
+    const numeroSesionPorCitaId = new Map<string, number>();
+    const contadoresPaquete = new Map<string, number>();
+
+    citasRealizadasDelPaquete.forEach((citaRealizada) => {
+      if (!citaRealizada.paqueteId) return;
+
+      const paqueteId = citaRealizada.paqueteId.toString();
+      const numeroSesion = (contadoresPaquete.get(paqueteId) ?? 0) + 1;
+
+      contadoresPaquete.set(paqueteId, numeroSesion);
+      numeroSesionPorCitaId.set(citaRealizada.id.toString(), numeroSesion);
+    });
 
     // Map to structure expected by UI (similar to OrdenServicio)
     const citasSerialized: CitaSerialized[] = citas.map((cita) => {
@@ -245,9 +259,7 @@ export async function getCitas(
         serialized["PaqueteAdquirido"] && typeof serialized["PaqueteAdquirido"] === "object"
           ? {
               ...(serialized["PaqueteAdquirido"] as Record<string, unknown>),
-              sesionesRealizadas: cita.paqueteId
-                ? sesionesRealizadasPorPaquete.get(cita.paqueteId.toString()) ?? 0
-                : 0,
+              sesionesRealizadas: numeroSesionPorCitaId.get(cita.id.toString()) ?? 0,
             }
           : serialized["PaqueteAdquirido"];
       
@@ -325,14 +337,30 @@ export async function getCita(token: string, id: number) {
 
     if (!cita) return { error: "Cita no encontrada" };
 
-    const sesionesRealizadas = cita.paqueteId
-      ? await prisma.citasPsicologos.count({
+    let sesionesRealizadas = 0;
+
+    if (cita.paqueteId && cita.realizada === true) {
+      const citasRealizadasDelPaquete = await prisma.citasPsicologos.findMany({
           where: {
             paqueteId: cita.paqueteId,
             realizada: true,
           },
-        })
-      : 0;
+          orderBy: [
+            { fechaCita: "asc" },
+            { horaInicio: "asc" },
+            { id: "asc" },
+          ],
+          select: {
+            id: true,
+          },
+        });
+
+      const citaIndex = citasRealizadasDelPaquete.findIndex(
+        (citaRealizada) => citaRealizada.id === cita.id
+      );
+
+      sesionesRealizadas = citaIndex >= 0 ? citaIndex + 1 : 0;
+    }
 
     const serialized = serializeBigInt(cita) as Record<string, unknown>;
     const paqueteAdquirido =
