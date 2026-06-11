@@ -291,21 +291,29 @@ export default function ProgramacionCitasPage() {
     const day = String(currentDate.getDate()).padStart(2, "0");
     const dateStr = `${year}-${month}-${day}`;
 
-    const startIso = `${dateStr}T${assignStartTime}:00`;
-    const endIso = `${dateStr}T${assignEndTime}:00`;
+    // La server action devuelve { error }; lo convertimos en throw para que el toast muestre el fallo real.
+    const promise = (async () => {
+      const result = await moveCita(
+        token,
+        selectedCita.id,
+        Number(assignConsultorioId),
+        dateStr,
+        assignStartTime,
+        assignEndTime,
+      );
 
-    const promise = moveCita(
-      token,
-      selectedCita.id,
-      Number(assignConsultorioId),
-      startIso,
-      endIso,
-    );
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      return result;
+    })();
 
     toast.promise(promise, {
       loading: "Asignando cita...",
       success: "Cita asignada correctamente",
-      error: "Error al asignar cita",
+      error: (error) =>
+        error instanceof Error ? error.message : "Error al asignar cita",
     });
 
     await promise;
