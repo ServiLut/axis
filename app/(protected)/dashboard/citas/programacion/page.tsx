@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Clock, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getCitasByDateRange, moveCita } from "./actions";
@@ -330,22 +331,19 @@ export default function ProgramacionCitasPage() {
 
           <div className="flex flex-col sm:flex-row items-center gap-4">
             <div className="w-full sm:w-[200px]">
-              <Select
+              <Combobox
+                options={[
+                  { value: "all", label: "Todos los psicólogos" },
+                  ...tecnicos.map((tecnico) => ({
+                    value: tecnico.id.toString(),
+                    label: `${tecnico.nombre} ${tecnico.apellido}`,
+                  })),
+                ]}
                 value={selectedTecnicoId}
-                onValueChange={setSelectedTecnicoId}
-              >
-                <SelectTrigger className="w-full bg-white">
-                  <SelectValue placeholder="Filtrar por psicólogo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los psicólogos</SelectItem>
-                  {tecnicos.map((tecnico) => (
-                    <SelectItem key={tecnico.id} value={tecnico.id.toString()}>
-                      {tecnico.nombre} {tecnico.apellido}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(val) => setSelectedTecnicoId(val || "all")}
+                placeholder="Filtrar por psicólogo"
+                className="w-full bg-white"
+              />
             </div>
 
             <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg border border-slate-200">
