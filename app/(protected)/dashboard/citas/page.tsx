@@ -971,6 +971,15 @@ export default function CitasPage() {
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+              <div className="flex items-center gap-2">
+                <span className="shrink-0 text-xs font-medium text-slate-500">Fecha:</span>
+                <div className="flex min-w-0 flex-1 items-center gap-1 rounded border bg-white p-1 shadow-sm sm:flex-none">
+                  <Input type="date" className="h-8 min-w-0 flex-1 border-0 text-xs focus-visible:ring-0 sm:w-32 sm:flex-none" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                  <span className="text-slate-400">-</span>
+                  <Input type="date" className="h-8 min-w-0 flex-1 border-0 text-xs focus-visible:ring-0 sm:w-32 sm:flex-none" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                </div>
+              </div>
+
               <Button
                 variant="ghost"
                 size="sm"
@@ -981,15 +990,6 @@ export default function CitasPage() {
                 <Trash2 className="h-4 w-4 mr-1" />
                 Borrar
               </Button>
-
-              <div className="flex items-center gap-2">
-                <span className="shrink-0 text-xs font-medium text-slate-500">Fecha:</span>
-                <div className="flex min-w-0 flex-1 items-center gap-1 rounded border bg-white p-1 shadow-sm sm:flex-none">
-                  <Input type="date" className="h-8 min-w-0 flex-1 border-0 text-xs focus-visible:ring-0 sm:w-32 sm:flex-none" value={startDate} onChange={e => setStartDate(e.target.value)} />
-                  <span className="text-slate-400">-</span>
-                  <Input type="date" className="h-8 min-w-0 flex-1 border-0 text-xs focus-visible:ring-0 sm:w-32 sm:flex-none" value={endDate} onChange={e => setEndDate(e.target.value)} />
-                </div>
-              </div>
             </div>
           </div>
         </div>
