@@ -59,6 +59,9 @@ type CitaSerialized = {
   paqueteNombre?: string | null;
 };
 
+// Estado que llega desde el filtro de la UI; se traduce al campo nullable `realizada`.
+type EstadoCitaFilter = "all" | "programada" | "realizada" | "cancelada";
+
 export async function getCitas(
   token: string,
   page: number = 1,
@@ -69,6 +72,7 @@ export async function getCitas(
     psicologoId?: string; // equivalent to tecnicoId
     consultorioId?: string;
     paqueteId?: string; // actually terapiaId (catalogoId)
+    estadoCita?: EstadoCitaFilter;
     estadoPago?: EstadoPagoOrden | "all";
     startDate?: string;
     endDate?: string;
@@ -144,6 +148,18 @@ export async function getCitas(
     if (filters.paqueteId && filters.paqueteId !== "all") {
         // Filter by the type of therapy (catalogoId) in the acquired package
         where.PaqueteAdquirido = { catalogoId: BigInt(filters.paqueteId) };
+    }
+
+    // La tabla guarda el estado en `realizada`: false = programada, true = realizada,
+    // null = cancelada. Por eso el filtro no necesita una columna nueva.
+    if (filters.estadoCita && filters.estadoCita !== "all") {
+      if (filters.estadoCita === "programada") {
+        where.realizada = false;
+      } else if (filters.estadoCita === "realizada") {
+        where.realizada = true;
+      } else if (filters.estadoCita === "cancelada") {
+        where.realizada = null;
+      }
     }
 
     if (
@@ -835,6 +851,7 @@ export async function getAllCitasForExport(token: string, filters: {
     psicologoId?: string;
     consultorioId?: string;
     paqueteId?: string;
+    estadoCita?: EstadoCitaFilter;
     estadoPago?: EstadoPagoOrden | "all";
     startDate?: string;
     endDate?: string;
