@@ -893,33 +893,17 @@ export default function CitasPage() {
 
       {/* Toolbar */}
       <div className="flex-none px-8 py-4 bg-slate-50 border-b border-slate-200">
-        <div className="max-w-7xl mx-auto flex flex-wrap gap-3 items-center">
-           <div className="relative flex-1 min-w-[200px]">
+        <div className="max-w-7xl mx-auto flex flex-col gap-3 xl:flex-row xl:items-start">
+          <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="relative min-w-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input placeholder="Buscar paciente..." className="pl-10 bg-white" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-           </div>
+            </div>
            
-           <div className="flex items-center gap-2">
-             <span className="text-xs font-medium text-slate-500">Psicólogo:</span>
-             <Combobox
-               options={[
-                 { value: "all", label: "Todos los psicólogos" },
-                 ...psicologos.map((p) => ({
-                   value: p.id.toString(),
-                   label: `${p.nombre} ${p.apellido}`,
-                 })),
-               ]}
-               value={selectedPsicologo}
-               onChange={(val) => setSelectedPsicologo(val || "all")}
-               placeholder="Filtrar por psicólogo"
-               className="w-[200px]"
-             />
-           </div>
-           
-           <div className="flex items-center gap-2">
-             <span className="text-xs font-medium text-slate-500">Paquete:</span>
+           <div className="flex min-w-0 items-center gap-2">
+             <span className="shrink-0 text-xs font-medium text-slate-500">Paquete:</span>
              <Select value={selectedPaquete} onValueChange={setSelectedPaquete}>
-               <SelectTrigger className="w-[160px] bg-white">
+               <SelectTrigger className="min-w-0 flex-1 bg-white">
                  <SelectValue placeholder="Paquete" />
                </SelectTrigger>
                <SelectContent>
@@ -933,10 +917,10 @@ export default function CitasPage() {
              </Select>
            </div>
            
-           <div className="flex items-center gap-2">
-             <span className="text-xs font-medium text-slate-500">Consultorio:</span>
+           <div className="flex min-w-0 items-center gap-2">
+             <span className="shrink-0 text-xs font-medium text-slate-500">Consultorio:</span>
              <Select value={selectedConsultorio} onValueChange={setSelectedConsultorio}>
-               <SelectTrigger className="w-[160px] bg-white">
+               <SelectTrigger className="min-w-0 flex-1 bg-white">
                  <SelectValue placeholder="Consultorio" />
                </SelectTrigger>
                <SelectContent>
@@ -950,10 +934,10 @@ export default function CitasPage() {
              </Select>
            </div>
 
-           <div className="flex items-center gap-2">
-             <span className="text-xs font-medium text-slate-500">Estado pago:</span>
+           <div className="flex min-w-0 items-center gap-2">
+             <span className="shrink-0 text-xs font-medium text-slate-500">Estado pago:</span>
              <Select value={selectedEstadoPago} onValueChange={(value) => setSelectedEstadoPago(value as EstadoPagoFilter)}>
-               <SelectTrigger className="w-[180px] bg-white">
+               <SelectTrigger className="min-w-0 flex-1 bg-white">
                  <SelectValue placeholder="Estado pago" />
                </SelectTrigger>
                <SelectContent>
@@ -966,25 +950,48 @@ export default function CitasPage() {
              </Select>
            </div>
 
-           <div className="flex items-center gap-2">
-             <span className="text-xs font-medium text-slate-500">Fecha:</span>
-             <div className="flex items-center gap-1 bg-white p-1 rounded border shadow-sm">
-                <Input type="date" className="h-8 w-32 border-0 text-xs focus-visible:ring-0" value={startDate} onChange={e => setStartDate(e.target.value)} />
-                <span className="text-slate-400">-</span>
-                <Input type="date" className="h-8 w-32 border-0 text-xs focus-visible:ring-0" value={endDate} onChange={e => setEndDate(e.target.value)} />
-             </div>
-           </div>
+          </div>
 
-           <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={clearFilters} 
-              className="text-slate-500 hover:text-red-600 hover:bg-red-50 h-8 px-2 ml-auto md:ml-0"
-              title="Borrar filtros"
-            >
-              <Trash2 className="h-4 w-4 mr-1" />
-              Borrar
-            </Button>
+          <div className="flex w-full flex-col gap-2 xl:ml-auto xl:w-[430px]">
+            <div className="flex items-center gap-2">
+              <span className="shrink-0 text-xs font-medium text-slate-500">Psicólogo:</span>
+              <Combobox
+                options={[
+                  { value: "all", label: "Todos los psicólogos" },
+                  ...psicologos.map((p) => ({
+                    value: p.id.toString(),
+                    label: `${p.nombre} ${p.apellido}`,
+                  })),
+                ]}
+                value={selectedPsicologo}
+                onChange={(val) => setSelectedPsicologo(val || "all")}
+                placeholder="Filtrar por psicólogo"
+                className="min-w-0 flex-1"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearFilters}
+                className="h-8 w-full px-2 text-slate-500 hover:bg-red-50 hover:text-red-600 sm:w-auto"
+                title="Borrar filtros"
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Borrar
+              </Button>
+
+              <div className="flex items-center gap-2">
+                <span className="shrink-0 text-xs font-medium text-slate-500">Fecha:</span>
+                <div className="flex min-w-0 flex-1 items-center gap-1 rounded border bg-white p-1 shadow-sm sm:flex-none">
+                  <Input type="date" className="h-8 min-w-0 flex-1 border-0 text-xs focus-visible:ring-0 sm:w-32 sm:flex-none" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                  <span className="text-slate-400">-</span>
+                  <Input type="date" className="h-8 min-w-0 flex-1 border-0 text-xs focus-visible:ring-0 sm:w-32 sm:flex-none" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
