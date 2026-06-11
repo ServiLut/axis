@@ -1,94 +1,103 @@
-# Sistema de Gestión de Fumigación
+# Axis Software
 
-Este proyecto es una aplicación web completa diseñada para la gestión operativa de empresas de fumigación y control de plagas. Es un sistema **Multi-Tenant**, lo que permite que múltiples empresas utilicen la plataforma de manera aislada y segura.
+Axis Software es una aplicacion web de gestion operativa construida con Next.js, React, TypeScript y Prisma. El sistema centraliza procesos de servicios, clientes, tecnicos, citas, contabilidad, insumos, referidos, auditoria, monitoreo de actividad y mensajeria.
 
-## Visión General
+El proyecto funciona como una plataforma multi-tenant: un mismo codigo sirve a varios sistemas o empresas, y la mayoria de consultas se filtran por `tenantId` para separar datos. Tambien tiene comportamientos especificos por tenant, por ejemplo:
 
-El sistema centraliza la operación del negocio, permitiendo la administración de:
-- **Clientes y Sedes**: Gestión de base de datos de clientes y sus múltiples direcciones.
-- **Órdenes de Servicio**: Ciclo de vida completo del servicio, desde la solicitud hasta la ejecución.
-- **Personal Técnico**: Asignación de tareas y seguimiento.
-- **Facturación y Reportes**: Control de costos y estados de servicio.
+- `tenantId = 1`: operacion principal de servicios tipo fumigacion/control de plagas y modulo legacy Servilution.
+- `tenantId = 2`: modulo legacy de servicio tecnico.
+- `tenantId = 4`: operacion de citas/psicologia, consultorios, terapias y paquetes.
 
----
+## Documentacion del proyecto
 
-## Estructura del Proyecto
+La documentacion completa esta separada por tema:
 
-El proyecto está construido sobre **Next.js** (App Router). A continuación se detalla la organización de los directorios principales para facilitar la navegación por el código:
+- [Arquitectura](docs/ARQUITECTURA.md): que es el sistema, como funciona por capas y de que depende.
+- [Modulos funcionales](docs/MODULOS.md): descripcion de cada modulo del dashboard y de las pantallas publicas.
+- [API y flujos](docs/API_Y_FLUJOS.md): endpoints, server actions y flujos principales de negocio.
+- [Base de datos](docs/BASE_DE_DATOS.md): modelos Prisma, conexiones PostgreSQL/MySQL, enums y relaciones principales.
+- [Referencia tecnica del codigo](docs/CODIGO.md): archivos, exports, responsabilidades y puntos de modificacion.
+- [Operacion y mantenimiento](docs/OPERACION.md): instalacion, variables de entorno, scripts, Docker, despliegue y cuidados.
 
-### `app/`
-Contiene la lógica de enrutamiento y las vistas de la aplicación.
-- **`(auth)`**: Rutas públicas relacionadas con la autenticación (Login, Recuperación de contraseña).
-- **`(protected)`**: Rutas protegidas que requieren sesión activa. Contiene la lógica principal del negocio (Dashboard, Clientes, Órdenes).
-- **`api/`**: Endpoints de la API para comunicación interna y manejo de datos asíncronos.
+## Stack principal
 
-### `prisma/`
-Capa de datos y modelado.
-- **`schema.prisma`**: Define el esquema de la base de datos, relaciones entre tablas y tipos de datos. Aquí se configura la conexión a **PostgreSQL**.
+- Next.js `16.0.10` con App Router.
+- React `19.2.1`.
+- TypeScript con modo `strict`.
+- Prisma 7 con cliente generado localmente en `prisma/generated`.
+- PostgreSQL/Supabase como base principal.
+- MySQL/MariaDB para integraciones legacy.
+- Supabase Storage y Supabase Realtime.
+- JWT propio con `jsonwebtoken`.
+- Hash de contrasenas con `bcrypt`.
+- Tailwind CSS 4, Radix UI, shadcn/ui y lucide-react.
+- Chatwoot mediante proxy interno de Next.js.
+- Expo Push Notifications.
+- Nodemailer para correos SMTP.
+- Redis opcional para cache/invalidadcion.
 
-### `components/`
-Biblioteca de componentes de interfaz de usuario (UI).
-- Se prioriza la reutilización de código.
-- Contiene elementos como botones, formularios, tablas de datos y modales.
-- Utiliza **Radix UI** y **Shadcn** para asegurar accesibilidad y consistencia en el diseño.
+## Estructura general
 
-### `lib/`
-Utilidades y configuraciones globales.
-- Funciones auxiliares (helpers), configuración de clientes de base de datos y validaciones compartidas.
+```text
+app/                         Rutas Next.js, paginas, API routes y server actions.
+components/                  Componentes de UI, dashboard, contabilidad y acciones visuales.
+hooks/                       Hooks client-side: rol de usuario, Chatwoot y monitoreo de actividad.
+lib/                         Clientes de datos, autenticacion, auditoria, correo, Redis y helpers.
+prisma/                      Schemas Prisma, clientes generados y configuraciones de base de datos.
+scripts/                     Scripts de diagnostico, revision y mantenimiento puntual.
+public/                      Assets publicos.
+supabase/                    Configuracion local de Supabase.
+types/                       Declaraciones TypeScript adicionales.
+backups/                     Respaldos/dumps locales del proyecto.
+```
 
----
+## Instalacion local
 
-## Lógica de Negocio y Flujo de Trabajo
+Requisitos:
 
-### Arquitectura Multi-Tenant
-El sistema aísla los datos de cada empresa mediante un identificador único (`tenantId`). Cada consulta a la base de datos filtra estrictamente por este ID para asegurar la privacidad de los datos entre diferentes organizaciones.
+- Node.js 22 recomendado.
+- npm o pnpm. El proyecto incluye `package-lock.json`, `pnpm-lock.yaml` y `pnpm-workspace.yaml`.
+- Acceso a las bases configuradas por variables de entorno.
 
-### Roles y Permisos (RBAC)
-El acceso a las funcionalidades está controlado por roles definidos en el esquema de base de datos:
-- **ADMIN**: Acceso total a la configuración de la empresa y gestión de usuarios.
-- **ASESOR**: Encargado de la gestión comercial, creación de clientes y agendamiento de órdenes.
-- **TÉCNICO**: Personal de campo. Visualiza sus órdenes asignadas y reporta la ejecución del servicio.
+Instalar dependencias:
 
-### Ciclo de Vida de una Orden de Servicio
-1.  **Creación**: Un Asesor registra una solicitud de servicio para un Cliente específico.
-2.  **Programación**: Se asigna fecha, hora y un Técnico responsable.
-3.  **Ejecución**: El Técnico realiza el servicio, registrando datos operativos (hora de llegada, insumos utilizados, observaciones).
-4.  **Finalización**: La orden se marca como completada y queda disponible para facturación o histórico.
-
----
-
-## Guía de Instalación
-
-Sigue estos pasos para levantar el entorno de desarrollo local:
-
-### 1. Prerrequisitos
-- Node.js (versión LTS recomendada)
-- npm o yarn
-
-### 2. Instalación de Dependencias
 ```bash
 npm install
 ```
 
-### 3. Configuración de Base de Datos
-Asegúrate de tener un archivo `.env` configurado con las credenciales de tu base de datos (PostgreSQL/Supabase). Luego, sincroniza el esquema de Prisma:
+Generar Prisma principal:
+
 ```bash
 npx prisma generate
 ```
 
-### 4. Ejecución
-Inicia el servidor de desarrollo:
+Generar clientes legacy si se necesitan:
+
+```bash
+npm run generate:mysql
+npm run generate:tecnicos
+```
+
+Levantar desarrollo:
+
 ```bash
 npm run dev
 ```
-La aplicación estará disponible en `http://localhost:3000`.
 
----
+Compilar produccion:
 
-## Stack Tecnológico
+```bash
+npm run build
+```
 
-- **Framework**: Next.js 16
-- **Base de Datos**: PostgreSQL (vía Supabase)
-- **ORM**: Prisma
-- **Estilos**: Tailwind CSS
-- **Lenguaje**: TypeScript
+## Nota critica de mantenimiento
+
+Este proyecto tiene multiples flujos acoplados a nombres de modelos, campos, estados y roles. Antes de cambiar codigo funcional, revisar:
+
+- Las acciones en `app/(protected)/dashboard/**/actions.ts`.
+- Las API routes en `app/api/**/route.ts`.
+- Los schemas `prisma/schema.prisma`, `prisma/schema.mysql.prisma` y `prisma/schema.tecnicos.prisma`.
+- Los clientes Prisma generados en `prisma/generated/`.
+- La documentacion de [API y flujos](docs/API_Y_FLUJOS.md) y [base de datos](docs/BASE_DE_DATOS.md).
+
+Los archivos generados de Prisma no deben editarse manualmente.
