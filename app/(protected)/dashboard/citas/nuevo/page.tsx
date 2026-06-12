@@ -152,10 +152,16 @@ export default function NuevoCitaPage() {
       setServiceSource(val);
       if (val === "PACKAGE") {
           setValorCita("0");
-      } else if (val === "NEW_THERAPY" && selectedTerapiaId) {
-          const therapy = terapias.find(t => t.id.toString() === selectedTerapiaId);
-          if (therapy && therapy.precioBase) {
-            setValorCita(therapy.precioBase.toString());
+          if (!selectedPaqueteId && activePackages.length > 0) {
+              setSelectedPaqueteId(activePackages[0].id.toString());
+          }
+      } else if (val === "NEW_THERAPY") {
+          setSelectedPaqueteId("");
+          if (selectedTerapiaId) {
+            const therapy = terapias.find(t => t.id.toString() === selectedTerapiaId);
+            if (therapy && therapy.precioBase) {
+              setValorCita(therapy.precioBase.toString());
+            }
           }
       }
   };
@@ -264,12 +270,15 @@ export default function NuevoCitaPage() {
 
           const res = await getClientPackages(token, Number(selectedClienteId));
           if (res.packages) {
-              setActivePackages(res.packages as unknown as (PaqueteAdquirido & { TerapiasPsicologos: TerapiasPsicologos })[]);
+              const packages = res.packages as unknown as (PaqueteAdquirido & { TerapiasPsicologos: TerapiasPsicologos })[];
+              setActivePackages(packages);
               // Auto-select source if packages exist
-              if ((res.packages as unknown[]).length > 0) {
+              if (packages.length > 0) {
                   setServiceSource("PACKAGE");
+                  setSelectedPaqueteId(packages[0].id.toString());
               } else {
                   setServiceSource("NEW_THERAPY");
+                  setSelectedPaqueteId("");
               }
           }
       };
