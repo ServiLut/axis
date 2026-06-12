@@ -30,6 +30,107 @@ const serializeBigInt = (obj: unknown): unknown => {
   return obj;
 };
 
+type PackageOwnerInput = {
+  tenantId: number;
+  pacienteId: number | null;
+  psicologoId: number | null;
+  terapiaId: bigint;
+  excludePackageId?: bigint | null;
+};
+
+const activePackageOwnerWhere = ({
+  pacienteId,
+  psicologoId,
+}: Pick<PackageOwnerInput, "pacienteId" | "psicologoId">) => {
+  if (pacienteId) return { clienteId: pacienteId };
+  if (psicologoId) return { clienteId: null, usuarioId: psicologoId };
+  return null;
+};
+
+const consumePackageSession = async (
+  tx: Prisma.TransactionClient,
+  packageId: bigint
+) => {
+  const result = await tx.paqueteAdquirido.updateMany({
+    where: {
+      id: packageId,
+      saldoRestante: { gt: 0 },
+    },
+    data: {
+      saldoRestante: { decrement: 1 },
+      sesionesConsumidas: { increment: 1 },
+    },
+  });
+
+  if (result.count === 0) {
+    throw new Error("El paquete no tiene saldo disponible");
+  }
+};
+
+const findReusableActivePackage = async (
+  tx: Prisma.TransactionClient,
+  input: PackageOwnerInput
+) => {
+  const ownerWhere = activePackageOwnerWhere(input);
+  if (!ownerWhere) return null;
+
+  return tx.paqueteAdquirido.findFirst({
+    where: {
+      tenantId: input.tenantId,
+      catalogoId: input.terapiaId,
+      estado: "ACTIVO",
+      saldoRestante: { gt: 0 },
+      ...ownerWhere,
+      ...(input.excludePackageId
+        ? { id: { not: input.excludePackageId } }
+        : {}),
+    },
+    orderBy: [{ fechaCompra: "asc" }, { id: "asc" }],
+  });
+};
+
+const resolvePackageForScheduledCita = async (
+  tx: Prisma.TransactionClient,
+  input: PackageOwnerInput & { valor: number | null }
+) => {
+  const ownerWhere = activePackageOwnerWhere(input);
+  if (!ownerWhere) {
+    throw new Error("Debe existir un paciente o psicólogo para asociar el paquete");
+  }
+
+  const reusablePackage = await findReusableActivePackage(tx, input);
+  if (reusablePackage) {
+    await consumePackageSession(tx, reusablePackage.id);
+    return reusablePackage.id;
+  }
+
+  const terapia = await tx.terapiasPsicologos.findUnique({
+    where: { id: input.terapiaId },
+  });
+
+  if (!terapia) {
+    throw new Error("Terapia no encontrada");
+  }
+
+  const totalSessions = Math.max(1, terapia.cantidadSesiones || 1);
+  const nuevoPaquete = await tx.paqueteAdquirido.create({
+    data: {
+      tenantId: input.tenantId,
+      clienteId: input.pacienteId,
+      usuarioId: input.pacienteId ? null : input.psicologoId,
+      catalogoId: input.terapiaId,
+      sesionesTotales: totalSessions,
+      sesionesConsumidas: 1,
+      saldoRestante: Math.max(0, totalSessions - 1),
+      fechaCompra: new Date(),
+      precioPagado: input.valor ?? terapia.precioBase,
+      estado: "ACTIVO",
+    },
+  });
+
+  return nuevoPaquete.id;
+};
+
 type CitaSerialized = {
   id: number;
   numeroOrden: string;
@@ -239,27 +340,29 @@ export async function getCitas(
           })
         : [];
 
-    const numeroSesionPorCitaId = new Map<string, number>();
-    const contadoresPaquete = new Map<string, number>();
+    const sesionesRealizadasPorPaqueteId = new Map<string, number>();
 
     citasRealizadasDelPaquete.forEach((citaRealizada) => {
       if (!citaRealizada.paqueteId) return;
 
       const paqueteId = citaRealizada.paqueteId.toString();
-      const numeroSesion = (contadoresPaquete.get(paqueteId) ?? 0) + 1;
+      const sesionesRealizadas =
+        (sesionesRealizadasPorPaqueteId.get(paqueteId) ?? 0) + 1;
 
-      contadoresPaquete.set(paqueteId, numeroSesion);
-      numeroSesionPorCitaId.set(citaRealizada.id.toString(), numeroSesion);
+      sesionesRealizadasPorPaqueteId.set(paqueteId, sesionesRealizadas);
     });
 
     // Map to structure expected by UI (similar to OrdenServicio)
     const citasSerialized: CitaSerialized[] = citas.map((cita) => {
       const serialized = serializeBigInt(cita) as Record<string, unknown>;
+      const sesionesRealizadas = cita.paqueteId
+        ? sesionesRealizadasPorPaqueteId.get(cita.paqueteId.toString()) ?? 0
+        : 0;
       const paqueteAdquirido =
         serialized["PaqueteAdquirido"] && typeof serialized["PaqueteAdquirido"] === "object"
           ? {
               ...(serialized["PaqueteAdquirido"] as Record<string, unknown>),
-              sesionesRealizadas: numeroSesionPorCitaId.get(cita.id.toString()) ?? 0,
+              sesionesRealizadas,
             }
           : serialized["PaqueteAdquirido"];
       
@@ -337,30 +440,14 @@ export async function getCita(token: string, id: number) {
 
     if (!cita) return { error: "Cita no encontrada" };
 
-    let sesionesRealizadas = 0;
-
-    if (cita.paqueteId && cita.realizada === true) {
-      const citasRealizadasDelPaquete = await prisma.citasPsicologos.findMany({
+    const sesionesRealizadas = cita.paqueteId
+      ? await prisma.citasPsicologos.count({
           where: {
             paqueteId: cita.paqueteId,
             realizada: true,
           },
-          orderBy: [
-            { fechaCita: "asc" },
-            { horaInicio: "asc" },
-            { id: "asc" },
-          ],
-          select: {
-            id: true,
-          },
-        });
-
-      const citaIndex = citasRealizadasDelPaquete.findIndex(
-        (citaRealizada) => citaRealizada.id === cita.id
-      );
-
-      sesionesRealizadas = citaIndex >= 0 ? citaIndex + 1 : 0;
-    }
+        })
+      : 0;
 
     const serialized = serializeBigInt(cita) as Record<string, unknown>;
     const paqueteAdquirido =
@@ -477,76 +564,53 @@ export async function createCita(token: string, formData: FormData) {
       }
     }
 
-    const finalPaqueteId = await prisma.$transaction(async (tx) => {
-        let pId = paqueteId;
+    const nuevaCita = await prisma.$transaction(async (tx) => {
+        let finalPaqueteId: bigint | null = null;
 
-        // Logic: If creating from a new Therapy, we must create a Package first
-        // Check if we have a patient OR a psychologist (for rentals)
-        if (!pId && terapiaId && (pacienteId || psicologoId)) {
-           const terapia = await tx.terapiasPsicologos.findUnique({
-               where: { id: terapiaId }
-           });
-           
-           if (terapia) {
-               // Initial Purchase: Create package and immediately consume 1 session
-               const totalSessions = terapia.cantidadSesiones || 1;
-               const nuevoPaquete = await tx.paqueteAdquirido.create({
-                   data: {
-                       tenantId: usuario.tenantId,
-                       clienteId: pacienteId, // Can be null
-                       usuarioId: !pacienteId ? psicologoId : null, // Link to psychologist if no patient
-                       catalogoId: terapiaId,
-                       sesionesTotales: totalSessions,
-                       sesionesConsumidas: 1, // First session consumed immediately
-                       saldoRestante: totalSessions - 1,
-                       fechaCompra: new Date(),
-                       precioPagado: valor || terapia.precioBase, // Full price charged here
-                       estado: "ACTIVO"
-                   }
-               });
-               pId = nuevoPaquete.id;
-           }
-        } else if (pId) {
-            // Existing Package: Consume 1 session
-            const paquete = await tx.paqueteAdquirido.findUnique({
-                where: { id: pId }
+        if (paqueteId) {
+            const paquete = await tx.paqueteAdquirido.findFirst({
+                where: { id: paqueteId, tenantId: usuario.tenantId },
             });
 
-            if (paquete && paquete.saldoRestante > 0) {
-                 await tx.paqueteAdquirido.update({
-                     where: { id: pId },
-                     data: {
-                         saldoRestante: { decrement: 1 },
-                         sesionesConsumidas: { increment: 1 },
-                         // Optional: Auto-close if 0? Keeping it simple for now or logic elsewhere
-                     }
-                 });
-            } else {
-                throw new Error("El paquete no tiene saldo disponible");
+            if (!paquete) {
+                throw new Error("Paquete no encontrado");
             }
-        }
-        
-        return pId;
-    });
 
-    const nuevaCita = await prisma.citasPsicologos.create({
-      data: {
-        tenantId: usuario.tenantId,
-        empresaId,
-        pacienteId,
-        servicioId,
-        creadoPorId: usuario.id,
-        psicologoId,
-        tipoServicio,
-        fechaCita,
-        horaInicio,
-        horaFin,
-        valor, // Step 1: Full Value, Step 2: 0 (from Frontend)
-        observacion,
-        metodoPago,
-        paqueteId: finalPaqueteId,
-        consultorioId,
-      },
+            await consumePackageSession(tx, paqueteId);
+            finalPaqueteId = paqueteId;
+        }
+
+        // Si ya existe un paquete activo para el mismo paciente/terapia,
+        // se reutiliza. Crear otro acá es exactamente cómo nacen los duplicados.
+        if (!finalPaqueteId && terapiaId && (pacienteId || psicologoId)) {
+            finalPaqueteId = await resolvePackageForScheduledCita(tx, {
+                tenantId: usuario.tenantId,
+                pacienteId,
+                psicologoId,
+                terapiaId,
+                valor,
+            });
+        }
+
+        return tx.citasPsicologos.create({
+          data: {
+            tenantId: usuario.tenantId,
+            empresaId,
+            pacienteId,
+            servicioId,
+            creadoPorId: usuario.id,
+            psicologoId,
+            tipoServicio,
+            fechaCita,
+            horaInicio,
+            horaFin,
+            valor, // Step 1: Full Value, Step 2: 0 (from Frontend)
+            observacion,
+            metodoPago,
+            paqueteId: finalPaqueteId,
+            consultorioId,
+          },
+        });
     });
 
     await createAuditLog({
@@ -757,17 +821,29 @@ export async function getClientPackages(token: string, clientId: number) {
     if (!payload) return { error: "No autorizado" };
 
     try {
+        const usuario = await prisma.usuario.findUnique({
+            where: { id: payload.userId },
+            select: { tenantId: true, rol: true },
+        });
+        if (!usuario) return { error: "Usuario no encontrado" };
+
+        const where: Prisma.PaqueteAdquiridoWhereInput = {
+            clienteId: clientId,
+            estado: "ACTIVO",
+            saldoRestante: { gt: 0 },
+        };
+
+        if (usuario.rol !== Rol.SU_ADMIN) {
+            where.tenantId = usuario.tenantId;
+        }
+
         const packages = await prisma.paqueteAdquirido.findMany({
-            where: { 
-                clienteId: clientId,
-                estado: "ACTIVO",
-                saldoRestante: { gt: 0 }
-            },
+            where,
             include: {
                 TerapiasPsicologos: true
             },
             orderBy: {
-                fechaCompra: 'desc'
+                fechaCompra: 'asc'
             }
         });
 
@@ -1259,31 +1335,23 @@ export async function updateCita(token: string, id: number, formData: FormData) 
         if (currentCita) {
             citaPrevia = serializeBigInt(currentCita);
             oldPaqueteId = currentCita.paqueteId;
-            // ... (rest of logic for newPaqueteId is same)
-            if (terapiaId) {
-                const terapia = await tx.terapiasPsicologos.findUnique({
-                    where: { id: terapiaId }
-                });
 
-                if (terapia) {
-                     const totalSessions = terapia.cantidadSesiones || 1;
-                     const precio = valor !== null ? valor : Number(terapia.precioBase);
-                     
-                     const nuevoPaquete = await tx.paqueteAdquirido.create({
-                        data: {
-                            tenantId: usuario.tenantId,
-                            clienteId: currentCita.pacienteId,
-                            usuarioId: !currentCita.pacienteId ? psicologoId : null,
-                            catalogoId: terapiaId,
-                            sesionesTotales: totalSessions,
-                            sesionesConsumidas: 1,
-                            saldoRestante: totalSessions - 1,
-                            fechaCompra: new Date(),
-                            precioPagado: precio,
-                            estado: "ACTIVO"
-                        }
-                     });
-                     newPaqueteId = nuevoPaquete.id;
+            if (terapiaId) {
+                const currentCatalogoId = currentCita.PaqueteAdquirido?.catalogoId;
+
+                if (currentCatalogoId !== terapiaId) {
+                    const paqueteUsuarioId = currentCita.pacienteId
+                        ? null
+                        : (psicologoId ?? currentCita.psicologoId);
+
+                    newPaqueteId = await resolvePackageForScheduledCita(tx, {
+                        tenantId: usuario.tenantId,
+                        pacienteId: currentCita.pacienteId,
+                        psicologoId: paqueteUsuarioId,
+                        terapiaId,
+                        valor,
+                        excludePackageId: oldPaqueteId,
+                    });
                 }
             }
         }
@@ -1304,7 +1372,7 @@ export async function updateCita(token: string, id: number, formData: FormData) 
         });
 
         // Cleanup Old Package
-        if (newPaqueteId && oldPaqueteId) {
+        if (newPaqueteId && oldPaqueteId && newPaqueteId !== oldPaqueteId) {
              const otherCitasCount = await tx.citasPsicologos.count({
                  where: { 
                      paqueteId: oldPaqueteId,
