@@ -136,6 +136,10 @@ interface Stats {
 
 type EstadoPagoFilter = EstadoPagoOrden | "all";
 
+// Estado visual del filtro. En BD no existe un enum de estado de cita:
+// se deriva de `realizada` (false = programada, true = realizada, null = cancelada).
+type EstadoCitaFilter = "all" | "programada" | "realizada" | "cancelada";
+
 const formatDateBogota = (dateString: Date | string | null, formatStr: string = "dd/MM/yyyy") => {
   if (!dateString) return "Sin agendar";
   try {
@@ -175,6 +179,13 @@ const getSesionesBadgeClass = (paquete: PaqueteCita) => {
   return sesionesRealizadas >= paquete.sesionesTotales
     ? "bg-green-100 text-green-700"
     : "bg-blue-50 text-blue-700";
+};
+
+// Centraliza la etiqueta para que tabla/export no traten `null` como "Programada".
+const getEstadoCitaLabel = (realizada: boolean | null) => {
+  if (realizada === true) return "Realizada";
+  if (realizada === false) return "Programada";
+  return "Cancelada";
 };
 
 export default function CitasPage() {
@@ -265,6 +276,8 @@ export default function CitasPage() {
       psicologo: "all",
       consultorio: "all",
       paquete: "all",
+      // Valor por defecto: no restringe la consulta por estado de cita.
+      estadoCita: "all" as EstadoCitaFilter,
       estadoPago: "all" as EstadoPagoFilter,
       start: "",
       end: "",
@@ -298,6 +311,7 @@ export default function CitasPage() {
   const [selectedPsicologo, setSelectedPsicologo] = useState(initialFilters.psicologo);
   const [selectedConsultorio, setSelectedConsultorio] = useState(initialFilters.consultorio);
   const [selectedPaquete, setSelectedPaquete] = useState(initialFilters.paquete);
+  const [selectedEstadoCita, setSelectedEstadoCita] = useState<EstadoCitaFilter>(initialFilters.estadoCita);
   const [selectedEstadoPago, setSelectedEstadoPago] = useState<EstadoPagoFilter>(initialFilters.estadoPago);
   const [startDate, setStartDate] = useState(initialFilters.start);
   const [endDate, setEndDate] = useState(initialFilters.end);
@@ -354,12 +368,13 @@ export default function CitasPage() {
       psicologo: selectedPsicologo,
       consultorio: selectedConsultorio,
       paquete: selectedPaquete,
+      estadoCita: selectedEstadoCita,
       estadoPago: selectedEstadoPago,
       start: startDate,
       end: endDate,
     };
     localStorage.setItem("citasFilters", JSON.stringify(filters));
-  }, [debouncedSearchTerm, selectedPsicologo, selectedConsultorio, selectedPaquete, selectedEstadoPago, startDate, endDate, isRestored]);
+  }, [debouncedSearchTerm, selectedPsicologo, selectedConsultorio, selectedPaquete, selectedEstadoCita, selectedEstadoPago, startDate, endDate, isRestored]);
 
   // Sync URL (Pagination only)
   useEffect(() => {
@@ -384,6 +399,7 @@ export default function CitasPage() {
     setSelectedPsicologo("all");
     setSelectedConsultorio("all");
     setSelectedPaquete("all");
+    setSelectedEstadoCita("all");
     setSelectedEstadoPago("all");
     setStartDate("");
     setEndDate("");
@@ -406,6 +422,7 @@ export default function CitasPage() {
       psicologoId: selectedPsicologo,
       consultorioId: selectedConsultorio,
       paqueteId: selectedPaquete,
+      estadoCita: selectedEstadoCita,
       estadoPago: selectedEstadoPago,
       startDate,
       endDate,
@@ -420,7 +437,7 @@ export default function CitasPage() {
       setTotalRecords(result.total || 0);
     }
     setLoading(false);
-  }, [currentPage, debouncedSearchTerm, selectedPsicologo, selectedConsultorio, selectedPaquete, selectedEstadoPago, startDate, endDate, router, isRestored]);
+  }, [currentPage, debouncedSearchTerm, selectedPsicologo, selectedConsultorio, selectedPaquete, selectedEstadoCita, selectedEstadoPago, startDate, endDate, router, isRestored]);
 
   const fetchAux = useCallback(async () => {
     const token = localStorage.getItem("token");
@@ -514,7 +531,7 @@ export default function CitasPage() {
         fecha: formatDateBogota(cita.fechaVisita),
         hora: formatTimeBogota(cita.horaInicio),
         psicologo: cita.tecnico ? `${cita.tecnico.nombre} ${cita.tecnico.apellido}` : "Sin asignar",
-        estado: cita.realizada ? "Realizada" : "Programada",
+        estado: getEstadoCitaLabel(cita.realizada),
         realizada: cita.realizada ? "SÍ" : "NO",
         metodoPago: cita.metodoPago || "N/A",
         estadoPago: cita.estadoPago || "PENDIENTE",
@@ -598,6 +615,7 @@ export default function CitasPage() {
         psicologoId: selectedPsicologo,
         consultorioId: selectedConsultorio,
         paqueteId: selectedPaquete,
+        estadoCita: selectedEstadoCita,
         estadoPago: selectedEstadoPago,
         startDate,
         endDate,
@@ -629,6 +647,7 @@ export default function CitasPage() {
       startDate: exportStartDate,
       endDate: exportEndDate,
       tenantId: exportTenantId,
+      estadoCita: selectedEstadoCita,
       estadoPago: selectedEstadoPago,
     });
 
@@ -893,8 +912,8 @@ export default function CitasPage() {
 
       {/* Toolbar */}
       <div className="flex-none px-8 py-4 bg-slate-50 border-b border-slate-200">
-        <div className="max-w-7xl mx-auto flex flex-col gap-3 xl:flex-row xl:items-start">
-          <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="max-w-7xl mx-auto space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div className="relative min-w-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input placeholder="Buscar paciente..." className="pl-10 bg-white" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
@@ -934,25 +953,25 @@ export default function CitasPage() {
              </Select>
            </div>
 
+           {/* Consultorio queda antes de Estado cita para mantener el orden pedido en el toolbar. */}
            <div className="flex min-w-0 items-center gap-2">
-             <span className="shrink-0 text-xs font-medium text-slate-500">Estado pago:</span>
-             <Select value={selectedEstadoPago} onValueChange={(value) => setSelectedEstadoPago(value as EstadoPagoFilter)}>
+             <span className="shrink-0 text-xs font-medium text-slate-500">Estado cita:</span>
+             <Select value={selectedEstadoCita} onValueChange={(value) => setSelectedEstadoCita(value as EstadoCitaFilter)}>
                <SelectTrigger className="min-w-0 flex-1 bg-white">
-                 <SelectValue placeholder="Estado pago" />
+                 <SelectValue placeholder="Estado cita" />
                </SelectTrigger>
                <SelectContent>
                  <SelectItem value="all">Todos</SelectItem>
-                 <SelectItem value={EstadoPagoOrden.PENDIENTE}>Pendiente</SelectItem>
-                 <SelectItem value={EstadoPagoOrden.EFECTIVO_DECLARADO}>Efectivo declarado</SelectItem>
-                 <SelectItem value={EstadoPagoOrden.CONSIGNADO}>Consignado</SelectItem>
-                 <SelectItem value={EstadoPagoOrden.CONCILIADO}>Conciliado</SelectItem>
+                 <SelectItem value="programada">Programada</SelectItem>
+                 <SelectItem value="realizada">Realizada</SelectItem>
+                 <SelectItem value="cancelada">Cancelada</SelectItem>
                </SelectContent>
              </Select>
            </div>
 
           </div>
 
-          <div className="flex w-full flex-col gap-2 xl:ml-auto xl:w-[430px]">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(260px,1fr)_minmax(220px,260px)_auto] lg:items-center">
             <div className="flex items-center gap-2">
               <span className="shrink-0 text-xs font-medium text-slate-500">Psicólogo:</span>
               <Combobox
@@ -970,7 +989,23 @@ export default function CitasPage() {
               />
             </div>
 
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="shrink-0 text-xs font-medium text-slate-500">Estado pago:</span>
+              <Select value={selectedEstadoPago} onValueChange={(value) => setSelectedEstadoPago(value as EstadoPagoFilter)}>
+                <SelectTrigger className="min-w-0 flex-1 bg-white">
+                  <SelectValue placeholder="Estado pago" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value={EstadoPagoOrden.PENDIENTE}>Pendiente</SelectItem>
+                  <SelectItem value={EstadoPagoOrden.EFECTIVO_DECLARADO}>Efectivo declarado</SelectItem>
+                  <SelectItem value={EstadoPagoOrden.CONSIGNADO}>Consignado</SelectItem>
+                  <SelectItem value={EstadoPagoOrden.CONCILIADO}>Conciliado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center lg:justify-end">
               <div className="flex items-center gap-2">
                 <span className="shrink-0 text-xs font-medium text-slate-500">Fecha:</span>
                 <div className="flex min-w-0 flex-1 items-center gap-1 rounded border bg-white p-1 shadow-sm sm:flex-none">
