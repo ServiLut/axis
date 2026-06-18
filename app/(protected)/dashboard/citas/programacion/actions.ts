@@ -4,7 +4,7 @@ import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
 import { Prisma, Rol } from "@/prisma/generated/prisma/client";
 import { revalidatePath } from "next/cache";
-import { fromZonedTime, formatInTimeZone } from "date-fns-tz";
+import { fromZonedTime } from "date-fns-tz"; //Se elimina formatInTimeZone porque ya no se requiere formatear la fecha aquí, solo la conversión de zona horaria.
 
 // Helper to serialize BigInt and Decimal (same as in citas/actions.ts)
 const serializeBigInt = (obj: unknown): unknown => {
@@ -147,8 +147,10 @@ export async function moveCita(
   token: string,
   citaId: number,
   consultorioId: number,
-  startDateStr: string,
-  endDateStr: string
+  //Se eliminan 'startDateStr' y 'endDateStr'.
+  dateStr: string, // Ahora el flujo maneja eventos/citas dentro del mismo día, requiriendo la fecha del día ('dateStr') y su bloque horario específico.
+  horaInicioStr: string,
+  horaFinStr: string,
 ) {
   const payload = verifyToken(token);
   if (!payload) return { error: "No autorizado" };
@@ -156,29 +158,56 @@ export async function moveCita(
   try {
     const usuario = await prisma.usuario.findUnique({
       where: { id: payload.userId },
-      select: { tenantId: true },
+      // Se agrega 'rol' para posterior validación de permisos
+      select: { tenantId: true, rol: true }, // // NOTA: Además del tenantId, ahora se consulta el rol del usuario para aplicar reglas de autorización basadas en su perfil.
     });
+    if (!usuario) return { error: "Usuario no encontrado" };
     
-    // Validate Dates
-    const start = new Date(startDateStr);
-    const end = new Date(endDateStr);
+    // Se estructuran las fechas combinando día y hora bajo la zona horaria de Bogotá para evitar desfases en el calendario
+    const TIMEZONE = "America/Bogota";
+    const start = fromZonedTime(`${dateStr}T${horaInicioStr}`, TIMEZONE);
+    const end = fromZonedTime(`${dateStr}T${horaFinStr}`, TIMEZONE);
     
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
         return { error: "Fechas inválidas" };
     }
 
-    const TIMEZONE = "America/Bogota";
-    // Correctly set fechaCita to the start of the day in Bogota timezone
-    const dayStr = formatInTimeZone(start, TIMEZONE, "yyyy-MM-dd");
-    const fechaCita = fromZonedTime(`${dayStr}T00:00`, TIMEZONE);
+    if (start >= end) {
+      return { error: "La hora de inicio debe ser anterior a la hora de fin" };
+    }
+
+    // Validamos disponibilidad para no cruzar dos citas en el mismo consultorio.
+    const overlappingCita = await prisma.citasPsicologos.findFirst({
+      where: {
+        id: { not: BigInt(citaId) },
+        consultorioId: BigInt(consultorioId),
+        realizada: false,
+        ...(usuario.rol !== Rol.SU_ADMIN && { tenantId: usuario.tenantId }),
+        AND: [{ horaInicio: { lt: end } }, { horaFin: { gt: start } }],
+      },
+      include: { consultorios: true },
+    });
+
+    if (overlappingCita) {
+      return {
+        error: `El consultorio ${overlappingCita.consultorios?.nombre || ""} ya esta ocupado en ese horario`,
+      };
+    }
+
+    const fechaCita = fromZonedTime(`${dateStr}T00:00`, TIMEZONE);
+    // SU_ADMIN no depende de tenantId; los demas usuarios solo actualizan citas de su tenant.
+    const citaWhere =
+      usuario.rol === Rol.SU_ADMIN
+        ? { id: BigInt(citaId) }
+        : { id: BigInt(citaId), tenantId: usuario.tenantId };
 
     await prisma.citasPsicologos.update({
-      where: { id: BigInt(citaId), tenantId: usuario?.tenantId },
+      where: citaWhere,
       data: {
         consultorioId: BigInt(consultorioId),
         horaInicio: start,
         horaFin: end,
-        fechaCita: fechaCita
+        fechaCita,
       },
     });
 
