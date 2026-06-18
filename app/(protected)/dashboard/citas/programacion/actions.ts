@@ -181,6 +181,7 @@ export async function moveCita(
       where: {
         id: { not: BigInt(citaId) },
         consultorioId: BigInt(consultorioId),
+        realizada: false,
         ...(usuario.rol !== Rol.SU_ADMIN && { tenantId: usuario.tenantId }),
         AND: [{ horaInicio: { lt: end } }, { horaFin: { gt: start } }],
       },

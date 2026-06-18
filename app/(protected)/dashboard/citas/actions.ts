@@ -567,6 +567,7 @@ export async function createCita(token: string, formData: FormData) {
         where: {
           consultorioId,
           tenantId: usuario.tenantId,
+          realizada: false,
           AND: [
             { horaInicio: { lt: horaFin } },
             { horaFin: { gt: horaInicio } }
@@ -1255,6 +1256,7 @@ export async function checkConsultorioDisponibilidad(
         ...(excludeCitaId && { id: { not: BigInt(excludeCitaId) } }),
         consultorioId: BigInt(consultorioId),
         tenantId: usuario.tenantId,
+        realizada: false,
         AND: [
           { horaInicio: { lt: horaFin } },
           { horaFin: { gt: horaInicio } }
@@ -1326,6 +1328,7 @@ export async function updateCita(token: string, id: number, formData: FormData) 
           id: { not: BigInt(id) },
           consultorioId,
           tenantId: usuario.tenantId,
+          realizada: false,
           AND: [
             { horaInicio: { lt: horaFin } },
             { horaFin: { gt: horaInicio } }
