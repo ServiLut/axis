@@ -193,10 +193,44 @@ export default function ProgramacionCitasPage() {
     return "PROGRAMADA";
   };
 
+  const visibleOrdenes = useMemo(() => {
+    const getReplacementSlotKey = (orden: CitaProgramacion) => {
+      if (!orden.fechaVisita || !orden.horaInicio || !orden.consultorioId) {
+        return null;
+      }
+
+      const fecha = new Date(orden.fechaVisita);
+      const inicio = new Date(orden.horaInicio);
+
+      return [
+        fecha.getFullYear(),
+        fecha.getMonth(),
+        fecha.getDate(),
+        orden.consultorioId.toString(),
+        inicio.getHours(),
+        inicio.getMinutes(),
+      ].join("|");
+    };
+
+    const activeSlots = new Set(
+      ordenes
+        .filter((orden) => orden.realizada !== null)
+        .map(getReplacementSlotKey)
+        .filter((key): key is string => key !== null),
+    );
+
+    return ordenes.filter((orden) => {
+      if (orden.realizada !== null) return true;
+
+      const slotKey = getReplacementSlotKey(orden);
+      return !slotKey || !activeSlots.has(slotKey);
+    });
+  }, [ordenes]);
+
   // Group orders by Consultorio ID
   const ordersByConsultorio = useMemo(() => {
     const groups: Record<string, CitaProgramacion[]> = {};
-    ordenes.forEach((orden) => {
+    visibleOrdenes.forEach((orden) => {
       // If no consultorio, maybe put in a "Sin Asignar" group or ignore?
       // Assuming 0 or "0" for unassigned if needed, but lets use ID string
       const cId = orden.consultorioId
@@ -206,7 +240,7 @@ export default function ProgramacionCitasPage() {
       groups[cId].push(orden);
     });
     return groups;
-  }, [ordenes]);
+  }, [visibleOrdenes]);
 
   // Constants for Time Grid
   const GRID_START = 6; // Start at 6 AM
@@ -482,13 +516,13 @@ export default function ProgramacionCitasPage() {
             {/* Simple list view for mobile for now, prioritized by time */}
             {loading ? (
               <div className="p-4 text-center text-slate-500">Cargando...</div>
-            ) : ordenes.length === 0 ? (
+            ) : visibleOrdenes.length === 0 ? (
               <div className="p-8 text-center text-slate-500 bg-white rounded-lg border">
                 No hay citas programadas para este día.
               </div>
             ) : (
               <div className="space-y-3">
-                {ordenes.map((orden) => (
+                {visibleOrdenes.map((orden) => (
                   <div
                     key={orden.id}
                     className={cn(
