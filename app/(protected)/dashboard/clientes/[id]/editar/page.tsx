@@ -456,6 +456,7 @@ export default function EditarClientePage() {
                     <SelectItem value="CC">Cédula de Ciudadanía</SelectItem>
                     <SelectItem value="NIT">NIT</SelectItem>
                     <SelectItem value="CE">Cédula de Extranjería</SelectItem>
+                    <SelectItem value="TI">Tarjeta de Identidad</SelectItem>
                     <SelectItem value="PASAPORTE">Pasaporte</SelectItem>
                   </SelectContent>
                 </Select>
