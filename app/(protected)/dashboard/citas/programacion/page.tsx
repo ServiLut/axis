@@ -67,6 +67,13 @@ interface Consultorio {
   nombre: string;
 }
 
+const formatDateInputValue = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 export default function ProgramacionCitasPage() {
   const router = useRouter();
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -84,6 +91,7 @@ export default function ProgramacionCitasPage() {
     null,
   );
   const [assignConsultorioId, setAssignConsultorioId] = useState<string>("");
+  const [assignDate, setAssignDate] = useState<string>("");
   const [assignStartTime, setAssignStartTime] = useState<string>("");
   const [assignEndTime, setAssignEndTime] = useState<string>("");
 
@@ -120,11 +128,7 @@ export default function ProgramacionCitasPage() {
     const tecnicoId =
       selectedTecnicoId === "all" ? undefined : Number(selectedTecnicoId);
 
-    // Format local date to YYYY-MM-DD
-    const year = currentDate.getFullYear();
-    const month = String(currentDate.getMonth() + 1).padStart(2, "0");
-    const day = String(currentDate.getDate()).padStart(2, "0");
-    const dateStr = `${year}-${month}-${day}`;
+    const dateStr = formatDateInputValue(currentDate);
 
     const result = await getCitasByDateRange(token, dateStr, tecnicoId);
     if (result.error) {
@@ -283,6 +287,11 @@ export default function ProgramacionCitasPage() {
   const handleOpenAssignModal = (cita: CitaProgramacion) => {
     setSelectedCita(cita);
     setAssignConsultorioId(cita.consultorioId?.toString() || "");
+    setAssignDate(
+      cita.fechaVisita
+        ? formatDateInputValue(new Date(cita.fechaVisita))
+        : formatDateInputValue(currentDate),
+    );
 
     // Set default times from cita or defaults
     if (cita.horaInicio) {
@@ -310,6 +319,7 @@ export default function ProgramacionCitasPage() {
     if (
       !selectedCita ||
       !assignConsultorioId ||
+      !assignDate ||
       !assignStartTime ||
       !assignEndTime
     ) {
@@ -320,18 +330,13 @@ export default function ProgramacionCitasPage() {
     const token = localStorage.getItem("token");
     if (!token) return;
 
-    const year = currentDate.getFullYear();
-    const month = String(currentDate.getMonth() + 1).padStart(2, "0");
-    const day = String(currentDate.getDate()).padStart(2, "0");
-    const dateStr = `${year}-${month}-${day}`;
-
     // La server action devuelve { error }; lo convertimos en throw para que el toast muestre el fallo real.
     const promise = (async () => {
       const result = await moveCita(
         token,
         selectedCita.id,
         Number(assignConsultorioId),
-        dateStr,
+        assignDate,
         assignStartTime,
         assignEndTime,
       );
@@ -344,10 +349,10 @@ export default function ProgramacionCitasPage() {
     })();
 
     toast.promise(promise, {
-      loading: "Asignando cita...",
-      success: "Cita asignada correctamente",
+      loading: "Guardando cambios...",
+      success: "Cita reasignada correctamente",
       error: (error) =>
-        error instanceof Error ? error.message : "Error al asignar cita",
+        error instanceof Error ? error.message : "Error al reasignar cita",
     });
 
     await promise;
@@ -410,7 +415,7 @@ export default function ProgramacionCitasPage() {
               <div className="relative">
                 <Input
                   type="date"
-                  value={currentDate.toISOString().split("T")[0]}
+                  value={formatDateInputValue(currentDate)}
                   onChange={handleDateChange}
                   className="h-8 w-[140px] text-xs border-0 bg-transparent shadow-none focus-visible:ring-0 p-1 pl-8 text-center font-medium cursor-pointer"
                 />
@@ -831,7 +836,7 @@ export default function ProgramacionCitasPage() {
       <Dialog open={isAssignModalOpen} onOpenChange={setIsAssignModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Asignar Consultorio y Horario</DialogTitle>
+            <DialogTitle>Asignar Consultorio, Fecha y Horario</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
@@ -854,6 +859,15 @@ export default function ProgramacionCitasPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="assignDate">Fecha</Label>
+              <Input
+                id="assignDate"
+                type="date"
+                value={assignDate}
+                onChange={(e) => setAssignDate(e.target.value)}
+              />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
