@@ -21,6 +21,7 @@ import {
   Lock,
   ClipboardList,
   Calendar,
+  RotateCcw,
   Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -50,6 +51,7 @@ import {
   uploadComprobantePagoCita,
   markCitaAsRealizada,
   markCitaAsCancelada,
+  restoreCitaCancelada,
   toggleCitaPago,
   updateCitaPago,
   getAllCitasForExport,
@@ -758,6 +760,20 @@ export default function CitasPage() {
       }
   };
 
+  const handleRestoreCancelada = async (id: number) => {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      const res = await restoreCitaCancelada(token, id);
+      if ("message" in res) {
+          toast.success(res.message);
+          fetchCitasData();
+          fetchAux(); // Update stats
+      } else {
+          toast.error(res.error);
+      }
+  };
+
   const handleTogglePago = async (id: number) => {
       const token = localStorage.getItem("token");
       if (!token) return;
@@ -1141,6 +1157,11 @@ export default function CitasPage() {
                              {cita.realizada === false && (
                                  <DropdownMenuItem onClick={() => handleMarkAsCancelada(cita.id)} className="text-orange-600">
                                      <EyeOff className="mr-2 h-4 w-4" /> Marcar como Cancelada
+                                 </DropdownMenuItem>
+                             )}
+                             {cita.realizada === null && (
+                                 <DropdownMenuItem onClick={() => handleRestoreCancelada(cita.id)} className="text-blue-600">
+                                     <RotateCcw className="mr-2 h-4 w-4" /> Restaurar como Programada
                                  </DropdownMenuItem>
                              )}
                              <DropdownMenuItem onClick={() => handleTogglePago(cita.id)} className={cita.estadoPago === EstadoPagoOrden.CONCILIADO ? "text-orange-600" : "text-green-600"}>

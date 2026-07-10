@@ -67,6 +67,26 @@ const consumePackageSession = async (
   }
 };
 
+const restorePackageSession = async (
+  tx: Prisma.TransactionClient,
+  packageId: bigint
+) => {
+  const result = await tx.paqueteAdquirido.updateMany({
+    where: {
+      id: packageId,
+      sesionesConsumidas: { gt: 0 },
+    },
+    data: {
+      saldoRestante: { increment: 1 },
+      sesionesConsumidas: { decrement: 1 },
+    },
+  });
+
+  if (result.count === 0) {
+    throw new Error("El paquete no tiene una sesión consumida para restaurar");
+  }
+};
+
 const findReusableActivePackage = async (
   tx: Prisma.TransactionClient,
   input: PackageOwnerInput
@@ -1077,34 +1097,45 @@ export async function markCitaAsCancelada(token: string, citaId: number) {
       where: { id: payload.userId },
       select: { tenantId: true },
     });
+    if (!usuario) return { error: "Usuario no encontrado" };
 
     const cita = await prisma.citasPsicologos.findFirst({
-        where: { id: BigInt(citaId), tenantId: usuario?.tenantId },
+        where: { id: BigInt(citaId), tenantId: usuario.tenantId },
         include: { PaqueteAdquirido: true }
     });
 
     if (!cita) return { error: "Cita no encontrada" };
+    if (cita.realizada !== false) {
+      return {
+        error:
+          cita.realizada === null
+            ? "La cita ya está cancelada"
+            : "Solo se pueden cancelar citas programadas",
+      };
+    }
 
     await prisma.$transaction(async (tx) => {
       // 1. Mark as cancelled (realizada = null)
-      await tx.citasPsicologos.update({
-        where: { id: BigInt(citaId) },
+      const cancelledCita = await tx.citasPsicologos.updateMany({
+        where: {
+          id: BigInt(citaId),
+          tenantId: usuario.tenantId,
+          realizada: false,
+        },
         data: { realizada: null },
       });
 
+      if (cancelledCita.count === 0) {
+        throw new Error("La cita ya no está programada");
+      }
+
       // 2. If it has a package, restore the session
       if (cita.paqueteId) {
-        await tx.paqueteAdquirido.update({
-          where: { id: cita.paqueteId },
-          data: {
-            sesionesConsumidas: { decrement: 1 },
-            saldoRestante: { increment: 1 },
-          },
-        });
+        await restorePackageSession(tx, cita.paqueteId);
       }
 
       await createAuditLog({
-        tenantId: usuario?.tenantId || 0,
+        tenantId: usuario.tenantId,
         usuarioId: payload.userId,
         accion: "UPDATE",
         entidad: "Cita",
@@ -1123,7 +1154,107 @@ export async function markCitaAsCancelada(token: string, citaId: number) {
     return { success: true, message: "Cita marcada como cancelada y sesión restaurada" };
   } catch (error) {
     console.error("Error cancelling cita:", error);
+    if (error instanceof Error && error.message === "La cita ya no está programada") {
+      return { error: "La cita ya no está programada" };
+    }
     return { error: "Error al cancelar la cita" };
+  }
+}
+
+export async function restoreCitaCancelada(token: string, citaId: number) {
+  const payload = verifyToken(token);
+  if (!payload) return { error: "No autorizado" };
+
+  try {
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: payload.userId },
+      select: { tenantId: true },
+    });
+    if (!usuario) return { error: "Usuario no encontrado" };
+
+    const result = await prisma.$transaction(async (tx) => {
+      const cita = await tx.citasPsicologos.findFirst({
+        where: { id: BigInt(citaId), tenantId: usuario.tenantId },
+        include: { consultorios: { select: { nombre: true } } },
+      });
+
+      if (!cita) return { error: "Cita no encontrada" };
+      if (cita.realizada !== null) {
+        return { error: "Solo se pueden restaurar citas canceladas" };
+      }
+
+      // Las citas canceladas no reservan el consultorio. Antes de restaurarla,
+      // verificamos que nadie haya ocupado el mismo horario.
+      if (cita.consultorioId && cita.horaInicio && cita.horaFin) {
+        const overlappingCita = await tx.citasPsicologos.findFirst({
+          where: {
+            id: { not: cita.id },
+            tenantId: usuario.tenantId,
+            consultorioId: cita.consultorioId,
+            realizada: false,
+            AND: [
+              { horaInicio: { lt: cita.horaFin } },
+              { horaFin: { gt: cita.horaInicio } },
+            ],
+          },
+          include: { consultorios: { select: { nombre: true } } },
+        });
+
+        if (overlappingCita) {
+          return {
+            error: `No se puede restaurar: el consultorio ${overlappingCita.consultorios?.nombre || cita.consultorios?.nombre || ""} ya está ocupado en ese horario`,
+          };
+        }
+      }
+
+      // Condicionamos la transición desde el estado cancelado para que una solicitud
+      // repetida no reserve una segunda sesión.
+      const restoredCita = await tx.citasPsicologos.updateMany({
+        where: {
+          id: cita.id,
+          tenantId: usuario.tenantId,
+          realizada: null,
+        },
+        data: { realizada: false },
+      });
+
+      if (restoredCita.count === 0) {
+        return { error: "La cita ya fue restaurada o cambió de estado" };
+      }
+
+      // Al cancelar se devolvió la sesión; al restaurar la cita se reserva de nuevo.
+      if (cita.paqueteId) {
+        await consumePackageSession(tx, cita.paqueteId);
+      }
+
+      await createAuditLog({
+        tenantId: usuario.tenantId,
+        usuarioId: payload.userId,
+        accion: "UPDATE",
+        entidad: "Cita",
+        entidadId: citaId,
+        detalles: {
+          descripcion: "Cancelación de cita revertida",
+          antes: { realizada: null },
+          despues: { realizada: false },
+        },
+        tx,
+      });
+
+      return { success: true, message: "Cita restaurada como programada" };
+    });
+
+    if ("error" in result) return result;
+
+    revalidatePath("/dashboard/citas");
+    revalidatePath("/dashboard/citas/programacion");
+    return { success: true, message: "Cita restaurada como programada" };
+  } catch (error) {
+    console.error("Error restoring cita:", error);
+    if (error instanceof Error && error.message === "El paquete no tiene saldo disponible") {
+      return { error: "No se puede restaurar la cita: el paquete ya no tiene sesiones disponibles" };
+    }
+    return { error: "Error al restaurar la cita" };
   }
 }
 
