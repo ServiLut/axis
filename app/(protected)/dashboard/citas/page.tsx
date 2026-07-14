@@ -50,6 +50,7 @@ import {
   getFormDataCitas,
   uploadComprobantePagoCita,
   markCitaAsRealizada,
+  markCitaAsProgramada,
   markCitaAsCancelada,
   restoreCitaCancelada,
   toggleCitaPago,
@@ -743,6 +744,21 @@ export default function CitasPage() {
       } else {
           toast.success(res.message);
           fetchCitasData();
+          fetchAux();
+      }
+  };
+
+  const handleMarkAsProgramada = async (id: number) => {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      const res = await markCitaAsProgramada(token, id);
+      if ("message" in res) {
+          toast.success(res.message);
+          fetchCitasData();
+          fetchAux();
+      } else {
+          toast.error(res.error);
       }
   };
 
@@ -1154,7 +1170,17 @@ export default function CitasPage() {
                                      <CheckCircle className="mr-2 h-4 w-4" /> Marcar Realizada
                                  </DropdownMenuItem>
                              )}
+                             {cita.realizada === true && (
+                                 <DropdownMenuItem onClick={() => handleMarkAsProgramada(cita.id)} className="text-blue-600">
+                                     <RotateCcw className="mr-2 h-4 w-4" /> Volver a Pendiente
+                                 </DropdownMenuItem>
+                             )}
                              {cita.realizada === false && (
+                                 <DropdownMenuItem onClick={() => handleMarkAsCancelada(cita.id)} className="text-orange-600">
+                                     <EyeOff className="mr-2 h-4 w-4" /> Marcar como Cancelada
+                                 </DropdownMenuItem>
+                             )}
+                             {cita.realizada === true && (
                                  <DropdownMenuItem onClick={() => handleMarkAsCancelada(cita.id)} className="text-orange-600">
                                      <EyeOff className="mr-2 h-4 w-4" /> Marcar como Cancelada
                                  </DropdownMenuItem>

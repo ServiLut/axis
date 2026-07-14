@@ -1088,6 +1088,92 @@ export async function markCitaAsRealizada(token: string, citaId: number) {
   }
 }
 
+export async function markCitaAsProgramada(token: string, citaId: number) {
+  const payload = verifyToken(token);
+  if (!payload) return { error: "No autorizado" };
+
+  try {
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: payload.userId },
+      select: { tenantId: true },
+    });
+    if (!usuario) return { error: "Usuario no encontrado" };
+
+    const result = await prisma.$transaction(async (tx) => {
+      const cita = await tx.citasPsicologos.findFirst({
+        where: { id: BigInt(citaId), tenantId: usuario.tenantId },
+        include: { consultorios: { select: { nombre: true } } },
+      });
+
+      if (!cita) return { error: "Cita no encontrada" };
+      if (cita.realizada === false) return { error: "La cita ya esta pendiente" };
+      if (cita.realizada === null) {
+        return { error: "Use restaurar para volver una cita cancelada a pendiente" };
+      }
+
+      if (cita.consultorioId && cita.horaInicio && cita.horaFin) {
+        const overlappingCita = await tx.citasPsicologos.findFirst({
+          where: {
+            id: { not: cita.id },
+            tenantId: usuario.tenantId,
+            consultorioId: cita.consultorioId,
+            realizada: false,
+            AND: [
+              { horaInicio: { lt: cita.horaFin } },
+              { horaFin: { gt: cita.horaInicio } },
+            ],
+          },
+          include: { consultorios: { select: { nombre: true } } },
+        });
+
+        if (overlappingCita) {
+          return {
+            error: `No se puede poner pendiente: el consultorio ${overlappingCita.consultorios?.nombre || cita.consultorios?.nombre || ""} ya esta ocupado en ese horario`,
+          };
+        }
+      }
+
+      const updatedCita = await tx.citasPsicologos.updateMany({
+        where: {
+          id: cita.id,
+          tenantId: usuario.tenantId,
+          realizada: true,
+        },
+        data: { realizada: false },
+      });
+
+      if (updatedCita.count === 0) {
+        return { error: "La cita ya cambio de estado" };
+      }
+
+      await createAuditLog({
+        tenantId: usuario.tenantId,
+        usuarioId: payload.userId,
+        accion: "UPDATE",
+        entidad: "Cita",
+        entidadId: citaId,
+        detalles: {
+          descripcion: "Cita marcada como pendiente",
+          antes: { realizada: true },
+          despues: { realizada: false },
+        },
+        tx,
+      });
+
+      return { success: true, message: "Cita marcada como pendiente" };
+    });
+
+    if ("error" in result) return result;
+
+    revalidatePath("/dashboard/citas");
+    revalidatePath("/dashboard/citas/programacion");
+    return { success: true, message: "Cita marcada como pendiente" };
+  } catch (error) {
+    console.error("Error updating cita to pending:", error);
+    return { error: "Error al poner la cita como pendiente" };
+  }
+}
+
 export async function markCitaAsCancelada(token: string, citaId: number) {
   const payload = verifyToken(token);
   if (!payload) return { error: "No autorizado" };
@@ -1105,22 +1191,16 @@ export async function markCitaAsCancelada(token: string, citaId: number) {
     });
 
     if (!cita) return { error: "Cita no encontrada" };
-    if (cita.realizada !== false) {
-      return {
-        error:
-          cita.realizada === null
-            ? "La cita ya está cancelada"
-            : "Solo se pueden cancelar citas programadas",
-      };
+    if (cita.realizada === null) {
+      return { error: "La cita ya esta cancelada" };
     }
-
     await prisma.$transaction(async (tx) => {
       // 1. Mark as cancelled (realizada = null)
       const cancelledCita = await tx.citasPsicologos.updateMany({
         where: {
           id: BigInt(citaId),
           tenantId: usuario.tenantId,
-          realizada: false,
+          realizada: cita.realizada,
         },
         data: { realizada: null },
       });

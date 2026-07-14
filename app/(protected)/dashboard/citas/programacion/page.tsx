@@ -75,7 +75,7 @@ const formatDateInputValue = (date: Date) => {
 };
 
 export default function ProgramacionCitasPage() {
-  const router = useRouter();
+  const router = useRouter(); 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [now, setNow] = useState(new Date());
   // viewMode removed, always "day" + "consultorios"
