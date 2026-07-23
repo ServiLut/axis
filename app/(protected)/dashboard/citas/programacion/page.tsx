@@ -40,6 +40,9 @@ interface CitaProgramacion {
   horaFin: Date | string | null;
   direccionTexto: string;
   municipio: string | null;
+
+
+  
   barrio: string | null;
   estado: string;
   realizada: boolean;
