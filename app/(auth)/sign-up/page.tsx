@@ -132,7 +132,17 @@ export default function SignUpPage() {
   };
 
   return (
-    <div className="min-h-screen flex w-full bg-white font-sans overflow-hidden">
+    <div className="min-h-screen flex w-full bg-white font-sans overflow-hidden relative">
+      <Link 
+        href="/"
+        className="absolute top-8 left-8 z-50 group flex items-center gap-3 text-[11px] uppercase tracking-[0.2em] font-bold text-slate-700 transition-all duration-300"
+      >
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white border border-slate-300 shadow-md group-hover:bg-gradient-to-br group-hover:from-indigo-600 group-hover:to-violet-600 group-hover:text-white group-hover:border-transparent group-hover:shadow-indigo-500/30 group-hover:-translate-x-1 transition-all duration-300">
+          <ArrowLeft className="w-4 h-4 text-slate-700 group-hover:text-white transition-transform duration-300" />
+        </div>
+        <span className="mt-[2px] bg-clip-text text-slate-700 group-hover:text-transparent group-hover:bg-gradient-to-r group-hover:from-indigo-600 group-hover:to-violet-600 transition-all duration-300">Volver</span>
+      </Link>
+
       {/* Contenedor principal sin flex-row-reverse, por lo que el formulario se mantiene a la izquierda de forma nativa */}
       {/* === SECCIÓN IZQUIERDA (Formulario) === */}
       <div className="w-full lg:w-1/2 flex flex-col items-center justify-center px-8 py-12 sm:px-12 lg:px-16 xl:px-24 z-10 bg-white overflow-y-auto">
@@ -140,12 +150,12 @@ export default function SignUpPage() {
         <div className="w-full max-w-md space-y-6 animate-in fade-in slide-in-from-right-8 duration-1000 ease-out">
           {/* Header Branding */}
           <div className="space-y-4 mb-8">
-            <div className="flex items-center gap-3 font-bold text-2xl text-slate-900 tracking-tight mb-6">
+            <Link href="/" className="flex items-center gap-3 font-bold text-2xl text-slate-900 tracking-tight mb-6 hover:opacity-80 transition-opacity w-fit">
               <div className="p-2.5 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-2xl text-white shadow-lg shadow-indigo-500/30 ring-1 ring-black/10">
                 <ShieldCheck className="h-6 w-6" />
               </div>
               Axis
-            </div>
+            </Link>
 
             {/* Barra de Progreso */}
             <div className="flex items-center justify-between mb-2">

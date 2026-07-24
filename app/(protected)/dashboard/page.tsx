@@ -721,16 +721,20 @@ function PsychologyMetricCard({
 }) {
   return (
     <Card
-      className={`${className} ${onClick ? "cursor-pointer transition-colors hover:bg-slate-50" : ""}`}
+      className={`group relative overflow-hidden rounded-2xl bg-white shadow-sm hover:-translate-y-1 hover:shadow-md transition-all duration-300 border-slate-200/60 ${className} ${onClick ? "cursor-pointer hover:bg-slate-50/80" : ""}`}
       onClick={onClick}
     >
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        {icon}
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+        <CardTitle className="text-sm font-semibold text-slate-600 tracking-tight">{title}</CardTitle>
+        <div className="p-2 bg-slate-50 rounded-xl border border-slate-100 shadow-sm group-hover:scale-110 transition-transform duration-300">
+          {icon}
+        </div>
       </CardHeader>
       <CardContent>
-        <div className={`text-2xl font-bold ${valueClassName}`}>{value}</div>
-        <p className="text-xs text-muted-foreground">{description}</p>
+        <div className={`text-[28px] leading-none font-bold tracking-tight mb-1 ${valueClassName}`}>
+          {value}
+        </div>
+        <p className="text-[13px] font-medium text-slate-500">{description}</p>
       </CardContent>
     </Card>
   );
@@ -791,12 +795,15 @@ function PsychologyDashboard({ stats }: { stats: PsychologyDashboardStats }) {
 
   return (
     <>
-      <div className="space-y-8">
+      <div className="space-y-10">
         <div>
-          <h3 className="mb-4 text-lg font-medium text-slate-600">
+          <h3 className="mb-5 flex items-center text-[19px] font-bold text-slate-800 tracking-tight">
+            <span className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center mr-3">
+              <Calendar className="w-4 h-4 text-indigo-600" />
+            </span>
             Resumen de Hoy · Psicología
           </h3>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <PsychologyMetricCard
               title="Citas de Hoy"
               value={stats.citasHoy}
@@ -844,10 +851,13 @@ function PsychologyDashboard({ stats }: { stats: PsychologyDashboardStats }) {
         </div>
 
         <div>
-          <h3 className="mb-4 text-lg font-medium text-slate-600">
+          <h3 className="mb-5 flex items-center text-[19px] font-bold text-slate-800 tracking-tight">
+            <span className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center mr-3">
+              <Activity className="w-4 h-4 text-blue-600" />
+            </span>
             Estadísticas Globales · Psicología
           </h3>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             <PsychologyMetricCard
               title="Citas Totales"
               value={stats.citasTotal}
@@ -896,15 +906,15 @@ function PsychologyDashboard({ stats }: { stats: PsychologyDashboardStats }) {
               description="Haz clic para ver el detalle"
               icon={<DollarSign className="h-4 w-4 text-red-600" />}
               valueClassName="text-red-600"
-              className="border-red-200"
+              className="border-red-200 bg-red-50/10 md:col-span-2 lg:col-span-1 xl:col-span-2"
               onClick={() => openOutstandingModal("total")}
             />
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-          <Card className="col-span-4">
-            <CardHeader>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
+          <Card className="col-span-4 rounded-2xl shadow-sm border-slate-200/60">
+            <CardHeader className="pb-4">
               <CardTitle>Terapias Más Solicitadas</CardTitle>
             </CardHeader>
             <CardContent>
@@ -929,9 +939,9 @@ function PsychologyDashboard({ stats }: { stats: PsychologyDashboardStats }) {
                               {terapia.cantidad}
                             </span>
                           </div>
-                          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                          <div className="h-3 w-full overflow-hidden rounded-full bg-slate-100 shadow-inner">
                             <div
-                              className="h-full rounded-full bg-violet-500"
+                              className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 shadow-sm"
                               style={{ width: `${(terapia.cantidad / maximum) * 100}%` }}
                             />
                           </div>
@@ -944,35 +954,35 @@ function PsychologyDashboard({ stats }: { stats: PsychologyDashboardStats }) {
             </CardContent>
           </Card>
 
-          <Card className="col-span-3">
-            <CardHeader>
+          <Card className="col-span-3 rounded-2xl shadow-sm border-slate-200/60">
+            <CardHeader className="pb-4">
               <CardTitle>Accesos Rápidos</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-4">
                 <button
-                  className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-left transition-colors hover:bg-slate-100"
+                  className="group flex flex-col justify-center rounded-xl border border-slate-200/60 bg-white p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-indigo-200 hover:shadow-md hover:bg-slate-50/50"
                   onClick={() => router.push("/dashboard/citas/nuevo")}
                 >
                   <span className="block font-semibold text-slate-700">Nueva Cita</span>
                   <span className="text-xs text-slate-500">Agendar una sesión</span>
                 </button>
                 <button
-                  className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-left transition-colors hover:bg-slate-100"
+                  className="group flex flex-col justify-center rounded-xl border border-slate-200/60 bg-white p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-indigo-200 hover:shadow-md hover:bg-slate-50/50"
                   onClick={() => router.push("/dashboard/clientes/nuevo")}
                 >
                   <span className="block font-semibold text-slate-700">Nuevo Paciente</span>
                   <span className="text-xs text-slate-500">Registrar paciente</span>
                 </button>
                 <button
-                  className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-left transition-colors hover:bg-slate-100"
+                  className="group flex flex-col justify-center rounded-xl border border-slate-200/60 bg-white p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-indigo-200 hover:shadow-md hover:bg-slate-50/50"
                   onClick={() => router.push("/dashboard/citas/programacion")}
                 >
                   <span className="block font-semibold text-slate-700">Agenda</span>
                   <span className="text-xs text-slate-500">Ver programación</span>
                 </button>
                 <button
-                  className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-left transition-colors hover:bg-slate-100"
+                  className="group flex flex-col justify-center rounded-xl border border-slate-200/60 bg-white p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-indigo-200 hover:shadow-md hover:bg-slate-50/50"
                   onClick={() => router.push("/dashboard/usuarios/tecnicos")}
                 >
                   <span className="block font-semibold text-slate-700">Psicólogos</span>
