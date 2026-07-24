@@ -94,47 +94,57 @@ export default function SignInPage() {
   };
 
   return (
-    <div className="min-h-screen flex w-full bg-white dark:bg-stone-950 font-sans">
-      {/* === SECCIÓN IZQUIERDA (Formulario) === */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-8 py-12 sm:px-12 lg:px-16 xl:px-24 z-10 bg-white dark:bg-stone-950">
-        <div className="w-full max-w-md space-y-8">
+    <div className="min-h-screen flex lg:flex-row-reverse w-full bg-white font-sans overflow-hidden">
+      {/* Contenedor principal: lg:flex-row-reverse invierte el orden para colocar el formulario a la derecha y el banner a la izquierda en pantallas grandes */}
+      
+      {/* === SECCIÓN IZQUIERDA (Formulario - renderizado visualmente a la derecha) === */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center px-8 py-12 sm:px-12 lg:px-16 xl:px-24 z-10 bg-white">
+        {/* Contenido del formulario: Se anima deslizándose desde la izquierda de manera sutil (slide-in-from-left-8) para crear un efecto cruzado sin revelar el fondo */}
+        <div className="w-full max-w-md space-y-8 animate-in fade-in slide-in-from-left-8 duration-1000 ease-out">
           {/* Header & Logo */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 font-bold text-xl text-stone-900 dark:text-white">
-              <div className="p-1.5 bg-[#6440fa] rounded-lg text-white">
-                <ShieldCheck className="h-5 w-5" />
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 font-bold text-2xl text-slate-900 tracking-tight">
+              <div className="p-2.5 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-2xl text-white shadow-lg shadow-indigo-500/30 ring-1 ring-black/10">
+                <ShieldCheck className="h-6 w-6" />
               </div>
               Axis
             </div>
-            <h1 className="text-3xl font-bold tracking-tight mt-6 text-stone-900 dark:text-white">
-              Bienvenido
-            </h1>
+            <div className="pt-2">
+              <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">
+                Bienvenido de nuevo
+              </h1>
+              <p className="text-slate-500 mt-2 text-[15px]">
+                Ingresa tus credenciales para acceder a tu cuenta.
+              </p>
+            </div>
           </div>
 
           {/* Formulario */}
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-6 pt-4">
             {/* Input Username */}
             <div className="space-y-2">
               <Label
                 htmlFor="username"
-                className="text-stone-700 dark:text-stone-300 font-medium"
+                className="text-[13px] uppercase tracking-wider text-slate-500 font-bold"
               >
-                Nombre de usuario<span className="text-red-500">*</span>
+                Nombre de usuario<span className="text-red-500 ml-1">*</span>
               </Label>
-              <div className="relative">
-                <User className="absolute left-3.5 top-3.5 h-5 w-5 text-stone-400" />
+              <div className="relative group">
+                <User className="absolute left-4 top-3.5 h-5 w-5 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
                 <Input
                   id="username"
                   type="text"
                   placeholder="Tu usuario"
-                  className={`pl-11 h-12 rounded-xl border-stone-200 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-[#6440fa]/20 focus:border-[#6440fa] transition-all dark:bg-stone-900 dark:border-stone-800 dark:focus:bg-stone-900 dark:text-white ${errors.username ? "border-red-500 bg-red-50/50 dark:bg-red-950/10" : ""}`}
+                  className={`pl-12 h-12 rounded-xl bg-white border-slate-200 shadow-sm hover:border-indigo-300 focus:bg-white focus:ring-4 focus:ring-indigo-500/15 focus:border-indigo-600 transition-all text-[15px] font-medium text-slate-900 ${errors.username ? "border-red-500 focus:ring-red-500/15 focus:border-red-500" : ""}`}
                   value={formData.username}
                   onChange={handleInputChange}
                   disabled={isLoading}
                 />
               </div>
               {errors.username && (
-                <p className="text-sm text-red-500 mt-1">{errors.username}</p>
+                <p className="text-sm text-red-500 mt-1 font-medium">
+                  {errors.username}
+                </p>
               )}
             </div>
 
@@ -142,17 +152,17 @@ export default function SignInPage() {
             <div className="space-y-2">
               <Label
                 htmlFor="password"
-                className="text-stone-700 dark:text-stone-300 font-medium"
+                className="text-[13px] uppercase tracking-wider text-slate-500 font-bold"
               >
-                Contraseña<span className="text-red-500">*</span>
+                Contraseña<span className="text-red-500 ml-1">*</span>
               </Label>
-              <div className="relative">
-                <Lock className="absolute left-3.5 top-3.5 h-5 w-5 text-stone-400" />
+              <div className="relative group">
+                <Lock className="absolute left-4 top-3.5 h-5 w-5 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
                   placeholder="••••••••"
-                  className={`pl-11 pr-11 h-12 rounded-xl border-stone-200 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-[#6440fa]/20 focus:border-[#6440fa] transition-all dark:bg-stone-900 dark:border-stone-800 dark:focus:bg-stone-900 dark:text-white ${errors.password ? "border-red-500 bg-red-50/50 dark:bg-red-950/10" : ""}`}
+                  className={`pl-12 pr-12 h-12 rounded-xl bg-white border-slate-200 shadow-sm hover:border-indigo-300 focus:bg-white focus:ring-4 focus:ring-indigo-500/15 focus:border-indigo-600 transition-all text-[15px] tracking-widest font-medium text-slate-900 ${errors.password ? "border-red-500 focus:ring-red-500/15 focus:border-red-500" : ""}`}
                   value={formData.password}
                   onChange={handleInputChange}
                   disabled={isLoading}
@@ -160,7 +170,7 @@ export default function SignInPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-3.5 text-stone-400 hover:text-stone-600 dark:hover:text-stone-300 focus:outline-none"
+                  className="absolute right-4 top-3.5 text-slate-400 hover:text-indigo-600 focus:outline-none transition-colors"
                 >
                   {showPassword ? (
                     <EyeOff className="h-5 w-5" />
@@ -170,13 +180,15 @@ export default function SignInPage() {
                 </button>
               </div>
               {errors.password && (
-                <p className="text-sm text-red-500 mt-1">{errors.password}</p>
+                <p className="text-sm text-red-500 mt-1 font-medium">
+                  {errors.password}
+                </p>
               )}
             </div>
 
             {/* Remember Me & Forgot Password */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
+            <div className="flex items-center justify-between pt-2">
+              <div className="flex items-center space-x-2.5">
                 <Checkbox
                   id="rememberMe"
                   checked={formData.rememberMe}
@@ -184,18 +196,18 @@ export default function SignInPage() {
                     setFormData((p) => ({ ...p, rememberMe: !!checked }))
                   }
                   disabled={isLoading}
-                  className="data-[state=checked]:bg-[#6440fa] data-[state=checked]:border-[#6440fa] border-stone-300 rounded"
+                  className="data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600 border-slate-300 rounded shadow-sm"
                 />
                 <Label
                   htmlFor="rememberMe"
-                  className="text-sm text-stone-600 dark:text-stone-400 cursor-pointer select-none"
+                  className="text-[14px] text-slate-600 cursor-pointer select-none font-semibold hover:text-slate-900 transition-colors"
                 >
                   Recordarme
                 </Label>
               </div>
               <Link
                 href="/forgot-password"
-                className="text-sm font-medium text-[#6440fa] hover:text-[#5030c9] transition-colors"
+                className="text-[14px] font-bold text-indigo-600 hover:text-indigo-700 transition-colors"
               >
                 ¿Olvidaste tu contraseña?
               </Link>
@@ -204,7 +216,7 @@ export default function SignInPage() {
             {/* Submit Button */}
             <Button
               type="submit"
-              className="w-full h-12 text-base font-semibold bg-[#6440fa] hover:bg-[#5030c9] text-white rounded-xl shadow-lg shadow-indigo-500/20 active:scale-[0.99] transition-all"
+              className="w-full h-12 mt-4 text-[15px] font-bold bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white rounded-xl shadow-[0_8px_20px_rgba(79,70,229,0.25)] hover:shadow-[0_10px_25px_rgba(79,70,229,0.35)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300 border border-indigo-500/50"
               disabled={isLoading}
             >
               {isLoading ? (
@@ -219,11 +231,11 @@ export default function SignInPage() {
           </form>
 
           {/* Sign Up Link */}
-          <p className="text-center text-sm text-stone-600 dark:text-stone-400">
-            ¿Nuevo en nuestra plataforma?{" "}
+          <p className="text-center text-[15px] text-slate-500 mt-8 font-medium">
+            ¿Nuevo en nuestra plataforma?<br />
             <Link
               href="/sign-up"
-              className="font-semibold text-[#6440fa] hover:underline transition-colors"
+              className="font-bold text-indigo-600 hover:text-indigo-700 transition-colors inline-block mt-1"
             >
               Crea una cuenta
             </Link>
@@ -231,59 +243,84 @@ export default function SignInPage() {
         </div>
       </div>
 
-      {/* === SECCIÓN DERECHA (Banner Púrpura) === */}
-      <div className="hidden lg:flex w-1/2 bg-[#6440fa] relative items-center justify-center p-12 overflow-hidden">
-        {/* Elemento decorativo de fondo (triángulo sutil) */}
-        <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-black/10 to-transparent pointer-events-none" />
-        <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+      {/* === SECCIÓN DERECHA (Banner Oscuro/Glassmorphism) === */}
+      <div className="hidden lg:flex w-1/2 bg-[#0f0a1f] relative items-center justify-center p-12 overflow-hidden">
+        {/* Elementos decorativos de fondo */}
+        <div className="absolute inset-0 z-0">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(99,102,241,0.1)_0%,transparent_50%)]"></div>
+          <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-indigo-500/20 rounded-full blur-[128px] mix-blend-screen pointer-events-none"></div>
+          <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-purple-500/20 rounded-full blur-[128px] mix-blend-screen pointer-events-none"></div>
+        </div>
 
-        <div className="relative z-10 w-full max-w-lg text-white space-y-8 mb-20">
-          <h2 className="text-4xl xl:text-5xl font-bold tracking-tight leading-tight">
+        {/* Patrón de puntos sutil */}
+        <div
+          className="absolute inset-0 z-0 opacity-[0.04]"
+          style={{
+            backgroundImage: "radial-gradient(#fff 1.5px, transparent 1.5px)",
+            backgroundSize: "32px 32px",
+          }}
+        ></div>
+
+        {/* Contenido del Banner: Se anima deslizándose desde la derecha para completar la transición cruzada */}
+        <div className="relative z-10 w-full max-w-lg text-white space-y-8 mb-20 animate-in fade-in slide-in-from-right-8 duration-1000 ease-out">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 text-sm font-medium backdrop-blur-md border border-white/10 text-indigo-200 shadow-xl">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-300"></span>
+            </span>
+            Plataforma Profesional de Gestión
+          </div>
+          <h2 className="text-4xl xl:text-5xl font-bold tracking-tight leading-tight text-white drop-shadow-lg">
             ¡Bienvenido de nuevo!
             <br />
-            Accede a tu cuenta.
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-purple-300">
+              Accede a tu cuenta.
+            </span>
           </h2>
-          <p className="text-lg text-indigo-100/90 max-w-md leading-relaxed">
+          <p className="text-lg text-indigo-100/80 max-w-md leading-relaxed font-light">
             Gracias por regresar. Por favor revisa tu bandeja de entrada si
             necesitas verificar tu cuenta para activarla.
           </p>
         </div>
 
-        {/* Tarjeta Flotante Inferior */}
-        <div className="absolute bottom-8 right-8 left-8 md:left-auto md:w-[450px] bg-white dark:bg-stone-900 p-6 rounded-2xl shadow-2xl shadow-black/20 flex items-center justify-between backdrop-blur-sm bg-white/95 dark:bg-stone-900/95 border border-white/20">
-          <div className="space-y-2">
-            <h3 className="font-bold text-lg text-stone-900 dark:text-white flex items-center gap-2">
+        {/* Tarjeta Flotante Inferior (Glassmorphism Premium) */}
+        <div className="absolute bottom-12 right-12 md:left-auto md:w-[450px] bg-gradient-to-br from-white/10 to-white/5 p-6 rounded-2xl shadow-[0_0_50px_rgba(99,102,241,0.15)] flex items-center justify-between backdrop-blur-xl border border-white/20 z-10 overflow-hidden group hover:scale-[1.02] transition-transform duration-500 animate-in fade-in slide-in-from-bottom-8 duration-1000 ease-out">
+          {/* Brillo interno suave */}
+          <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
+
+          <div className="space-y-2 relative z-10">
+            <h3 className="font-bold text-lg text-white flex items-center gap-2 drop-shadow-sm">
               Ingresa tus credenciales
-              <ArrowUpRight className="h-4 w-4 text-stone-400" />
+              <ArrowUpRight className="h-4 w-4 text-indigo-300" />
             </h3>
-            <p className="text-sm text-stone-500 dark:text-stone-400">
+            <p className="text-sm text-indigo-200/80 font-light">
               Mantente conectado para las últimas actualizaciones.
             </p>
           </div>
-          {/* Stack de Avatares (Placeholder) */}
-          <div className="flex -space-x-3 rtl:space-x-reverse relative shrink-0">
+          {/* Stack de Avatares */}
+          <div className="flex -space-x-3 rtl:space-x-reverse relative shrink-0 z-10">
             <Image
-              className="w-10 h-10 border-2 border-white dark:border-stone-900 rounded-full object-cover"
+              className="w-11 h-11 border-2 border-[#1a1432] rounded-full object-cover shadow-lg"
               src="https://i.pravatar.cc/100?img=1"
               alt="Avatar 1"
-              width={40}
-              height={40}
+              width={44}
+              height={44}
             />
             <Image
-              className="w-10 h-10 border-2 border-white dark:border-stone-900 rounded-full object-cover"
+              className="w-11 h-11 border-2 border-[#1a1432] rounded-full object-cover shadow-lg"
               src="https://i.pravatar.cc/100?img=2"
               alt="Avatar 2"
-              width={40}
-              height={40}
+              width={44}
+              height={44}
             />
             <Image
-              className="w-10 h-10 border-2 border-white dark:border-stone-900 rounded-full object-cover"
+              className="w-11 h-11 border-2 border-[#1a1432] rounded-full object-cover shadow-lg"
               src="https://i.pravatar.cc/100?img=3"
               alt="Avatar 3"
-              width={40}
-              height={40}
+              width={44}
+              height={44}
             />
-            <div className="flex items-center justify-center w-10 h-10 border-2 border-white dark:border-stone-900 rounded-full bg-stone-800 text-xs font-medium text-white">
+            <div className="flex items-center justify-center w-11 h-11 border-2 border-[#1a1432] rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 text-xs font-bold text-white shadow-lg">
               +3k
             </div>
           </div>

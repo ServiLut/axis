@@ -32,3 +32,30 @@ A continuación detallo todas las mejoras y ajustes que implementé el día de h
   - Eliminé la dependencia estricta de la clase `.dark` (en `globals.css`) habilitando las **Media Queries nativas**. Ahora la web reacciona automáticamente a las preferencias de tu sistema operativo o navegador (ej. Google Chrome).
   - Integré lógica dinámica con Tailwind para que la imagen principal del Dashboard cambie automáticamente: *Atlas Analytics* (Dashboard claro) se muestra cuando tu OS está en Modo Oscuro, y *Aetherflow* (Dashboard oscuro) cuando está en Modo Claro.
   - Las notificaciones flotantes del Hero también invierten sus fondos dinámicamente y se mejoró la visibilidad y el contraste de sus pequeños íconos para garantizar accesibilidad en ambas versiones.
+
+
+## Actualización: 24 de Julio de 2026 - Rediseño Premium de Flujos de Autenticación
+
+Hoy me enfoqué en llevar la experiencia de registro e inicio de sesión a un nivel ultra-premium, inspirándome en diseños modernos de SaaS (tipo Stripe, Apple).
+
+### 1. Interfaz de Formulario "Flotante"
+- **Limpieza Visual**: Eliminé los fondos grises de los campos de texto (`inputs`). Ahora tienen un fondo blanco inmaculado que contrasta suavemente con el entorno, utilizando un borde sutil (`border-slate-200`) y una sombra ligera (`shadow-sm`) que los hace ver como si flotaran sobre el fondo.
+- **Micro-interacciones de Focus**: Al interactuar con los campos, implementé un anillo de color dinámico y un ligero realce en los íconos (que cambian a `indigo-600`), haciendo la experiencia más ágil y táctil.
+
+### 2. Jerarquía y Tipografía Moderna
+- **Etiquetas Estilizadas**: Reconstruí los `Labels` (Nombre, Contraseña, etc.) utilizando mayúsculas pequeñas, un espaciado de letras amplio (`tracking-wider`) y un mayor grosor de fuente (`font-bold`). Esto da un aspecto técnico, organizado y muy profesional, alineado con las mejores prácticas de UX.
+- **Esquema de Colores "Tech"**: Hice la transición de los tonos cálidos (marrón/piedra) a tonos grises fríos y azulados (`slate-900`, `slate-500`), aportando frescura y sensación de modernidad al texto.
+
+### 3. Botones Espectaculares
+- **Gradientes Profundos**: Actualicé los botones de acción principales (Iniciar Sesión / Continuar / Finalizar) con un rico gradiente que transita desde `indigo-600` a `violet-600`.
+- **Efectos 3D**: Añadí un sutil borde translúcido (`border-indigo-500/50`) y sombras vibrantes que proyectan el color del botón, dándoles una profundidad de aspecto nativo. Responden con un leve hundimiento (`translate-y-0.5`) al pasar el cursor o hacer clic.
+
+### 4. Funcionalidad UX Práctica
+- **Toggle de Contraseña (Ver/Ocultar)**: Implementé un botón interactivo (ícono de ojo) en los campos de "Contraseña" y "Confirmar" en la página de Crear Cuenta, brindando a los usuarios mayor confianza y previniendo errores de escritura.
+
+### 5. Animación de "Espejo" Fluida (Transición Elegante)
+- **Cambio de Disposición (Layout Swap)**: Reorganicé la vista de Iniciar Sesión para que sea el reflejo exacto de Crear Cuenta (el formulario de login ahora está a la derecha, mientras que el registro está a la izquierda).
+- **Animación Cruzada Sin Parpadeo**: Implementé una transición estática en la que los fondos nunca desaparecen ni "parpadean" en blanco. En su lugar, el **contenido interno** (formularios y textos del banner) entra deslizándose suave y delicadamente desde los laterales (`slide-in-from-left-8` / `right-8` y `fade-in`), logrando que las pantallas parezcan cruzarse de forma impecable y nativa al cambiar entre ellas. Además, comenté todo el código explicando este proceso.
+
+### 6. Refinamiento Visual en Enlaces de Navegación
+- **Alineación Vertical**: Modifiqué los textos inferiores de "¿Nuevo en nuestra plataforma?" y "¿Ya tienes cuenta?". Inserte un salto de línea (`<br />`) para que el enlace de acción principal (Crea una cuenta / Inicia Sesión) quede perfectamente centrado por debajo de la pregunta, tal y como se solicitó, dándole un aspecto visual mucho más balanceado y claro.
