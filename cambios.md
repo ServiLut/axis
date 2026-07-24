@@ -59,3 +59,43 @@ Hoy me enfoqué en llevar la experiencia de registro e inicio de sesión a un ni
 
 ### 6. Refinamiento Visual en Enlaces de Navegación
 - **Alineación Vertical**: Modifiqué los textos inferiores de "¿Nuevo en nuestra plataforma?" y "¿Ya tienes cuenta?". Inserte un salto de línea (`<br />`) para que el enlace de acción principal (Crea una cuenta / Inicia Sesión) quede perfectamente centrado por debajo de la pregunta, tal y como se solicitó, dándole un aspecto visual mucho más balanceado y claro.
+
+
+## Actualización: 24 de Julio de 2026 - Dashboard exclusivo de Psicología
+
+Se creó una variante del Dashboard para el tenant de Psicología (`tenantId = 4`) sin modificar la lógica ni las métricas que usan los demás tenants.
+
+### 1. Separación segura por tenant
+
+- **Detección desde la base de datos**: `getDashboardStats` consulta el usuario actualizado y selecciona el Dashboard psicológico cuando su tenant activo es el ID `4`.
+- **Compatibilidad con SU_ADMIN**: al cambiar al tenant de Psicología, el superadministrador recibe únicamente la información psicológica del tenant seleccionado.
+- **Aislamiento del flujo anterior**: los tenants distintos de `4` continúan usando las consultas existentes de `OrdenServicio`, incluyendo el comportamiento consolidado previo de `SU_ADMIN`.
+- **Constante centralizada**: se agregó `PSYCHOLOGY_TENANT_ID` para evitar repetir el identificador como un valor mágico.
+
+### 2. Indicadores de citas
+
+- **Resumen diario**: total de citas, programadas, realizadas, canceladas, valor conciliado y valor pendiente para el día actual.
+- **Resumen histórico**: total de citas, programadas, realizadas, canceladas, tasa de cancelación, valor conciliado y cartera pendiente.
+- **Estados de cita**: se conserva la semántica existente de `realizada`: `false` significa programada, `true` realizada y `null` cancelada.
+- **Estados financieros**: solo `estadoPago = CONCILIADO` se considera ingreso. Los valores nulos y los estados intermedios se mantienen como cartera pendiente.
+- **Citas canceladas**: participan en el total y la tasa de cancelación, pero se excluyen de ingresos y cartera.
+
+### 3. Fechas y valores
+
+- **Zona horaria explícita**: el rango de "hoy" se calcula en `America/Bogota`, independientemente de la zona horaria del servidor.
+- **Fecha de referencia**: los valores diarios se atribuyen a `fechaCita`, porque el modelo no dispone actualmente de una fecha independiente de conciliación.
+- **Paquetes**: las sesiones posteriores cuyo valor sea `0` no duplican el ingreso registrado en la primera cita o compra del paquete.
+
+### 4. Interfaz de Psicología
+
+- **Vista especializada**: se añadieron tarjetas y textos propios de citas, sin reutilizar etiquetas de órdenes o servicios técnicos.
+- **Terapias más solicitadas**: el nombre se obtiene primero desde el paquete adquirido y, para registros antiguos, desde el servicio relacionado.
+- **Accesos rápidos**: nueva cita, nuevo paciente, programación y gestión de psicólogos.
+- **Detalle de cartera**: las tarjetas de pagos pendientes abren un modal con cita, fecha, paciente, terapia, método, estado y valor. Cada fila dirige a la edición de la cita correspondiente.
+
+### 5. Controles técnicos y validación
+
+- La consulta de cartera vuelve a verificar en el servidor que el usuario pertenezca al tenant `4`.
+- Los registros psicológicos con otro tenant o con `tenantId` nulo quedan excluidos.
+- TypeScript, ESLint y `git diff --check` finalizaron correctamente.
+- La compilación de Next.js y su revisión de TypeScript finalizaron correctamente; la recolección posterior de páginas no pudo completarse en el entorno local por ausencia de variables válidas de Supabase y base de datos.

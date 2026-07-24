@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { 
   DollarSign, 
@@ -9,7 +9,8 @@ import {
   Clock, 
   Activity, 
   TrendingUp,
-  Briefcase
+  Briefcase,
+  ClipboardList,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,7 +28,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getDashboardStats, getUnpaidServicesDetails } from "./actions";
+import {
+  getDashboardStats,
+  getPsychologyOutstandingDetails,
+  getUnpaidServicesDetails,
+  type PsychologyDashboardStats,
+} from "./actions";
 import { toast } from "sonner";
 
 interface DashboardStats {
@@ -148,6 +154,10 @@ function DashboardSkeleton() {
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [psychologyStats, setPsychologyStats] =
+    useState<PsychologyDashboardStats | null>(null);
+  const [dashboardType, setDashboardType] =
+    useState<"services" | "psychology" | null>(null);
   const [loading, setLoading] = useState(true);
   const [unpaidModal, setUnpaidModal] = useState<{
     isOpen: boolean;
@@ -172,11 +182,15 @@ export default function DashboardPage() {
       }
 
       const result = await getDashboardStats(token);
-      if (result.error) {
+      if ("error" in result && result.error) {
         toast.error(result.error);
         if (result.error === "No autorizado") router.push("/sign-in");
-      } else if (result.stats) {
+      } else if ("stats" in result && result.type === "psychology") {
+        setPsychologyStats(result.stats);
+        setDashboardType("psychology");
+      } else if ("stats" in result && result.type === "services") {
         setStats(result.stats);
+        setDashboardType("services");
       }
       setLoading(false);
     };
@@ -207,14 +221,7 @@ export default function DashboardPage() {
     }
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("es-CO", {
-      style: "currency",
-      currency: "COP",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
+  const formatCurrency = formatCurrencyValue;
 
   return (
     <div className="flex-1 space-y-4 p-8 pt-6 bg-slate-50 overflow-y-auto h-full">
@@ -224,6 +231,8 @@ export default function DashboardPage() {
 
       {loading ? (
         <DashboardSkeleton />
+      ) : dashboardType === "psychology" && psychologyStats ? (
+        <PsychologyDashboard stats={psychologyStats} />
       ) : stats && (
         <div className="space-y-8">
           {/* Section: Resumen de Hoy */}
@@ -584,7 +593,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <Dialog 
+      {dashboardType === "services" && <Dialog
         open={unpaidModal.isOpen} 
         onOpenChange={(open) => setUnpaidModal(prev => ({ ...prev, isOpen: open }))}
       >
@@ -665,7 +674,399 @@ export default function DashboardPage() {
               </Table>
             </div>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
     </div>
+  );
+}
+
+interface PsychologyOutstandingItem {
+  id: number;
+  numeroCita: string;
+  fechaCita: Date | null;
+  paciente: {
+    nombre: string | null;
+    apellido: string | null;
+  } | null;
+  terapia: string;
+  metodoPago: string | null;
+  estadoPago: string | null;
+  estadoCita: string;
+  pendiente: number;
+}
+
+const formatCurrencyValue = (value: number) =>
+  new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
+
+function PsychologyMetricCard({
+  title,
+  value,
+  description,
+  icon,
+  valueClassName = "",
+  className = "",
+  onClick,
+}: {
+  title: string;
+  value: ReactNode;
+  description: string;
+  icon: ReactNode;
+  valueClassName?: string;
+  className?: string;
+  onClick?: () => void;
+}) {
+  return (
+    <Card
+      className={`${className} ${onClick ? "cursor-pointer transition-colors hover:bg-slate-50" : ""}`}
+      onClick={onClick}
+    >
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        {icon}
+      </CardHeader>
+      <CardContent>
+        <div className={`text-2xl font-bold ${valueClassName}`}>{value}</div>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Vista deliberadamente independiente: los textos, enlaces y detalles de citas
+// no alteran el Dashboard histórico que consumen los demás tenants.
+function PsychologyDashboard({ stats }: { stats: PsychologyDashboardStats }) {
+  const router = useRouter();
+  const [outstandingModal, setOutstandingModal] = useState<{
+    isOpen: boolean;
+    type: "today" | "total";
+    loading: boolean;
+    data: PsychologyOutstandingItem[];
+  }>({
+    isOpen: false,
+    type: "today",
+    loading: false,
+    data: [],
+  });
+
+  // La consulta del modal vuelve a validar el tenant en el servidor; el estado
+  // del cliente solo controla la presentación y el rango solicitado.
+  const openOutstandingModal = async (type: "today" | "total") => {
+    setOutstandingModal({ isOpen: true, type, loading: true, data: [] });
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/sign-in");
+      return;
+    }
+
+    const result = await getPsychologyOutstandingDetails(token, type);
+    if (result.error) {
+      toast.error(result.error);
+      setOutstandingModal((previous) => ({
+        ...previous,
+        isOpen: false,
+        loading: false,
+      }));
+      return;
+    }
+
+    setOutstandingModal((previous) => ({
+      ...previous,
+      loading: false,
+      data: (result.citas || []) as PsychologyOutstandingItem[],
+    }));
+  };
+
+  const formatAppointmentDate = (date: Date | null) => {
+    if (!date) return "Sin fecha";
+    return new Intl.DateTimeFormat("es-CO", {
+      dateStyle: "medium",
+      timeZone: "America/Bogota",
+    }).format(new Date(date));
+  };
+
+  return (
+    <>
+      <div className="space-y-8">
+        <div>
+          <h3 className="mb-4 text-lg font-medium text-slate-600">
+            Resumen de Hoy · Psicología
+          </h3>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            <PsychologyMetricCard
+              title="Citas de Hoy"
+              value={stats.citasHoy}
+              description="Total en la agenda de hoy"
+              icon={<ClipboardList className="h-4 w-4 text-blue-600" />}
+            />
+            <PsychologyMetricCard
+              title="Programadas"
+              value={stats.programadasHoy}
+              description="Pendientes de realizar hoy"
+              icon={<Calendar className="h-4 w-4 text-blue-500" />}
+            />
+            <PsychologyMetricCard
+              title="Realizadas"
+              value={stats.realizadasHoy}
+              description="Sesiones completadas hoy"
+              icon={<CheckCircle className="h-4 w-4 text-green-500" />}
+              valueClassName="text-green-600"
+            />
+            <PsychologyMetricCard
+              title="Canceladas"
+              value={stats.canceladasHoy}
+              description="Citas canceladas de hoy"
+              icon={<Activity className="h-4 w-4 text-orange-500" />}
+              valueClassName="text-orange-600"
+              className="border-orange-100"
+            />
+            <PsychologyMetricCard
+              title="Valor Conciliado"
+              value={formatCurrencyValue(stats.ingresosHoy)}
+              description="Citas de hoy ya conciliadas"
+              icon={<DollarSign className="h-4 w-4 text-green-600" />}
+              valueClassName="text-green-700"
+            />
+            <PsychologyMetricCard
+              title="Pendiente de Pago"
+              value={formatCurrencyValue(stats.pendienteHoy)}
+              description="Haz clic para ver las citas"
+              icon={<DollarSign className="h-4 w-4 text-red-500" />}
+              valueClassName="text-red-600"
+              className="border-red-200"
+              onClick={() => openOutstandingModal("today")}
+            />
+          </div>
+        </div>
+
+        <div>
+          <h3 className="mb-4 text-lg font-medium text-slate-600">
+            Estadísticas Globales · Psicología
+          </h3>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <PsychologyMetricCard
+              title="Citas Totales"
+              value={stats.citasTotal}
+              description="Histórico de citas registradas"
+              icon={<Briefcase className="h-4 w-4 text-blue-600" />}
+            />
+            <PsychologyMetricCard
+              title="Programadas"
+              value={stats.programadasTotal}
+              description="Pendientes de realizar"
+              icon={<Clock className="h-4 w-4 text-yellow-600" />}
+            />
+            <PsychologyMetricCard
+              title="Realizadas"
+              value={stats.realizadasTotal}
+              description="Histórico de sesiones completadas"
+              icon={<CheckCircle className="h-4 w-4 text-green-600" />}
+              valueClassName="text-green-700"
+            />
+            <PsychologyMetricCard
+              title="Canceladas"
+              value={stats.canceladasTotal}
+              description="Histórico de citas canceladas"
+              icon={<Activity className="h-4 w-4 text-orange-500" />}
+              valueClassName="text-orange-600"
+              className="border-orange-100"
+            />
+            <PsychologyMetricCard
+              title="Tasa de Cancelación"
+              value={`${stats.tasaCancelacionTotal.toFixed(1)}%`}
+              description="Sobre todas las citas registradas"
+              icon={<TrendingUp className="h-4 w-4 text-orange-600" />}
+              valueClassName="text-orange-700"
+              className="border-orange-200"
+            />
+            <PsychologyMetricCard
+              title="Valor Conciliado"
+              value={formatCurrencyValue(stats.ingresosTotal)}
+              description="Histórico no cancelado y conciliado"
+              icon={<TrendingUp className="h-4 w-4 text-green-700" />}
+              valueClassName="text-green-700"
+            />
+            <PsychologyMetricCard
+              title="Cartera Pendiente"
+              value={formatCurrencyValue(stats.pendienteTotal)}
+              description="Haz clic para ver el detalle"
+              icon={<DollarSign className="h-4 w-4 text-red-600" />}
+              valueClassName="text-red-600"
+              className="border-red-200"
+              onClick={() => openOutstandingModal("total")}
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+          <Card className="col-span-4">
+            <CardHeader>
+              <CardTitle>Terapias Más Solicitadas</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {stats.topTerapias.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No hay datos suficientes aún.
+                  </p>
+                ) : (
+                  stats.topTerapias.map((terapia) => {
+                    const maximum = Math.max(
+                      ...stats.topTerapias.map((item) => item.cantidad)
+                    );
+                    return (
+                      <div key={terapia.nombre} className="flex items-center">
+                        <div className="w-full space-y-1">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium leading-none">
+                              {terapia.nombre}
+                            </p>
+                            <span className="text-sm font-bold text-muted-foreground">
+                              {terapia.cantidad}
+                            </span>
+                          </div>
+                          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                            <div
+                              className="h-full rounded-full bg-violet-500"
+                              style={{ width: `${(terapia.cantidad / maximum) * 100}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="col-span-3">
+            <CardHeader>
+              <CardTitle>Accesos Rápidos</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-left transition-colors hover:bg-slate-100"
+                  onClick={() => router.push("/dashboard/citas/nuevo")}
+                >
+                  <span className="block font-semibold text-slate-700">Nueva Cita</span>
+                  <span className="text-xs text-slate-500">Agendar una sesión</span>
+                </button>
+                <button
+                  className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-left transition-colors hover:bg-slate-100"
+                  onClick={() => router.push("/dashboard/clientes/nuevo")}
+                >
+                  <span className="block font-semibold text-slate-700">Nuevo Paciente</span>
+                  <span className="text-xs text-slate-500">Registrar paciente</span>
+                </button>
+                <button
+                  className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-left transition-colors hover:bg-slate-100"
+                  onClick={() => router.push("/dashboard/citas/programacion")}
+                >
+                  <span className="block font-semibold text-slate-700">Agenda</span>
+                  <span className="text-xs text-slate-500">Ver programación</span>
+                </button>
+                <button
+                  className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-left transition-colors hover:bg-slate-100"
+                  onClick={() => router.push("/dashboard/usuarios/tecnicos")}
+                >
+                  <span className="block font-semibold text-slate-700">Psicólogos</span>
+                  <span className="text-xs text-slate-500">Gestionar equipo</span>
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      <Dialog
+        open={outstandingModal.isOpen}
+        onOpenChange={(isOpen) =>
+          setOutstandingModal((previous) => ({ ...previous, isOpen }))
+        }
+      >
+        <DialogContent className="max-h-[80vh] max-w-5xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {outstandingModal.type === "today"
+                ? "Citas Pendientes de Pago · Hoy"
+                : "Cartera Pendiente · Histórico"}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Cita</TableHead>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Paciente</TableHead>
+                  <TableHead>Terapia</TableHead>
+                  <TableHead>Método</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead className="text-right">Pendiente</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {outstandingModal.loading ? (
+                  Array.from({ length: 5 }).map((_, index) => (
+                    <TableRow key={index}>
+                      {Array.from({ length: 7 }).map((__, cellIndex) => (
+                        <TableCell key={cellIndex}>
+                          <Skeleton className="h-4 w-20" />
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                ) : outstandingModal.data.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="h-24 text-center">
+                      No hay citas pendientes de pago en esta categoría.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  outstandingModal.data.map((item) => (
+                    <TableRow
+                      key={item.id}
+                      className="cursor-pointer hover:bg-slate-50"
+                      onClick={() => router.push(`/dashboard/citas/${item.id}/editar`)}
+                    >
+                      <TableCell className="font-medium">{item.numeroCita}</TableCell>
+                      <TableCell>{formatAppointmentDate(item.fechaCita)}</TableCell>
+                      <TableCell>
+                        {[item.paciente?.nombre, item.paciente?.apellido]
+                          .filter(Boolean)
+                          .join(" ") || "Sin paciente"}
+                      </TableCell>
+                      <TableCell>{item.terapia}</TableCell>
+                      <TableCell>{item.metodoPago || "Sin definir"}</TableCell>
+                      <TableCell>
+                        <span
+                          className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
+                            item.estadoCita === "Realizada"
+                              ? "bg-green-100 text-green-700"
+                              : "bg-blue-100 text-blue-700"
+                          }`}
+                        >
+                          {item.estadoCita}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-red-600">
+                        {formatCurrencyValue(item.pendiente)}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
