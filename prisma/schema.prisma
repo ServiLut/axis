@@ -8,6 +8,7 @@ datasource db {
 }
 
 model Tenant {
+  movimientosCaja                                         MovimientoCaja[]
   id                                                      Int                              @id @default(autoincrement())
   nombre                                                  String
   createdAt                                               DateTime                         @default(now())
@@ -84,6 +85,7 @@ model Empresa {
 }
 
 model Usuario {
+  movimientosCaja                                      MovimientoCaja[]
   id                                                   Int                              @id @default(autoincrement())
   tenantId                                             Int
   username                                             String                           @unique
@@ -625,6 +627,27 @@ model Egresos {
   Usuario    Usuario? @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@map("Egresos")
+}
+
+// Tabla independiente. Instalación manual pendiente; no altera los balances existentes.
+model MovimientoCaja {
+  id           BigInt   @id @default(autoincrement())
+  tenantId     Int
+  creadoPorId  Int
+  fecha        DateTime @db.Date
+  tipo         String   @db.VarChar(7)
+  metodoPago   String   @db.VarChar(13)
+  monto        Decimal  @db.Decimal(12, 2)
+  concepto     String   @db.VarChar(240)
+  referencia   String?  @db.VarChar(120)
+  solicitudId  String   @db.Uuid
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  creadoPor    Usuario  @relation(fields: [creadoPorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([tenantId, creadoPorId, solicitudId])
+  @@index([tenantId, fecha])
+  @@map("MovimientoCaja")
 }
 
 model Auditoria {

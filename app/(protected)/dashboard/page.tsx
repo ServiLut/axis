@@ -35,6 +35,9 @@ import {
   type PsychologyDashboardStats,
 } from "./actions";
 import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { bogotaToday } from "@/lib/bogota-date";
 
 interface DashboardStats {
   serviciosAgendadosHoy: number;
@@ -153,6 +156,7 @@ function DashboardSkeleton() {
 }
 
 export default function DashboardPage() {
+  const [selectedDate, setSelectedDate] = useState(() => bogotaToday());
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [psychologyStats, setPsychologyStats] =
     useState<PsychologyDashboardStats | null>(null);
@@ -174,6 +178,7 @@ export default function DashboardPage() {
   const router = useRouter();
 
   useEffect(() => {
+    let cancelled = false;
     const fetchData = async () => {
       const token = localStorage.getItem("token");
       if (!token) {
@@ -181,22 +186,34 @@ export default function DashboardPage() {
         return;
       }
 
-      const result = await getDashboardStats(token);
-      if ("error" in result && result.error) {
-        toast.error(result.error);
-        if (result.error === "No autorizado") router.push("/sign-in");
-      } else if ("stats" in result && result.type === "psychology") {
-        setPsychologyStats(result.stats);
-        setDashboardType("psychology");
-      } else if ("stats" in result && result.type === "services") {
-        setStats(result.stats);
-        setDashboardType("services");
+      setLoading(true);
+      try {
+        const result = await getDashboardStats(token, selectedDate);
+        if (cancelled) return;
+        if ("error" in result && result.error) {
+          toast.error(result.error);
+          setPsychologyStats(null);
+          if (result.error === "No autorizado") router.push("/sign-in");
+        } else if ("stats" in result && result.type === "psychology") {
+          setPsychologyStats(result.stats);
+          setDashboardType("psychology");
+        } else if ("stats" in result && result.type === "services") {
+          setStats(result.stats);
+          setDashboardType("services");
+        }
+      } catch {
+        if (!cancelled) {
+          toast.error("No se pudo cargar el resumen. Intenta consultar la fecha nuevamente.");
+          setPsychologyStats(null);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      setLoading(false);
     };
 
     fetchData();
-  }, [router]);
+    return () => { cancelled = true; };
+  }, [router, selectedDate]);
 
   const handleOpenUnpaidModal = async (type: 'today' | 'total') => {
     setUnpaidModal(prev => ({ ...prev, isOpen: true, type, loading: true, data: [] }));
@@ -229,10 +246,22 @@ export default function DashboardPage() {
         <h2 className="text-3xl font-bold tracking-tight text-slate-900">Dashboard</h2>
       </div>
 
+      {dashboardType === "psychology" && (
+        <div className="flex flex-wrap items-center gap-3">
+          <label htmlFor="dashboard-date" className="text-sm font-medium text-slate-700">Fecha de las citas</label>
+          <Input id="dashboard-date" type="date" value={selectedDate} max={bogotaToday()}
+            className="w-auto bg-white" onChange={(e) => {
+              if (e.target.value && e.target.validity.valid) setSelectedDate(e.target.value);
+            }} />
+          <Button variant="outline" onClick={() => setSelectedDate(bogotaToday())}
+            disabled={selectedDate === bogotaToday()}>Hoy</Button>
+        </div>
+      )}
+
       {loading ? (
         <DashboardSkeleton />
       ) : dashboardType === "psychology" && psychologyStats ? (
-        <PsychologyDashboard stats={psychologyStats} />
+        <PsychologyDashboard key={psychologyStats.fechaConsulta} stats={psychologyStats} />
       ) : stats && (
         <div className="space-y-8">
           {/* Section: Resumen de Hoy */}
@@ -744,6 +773,8 @@ function PsychologyMetricCard({
 // no alteran el Dashboard histórico que consumen los demás tenants.
 function PsychologyDashboard({ stats }: { stats: PsychologyDashboardStats }) {
   const router = useRouter();
+  const dateLabel = new Intl.DateTimeFormat("es-CO", { dateStyle: "long", timeZone: "America/Bogota" })
+    .format(new Date(`${stats.fechaConsulta}T12:00:00-05:00`));
   const [outstandingModal, setOutstandingModal] = useState<{
     isOpen: boolean;
     type: "today" | "total";
@@ -767,7 +798,7 @@ function PsychologyDashboard({ stats }: { stats: PsychologyDashboardStats }) {
       return;
     }
 
-    const result = await getPsychologyOutstandingDetails(token, type);
+    const result = await getPsychologyOutstandingDetails(token, type, stats.fechaConsulta);
     if (result.error) {
       toast.error(result.error);
       setOutstandingModal((previous) => ({
@@ -801,32 +832,36 @@ function PsychologyDashboard({ stats }: { stats: PsychologyDashboardStats }) {
             <span className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center mr-3">
               <Calendar className="w-4 h-4 text-indigo-600" />
             </span>
-            Resumen de Hoy · Psicología
+            Resumen del {dateLabel} · Psicología
           </h3>
+          <p className="mb-5 text-sm text-slate-600">
+            Estado de pago actual de las citas de esta fecha, incluidos los pagos conciliados después.
+            No representa el saldo al cierre de ese día. Las estadísticas globales abarcan todo el historial.
+          </p>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <PsychologyMetricCard
-              title="Citas de Hoy"
+              title="Citas del día"
               value={stats.citasHoy}
-              description="Total en la agenda de hoy"
+              description="Agenda de la fecha seleccionada"
               icon={<ClipboardList className="h-4 w-4 text-blue-600" />}
             />
             <PsychologyMetricCard
               title="Programadas"
               value={stats.programadasHoy}
-              description="Pendientes de realizar hoy"
+              description="Pendientes de realizar en esta agenda"
               icon={<Calendar className="h-4 w-4 text-blue-500" />}
             />
             <PsychologyMetricCard
               title="Realizadas"
               value={stats.realizadasHoy}
-              description="Sesiones completadas hoy"
+              description="Sesiones completadas de esta agenda"
               icon={<CheckCircle className="h-4 w-4 text-green-500" />}
               valueClassName="text-green-600"
             />
             <PsychologyMetricCard
               title="Canceladas"
               value={stats.canceladasHoy}
-              description="Citas canceladas de hoy"
+              description="Citas canceladas de esta agenda"
               icon={<Activity className="h-4 w-4 text-orange-500" />}
               valueClassName="text-orange-600"
               className="border-orange-100"
@@ -834,7 +869,7 @@ function PsychologyDashboard({ stats }: { stats: PsychologyDashboardStats }) {
             <PsychologyMetricCard
               title="Valor Conciliado"
               value={formatCurrencyValue(stats.ingresosHoy)}
-              description="Citas de hoy ya conciliadas"
+              description="Citas de esta fecha ya conciliadas"
               icon={<DollarSign className="h-4 w-4 text-green-600" />}
               valueClassName="text-green-700"
             />
@@ -1004,7 +1039,7 @@ function PsychologyDashboard({ stats }: { stats: PsychologyDashboardStats }) {
           <DialogHeader>
             <DialogTitle>
               {outstandingModal.type === "today"
-                ? "Citas Pendientes de Pago · Hoy"
+                ? `Citas Pendientes de Pago · ${dateLabel}`
                 : "Cartera Pendiente · Histórico"}
             </DialogTitle>
           </DialogHeader>

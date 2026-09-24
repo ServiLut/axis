@@ -118,6 +118,7 @@ const allMenuItems: MenuConfig[] = [
       { href: "/dashboard/contabilidad/nomina", label: "Nómina" },
       { href: "/dashboard/contabilidad/anticipos", label: "Anticipos" },
       { href: "/dashboard/contabilidad/egresos", label: "Egresos" },
+      { href: "/dashboard/contabilidad/caja", label: "Caja diaria" },
       { href: "/dashboard/contabilidad/balances", label: "Balances" },
     ],
   },
@@ -250,6 +251,10 @@ export function Sidebar({ className }: SidebarProps) {
 
         // Filter sub-items
         const filteredItems = item.items.filter((subItem) => {
+          if (subItem.href === "/dashboard/contabilidad/caja") {
+            return process.env.NEXT_PUBLIC_CAJA_DIARIA_ENABLED === "true" && tenantId === 4 &&
+              (role === "ADMIN" || role === "SU_ADMIN" || role === "ASESOR");
+          }
           // Admin Only Links
           const adminOnlyPaths = [
             "/dashboard/usuarios/aprobar",

@@ -31,6 +31,11 @@ import {
 } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
 import imageCompression from "browser-image-compression";
+import { InternationalPhoneInput } from "@/components/clientes/international-phone-input";
+import { ClientLocationFields } from "@/components/clientes/location-fields";
+import { normalizeClientPhone } from "@/lib/client-phone";
+
+const showClientDocumentUploads = false;
 
 interface Direccion {
   id: number;
@@ -253,6 +258,14 @@ export default function EditarClientePage() {
     };
 
     if (tenantId === 4) {
+        try {
+            formData.set("telefono", normalizeClientPhone(String(formData.get("telefono") || "")));
+            formData.set("telefono2", normalizeClientPhone(String(formData.get("telefono2") || "")));
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Teléfono inválido");
+            setSaving(false);
+            return;
+        }
         // Upload Documento de Identidad (documentoPath)
         if (documentoFile) {
             try {
@@ -480,7 +493,7 @@ export default function EditarClientePage() {
               </div>
             </div>
 
-            {tenantId === 4 && (
+            {tenantId === 4 && showClientDocumentUploads && (
                 <div className="md:col-span-5 grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
                     {/* Documento de Identidad Upload */}
                     <div className="space-y-2">
@@ -631,7 +644,9 @@ export default function EditarClientePage() {
                 >
                   Teléfono <span className="text-red-500">*</span>
                 </Label>
-                <div className="relative">
+                {tenantId === 4 ? (
+                  <InternationalPhoneInput name="telefono" defaultValue={cliente?.telefono} required />
+                ) : (<div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <Input
                     id="telefono"
@@ -642,7 +657,7 @@ export default function EditarClientePage() {
                     required
                     className="h-11 pl-10"
                   />
-                </div>
+                </div>)}
               </div>
 
               <div className="space-y-2">
@@ -652,7 +667,9 @@ export default function EditarClientePage() {
                 >
                   Teléfono 2 <span className="text-slate-400 font-normal">(Opcional)</span>
                 </Label>
-                <div className="relative">
+                {tenantId === 4 ? (
+                  <InternationalPhoneInput name="telefono2" defaultValue={cliente?.telefono2} />
+                ) : (<div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <Input
                     id="telefono2"
@@ -662,7 +679,7 @@ export default function EditarClientePage() {
                     placeholder="Ej. 3007654321"
                     className="h-11 pl-10"
                   />
-                </div>
+                </div>)}
               </div>
 
               <div className="space-y-2">
@@ -784,6 +801,10 @@ export default function EditarClientePage() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                      {tenantId === 4 ? (
+                        <ClientLocationFields municipality={dir.municipio} neighborhood={dir.barrio}
+                          onChange={(field, value) => handleDireccionChange(dir.id, field, value)} />
+                      ) : (<>
                       <div className="space-y-2">
                         <Label className="text-sm font-medium text-slate-700">
                           Municipio
@@ -814,6 +835,7 @@ export default function EditarClientePage() {
                           disabled={!dir.municipio}
                         />
                       </div>
+                      </>)}
 
                       <div className="space-y-2">
                         <Label className="text-sm font-medium text-slate-700">
@@ -875,7 +897,7 @@ export default function EditarClientePage() {
           </div>
 
           {/* Vehículos */}
-          <div className="space-y-6">
+          {tenantId !== 4 && <div className="space-y-6">
             <div className="flex items-center justify-between pb-3 border-b-2 border-slate-200">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-purple-50 rounded-lg">
@@ -997,7 +1019,7 @@ export default function EditarClientePage() {
                 </div>
               )}
             </div>
-          </div>
+          </div>}
 
           {/* Botones de acción */}
           <div className="flex items-center justify-between pt-6 border-t-2 border-slate-200">

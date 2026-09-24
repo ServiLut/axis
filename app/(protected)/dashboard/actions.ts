@@ -4,11 +4,12 @@ import prisma from "@/lib/prisma";
 import { verifyToken, signToken } from "@/lib/auth";
 import { PSYCHOLOGY_TENANT_ID } from "@/lib/constants/tenants";
 import { EstadoPagoOrden, Prisma } from "@/prisma/generated/prisma/client";
-import { fromZonedTime } from "date-fns-tz";
+import { getBogotaDayRange } from "@/lib/bogota-date";
 
 // Contrato exclusivo de la variante psicológica del Dashboard. No se mezcla con
 // las métricas de OrdenServicio para mantener intactos los demás tenants.
 export interface PsychologyDashboardStats {
+  fechaConsulta: string;
   citasHoy: number;
   programadasHoy: number;
   realizadasHoy: number;
@@ -24,32 +25,6 @@ export interface PsychologyDashboardStats {
   pendienteTotal: number;
   topTerapias: { nombre: string; cantidad: number }[];
 }
-
-const BOGOTA_TIME_ZONE = "America/Bogota";
-
-// Las citas se almacenan con zona horaria. Construir ambos límites desde la fecha
-// de Bogotá evita que el servidor (por ejemplo, configurado en UTC) cambie el día.
-const getBogotaDayRange = () => {
-  const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: BOGOTA_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  const today = formatter.format(new Date());
-  const [year, month, day] = today.split("-").map(Number);
-  const nextDay = new Date(Date.UTC(year, month - 1, day + 1));
-  const tomorrow = [
-    nextDay.getUTCFullYear(),
-    String(nextDay.getUTCMonth() + 1).padStart(2, "0"),
-    String(nextDay.getUTCDate()).padStart(2, "0"),
-  ].join("-");
-
-  return {
-    start: fromZonedTime(`${today}T00:00:00`, BOGOTA_TIME_ZONE),
-    end: fromZonedTime(`${tomorrow}T00:00:00`, BOGOTA_TIME_ZONE),
-  };
-};
 
 // Cartera: cita vigente, con valor real y todavía no conciliada. Los estados
 // intermedios (declarado/consignado) siguen pendientes hasta llegar a CONCILIADO.
@@ -70,8 +45,8 @@ const toNumber = (value: unknown): number => {
   return Number(value || 0);
 };
 
-async function getPsychologyDashboardStats(): Promise<PsychologyDashboardStats> {
-  const { start, end } = getBogotaDayRange();
+async function getPsychologyDashboardStats(selectedDate?: string): Promise<PsychologyDashboardStats> {
+  const { date, start, end } = getBogotaDayRange(selectedDate);
   const tenantWhere = { tenantId: PSYCHOLOGY_TENANT_ID };
   const todayWhere: Prisma.CitasPsicologosWhereInput = {
     ...tenantWhere,
@@ -171,6 +146,7 @@ async function getPsychologyDashboardStats(): Promise<PsychologyDashboardStats> 
     .slice(0, 5);
 
   return {
+    fechaConsulta: date,
     citasHoy,
     programadasHoy,
     realizadasHoy,
@@ -189,7 +165,7 @@ async function getPsychologyDashboardStats(): Promise<PsychologyDashboardStats> 
   };
 }
 
-export async function getDashboardStats(token: string) {
+export async function getDashboardStats(token: string, selectedDate?: string) {
   const payload = verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
@@ -206,7 +182,7 @@ export async function getDashboardStats(token: string) {
     if (usuario.tenantId === PSYCHOLOGY_TENANT_ID) {
       return {
         type: "psychology" as const,
-        stats: await getPsychologyDashboardStats(),
+        stats: await getPsychologyDashboardStats(selectedDate),
       };
     }
     
@@ -482,7 +458,8 @@ export async function getDashboardStats(token: string) {
  */
 export async function getPsychologyOutstandingDetails(
   token: string,
-  type: "today" | "total"
+  type: "today" | "total",
+  selectedDate?: string,
 ) {
   const payload = verifyToken(token);
   if (!payload) return { error: "No autorizado" };
@@ -498,7 +475,7 @@ export async function getPsychologyOutstandingDetails(
       return { error: "Esta consulta solo está disponible para Psicología" };
     }
 
-    const { start, end } = getBogotaDayRange();
+    const { start, end } = getBogotaDayRange(selectedDate);
     const where: Prisma.CitasPsicologosWhereInput = {
       tenantId: PSYCHOLOGY_TENANT_ID,
       ...pendingPsychologyPaymentWhere,

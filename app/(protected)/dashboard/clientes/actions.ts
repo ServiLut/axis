@@ -1,4 +1,6 @@
 "use server";
+import { clientPhoneVariants, normalizeClientPhone } from "@/lib/client-phone";
+import { PSYCHOLOGY_TENANT_ID } from "@/lib/constants/tenants";
 
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
@@ -289,8 +291,8 @@ export async function updateCliente(token: string, id: number, formData: FormDat
     const apellido = formData.get("apellido") as string;
     const tipoDocumento = formData.get("tipoDocumento") as string;
     const numeroDocumento = formData.get("numeroDocumento") as string;
-    const telefono = formData.get("telefono") as string;
-    const telefono2 = formData.get("telefono2") as string;
+    let telefono = formData.get("telefono") as string;
+    let telefono2 = formData.get("telefono2") as string;
     const correo = formData.get("correo") as string;
     const registroDocumento = formData.get("registroDocumento") as string;
     const documentoPath = formData.get("documentoPath") as string;
@@ -299,6 +301,16 @@ export async function updateCliente(token: string, id: number, formData: FormDat
 
     if (!telefono) {
       return { error: "El teléfono es obligatorio." };
+    }
+
+    if (targetTenantId === PSYCHOLOGY_TENANT_ID) {
+      try {
+        telefono = normalizeClientPhone(telefono);
+        telefono2 = normalizeClientPhone(telefono2 === "No Concretado" ? "" : telefono2 || "");
+        if (!telefono) return { error: "El teléfono es obligatorio." };
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : "Teléfono inválido" };
+      }
     }
 
     // Verificar si ya existe otro cliente con el mismo teléfono (primario o secundario)
@@ -317,6 +329,11 @@ export async function updateCliente(token: string, id: number, formData: FormDat
     if (telefono2 && telefono2.trim() && isValidPhoneNumber(telefono2.trim())) {
         orConditions.push({ telefono: telefono2.trim() });
         orConditions.push({ telefono2: telefono2.trim() });
+    }
+
+    if (targetTenantId === PSYCHOLOGY_TENANT_ID) {
+      const variants = [...new Set([...clientPhoneVariants(telefono), ...clientPhoneVariants(telefono2)])];
+      orConditions.push({ telefono: { in: variants } }, { telefono2: { in: variants } });
     }
 
     if (orConditions.length > 0) {

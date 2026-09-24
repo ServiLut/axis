@@ -62,6 +62,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Combobox } from "@/components/ui/combobox";
 import { municipiosAntioquia } from "@/lib/constants/municipios";
 import { useUserRole } from "@/hooks/use-user-role";
+import { ClientPhoneLink } from "@/components/clientes/phone-link";
 
 interface Cliente {
   id: number;
@@ -826,13 +827,13 @@ export default function ClientesPage() {
                           <div className="space-y-1">
                             <div className="flex items-center gap-2 text-slate-600">
                               <Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                              <span>{cliente.telefono}</span>
+                              <ClientPhoneLink phone={cliente.telefono} enabled={tenantId === 4} />
                             </div>
                             {cliente.telefono2 &&
                               cliente.telefono2 !== "No Concretado" && (
                                 <div className="flex items-center gap-2 text-slate-600">
                                   <Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                  <span>{cliente.telefono2}</span>
+                                  <ClientPhoneLink phone={cliente.telefono2} enabled={tenantId === 4} />
                                 </div>
                               )}
                             {cliente.correo && (
@@ -1175,7 +1176,7 @@ export default function ClientesPage() {
                       <div className="flex items-center gap-2">
                         <Phone className="h-4 w-4 text-slate-400" />
                         <span className="text-base font-medium text-slate-900">
-                          {selectedCliente.telefono}
+                          <ClientPhoneLink phone={selectedCliente.telefono} enabled={tenantId === 4} />
                         </span>
                       </div>
                       {selectedCliente.telefono2 &&
@@ -1183,7 +1184,7 @@ export default function ClientesPage() {
                           <div className="flex items-center gap-2">
                             <Phone className="h-4 w-4 text-slate-400" />
                             <span className="text-base font-medium text-slate-900">
-                              {selectedCliente.telefono2}
+                              <ClientPhoneLink phone={selectedCliente.telefono2} enabled={tenantId === 4} />
                             </span>
                           </div>
                         )}
