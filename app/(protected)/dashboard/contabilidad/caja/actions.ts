@@ -7,7 +7,7 @@ import { getBogotaDayRange } from "@/lib/bogota-date";
 import { validateCajaInput, type CajaInput, type CajaMovement } from "@/lib/caja";
 
 async function cajaUser(token: string) {
-  if (process.env.NEXT_PUBLIC_CAJA_DIARIA_ENABLED !== "true") throw new Error("La caja diaria aún no está habilitada.");
+  if (process.env.NEXT_PUBLIC_CAJA_DIARIA_ENABLED !== "true" && process.env.NEXT_PUBLIC_RECEPCION_ENABLED !== "true") throw new Error("La caja diaria aún no está habilitada.");
   const payload = verifyToken(token);
   if (!payload) throw new Error("No autorizado.");
   const user = await prisma.usuario.findUnique({

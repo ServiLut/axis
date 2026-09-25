@@ -1,5 +1,9 @@
 # API y flujos
 
+## Recepción de Psicología
+
+Server Actions en `app/(protected)/dashboard/recepcion/actions.ts`: `getReceptionData`, `createReceptionCharge`, `recordReceptionPayment`, `cancelReceptionCharge`, `refundReceptionPayment`, `updateReceptionRate`. Todas verifican flag, sesión, usuario activo/aprobado, rol y tenant 4; las tres últimas son administrativas. Cargo y pago son operaciones distintas. Un pago guarda aplicaciones, ingreso en MovimientoCaja y auditoría en una transacción con control de reintentos por UUID. Detalles e instalación en [RECEPCION_PSICOLOGIA.md](RECEPCION_PSICOLOGIA.md).
+
 ## Convenciones generales
 
 El proyecto usa dos formas principales para ejecutar negocio:

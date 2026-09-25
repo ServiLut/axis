@@ -376,6 +376,7 @@ export type CitasPsicologosWhereInput = {
   consultorioId?: Prisma.BigIntNullableFilter<"CitasPsicologos"> | bigint | number | null
   realizada?: Prisma.BoolNullableFilter<"CitasPsicologos"> | boolean | null
   estadoPago?: Prisma.EnumEstadoPagoOrdenNullableFilter<"CitasPsicologos"> | $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionListRelationFilter
   consultorios?: Prisma.XOR<Prisma.ConsultoriosNullableScalarRelationFilter, Prisma.consultoriosWhereInput> | null
   Usuario_CitasPsicologos_creadoPorIdToUsuario?: Prisma.XOR<Prisma.UsuarioNullableScalarRelationFilter, Prisma.UsuarioWhereInput> | null
   Empresa?: Prisma.XOR<Prisma.EmpresaNullableScalarRelationFilter, Prisma.EmpresaWhereInput> | null
@@ -409,6 +410,7 @@ export type CitasPsicologosOrderByWithRelationInput = {
   consultorioId?: Prisma.SortOrderInput | Prisma.SortOrder
   realizada?: Prisma.SortOrderInput | Prisma.SortOrder
   estadoPago?: Prisma.SortOrderInput | Prisma.SortOrder
+  cargosRecepcion?: Prisma.CargoRecepcionOrderByRelationAggregateInput
   consultorios?: Prisma.consultoriosOrderByWithRelationInput
   Usuario_CitasPsicologos_creadoPorIdToUsuario?: Prisma.UsuarioOrderByWithRelationInput
   Empresa?: Prisma.EmpresaOrderByWithRelationInput
@@ -445,6 +447,7 @@ export type CitasPsicologosWhereUniqueInput = Prisma.AtLeast<{
   consultorioId?: Prisma.BigIntNullableFilter<"CitasPsicologos"> | bigint | number | null
   realizada?: Prisma.BoolNullableFilter<"CitasPsicologos"> | boolean | null
   estadoPago?: Prisma.EnumEstadoPagoOrdenNullableFilter<"CitasPsicologos"> | $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionListRelationFilter
   consultorios?: Prisma.XOR<Prisma.ConsultoriosNullableScalarRelationFilter, Prisma.consultoriosWhereInput> | null
   Usuario_CitasPsicologos_creadoPorIdToUsuario?: Prisma.XOR<Prisma.UsuarioNullableScalarRelationFilter, Prisma.UsuarioWhereInput> | null
   Empresa?: Prisma.XOR<Prisma.EmpresaNullableScalarRelationFilter, Prisma.EmpresaWhereInput> | null
@@ -523,6 +526,7 @@ export type CitasPsicologosCreateInput = {
   createdAt?: Date | string
   realizada?: boolean | null
   estadoPago?: $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutCitaInput
   consultorios?: Prisma.consultoriosCreateNestedOneWithoutCitasPsicologosInput
   Usuario_CitasPsicologos_creadoPorIdToUsuario?: Prisma.UsuarioCreateNestedOneWithoutCitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioInput
   Empresa?: Prisma.EmpresaCreateNestedOneWithoutCitasPsicologosInput
@@ -556,6 +560,7 @@ export type CitasPsicologosUncheckedCreateInput = {
   consultorioId?: bigint | number | null
   realizada?: boolean | null
   estadoPago?: $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCitaInput
   nominaDetalles?: Prisma.NominaDetalleUncheckedCreateNestedManyWithoutCitaInput
 }
 
@@ -571,6 +576,7 @@ export type CitasPsicologosUpdateInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   realizada?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   estadoPago?: Prisma.NullableEnumEstadoPagoOrdenFieldUpdateOperationsInput | $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutCitaNestedInput
   consultorios?: Prisma.consultoriosUpdateOneWithoutCitasPsicologosNestedInput
   Usuario_CitasPsicologos_creadoPorIdToUsuario?: Prisma.UsuarioUpdateOneWithoutCitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioNestedInput
   Empresa?: Prisma.EmpresaUpdateOneWithoutCitasPsicologosNestedInput
@@ -604,6 +610,7 @@ export type CitasPsicologosUncheckedUpdateInput = {
   consultorioId?: Prisma.NullableBigIntFieldUpdateOperationsInput | bigint | number | null
   realizada?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   estadoPago?: Prisma.NullableEnumEstadoPagoOrdenFieldUpdateOperationsInput | $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCitaNestedInput
   nominaDetalles?: Prisma.NominaDetalleUncheckedUpdateManyWithoutCitaNestedInput
 }
 
@@ -1177,6 +1184,22 @@ export type CitasPsicologosUncheckedUpdateManyWithoutPaqueteAdquiridoNestedInput
   deleteMany?: Prisma.CitasPsicologosScalarWhereInput | Prisma.CitasPsicologosScalarWhereInput[]
 }
 
+export type CitasPsicologosCreateNestedOneWithoutCargosRecepcionInput = {
+  create?: Prisma.XOR<Prisma.CitasPsicologosCreateWithoutCargosRecepcionInput, Prisma.CitasPsicologosUncheckedCreateWithoutCargosRecepcionInput>
+  connectOrCreate?: Prisma.CitasPsicologosCreateOrConnectWithoutCargosRecepcionInput
+  connect?: Prisma.CitasPsicologosWhereUniqueInput
+}
+
+export type CitasPsicologosUpdateOneWithoutCargosRecepcionNestedInput = {
+  create?: Prisma.XOR<Prisma.CitasPsicologosCreateWithoutCargosRecepcionInput, Prisma.CitasPsicologosUncheckedCreateWithoutCargosRecepcionInput>
+  connectOrCreate?: Prisma.CitasPsicologosCreateOrConnectWithoutCargosRecepcionInput
+  upsert?: Prisma.CitasPsicologosUpsertWithoutCargosRecepcionInput
+  disconnect?: Prisma.CitasPsicologosWhereInput | boolean
+  delete?: Prisma.CitasPsicologosWhereInput | boolean
+  connect?: Prisma.CitasPsicologosWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.CitasPsicologosUpdateToOneWithWhereWithoutCargosRecepcionInput, Prisma.CitasPsicologosUpdateWithoutCargosRecepcionInput>, Prisma.CitasPsicologosUncheckedUpdateWithoutCargosRecepcionInput>
+}
+
 export type CitasPsicologosCreateWithoutTenantInput = {
   id?: bigint | number
   fechaCita?: Date | string | null
@@ -1189,6 +1212,7 @@ export type CitasPsicologosCreateWithoutTenantInput = {
   createdAt?: Date | string
   realizada?: boolean | null
   estadoPago?: $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutCitaInput
   consultorios?: Prisma.consultoriosCreateNestedOneWithoutCitasPsicologosInput
   Usuario_CitasPsicologos_creadoPorIdToUsuario?: Prisma.UsuarioCreateNestedOneWithoutCitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioInput
   Empresa?: Prisma.EmpresaCreateNestedOneWithoutCitasPsicologosInput
@@ -1220,6 +1244,7 @@ export type CitasPsicologosUncheckedCreateWithoutTenantInput = {
   consultorioId?: bigint | number | null
   realizada?: boolean | null
   estadoPago?: $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCitaInput
   nominaDetalles?: Prisma.NominaDetalleUncheckedCreateNestedManyWithoutCitaInput
 }
 
@@ -1287,6 +1312,7 @@ export type CitasPsicologosCreateWithoutEmpresaInput = {
   createdAt?: Date | string
   realizada?: boolean | null
   estadoPago?: $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutCitaInput
   consultorios?: Prisma.consultoriosCreateNestedOneWithoutCitasPsicologosInput
   Usuario_CitasPsicologos_creadoPorIdToUsuario?: Prisma.UsuarioCreateNestedOneWithoutCitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioInput
   Cliente?: Prisma.ClienteCreateNestedOneWithoutCitasPsicologosInput
@@ -1318,6 +1344,7 @@ export type CitasPsicologosUncheckedCreateWithoutEmpresaInput = {
   consultorioId?: bigint | number | null
   realizada?: boolean | null
   estadoPago?: $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCitaInput
   nominaDetalles?: Prisma.NominaDetalleUncheckedCreateNestedManyWithoutCitaInput
 }
 
@@ -1359,6 +1386,7 @@ export type CitasPsicologosCreateWithoutUsuario_CitasPsicologos_creadoPorIdToUsu
   createdAt?: Date | string
   realizada?: boolean | null
   estadoPago?: $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutCitaInput
   consultorios?: Prisma.consultoriosCreateNestedOneWithoutCitasPsicologosInput
   Empresa?: Prisma.EmpresaCreateNestedOneWithoutCitasPsicologosInput
   Cliente?: Prisma.ClienteCreateNestedOneWithoutCitasPsicologosInput
@@ -1390,6 +1418,7 @@ export type CitasPsicologosUncheckedCreateWithoutUsuario_CitasPsicologos_creadoP
   consultorioId?: bigint | number | null
   realizada?: boolean | null
   estadoPago?: $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCitaInput
   nominaDetalles?: Prisma.NominaDetalleUncheckedCreateNestedManyWithoutCitaInput
 }
 
@@ -1415,6 +1444,7 @@ export type CitasPsicologosCreateWithoutUsuario_CitasPsicologos_psicologoIdToUsu
   createdAt?: Date | string
   realizada?: boolean | null
   estadoPago?: $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutCitaInput
   consultorios?: Prisma.consultoriosCreateNestedOneWithoutCitasPsicologosInput
   Usuario_CitasPsicologos_creadoPorIdToUsuario?: Prisma.UsuarioCreateNestedOneWithoutCitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioInput
   Empresa?: Prisma.EmpresaCreateNestedOneWithoutCitasPsicologosInput
@@ -1446,6 +1476,7 @@ export type CitasPsicologosUncheckedCreateWithoutUsuario_CitasPsicologos_psicolo
   consultorioId?: bigint | number | null
   realizada?: boolean | null
   estadoPago?: $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCitaInput
   nominaDetalles?: Prisma.NominaDetalleUncheckedCreateNestedManyWithoutCitaInput
 }
 
@@ -1503,6 +1534,7 @@ export type CitasPsicologosCreateWithoutClienteInput = {
   createdAt?: Date | string
   realizada?: boolean | null
   estadoPago?: $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutCitaInput
   consultorios?: Prisma.consultoriosCreateNestedOneWithoutCitasPsicologosInput
   Usuario_CitasPsicologos_creadoPorIdToUsuario?: Prisma.UsuarioCreateNestedOneWithoutCitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioInput
   Empresa?: Prisma.EmpresaCreateNestedOneWithoutCitasPsicologosInput
@@ -1534,6 +1566,7 @@ export type CitasPsicologosUncheckedCreateWithoutClienteInput = {
   consultorioId?: bigint | number | null
   realizada?: boolean | null
   estadoPago?: $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCitaInput
   nominaDetalles?: Prisma.NominaDetalleUncheckedCreateNestedManyWithoutCitaInput
 }
 
@@ -1575,6 +1608,7 @@ export type CitasPsicologosCreateWithoutServicio_CitasPsicologos_servicioIdToSer
   createdAt?: Date | string
   realizada?: boolean | null
   estadoPago?: $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutCitaInput
   consultorios?: Prisma.consultoriosCreateNestedOneWithoutCitasPsicologosInput
   Usuario_CitasPsicologos_creadoPorIdToUsuario?: Prisma.UsuarioCreateNestedOneWithoutCitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioInput
   Empresa?: Prisma.EmpresaCreateNestedOneWithoutCitasPsicologosInput
@@ -1606,6 +1640,7 @@ export type CitasPsicologosUncheckedCreateWithoutServicio_CitasPsicologos_servic
   consultorioId?: bigint | number | null
   realizada?: boolean | null
   estadoPago?: $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCitaInput
   nominaDetalles?: Prisma.NominaDetalleUncheckedCreateNestedManyWithoutCitaInput
 }
 
@@ -1631,6 +1666,7 @@ export type CitasPsicologosCreateWithoutServicio_CitasPsicologos_tipoServicioToS
   createdAt?: Date | string
   realizada?: boolean | null
   estadoPago?: $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutCitaInput
   consultorios?: Prisma.consultoriosCreateNestedOneWithoutCitasPsicologosInput
   Usuario_CitasPsicologos_creadoPorIdToUsuario?: Prisma.UsuarioCreateNestedOneWithoutCitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioInput
   Empresa?: Prisma.EmpresaCreateNestedOneWithoutCitasPsicologosInput
@@ -1662,6 +1698,7 @@ export type CitasPsicologosUncheckedCreateWithoutServicio_CitasPsicologos_tipoSe
   consultorioId?: bigint | number | null
   realizada?: boolean | null
   estadoPago?: $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCitaInput
   nominaDetalles?: Prisma.NominaDetalleUncheckedCreateNestedManyWithoutCitaInput
 }
 
@@ -1719,6 +1756,7 @@ export type CitasPsicologosCreateWithoutNominaDetallesInput = {
   createdAt?: Date | string
   realizada?: boolean | null
   estadoPago?: $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutCitaInput
   consultorios?: Prisma.consultoriosCreateNestedOneWithoutCitasPsicologosInput
   Usuario_CitasPsicologos_creadoPorIdToUsuario?: Prisma.UsuarioCreateNestedOneWithoutCitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioInput
   Empresa?: Prisma.EmpresaCreateNestedOneWithoutCitasPsicologosInput
@@ -1751,6 +1789,7 @@ export type CitasPsicologosUncheckedCreateWithoutNominaDetallesInput = {
   consultorioId?: bigint | number | null
   realizada?: boolean | null
   estadoPago?: $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCitaInput
 }
 
 export type CitasPsicologosCreateOrConnectWithoutNominaDetallesInput = {
@@ -1781,6 +1820,7 @@ export type CitasPsicologosUpdateWithoutNominaDetallesInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   realizada?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   estadoPago?: Prisma.NullableEnumEstadoPagoOrdenFieldUpdateOperationsInput | $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutCitaNestedInput
   consultorios?: Prisma.consultoriosUpdateOneWithoutCitasPsicologosNestedInput
   Usuario_CitasPsicologos_creadoPorIdToUsuario?: Prisma.UsuarioUpdateOneWithoutCitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioNestedInput
   Empresa?: Prisma.EmpresaUpdateOneWithoutCitasPsicologosNestedInput
@@ -1813,6 +1853,7 @@ export type CitasPsicologosUncheckedUpdateWithoutNominaDetallesInput = {
   consultorioId?: Prisma.NullableBigIntFieldUpdateOperationsInput | bigint | number | null
   realizada?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   estadoPago?: Prisma.NullableEnumEstadoPagoOrdenFieldUpdateOperationsInput | $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCitaNestedInput
 }
 
 export type CitasPsicologosCreateWithoutConsultoriosInput = {
@@ -1827,6 +1868,7 @@ export type CitasPsicologosCreateWithoutConsultoriosInput = {
   createdAt?: Date | string
   realizada?: boolean | null
   estadoPago?: $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutCitaInput
   Usuario_CitasPsicologos_creadoPorIdToUsuario?: Prisma.UsuarioCreateNestedOneWithoutCitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioInput
   Empresa?: Prisma.EmpresaCreateNestedOneWithoutCitasPsicologosInput
   Cliente?: Prisma.ClienteCreateNestedOneWithoutCitasPsicologosInput
@@ -1858,6 +1900,7 @@ export type CitasPsicologosUncheckedCreateWithoutConsultoriosInput = {
   paqueteId?: bigint | number | null
   realizada?: boolean | null
   estadoPago?: $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCitaInput
   nominaDetalles?: Prisma.NominaDetalleUncheckedCreateNestedManyWithoutCitaInput
 }
 
@@ -1899,6 +1942,7 @@ export type CitasPsicologosCreateWithoutPaqueteAdquiridoInput = {
   createdAt?: Date | string
   realizada?: boolean | null
   estadoPago?: $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutCitaInput
   consultorios?: Prisma.consultoriosCreateNestedOneWithoutCitasPsicologosInput
   Usuario_CitasPsicologos_creadoPorIdToUsuario?: Prisma.UsuarioCreateNestedOneWithoutCitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioInput
   Empresa?: Prisma.EmpresaCreateNestedOneWithoutCitasPsicologosInput
@@ -1930,6 +1974,7 @@ export type CitasPsicologosUncheckedCreateWithoutPaqueteAdquiridoInput = {
   consultorioId?: bigint | number | null
   realizada?: boolean | null
   estadoPago?: $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCitaInput
   nominaDetalles?: Prisma.NominaDetalleUncheckedCreateNestedManyWithoutCitaInput
 }
 
@@ -1957,6 +2002,118 @@ export type CitasPsicologosUpdateWithWhereUniqueWithoutPaqueteAdquiridoInput = {
 export type CitasPsicologosUpdateManyWithWhereWithoutPaqueteAdquiridoInput = {
   where: Prisma.CitasPsicologosScalarWhereInput
   data: Prisma.XOR<Prisma.CitasPsicologosUpdateManyMutationInput, Prisma.CitasPsicologosUncheckedUpdateManyWithoutPaqueteAdquiridoInput>
+}
+
+export type CitasPsicologosCreateWithoutCargosRecepcionInput = {
+  id?: bigint | number
+  fechaCita?: Date | string | null
+  horaInicio?: Date | string | null
+  horaFin?: Date | string | null
+  valor?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  observacion?: string | null
+  metodoPago?: string | null
+  comprobantePath?: string | null
+  createdAt?: Date | string
+  realizada?: boolean | null
+  estadoPago?: $Enums.EstadoPagoOrden | null
+  consultorios?: Prisma.consultoriosCreateNestedOneWithoutCitasPsicologosInput
+  Usuario_CitasPsicologos_creadoPorIdToUsuario?: Prisma.UsuarioCreateNestedOneWithoutCitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioInput
+  Empresa?: Prisma.EmpresaCreateNestedOneWithoutCitasPsicologosInput
+  Cliente?: Prisma.ClienteCreateNestedOneWithoutCitasPsicologosInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoCreateNestedOneWithoutCitasPsicologosInput
+  Usuario_CitasPsicologos_psicologoIdToUsuario?: Prisma.UsuarioCreateNestedOneWithoutCitasPsicologos_CitasPsicologos_psicologoIdToUsuarioInput
+  Servicio_CitasPsicologos_servicioIdToServicio?: Prisma.ServicioCreateNestedOneWithoutCitasPsicologos_CitasPsicologos_servicioIdToServicioInput
+  Tenant?: Prisma.TenantCreateNestedOneWithoutCitasPsicologosInput
+  Servicio_CitasPsicologos_tipoServicioToServicio?: Prisma.ServicioCreateNestedOneWithoutCitasPsicologos_CitasPsicologos_tipoServicioToServicioInput
+  nominaDetalles?: Prisma.NominaDetalleCreateNestedManyWithoutCitaInput
+}
+
+export type CitasPsicologosUncheckedCreateWithoutCargosRecepcionInput = {
+  id?: bigint | number
+  tenantId?: number | null
+  empresaId?: number | null
+  pacienteId?: number | null
+  servicioId?: number | null
+  creadoPorId?: number | null
+  psicologoId?: number | null
+  tipoServicio?: number | null
+  fechaCita?: Date | string | null
+  horaInicio?: Date | string | null
+  horaFin?: Date | string | null
+  valor?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  observacion?: string | null
+  metodoPago?: string | null
+  comprobantePath?: string | null
+  createdAt?: Date | string
+  paqueteId?: bigint | number | null
+  consultorioId?: bigint | number | null
+  realizada?: boolean | null
+  estadoPago?: $Enums.EstadoPagoOrden | null
+  nominaDetalles?: Prisma.NominaDetalleUncheckedCreateNestedManyWithoutCitaInput
+}
+
+export type CitasPsicologosCreateOrConnectWithoutCargosRecepcionInput = {
+  where: Prisma.CitasPsicologosWhereUniqueInput
+  create: Prisma.XOR<Prisma.CitasPsicologosCreateWithoutCargosRecepcionInput, Prisma.CitasPsicologosUncheckedCreateWithoutCargosRecepcionInput>
+}
+
+export type CitasPsicologosUpsertWithoutCargosRecepcionInput = {
+  update: Prisma.XOR<Prisma.CitasPsicologosUpdateWithoutCargosRecepcionInput, Prisma.CitasPsicologosUncheckedUpdateWithoutCargosRecepcionInput>
+  create: Prisma.XOR<Prisma.CitasPsicologosCreateWithoutCargosRecepcionInput, Prisma.CitasPsicologosUncheckedCreateWithoutCargosRecepcionInput>
+  where?: Prisma.CitasPsicologosWhereInput
+}
+
+export type CitasPsicologosUpdateToOneWithWhereWithoutCargosRecepcionInput = {
+  where?: Prisma.CitasPsicologosWhereInput
+  data: Prisma.XOR<Prisma.CitasPsicologosUpdateWithoutCargosRecepcionInput, Prisma.CitasPsicologosUncheckedUpdateWithoutCargosRecepcionInput>
+}
+
+export type CitasPsicologosUpdateWithoutCargosRecepcionInput = {
+  id?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  fechaCita?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  horaInicio?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  horaFin?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  valor?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  observacion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  metodoPago?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  comprobantePath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  realizada?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
+  estadoPago?: Prisma.NullableEnumEstadoPagoOrdenFieldUpdateOperationsInput | $Enums.EstadoPagoOrden | null
+  consultorios?: Prisma.consultoriosUpdateOneWithoutCitasPsicologosNestedInput
+  Usuario_CitasPsicologos_creadoPorIdToUsuario?: Prisma.UsuarioUpdateOneWithoutCitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioNestedInput
+  Empresa?: Prisma.EmpresaUpdateOneWithoutCitasPsicologosNestedInput
+  Cliente?: Prisma.ClienteUpdateOneWithoutCitasPsicologosNestedInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoUpdateOneWithoutCitasPsicologosNestedInput
+  Usuario_CitasPsicologos_psicologoIdToUsuario?: Prisma.UsuarioUpdateOneWithoutCitasPsicologos_CitasPsicologos_psicologoIdToUsuarioNestedInput
+  Servicio_CitasPsicologos_servicioIdToServicio?: Prisma.ServicioUpdateOneWithoutCitasPsicologos_CitasPsicologos_servicioIdToServicioNestedInput
+  Tenant?: Prisma.TenantUpdateOneWithoutCitasPsicologosNestedInput
+  Servicio_CitasPsicologos_tipoServicioToServicio?: Prisma.ServicioUpdateOneWithoutCitasPsicologos_CitasPsicologos_tipoServicioToServicioNestedInput
+  nominaDetalles?: Prisma.NominaDetalleUpdateManyWithoutCitaNestedInput
+}
+
+export type CitasPsicologosUncheckedUpdateWithoutCargosRecepcionInput = {
+  id?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  tenantId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  empresaId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  pacienteId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  servicioId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  creadoPorId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  psicologoId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  tipoServicio?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  fechaCita?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  horaInicio?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  horaFin?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  valor?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
+  observacion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  metodoPago?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  comprobantePath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  paqueteId?: Prisma.NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+  consultorioId?: Prisma.NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+  realizada?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
+  estadoPago?: Prisma.NullableEnumEstadoPagoOrdenFieldUpdateOperationsInput | $Enums.EstadoPagoOrden | null
+  nominaDetalles?: Prisma.NominaDetalleUncheckedUpdateManyWithoutCitaNestedInput
 }
 
 export type CitasPsicologosCreateManyTenantInput = {
@@ -1993,6 +2150,7 @@ export type CitasPsicologosUpdateWithoutTenantInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   realizada?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   estadoPago?: Prisma.NullableEnumEstadoPagoOrdenFieldUpdateOperationsInput | $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutCitaNestedInput
   consultorios?: Prisma.consultoriosUpdateOneWithoutCitasPsicologosNestedInput
   Usuario_CitasPsicologos_creadoPorIdToUsuario?: Prisma.UsuarioUpdateOneWithoutCitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioNestedInput
   Empresa?: Prisma.EmpresaUpdateOneWithoutCitasPsicologosNestedInput
@@ -2024,6 +2182,7 @@ export type CitasPsicologosUncheckedUpdateWithoutTenantInput = {
   consultorioId?: Prisma.NullableBigIntFieldUpdateOperationsInput | bigint | number | null
   realizada?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   estadoPago?: Prisma.NullableEnumEstadoPagoOrdenFieldUpdateOperationsInput | $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCitaNestedInput
   nominaDetalles?: Prisma.NominaDetalleUncheckedUpdateManyWithoutCitaNestedInput
 }
 
@@ -2083,6 +2242,7 @@ export type CitasPsicologosUpdateWithoutEmpresaInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   realizada?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   estadoPago?: Prisma.NullableEnumEstadoPagoOrdenFieldUpdateOperationsInput | $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutCitaNestedInput
   consultorios?: Prisma.consultoriosUpdateOneWithoutCitasPsicologosNestedInput
   Usuario_CitasPsicologos_creadoPorIdToUsuario?: Prisma.UsuarioUpdateOneWithoutCitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioNestedInput
   Cliente?: Prisma.ClienteUpdateOneWithoutCitasPsicologosNestedInput
@@ -2114,6 +2274,7 @@ export type CitasPsicologosUncheckedUpdateWithoutEmpresaInput = {
   consultorioId?: Prisma.NullableBigIntFieldUpdateOperationsInput | bigint | number | null
   realizada?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   estadoPago?: Prisma.NullableEnumEstadoPagoOrdenFieldUpdateOperationsInput | $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCitaNestedInput
   nominaDetalles?: Prisma.NominaDetalleUncheckedUpdateManyWithoutCitaNestedInput
 }
 
@@ -2195,6 +2356,7 @@ export type CitasPsicologosUpdateWithoutUsuario_CitasPsicologos_creadoPorIdToUsu
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   realizada?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   estadoPago?: Prisma.NullableEnumEstadoPagoOrdenFieldUpdateOperationsInput | $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutCitaNestedInput
   consultorios?: Prisma.consultoriosUpdateOneWithoutCitasPsicologosNestedInput
   Empresa?: Prisma.EmpresaUpdateOneWithoutCitasPsicologosNestedInput
   Cliente?: Prisma.ClienteUpdateOneWithoutCitasPsicologosNestedInput
@@ -2226,6 +2388,7 @@ export type CitasPsicologosUncheckedUpdateWithoutUsuario_CitasPsicologos_creadoP
   consultorioId?: Prisma.NullableBigIntFieldUpdateOperationsInput | bigint | number | null
   realizada?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   estadoPago?: Prisma.NullableEnumEstadoPagoOrdenFieldUpdateOperationsInput | $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCitaNestedInput
   nominaDetalles?: Prisma.NominaDetalleUncheckedUpdateManyWithoutCitaNestedInput
 }
 
@@ -2263,6 +2426,7 @@ export type CitasPsicologosUpdateWithoutUsuario_CitasPsicologos_psicologoIdToUsu
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   realizada?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   estadoPago?: Prisma.NullableEnumEstadoPagoOrdenFieldUpdateOperationsInput | $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutCitaNestedInput
   consultorios?: Prisma.consultoriosUpdateOneWithoutCitasPsicologosNestedInput
   Usuario_CitasPsicologos_creadoPorIdToUsuario?: Prisma.UsuarioUpdateOneWithoutCitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioNestedInput
   Empresa?: Prisma.EmpresaUpdateOneWithoutCitasPsicologosNestedInput
@@ -2294,6 +2458,7 @@ export type CitasPsicologosUncheckedUpdateWithoutUsuario_CitasPsicologos_psicolo
   consultorioId?: Prisma.NullableBigIntFieldUpdateOperationsInput | bigint | number | null
   realizada?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   estadoPago?: Prisma.NullableEnumEstadoPagoOrdenFieldUpdateOperationsInput | $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCitaNestedInput
   nominaDetalles?: Prisma.NominaDetalleUncheckedUpdateManyWithoutCitaNestedInput
 }
 
@@ -2353,6 +2518,7 @@ export type CitasPsicologosUpdateWithoutClienteInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   realizada?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   estadoPago?: Prisma.NullableEnumEstadoPagoOrdenFieldUpdateOperationsInput | $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutCitaNestedInput
   consultorios?: Prisma.consultoriosUpdateOneWithoutCitasPsicologosNestedInput
   Usuario_CitasPsicologos_creadoPorIdToUsuario?: Prisma.UsuarioUpdateOneWithoutCitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioNestedInput
   Empresa?: Prisma.EmpresaUpdateOneWithoutCitasPsicologosNestedInput
@@ -2384,6 +2550,7 @@ export type CitasPsicologosUncheckedUpdateWithoutClienteInput = {
   consultorioId?: Prisma.NullableBigIntFieldUpdateOperationsInput | bigint | number | null
   realizada?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   estadoPago?: Prisma.NullableEnumEstadoPagoOrdenFieldUpdateOperationsInput | $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCitaNestedInput
   nominaDetalles?: Prisma.NominaDetalleUncheckedUpdateManyWithoutCitaNestedInput
 }
 
@@ -2465,6 +2632,7 @@ export type CitasPsicologosUpdateWithoutServicio_CitasPsicologos_servicioIdToSer
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   realizada?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   estadoPago?: Prisma.NullableEnumEstadoPagoOrdenFieldUpdateOperationsInput | $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutCitaNestedInput
   consultorios?: Prisma.consultoriosUpdateOneWithoutCitasPsicologosNestedInput
   Usuario_CitasPsicologos_creadoPorIdToUsuario?: Prisma.UsuarioUpdateOneWithoutCitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioNestedInput
   Empresa?: Prisma.EmpresaUpdateOneWithoutCitasPsicologosNestedInput
@@ -2496,6 +2664,7 @@ export type CitasPsicologosUncheckedUpdateWithoutServicio_CitasPsicologos_servic
   consultorioId?: Prisma.NullableBigIntFieldUpdateOperationsInput | bigint | number | null
   realizada?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   estadoPago?: Prisma.NullableEnumEstadoPagoOrdenFieldUpdateOperationsInput | $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCitaNestedInput
   nominaDetalles?: Prisma.NominaDetalleUncheckedUpdateManyWithoutCitaNestedInput
 }
 
@@ -2533,6 +2702,7 @@ export type CitasPsicologosUpdateWithoutServicio_CitasPsicologos_tipoServicioToS
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   realizada?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   estadoPago?: Prisma.NullableEnumEstadoPagoOrdenFieldUpdateOperationsInput | $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutCitaNestedInput
   consultorios?: Prisma.consultoriosUpdateOneWithoutCitasPsicologosNestedInput
   Usuario_CitasPsicologos_creadoPorIdToUsuario?: Prisma.UsuarioUpdateOneWithoutCitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioNestedInput
   Empresa?: Prisma.EmpresaUpdateOneWithoutCitasPsicologosNestedInput
@@ -2564,6 +2734,7 @@ export type CitasPsicologosUncheckedUpdateWithoutServicio_CitasPsicologos_tipoSe
   consultorioId?: Prisma.NullableBigIntFieldUpdateOperationsInput | bigint | number | null
   realizada?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   estadoPago?: Prisma.NullableEnumEstadoPagoOrdenFieldUpdateOperationsInput | $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCitaNestedInput
   nominaDetalles?: Prisma.NominaDetalleUncheckedUpdateManyWithoutCitaNestedInput
 }
 
@@ -2623,6 +2794,7 @@ export type CitasPsicologosUpdateWithoutConsultoriosInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   realizada?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   estadoPago?: Prisma.NullableEnumEstadoPagoOrdenFieldUpdateOperationsInput | $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutCitaNestedInput
   Usuario_CitasPsicologos_creadoPorIdToUsuario?: Prisma.UsuarioUpdateOneWithoutCitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioNestedInput
   Empresa?: Prisma.EmpresaUpdateOneWithoutCitasPsicologosNestedInput
   Cliente?: Prisma.ClienteUpdateOneWithoutCitasPsicologosNestedInput
@@ -2654,6 +2826,7 @@ export type CitasPsicologosUncheckedUpdateWithoutConsultoriosInput = {
   paqueteId?: Prisma.NullableBigIntFieldUpdateOperationsInput | bigint | number | null
   realizada?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   estadoPago?: Prisma.NullableEnumEstadoPagoOrdenFieldUpdateOperationsInput | $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCitaNestedInput
   nominaDetalles?: Prisma.NominaDetalleUncheckedUpdateManyWithoutCitaNestedInput
 }
 
@@ -2713,6 +2886,7 @@ export type CitasPsicologosUpdateWithoutPaqueteAdquiridoInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   realizada?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   estadoPago?: Prisma.NullableEnumEstadoPagoOrdenFieldUpdateOperationsInput | $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutCitaNestedInput
   consultorios?: Prisma.consultoriosUpdateOneWithoutCitasPsicologosNestedInput
   Usuario_CitasPsicologos_creadoPorIdToUsuario?: Prisma.UsuarioUpdateOneWithoutCitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioNestedInput
   Empresa?: Prisma.EmpresaUpdateOneWithoutCitasPsicologosNestedInput
@@ -2744,6 +2918,7 @@ export type CitasPsicologosUncheckedUpdateWithoutPaqueteAdquiridoInput = {
   consultorioId?: Prisma.NullableBigIntFieldUpdateOperationsInput | bigint | number | null
   realizada?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   estadoPago?: Prisma.NullableEnumEstadoPagoOrdenFieldUpdateOperationsInput | $Enums.EstadoPagoOrden | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCitaNestedInput
   nominaDetalles?: Prisma.NominaDetalleUncheckedUpdateManyWithoutCitaNestedInput
 }
 
@@ -2775,10 +2950,12 @@ export type CitasPsicologosUncheckedUpdateManyWithoutPaqueteAdquiridoInput = {
  */
 
 export type CitasPsicologosCountOutputType = {
+  cargosRecepcion: number
   nominaDetalles: number
 }
 
 export type CitasPsicologosCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  cargosRecepcion?: boolean | CitasPsicologosCountOutputTypeCountCargosRecepcionArgs
   nominaDetalles?: boolean | CitasPsicologosCountOutputTypeCountNominaDetallesArgs
 }
 
@@ -2790,6 +2967,13 @@ export type CitasPsicologosCountOutputTypeDefaultArgs<ExtArgs extends runtime.Ty
    * Select specific fields to fetch from the CitasPsicologosCountOutputType
    */
   select?: Prisma.CitasPsicologosCountOutputTypeSelect<ExtArgs> | null
+}
+
+/**
+ * CitasPsicologosCountOutputType without action
+ */
+export type CitasPsicologosCountOutputTypeCountCargosRecepcionArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.CargoRecepcionWhereInput
 }
 
 /**
@@ -2821,6 +3005,7 @@ export type CitasPsicologosSelect<ExtArgs extends runtime.Types.Extensions.Inter
   consultorioId?: boolean
   realizada?: boolean
   estadoPago?: boolean
+  cargosRecepcion?: boolean | Prisma.CitasPsicologos$cargosRecepcionArgs<ExtArgs>
   consultorios?: boolean | Prisma.CitasPsicologos$consultoriosArgs<ExtArgs>
   Usuario_CitasPsicologos_creadoPorIdToUsuario?: boolean | Prisma.CitasPsicologos$Usuario_CitasPsicologos_creadoPorIdToUsuarioArgs<ExtArgs>
   Empresa?: boolean | Prisma.CitasPsicologos$EmpresaArgs<ExtArgs>
@@ -2923,6 +3108,7 @@ export type CitasPsicologosSelectScalar = {
 
 export type CitasPsicologosOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "empresaId" | "pacienteId" | "servicioId" | "creadoPorId" | "psicologoId" | "tipoServicio" | "fechaCita" | "horaInicio" | "horaFin" | "valor" | "observacion" | "metodoPago" | "comprobantePath" | "createdAt" | "paqueteId" | "consultorioId" | "realizada" | "estadoPago", ExtArgs["result"]["citasPsicologos"]>
 export type CitasPsicologosInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  cargosRecepcion?: boolean | Prisma.CitasPsicologos$cargosRecepcionArgs<ExtArgs>
   consultorios?: boolean | Prisma.CitasPsicologos$consultoriosArgs<ExtArgs>
   Usuario_CitasPsicologos_creadoPorIdToUsuario?: boolean | Prisma.CitasPsicologos$Usuario_CitasPsicologos_creadoPorIdToUsuarioArgs<ExtArgs>
   Empresa?: boolean | Prisma.CitasPsicologos$EmpresaArgs<ExtArgs>
@@ -2961,6 +3147,7 @@ export type CitasPsicologosIncludeUpdateManyAndReturn<ExtArgs extends runtime.Ty
 export type $CitasPsicologosPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "CitasPsicologos"
   objects: {
+    cargosRecepcion: Prisma.$CargoRecepcionPayload<ExtArgs>[]
     consultorios: Prisma.$consultoriosPayload<ExtArgs> | null
     Usuario_CitasPsicologos_creadoPorIdToUsuario: Prisma.$UsuarioPayload<ExtArgs> | null
     Empresa: Prisma.$EmpresaPayload<ExtArgs> | null
@@ -3387,6 +3574,7 @@ readonly fields: CitasPsicologosFieldRefs;
  */
 export interface Prisma__CitasPsicologosClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
+  cargosRecepcion<T extends Prisma.CitasPsicologos$cargosRecepcionArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.CitasPsicologos$cargosRecepcionArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$CargoRecepcionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   consultorios<T extends Prisma.CitasPsicologos$consultoriosArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.CitasPsicologos$consultoriosArgs<ExtArgs>>): Prisma.Prisma__consultoriosClient<runtime.Types.Result.GetResult<Prisma.$consultoriosPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   Usuario_CitasPsicologos_creadoPorIdToUsuario<T extends Prisma.CitasPsicologos$Usuario_CitasPsicologos_creadoPorIdToUsuarioArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.CitasPsicologos$Usuario_CitasPsicologos_creadoPorIdToUsuarioArgs<ExtArgs>>): Prisma.Prisma__UsuarioClient<runtime.Types.Result.GetResult<Prisma.$UsuarioPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   Empresa<T extends Prisma.CitasPsicologos$EmpresaArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.CitasPsicologos$EmpresaArgs<ExtArgs>>): Prisma.Prisma__EmpresaClient<runtime.Types.Result.GetResult<Prisma.$EmpresaPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
@@ -3839,6 +4027,30 @@ export type CitasPsicologosDeleteManyArgs<ExtArgs extends runtime.Types.Extensio
    * Limit how many CitasPsicologos to delete.
    */
   limit?: number
+}
+
+/**
+ * CitasPsicologos.cargosRecepcion
+ */
+export type CitasPsicologos$cargosRecepcionArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the CargoRecepcion
+   */
+  select?: Prisma.CargoRecepcionSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the CargoRecepcion
+   */
+  omit?: Prisma.CargoRecepcionOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.CargoRecepcionInclude<ExtArgs> | null
+  where?: Prisma.CargoRecepcionWhereInput
+  orderBy?: Prisma.CargoRecepcionOrderByWithRelationInput | Prisma.CargoRecepcionOrderByWithRelationInput[]
+  cursor?: Prisma.CargoRecepcionWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.CargoRecepcionScalarFieldEnum | Prisma.CargoRecepcionScalarFieldEnum[]
 }
 
 /**

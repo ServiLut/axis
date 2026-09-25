@@ -7,6 +7,10 @@ import { Prisma, Rol, EstadoPagoOrden } from "@/prisma/generated/prisma/client";
 import { fromZonedTime } from "date-fns-tz";
 import { createClient } from "@supabase/supabase-js";
 import { createAuditLog } from "@/lib/audit";
+import { requireFinanceUser } from "@/lib/psychology-access";
+import { bookingTimes } from "@/lib/booking";
+import { lockAndValidateBooking, normalizedRental } from "@/lib/booking-server";
+import { cajaAmountInCents } from "@/lib/caja";
 
 // Helper to serialize BigInt and Decimal
 const serializeBigInt = (obj: unknown): unknown => {
@@ -124,8 +128,8 @@ const resolvePackageForScheduledCita = async (
     return reusablePackage.id;
   }
 
-  const terapia = await tx.terapiasPsicologos.findUnique({
-    where: { id: input.terapiaId },
+  const terapia = await tx.terapiasPsicologos.findFirst({
+    where: { id: input.terapiaId, tenantId: input.tenantId, activo: true },
   });
 
   if (!terapia) {
@@ -220,7 +224,7 @@ export async function getCitas(
         : [filter];
     };
 
-    if (usuario.rol === Rol.SU_ADMIN) {
+    if (usuario.rol === Rol.SU_ADMIN && usuario.tenantId !== 4) {
         if (filters.tenantId && filters.tenantId !== "all") {
             where.tenantId = Number(filters.tenantId);
         }
@@ -455,6 +459,7 @@ export async function getCita(token: string, id: number) {
       where: { id: payload.userId },
       select: { tenantId: true },
     });
+    if (!usuario) return { error: "Usuario no encontrado" };
 
     const cita = await prisma.citasPsicologos.findFirst({
       where: { id: BigInt(id), tenantId: usuario?.tenantId },
@@ -532,11 +537,7 @@ export async function createCita(token: string, formData: FormData) {
   if (!payload) return { error: "No autorizado" };
 
   try {
-    const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
-      select: { tenantId: true, id: true },
-    });
-    if (!usuario) return { error: "Usuario no encontrado" };
+    const usuario = await requireFinanceUser(token);
 
     const clienteValue = formData.get("cliente");
     const pacienteId = clienteValue ? Number(clienteValue) : null;
@@ -558,7 +559,7 @@ export async function createCita(token: string, formData: FormData) {
     const horaInicioStr = formData.get("horaInicio") as string;
     const horaFinStr = formData.get("horaFin") as string;
     const observacion = formData.get("observacion") as string;
-    const valor = formData.get("valorCotizado") ? Number(formData.get("valorCotizado")) : null;
+    let valor = formData.get("valorCotizado") ? Number(formData.get("valorCotizado")) : null;
     const metodoPago = formData.get("metodoPago") ? formData.get("metodoPago")?.toString() : null;
     const consultorioRaw = formData.get("consultorio");
     const consultorioId = consultorioRaw ? BigInt(consultorioRaw.toString()) : null;
@@ -601,7 +602,18 @@ export async function createCita(token: string, formData: FormData) {
       }
     }
 
-    const nuevaCita = await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx) => {
+        const schedule = bookingTimes(fechaCitaStr, horaInicioStr, horaFinStr);
+        fechaCita = schedule.fecha; horaInicio = schedule.inicio; horaFin = schedule.fin;
+        const rental = await normalizedRental(tx, usuario.tenantId, terapiaId, horaInicio, horaFin);
+        if (rental) { valor = rental.valor; horaFin = rental.fin; if (!consultorioId) throw new Error("El alquiler requiere consultorio."); }
+        if (valor !== null && valor !== 0) valor = cajaAmountInCents(String(valor)) / 100;
+        await lockAndValidateBooking(tx, { tenantId: usuario.tenantId, psicologoId, consultorioId, inicio: horaInicio, fin: horaFin });
+        if (pacienteId && !(await tx.cliente.findFirst({ where: { id: pacienteId, tenantId: usuario.tenantId, deletedAt: null }, select: { id: true } }))) throw new Error("Paciente no encontrado en este sistema.");
+        if (empresaId && !(await tx.empresa.findFirst({ where: { id: empresaId, tenantId: usuario.tenantId }, select: { id: true } }))) throw new Error("Empresa no encontrada en este sistema.");
+        for (const serviceId of [servicioId, tipoServicio].filter((n): n is number => n !== null)) {
+          if (!(await tx.servicio.findFirst({ where: { id: serviceId, tenantId: usuario.tenantId }, select: { id: true } }))) throw new Error("Servicio no encontrado en este sistema.");
+        }
         let finalPaqueteId: bigint | null = null;
 
         if (paqueteId) {
@@ -609,9 +621,10 @@ export async function createCita(token: string, formData: FormData) {
                 where: { id: paqueteId, tenantId: usuario.tenantId },
             });
 
-            if (!paquete) {
+            if (!paquete || paquete.estado !== "ACTIVO" || (pacienteId ? paquete.clienteId !== pacienteId : paquete.clienteId !== null || paquete.usuarioId !== psicologoId)) {
                 throw new Error("Paquete no encontrado");
             }
+            if (paquete.fechaVencimiento && paquete.fechaVencimiento < schedule.fecha) throw new Error("El paquete vence antes de la cita.");
 
             await consumePackageSession(tx, paqueteId);
             finalPaqueteId = paqueteId;
@@ -629,7 +642,7 @@ export async function createCita(token: string, formData: FormData) {
             });
         }
 
-        return tx.citasPsicologos.create({
+        const created = await tx.citasPsicologos.create({
           data: {
             tenantId: usuario.tenantId,
             empresaId,
@@ -648,25 +661,26 @@ export async function createCita(token: string, formData: FormData) {
             consultorioId,
           },
         });
-    });
-
-    await createAuditLog({
+        await createAuditLog({
       tenantId: usuario.tenantId,
       usuarioId: payload.userId,
       accion: "CREATE",
       entidad: "Cita",
-      entidadId: Number(nuevaCita.id),
+      entidadId: created.id.toString(),
       detalles: {
         descripcion: "Cita creada",
-        despues: serializeBigInt(nuevaCita),
+        despues: serializeBigInt(created),
       },
+          tx,
+        });
+        return created;
     });
 
     revalidatePath("/dashboard/citas");
     return { success: true, message: "Cita creada correctamente" };
   } catch (error) {
     console.error("Error creando cita:", error);
-    return { error: "Error al crear la cita" };
+    return { error: error instanceof Error && error.name === "Error" ? error.message : "Error al crear la cita" };
   }
 }
 
@@ -792,7 +806,8 @@ export async function getFormDataCitas(token: string) {
              select: { tenantId: true },
         });
         
-        const tenantId = usuario?.tenantId || 0;
+        if (!usuario) return { error: "Usuario no encontrado" };
+        const tenantId = usuario.tenantId;
         const whereActive = { tenantId, activo: true };
 
         const [empresas, servicios, tecnicos, tiposServicios, consultorios, metodosPago, terapias] = await Promise.all([
@@ -803,14 +818,15 @@ export async function getFormDataCitas(token: string) {
              }),
              prisma.usuario.findMany({ 
                  where: { 
-                     tenantId: 4, 
-                     rol: Rol.TECNICO
+                     tenantId,
+                     rol: Rol.TECNICO,
+                     activo: true,
                  } 
              }),
              prisma.tipoServicio.findMany({ where: whereActive }),
              prisma.consultorios.findMany({ where: { tenantId } }),
              prisma.metodoPago.findMany({ where: whereActive }),
-             prisma.terapiasPsicologos.findMany({ where: { activo: true } })
+             prisma.terapiasPsicologos.findMany({ where: { tenantId, activo: true } })
         ]);
 
         return {
@@ -900,10 +916,13 @@ export async function searchClientes(token: string, term: string) {
   }
 
   try {
+    const user = await requireFinanceUser(token);
     const searchWords = term.split(/\s+/).filter(word => word.length > 0);
 
     const clientes = await prisma.cliente.findMany({
       where: {
+        tenantId: user.tenantId,
+        deletedAt: null,
         OR: [
           {
             AND: searchWords.map(word => ({
@@ -1093,13 +1112,10 @@ export async function markCitaAsProgramada(token: string, citaId: number) {
   if (!payload) return { error: "No autorizado" };
 
   try {
-    const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
-      select: { tenantId: true },
-    });
-    if (!usuario) return { error: "Usuario no encontrado" };
+    const usuario = await requireFinanceUser(token);
 
     const result = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Tenant" WHERE "id" = ${usuario.tenantId} FOR UPDATE`;
       const cita = await tx.citasPsicologos.findFirst({
         where: { id: BigInt(citaId), tenantId: usuario.tenantId },
         include: { consultorios: { select: { nombre: true } } },
@@ -1111,27 +1127,8 @@ export async function markCitaAsProgramada(token: string, citaId: number) {
         return { error: "Use restaurar para volver una cita cancelada a pendiente" };
       }
 
-      if (cita.consultorioId && cita.horaInicio && cita.horaFin) {
-        const overlappingCita = await tx.citasPsicologos.findFirst({
-          where: {
-            id: { not: cita.id },
-            tenantId: usuario.tenantId,
-            consultorioId: cita.consultorioId,
-            realizada: false,
-            AND: [
-              { horaInicio: { lt: cita.horaFin } },
-              { horaFin: { gt: cita.horaInicio } },
-            ],
-          },
-          include: { consultorios: { select: { nombre: true } } },
-        });
-
-        if (overlappingCita) {
-          return {
-            error: `No se puede poner pendiente: el consultorio ${overlappingCita.consultorios?.nombre || cita.consultorios?.nombre || ""} ya esta ocupado en ese horario`,
-          };
-        }
-      }
+      if (!cita.horaInicio || !cita.horaFin) throw new Error("Completa primero el horario de la cita.");
+      await lockAndValidateBooking(tx, { tenantId: usuario.tenantId, psicologoId: cita.psicologoId, consultorioId: cita.consultorioId, inicio: cita.horaInicio, fin: cita.horaFin, excludeId: cita.id });
 
       const updatedCita = await tx.citasPsicologos.updateMany({
         where: {
@@ -1170,7 +1167,7 @@ export async function markCitaAsProgramada(token: string, citaId: number) {
     return { success: true, message: "Cita marcada como pendiente" };
   } catch (error) {
     console.error("Error updating cita to pending:", error);
-    return { error: "Error al poner la cita como pendiente" };
+    return { error: error instanceof Error && error.name === "Error" ? error.message : "Error al poner la cita como pendiente" };
   }
 }
 
@@ -1179,22 +1176,18 @@ export async function markCitaAsCancelada(token: string, citaId: number) {
   if (!payload) return { error: "No autorizado" };
 
   try {
-    const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
-      select: { tenantId: true },
-    });
-    if (!usuario) return { error: "Usuario no encontrado" };
-
-    const cita = await prisma.citasPsicologos.findFirst({
+    const usuario = await requireFinanceUser(token);
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Tenant" WHERE "id" = ${usuario.tenantId} FOR UPDATE`;
+      const cita = await tx.citasPsicologos.findFirst({
         where: { id: BigInt(citaId), tenantId: usuario.tenantId },
         include: { PaqueteAdquirido: true }
     });
 
-    if (!cita) return { error: "Cita no encontrada" };
+    if (!cita) throw new Error("Cita no encontrada");
     if (cita.realizada === null) {
-      return { error: "La cita ya esta cancelada" };
+      return;
     }
-    await prisma.$transaction(async (tx) => {
       // 1. Mark as cancelled (realizada = null)
       const cancelledCita = await tx.citasPsicologos.updateMany({
         where: {
@@ -1246,13 +1239,10 @@ export async function restoreCitaCancelada(token: string, citaId: number) {
   if (!payload) return { error: "No autorizado" };
 
   try {
-    const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
-      select: { tenantId: true },
-    });
-    if (!usuario) return { error: "Usuario no encontrado" };
+    const usuario = await requireFinanceUser(token);
 
     const result = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Tenant" WHERE "id" = ${usuario.tenantId} FOR UPDATE`;
       const cita = await tx.citasPsicologos.findFirst({
         where: { id: BigInt(citaId), tenantId: usuario.tenantId },
         include: { consultorios: { select: { nombre: true } } },
@@ -1263,29 +1253,8 @@ export async function restoreCitaCancelada(token: string, citaId: number) {
         return { error: "Solo se pueden restaurar citas canceladas" };
       }
 
-      // Las citas canceladas no reservan el consultorio. Antes de restaurarla,
-      // verificamos que nadie haya ocupado el mismo horario.
-      if (cita.consultorioId && cita.horaInicio && cita.horaFin) {
-        const overlappingCita = await tx.citasPsicologos.findFirst({
-          where: {
-            id: { not: cita.id },
-            tenantId: usuario.tenantId,
-            consultorioId: cita.consultorioId,
-            realizada: false,
-            AND: [
-              { horaInicio: { lt: cita.horaFin } },
-              { horaFin: { gt: cita.horaInicio } },
-            ],
-          },
-          include: { consultorios: { select: { nombre: true } } },
-        });
-
-        if (overlappingCita) {
-          return {
-            error: `No se puede restaurar: el consultorio ${overlappingCita.consultorios?.nombre || cita.consultorios?.nombre || ""} ya está ocupado en ese horario`,
-          };
-        }
-      }
+      if (!cita.horaInicio || !cita.horaFin) throw new Error("Completa primero el horario de la cita.");
+      await lockAndValidateBooking(tx, { tenantId: usuario.tenantId, psicologoId: cita.psicologoId, consultorioId: cita.consultorioId, inicio: cita.horaInicio, fin: cita.horaFin, excludeId: cita.id });
 
       // Condicionamos la transición desde el estado cancelado para que una solicitud
       // repetida no reserve una segunda sesión.
@@ -1334,7 +1303,7 @@ export async function restoreCitaCancelada(token: string, citaId: number) {
     if (error instanceof Error && error.message === "El paquete no tiene saldo disponible") {
       return { error: "No se puede restaurar la cita: el paquete ya no tiene sesiones disponibles" };
     }
-    return { error: "Error al restaurar la cita" };
+    return { error: error instanceof Error && error.name === "Error" ? error.message : "Error al restaurar la cita" };
   }
 }
 
@@ -1495,18 +1464,14 @@ export async function updateCita(token: string, id: number, formData: FormData) 
   if (!payload) return { error: "No autorizado" };
 
   try {
-    const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
-      select: { tenantId: true },
-    });
-    if (!usuario) return { error: "Usuario no encontrado" };
+    const usuario = await requireFinanceUser(token);
 
     const psicologoId = formData.get("tecnico") ? Number(formData.get("tecnico")) : null;
     const fechaCitaStr = formData.get("fechaVisita") as string;
     const horaInicioStr = formData.get("horaInicio") as string;
     const horaFinStr = formData.get("horaFin") as string;
     const observacion = formData.get("observacion") as string;
-    const valor = formData.get("valorCotizado") ? Number(formData.get("valorCotizado")) : null;
+    let valor = formData.get("valorCotizado") ? Number(formData.get("valorCotizado")) : null;
     const metodoPago = formData.get("metodoPago") ? formData.get("metodoPago")?.toString() : null;
     const consultorioIdRaw = formData.get("consultorioId");
     const consultorioId = consultorioIdRaw ? BigInt(consultorioIdRaw.toString()) : null;
@@ -1554,6 +1519,9 @@ export async function updateCita(token: string, id: number, formData: FormData) 
     }
 
     await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT "id" FROM "Tenant" WHERE "id" = ${usuario.tenantId} FOR UPDATE`;
+        const schedule = bookingTimes(fechaCitaStr, horaInicioStr, horaFinStr);
+        fechaCita = schedule.fecha; horaInicio = schedule.inicio; horaFin = schedule.fin;
         let newPaqueteId: bigint | undefined = undefined;
         let oldPaqueteId: bigint | null | undefined = undefined;
         let citaPrevia = null;
@@ -1563,9 +1531,33 @@ export async function updateCita(token: string, id: number, formData: FormData) 
             include: { PaqueteAdquirido: true } // Include package to get details if needed
         });
         
+        if (!currentCita) throw new Error("Cita no encontrada en este sistema.");
         if (currentCita) {
             citaPrevia = serializeBigInt(currentCita);
             oldPaqueteId = currentCita.paqueteId;
+            const catalogId = terapiaId || currentCita.PaqueteAdquirido?.catalogoId || null;
+            const durationChanged = !currentCita.horaInicio || !currentCita.horaFin ||
+              currentCita.horaFin.getTime() - currentCita.horaInicio.getTime() !== horaFin.getTime() - horaInicio.getTime();
+            const therapyChanged = !!terapiaId && terapiaId !== currentCita.PaqueteAdquirido?.catalogoId;
+            const oldTherapy = catalogId ? await tx.terapiasPsicologos.findFirst({ where: { id: catalogId, tenantId: usuario.tenantId } }) : null;
+            const rental = /alquiler/i.test(oldTherapy?.nombre || "");
+            if (rental) {
+              if (!consultorioId) throw new Error("El alquiler requiere consultorio.");
+              if (!durationChanged && !therapyChanged) valor = Number(currentCita.valor || 0);
+              else {
+                if (currentCita.estadoPago !== "PENDIENTE" || currentCita.realizada !== false) throw new Error("La reserva tiene pago o ya finalizó. Registra el exceso en Recepción; no reemplaces su precio histórico.");
+                const quote = await normalizedRental(tx, usuario.tenantId, catalogId, horaInicio, horaFin);
+                if (quote) { valor = quote.valor; horaFin = quote.fin; }
+                if (!therapyChanged && currentCita.paqueteId) {
+                  const count = await tx.citasPsicologos.count({ where: { paqueteId: currentCita.paqueteId } });
+                  if (count !== 1 || currentCita.PaqueteAdquirido?.sesionesTotales !== 1) throw new Error("El paquete de alquiler es compartido; revisa su contrato antes de modificar el precio.");
+                  await tx.paqueteAdquirido.update({ where: { id: currentCita.paqueteId }, data: { precioPagado: valor || 0 } });
+                }
+              }
+            }
+            if (valor !== null && (!Number.isFinite(valor) || valor < 0 || valor > 999999999.99)) throw new Error("Valor inválido.");
+            if (currentCita.realizada !== false && (durationChanged || therapyChanged || currentCita.horaInicio?.getTime() !== horaInicio.getTime() || Number(currentCita.valor) !== valor)) throw new Error("Una cita finalizada o cancelada conserva su horario y valor; usa una corrección autorizada.");
+            if (currentCita.realizada !== null) await lockAndValidateBooking(tx, { tenantId: usuario.tenantId, psicologoId, consultorioId, inicio: horaInicio, fin: horaFin, excludeId: currentCita.id });
 
             if (terapiaId) {
                 const currentCatalogoId = currentCita.PaqueteAdquirido?.catalogoId;
@@ -1604,26 +1596,8 @@ export async function updateCita(token: string, id: number, formData: FormData) 
 
         // Cleanup Old Package
         if (newPaqueteId && oldPaqueteId && newPaqueteId !== oldPaqueteId) {
-             const otherCitasCount = await tx.citasPsicologos.count({
-                 where: { 
-                     paqueteId: oldPaqueteId,
-                     id: { not: BigInt(id) }
-                 }
-             });
-
-             if (otherCitasCount === 0) {
-                 await tx.paqueteAdquirido.delete({
-                     where: { id: oldPaqueteId }
-                 });
-             } else {
-                 await tx.paqueteAdquirido.update({
-                     where: { id: oldPaqueteId },
-                     data: {
-                         sesionesConsumidas: { decrement: 1 },
-                         saldoRestante: { increment: 1 }
-                     }
-                 });
-             }
+             // Preserve the package and its financial history even when it has no appointments.
+             if (currentCita.realizada !== null) await restorePackageSession(tx, oldPaqueteId);
         }
 
         await createAuditLog({
@@ -1645,6 +1619,6 @@ export async function updateCita(token: string, id: number, formData: FormData) 
     return { success: true, message: "Cita actualizada correctamente" };
   } catch (error) {
     console.error("Error actualizando cita:", error);
-    return { error: "Error al actualizar la cita" };
+    return { error: error instanceof Error && error.name === "Error" ? error.message : "Error al actualizar la cita" };
   }
 }

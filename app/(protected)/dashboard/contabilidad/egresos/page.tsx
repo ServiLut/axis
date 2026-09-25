@@ -72,6 +72,7 @@ export default function EgresosPage() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [editingEgreso, setEditingEgreso] = useState<Egreso | null>(null);
   const [deletingEgresoId, setDeletingEgresoId] = useState<string | null>(null);
+  const [motivoAnulacion, setMotivoAnulacion] = useState("");
 
   // Form State
   const [selectedUser, setSelectedUser] = useState<string>("");
@@ -171,6 +172,7 @@ export default function EgresosPage() {
   };
 
   const handleOpenDeleteModal = (id: string) => {
+    setMotivoAnulacion("");
     setDeletingEgresoId(id);
     setIsDeleteModalOpen(true);
   };
@@ -182,13 +184,13 @@ export default function EgresosPage() {
     const token = localStorage.getItem("token");
     if (!token) return;
 
-    const res = await deleteEgreso(token, deletingEgresoId);
+    const res = await deleteEgreso(token, deletingEgresoId, motivoAnulacion);
     if (res.success) {
-      toast.success("Egreso eliminado");
+      toast.success("Egreso anulado; historial conservado");
       setIsDeleteModalOpen(false);
       fetchEgresos();
     } else {
-      toast.error(res.error || "Error al eliminar");
+      toast.error(res.error || "Error al anular");
     }
     setSubmitting(false);
   };
@@ -379,11 +381,13 @@ export default function EgresosPage() {
       <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Eliminar Egreso</DialogTitle>
+            <DialogTitle>Anular egreso</DialogTitle>
             <DialogDescription>
-              ¿Está seguro de que desea eliminar este registro? Esta acción no se puede deshacer.
+              Se conservará el registro original y se añadirá un reverso por el mismo valor con fecha de hoy. Registra el motivo de la corrección.
             </DialogDescription>
           </DialogHeader>
+          <Label htmlFor="motivo-anulacion">Motivo</Label>
+          <Input id="motivo-anulacion" minLength={5} maxLength={240} value={motivoAnulacion} onChange={(e) => setMotivoAnulacion(e.target.value)} />
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDeleteModalOpen(false)}>
               Cancelar
@@ -391,9 +395,9 @@ export default function EgresosPage() {
             <Button
               variant="destructive"
               onClick={handleDelete}
-              disabled={submitting}
+              disabled={submitting || motivoAnulacion.trim().length < 5}
             >
-              {submitting ? "Eliminando..." : "Eliminar"}
+              {submitting ? "Anulando..." : "Anular"}
             </Button>
           </DialogFooter>
         </DialogContent>

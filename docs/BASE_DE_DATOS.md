@@ -1,5 +1,9 @@
 # Base de datos
 
+## Recepción de Psicología — esquema propuesto, instalación pendiente
+
+`ServicioRecepcion` guarda tarifas por tenant/código; `CargoRecepcion` conserva cantidad y precio aplicados al profesional y reserva; `PagoRecepcion` vincula el movimiento de caja y eventual devolución; `AplicacionPagoRecepcion` reparte el pago entre cargos. El esquema Prisma se acompaña de `docs/sql/2026-09-25-recepcion.sql`, que agrega CHECK, índices parciales y RLS no expresables íntegramente en Prisma. Requiere MovimientoCaja. No reinterpreta registros históricos ni crea facturas electrónicas. Pruebas SQL y puesta en marcha en [RECEPCION_PSICOLOGIA.md](RECEPCION_PSICOLOGIA.md).
+
 ## Vision general
 
 El proyecto usa tres schemas Prisma:

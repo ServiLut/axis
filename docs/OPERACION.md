@@ -1,5 +1,9 @@
 # Operacion y mantenimiento
 
+## Ampliación opcional de Recepción de Psicología
+
+`NEXT_PUBLIC_RECEPCION_ENABLED=true` debe estar definido al construir y ejecutar para activar `/dashboard/recepcion`. Con la variable ausente, las acciones rechazan operaciones antes de consultar las tablas nuevas. Requiere instalar primero el SQL de caja y recepción; también habilita el libro de caja y su resumen separado en Balances. No sincroniza automáticamente los pagos base de Citas. Véase [RECEPCION_PSICOLOGIA.md](RECEPCION_PSICOLOGIA.md) para instalación, pruebas y limitaciones. `npm run test:psicologia` ejecuta la batería aislada sin conectar producción.
+
 ## Requisitos
 
 - Node.js 22 recomendado.

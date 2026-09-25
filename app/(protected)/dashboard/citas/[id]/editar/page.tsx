@@ -31,6 +31,7 @@ import type {
 } from "@/prisma/generated/prisma/client";
 import { format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
+import { rentalQuote } from "@/lib/booking";
 
 const TIMEZONE = "America/Bogota";
 
@@ -60,7 +61,7 @@ export default function EditarCitaPage() {
   // Form Data
   const [psicologos, setPsicologos] = useState<Usuario[]>([]);
   const [metodosPago, setMetodosPago] = useState<{id: number, nombre: string}[]>([]);
-  const [terapias, setTerapias] = useState<{id: number, nombre: string}[]>([]);
+  const [terapias, setTerapias] = useState<{id: number, nombre: string, precioBase: number, cantidadSesiones: number}[]>([]);
   const [consultorios, setConsultorios] = useState<{id: number, nombre: string}[]>([]);
 
   // Cita State
@@ -77,14 +78,14 @@ export default function EditarCitaPage() {
   const [selectedMetodoPago, setSelectedMetodoPago] = useState<string>("");
   const [observacion, setObservacion] = useState<string>("");
 
-  // Auto-calculate Rental Price based on time fractions (State adjustment during render)
+  // Preserve the historical quote while loading; recalculate only a changed duration.
   const [prevCalcData, setPrevCalcData] = useState({ 
     isRental: false, 
     horaInicio: "", 
     horaFin: "" 
   });
   
-  const currentIsRental = cita?.servicio?.nombre?.toLowerCase().includes("alquiler") || selectedTerapiaId === "49";
+  const currentIsRental = !!cita?.servicio?.nombre?.toLowerCase().includes("alquiler") || !!terapias.find((t) => t.id.toString() === selectedTerapiaId)?.nombre.toLowerCase().includes("alquiler");
 
   if (
     prevCalcData.isRental !== currentIsRental || 
@@ -92,7 +93,11 @@ export default function EditarCitaPage() {
     prevCalcData.horaFin !== horaFin
   ) {
     setPrevCalcData({ isRental: currentIsRental, horaInicio, horaFin });
-    if (currentIsRental && horaInicio && horaFin) {
+    const originalStart = cita?.horaInicio ? format(toZonedTime(new Date(cita.horaInicio), TIMEZONE), "HH:mm") : "";
+    const originalEnd = cita?.horaFin ? format(toZonedTime(new Date(cita.horaFin), TIMEZONE), "HH:mm") : "";
+    if (currentIsRental && horaInicio && horaFin && horaInicio === originalStart && horaFin === originalEnd) {
+      setValorCita(String(cita?.valorCotizado || 0));
+    } else if (currentIsRental && horaInicio && horaFin) {
       const [hStart, mStart] = horaInicio.split(":").map(Number);
       const [hEnd, mEnd] = horaFin.split(":").map(Number);
 
@@ -102,13 +107,12 @@ export default function EditarCitaPage() {
       ) {
         const startTotalMinutes = hStart * 60 + mStart;
         const endTotalMinutes = hEnd * 60 + mEnd;
-        let diff = endTotalMinutes - startTotalMinutes;
-        if (diff < 0) diff += 24 * 60; // Midnight crossing
-        if (diff > 0) {
-          const fractions = Math.ceil(diff / 15);
-          const total = fractions * 4725;
-          setValorCita(total.toString());
-        }
+        const diff = endTotalMinutes - startTotalMinutes;
+        const rentals = terapias.filter((t) => /alquiler/i.test(t.nombre) && t.cantidadSesiones === 1);
+        const originalMinutes = cita?.horaFin && cita.horaInicio ? (new Date(cita.horaFin).getTime() - new Date(cita.horaInicio).getTime()) / 60000 : 0;
+        if (diff === originalMinutes) setValorCita(String(cita?.valorCotizado || 0));
+        else try { setValorCita(rentalQuote(diff, rentals.length === 1 ? Number(rentals[0].precioBase).toFixed(2) : "").amount.toString()); }
+        catch { setValorCita(""); }
       }
     }
   }
@@ -135,7 +139,7 @@ export default function EditarCitaPage() {
       } else {
         setPsicologos((formDataRes.tecnicos as Usuario[]) || []);
         setMetodosPago((formDataRes.metodosPago as {id: number, nombre: string}[]) || []);
-        setTerapias((formDataRes.terapias as {id: number, nombre: string}[]) || []);
+        setTerapias((formDataRes.terapias as {id: number, nombre: string, precioBase: number, cantidadSesiones: number}[]) || []);
         // Consultorios handled separately now to ensure it's fetched
       }
 

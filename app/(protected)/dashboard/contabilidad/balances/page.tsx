@@ -141,19 +141,27 @@ export default function BalancesPage() {
                  </div>
             ) : balance ? (
                 <>
+                    {balance.isTenant4 && <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">
+                      Esta vista clasifica las citas realizadas por su estado de pago actual y fecha de atención. Los paquetes se prorratean como estimación; no es un extracto de pagos recibidos durante el periodo.
+                      <div className="mt-2">Valor realizado estimado: ${balance.ingresos.valorRealizado?.toLocaleString("es-CO", { maximumFractionDigits: 2 })} · Por conciliar: ${balance.ingresos.valorPorConciliar?.toLocaleString("es-CO", { maximumFractionDigits: 2 })}.</div>
+                    </div>}
+                    {balance.caja && <div className="mb-5 rounded-lg border bg-white p-4 text-sm"><h2 className="font-semibold">Libro diario · movimientos de dinero registrados</h2>
+                      <p className="mt-2">Entradas: ${Number(balance.caja.ingresos).toLocaleString("es-CO")} · Salidas: ${Number(balance.caja.egresos).toLocaleString("es-CO")} · Neto: ${Number(balance.caja.neto).toLocaleString("es-CO")}</p>
+                      <p className="mt-2 text-xs text-slate-600">Incluye pagos y devoluciones de recepción y otros movimientos manuales por su fecha real. No incluye automáticamente los pagos base de citas; no sumar ambas vistas como si fueran una conciliación bancaria. El neto no incluye saldo inicial.</p>
+                    </div>}
                     {/* Main Summary Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {/* Ingresos Card */}
                         <Card className="border-emerald-100 shadow-sm">
                             <CardHeader className="flex flex-row items-center justify-between pb-2">
                                 <CardTitle className="text-sm font-medium text-emerald-600 uppercase tracking-wider">
-                                    Total Ingresos
+                                    {balance.isTenant4 ? "Servicios marcados conciliados" : "Total Ingresos"}
                                 </CardTitle>
                                 <TrendingUp className="h-4 w-4 text-emerald-600" />
                             </CardHeader>
                             <CardContent>
                                 <div className="text-2xl font-bold text-slate-900">
-                                    ${balance.ingresos.totalRecaudado.toLocaleString()}
+                                    ${balance.ingresos.totalRecaudado.toLocaleString("es-CO", { maximumFractionDigits: 2 })}
                                 </div>
                                 <p className="text-xs text-slate-500 mt-1 mb-3">
                                     {balance.ingresos.cantidadServicios} servicios finalizados
@@ -195,13 +203,13 @@ export default function BalancesPage() {
                         <Card className={`shadow-sm ${balance.neto >= 0 ? 'border-indigo-100 bg-indigo-50/30' : 'border-amber-100 bg-amber-50/30'}`}>
                             <CardHeader className="flex flex-row items-center justify-between pb-2">
                                 <CardTitle className="text-sm font-medium text-slate-600 uppercase tracking-wider">
-                                    Flujo Neto
+                                    {balance.isTenant4 ? "Diferencia estimada" : "Flujo Neto"}
                                 </CardTitle>
                                 <Scale className={`h-4 w-4 ${balance.neto >= 0 ? 'text-indigo-600' : 'text-amber-600'}`} />
                             </CardHeader>
                             <CardContent>
                                 <div className={`text-2xl font-bold ${balance.neto >= 0 ? 'text-indigo-700' : 'text-amber-700'}`}>
-                                    ${balance.neto.toLocaleString()}
+                                    ${balance.neto.toLocaleString("es-CO", { maximumFractionDigits: 2 })}
                                 </div>
                                 <p className="text-xs text-slate-500 mt-1">
                                     Ingresos - (Nómina + Anticipos{balance.egresos.totalOtrosEgresos > 0 ? " + Gastos" : ""})

@@ -158,6 +158,31 @@ export type SesionActividad = Prisma.SesionActividadModel
  */
 export type Egresos = Prisma.EgresosModel
 /**
+ * Model MovimientoCaja
+ * 
+ */
+export type MovimientoCaja = Prisma.MovimientoCajaModel
+/**
+ * Model ServicioRecepcion
+ * 
+ */
+export type ServicioRecepcion = Prisma.ServicioRecepcionModel
+/**
+ * Model CargoRecepcion
+ * 
+ */
+export type CargoRecepcion = Prisma.CargoRecepcionModel
+/**
+ * Model PagoRecepcion
+ * 
+ */
+export type PagoRecepcion = Prisma.PagoRecepcionModel
+/**
+ * Model AplicacionPagoRecepcion
+ * 
+ */
+export type AplicacionPagoRecepcion = Prisma.AplicacionPagoRecepcionModel
+/**
  * Model Auditoria
  * 
  */

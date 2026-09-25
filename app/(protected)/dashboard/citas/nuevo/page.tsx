@@ -38,6 +38,7 @@ import type {
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { rentalQuote } from "@/lib/booking";
 
 type AppointmentMode = "PLANTA" | "ALQUILER" | null;
 type ServiceSource = "PACKAGE" | "NEW_THERAPY" | "LEGACY";
@@ -70,10 +71,12 @@ export default function NuevoCitaPage() {
   const [horaInicio, setHoraInicio] = useState<string>("");
   const [horaFin, setHoraFin] = useState<string>("");
 
-  // Auto-calculate Rental Price based on time fractions (State adjustment during render)
-  const [prevCalcData, setPrevCalcData] = useState({ mode, horaInicio, horaFin });
-  if (prevCalcData.mode !== mode || prevCalcData.horaInicio !== horaInicio || prevCalcData.horaFin !== horaFin) {
-    setPrevCalcData({ mode, horaInicio, horaFin });
+  const rentalServices = terapias.filter((t) => /alquiler/i.test(t.nombre) && t.cantidadSesiones === 1);
+  const rentalService = rentalServices.length === 1 ? rentalServices[0] : undefined;
+  const rentalPrice = rentalService ? Number(rentalService.precioBase).toFixed(2) : "";
+  const [prevCalcData, setPrevCalcData] = useState({ mode, horaInicio, horaFin, rentalPrice });
+  if (prevCalcData.mode !== mode || prevCalcData.horaInicio !== horaInicio || prevCalcData.horaFin !== horaFin || prevCalcData.rentalPrice !== rentalPrice) {
+    setPrevCalcData({ mode, horaInicio, horaFin, rentalPrice });
     if (mode === "ALQUILER" && horaInicio && horaFin) {
       const [hStart, mStart] = horaInicio.split(":").map(Number);
       const [hEnd, mEnd] = horaFin.split(":").map(Number);
@@ -84,13 +87,9 @@ export default function NuevoCitaPage() {
       ) {
         const startTotalMinutes = hStart * 60 + mStart;
         const endTotalMinutes = hEnd * 60 + mEnd;
-        let diff = endTotalMinutes - startTotalMinutes;
-        if (diff < 0) diff += 24 * 60; // Midnight crossing
-        if (diff > 0) {
-          const fractions = Math.ceil(diff / 15);
-          const total = fractions * 4725;
-          setValorCita(total.toString());
-        }
+        const diff = endTotalMinutes - startTotalMinutes;
+        try { setValorCita(rentalQuote(diff, rentalPrice).amount.toString()); }
+        catch { setValorCita(""); }
       }
     }
   }
@@ -138,7 +137,7 @@ export default function NuevoCitaPage() {
   const handleModeChange = (newMode: AppointmentMode) => {
       setMode(newMode);
       if (newMode === "ALQUILER") {
-          const rentalPackage = terapias.find(t => t.id.toString() === "49");
+          const rentalPackage = rentalService;
           if (rentalPackage && rentalPackage.precioBase) {
               setValorCita(rentalPackage.precioBase.toString());
           }
@@ -316,9 +315,8 @@ export default function NuevoCitaPage() {
       formData.set("cliente", selectedClienteId);
     }
     
-    if (selectedPsicologoId) {
-      formData.set("tecnico", selectedPsicologoId);
-    }
+    if (!selectedPsicologoId) { toast.error("Asigna un profesional a la cita o reserva."); setSaving(false); return; }
+    formData.set("tecnico", selectedPsicologoId);
     
     // Force default empresa
     formData.set("empresa", DEFAULT_EMPRESA_ID);
@@ -348,8 +346,8 @@ export default function NuevoCitaPage() {
              return;
         }
         
-        // Auto-select "Alquiler de consultorio" package (ID 49)
-        formData.set("terapiaId", "49");
+        if (!rentalService) { toast.error("Debe existir un único servicio activo de alquiler por una sesión en el catálogo."); setSaving(false); return; }
+        formData.set("terapiaId", rentalService.id.toString());
     }
 
     const result = await createCita(token, formData);

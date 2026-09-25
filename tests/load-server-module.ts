@@ -17,13 +17,13 @@ export function loadServerModule<T>(filename: string, mocks: Record<string, unkn
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
     }).outputText;
     runInNewContext(code, {
-      module: loadedModule, exports: loadedModule.exports, Date, Intl, URL, FormData, console: { error() {}, warn() {} }, process: { env },
+      module: loadedModule, exports: loadedModule.exports, Date, Intl, URL, FormData, Error, console: { error() {}, warn() {} }, process: { env },
       require: (id: string) => {
         if (id in mocks) return mocks[id];
-        if (id === "@/lib/bogota-date" || id === "@/lib/client-phone" || id === "@/lib/caja" || id === "@/lib/constants/tenants") {
+        if (["@/lib/bogota-date", "@/lib/client-phone", "@/lib/caja", "@/lib/constants/tenants", "@/lib/recepcion", "@/lib/booking", "@/lib/booking-server", "@/lib/psychology-access"].includes(id)) {
           return load(resolve(id.replace("@/", "") + ".ts"));
         }
-        if (id === "./bogota-date") return load(resolve(dirname(absolute), "bogota-date.ts"));
+        if (["./bogota-date", "./caja", "./booking", "./constants/tenants"].includes(id)) return load(resolve(dirname(absolute), `${id}.ts`));
         throw new Error(`Unmocked dependency: ${id}`);
       },
     }, { filename: absolute });

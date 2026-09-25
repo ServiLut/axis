@@ -13,6 +13,7 @@ interface AuditLogParams {
   detalles?: unknown;
   metadata?: unknown;
   tx?: PrismaTransactionClient;
+  required?: boolean;
 }
 
 export async function createAuditLog({
@@ -24,6 +25,7 @@ export async function createAuditLog({
   detalles,
   metadata,
   tx,
+  required = false,
 }: AuditLogParams) {
   const db = tx || prisma;
 
@@ -41,7 +43,7 @@ export async function createAuditLog({
     });
   } catch (error) {
     console.error("Failed to create audit log:", error);
-    // In a critical audit system, you might want to re-throw this.
-    // For now, we log it to avoid crashing the user action if logging fails.
+    // Transactional financial changes must roll back if their audit cannot be saved.
+    if (required || tx) throw new Error("No se pudo guardar la auditoría. La operación fue revertida.");
   }
 }

@@ -8,6 +8,9 @@ datasource db {
 }
 
 model Tenant {
+  serviciosRecepcion                                      ServicioRecepcion[]
+  cargosRecepcion                                         CargoRecepcion[]
+  pagosRecepcion                                          PagoRecepcion[]
   movimientosCaja                                         MovimientoCaja[]
   id                                                      Int                              @id @default(autoincrement())
   nombre                                                  String
@@ -85,6 +88,9 @@ model Empresa {
 }
 
 model Usuario {
+  cargosRecepcion                                         CargoRecepcion[] @relation("RecepcionProfesional")
+  cargosRecepcionCreados                                   CargoRecepcion[] @relation("RecepcionCreador")
+  pagosRecepcionCreados                                    PagoRecepcion[]
   movimientosCaja                                      MovimientoCaja[]
   id                                                   Int                              @id @default(autoincrement())
   tenantId                                             Int
@@ -452,6 +458,7 @@ model CuentasPago {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model CitasPsicologos {
+  cargosRecepcion                                  CargoRecepcion[]
   id                                              BigInt            @id @default(autoincrement())
   tenantId                                        Int?
   empresaId                                       Int?
@@ -629,8 +636,10 @@ model Egresos {
   @@map("Egresos")
 }
 
-// Tabla independiente. Instalación manual pendiente; no altera los balances existentes.
+// Libro por fecha de movimiento. La instalación manual y las restricciones se documentan en docs/sql.
 model MovimientoCaja {
+  pagoRecepcion PagoRecepcion? @relation("RecepcionCobro")
+  devolucionRecepcion PagoRecepcion? @relation("RecepcionDevolucion")
   id           BigInt   @id @default(autoincrement())
   tenantId     Int
   creadoPorId  Int
@@ -648,6 +657,81 @@ model MovimientoCaja {
   @@unique([tenantId, creadoPorId, solicitudId])
   @@index([tenantId, fecha])
   @@map("MovimientoCaja")
+}
+
+// CHECK, índices parciales y RLS se instalan con docs/sql/2026-09-25-recepcion.sql.
+// No sustituir ese script por db push: Prisma no representa esas restricciones.
+model ServicioRecepcion {
+  tenantId Int
+  codigo String @db.VarChar(20)
+  nombre String @db.VarChar(120)
+  unidad String @db.VarChar(30)
+  precio Decimal? @db.Decimal(12, 2)
+  updatedAt DateTime @default(now()) @db.Timestamptz(6)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  cargos CargoRecepcion[]
+  @@id([tenantId, codigo])
+}
+
+model CargoRecepcion {
+  id BigInt @id @default(autoincrement())
+  tenantId Int
+  profesionalId Int
+  citaId BigInt?
+  creadoPorId Int
+  fecha DateTime @db.Date
+  codigo String @db.VarChar(20)
+  concepto String @db.VarChar(120)
+  cantidad Int
+  precioUnitario Decimal @db.Decimal(12, 2)
+  total Decimal @db.Decimal(12, 2)
+  minutosExtra Int?
+  nota String @default("") @db.VarChar(240)
+  solicitudId String @db.Uuid
+  solicitud Json @db.JsonB
+  anulado Boolean @default(false)
+  motivoAnulacion String? @db.VarChar(240)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  profesional Usuario @relation("RecepcionProfesional", fields: [profesionalId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  creadoPor Usuario @relation("RecepcionCreador", fields: [creadoPorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  cita CitasPsicologos? @relation(fields: [citaId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  servicio ServicioRecepcion @relation(fields: [tenantId, codigo], references: [tenantId, codigo], onDelete: NoAction, onUpdate: NoAction)
+  aplicaciones AplicacionPagoRecepcion[]
+  @@unique([tenantId, creadoPorId, solicitudId])
+  @@index([tenantId, fecha], map: "CargoRecepcion_tenant_fecha")
+}
+
+model PagoRecepcion {
+  id BigInt @id @default(autoincrement())
+  tenantId Int
+  creadoPorId Int
+  fecha DateTime @db.Date
+  monto Decimal @db.Decimal(12, 2)
+  metodoPago String @db.VarChar(13)
+  referencia String @db.VarChar(120)
+  movimientoCajaId BigInt @unique
+  solicitudId String @db.Uuid
+  solicitud Json @db.JsonB
+  reversado Boolean @default(false)
+  reversoMovimientoId BigInt? @unique
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  creadoPor Usuario @relation(fields: [creadoPorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  movimiento MovimientoCaja @relation("RecepcionCobro", fields: [movimientoCajaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reverso MovimientoCaja? @relation("RecepcionDevolucion", fields: [reversoMovimientoId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  aplicaciones AplicacionPagoRecepcion[]
+  @@unique([tenantId, creadoPorId, solicitudId])
+  @@index([tenantId, fecha], map: "PagoRecepcion_tenant_fecha")
+}
+
+model AplicacionPagoRecepcion {
+  pagoId BigInt
+  cargoId BigInt
+  monto Decimal @db.Decimal(12, 2)
+  pago PagoRecepcion @relation(fields: [pagoId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  cargo CargoRecepcion @relation(fields: [cargoId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  @@id([pagoId, cargoId])
 }
 
 model Auditoria {

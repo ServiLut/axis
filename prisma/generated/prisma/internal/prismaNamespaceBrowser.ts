@@ -79,6 +79,11 @@ export const ModelName = {
   LogEvento: 'LogEvento',
   SesionActividad: 'SesionActividad',
   Egresos: 'Egresos',
+  MovimientoCaja: 'MovimientoCaja',
+  ServicioRecepcion: 'ServicioRecepcion',
+  CargoRecepcion: 'CargoRecepcion',
+  PagoRecepcion: 'PagoRecepcion',
+  AplicacionPagoRecepcion: 'AplicacionPagoRecepcion',
   Auditoria: 'Auditoria',
   Referidos: 'Referidos',
   ProductosFumigacion: 'ProductosFumigacion',
@@ -565,6 +570,87 @@ export const EgresosScalarFieldEnum = {
 export type EgresosScalarFieldEnum = (typeof EgresosScalarFieldEnum)[keyof typeof EgresosScalarFieldEnum]
 
 
+export const MovimientoCajaScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  creadoPorId: 'creadoPorId',
+  fecha: 'fecha',
+  tipo: 'tipo',
+  metodoPago: 'metodoPago',
+  monto: 'monto',
+  concepto: 'concepto',
+  referencia: 'referencia',
+  solicitudId: 'solicitudId',
+  createdAt: 'createdAt'
+} as const
+
+export type MovimientoCajaScalarFieldEnum = (typeof MovimientoCajaScalarFieldEnum)[keyof typeof MovimientoCajaScalarFieldEnum]
+
+
+export const ServicioRecepcionScalarFieldEnum = {
+  tenantId: 'tenantId',
+  codigo: 'codigo',
+  nombre: 'nombre',
+  unidad: 'unidad',
+  precio: 'precio',
+  updatedAt: 'updatedAt'
+} as const
+
+export type ServicioRecepcionScalarFieldEnum = (typeof ServicioRecepcionScalarFieldEnum)[keyof typeof ServicioRecepcionScalarFieldEnum]
+
+
+export const CargoRecepcionScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  profesionalId: 'profesionalId',
+  citaId: 'citaId',
+  creadoPorId: 'creadoPorId',
+  fecha: 'fecha',
+  codigo: 'codigo',
+  concepto: 'concepto',
+  cantidad: 'cantidad',
+  precioUnitario: 'precioUnitario',
+  total: 'total',
+  minutosExtra: 'minutosExtra',
+  nota: 'nota',
+  solicitudId: 'solicitudId',
+  solicitud: 'solicitud',
+  anulado: 'anulado',
+  motivoAnulacion: 'motivoAnulacion',
+  createdAt: 'createdAt'
+} as const
+
+export type CargoRecepcionScalarFieldEnum = (typeof CargoRecepcionScalarFieldEnum)[keyof typeof CargoRecepcionScalarFieldEnum]
+
+
+export const PagoRecepcionScalarFieldEnum = {
+  id: 'id',
+  tenantId: 'tenantId',
+  creadoPorId: 'creadoPorId',
+  fecha: 'fecha',
+  monto: 'monto',
+  metodoPago: 'metodoPago',
+  referencia: 'referencia',
+  movimientoCajaId: 'movimientoCajaId',
+  solicitudId: 'solicitudId',
+  solicitud: 'solicitud',
+  reversado: 'reversado',
+  reversoMovimientoId: 'reversoMovimientoId',
+  createdAt: 'createdAt'
+} as const
+
+export type PagoRecepcionScalarFieldEnum = (typeof PagoRecepcionScalarFieldEnum)[keyof typeof PagoRecepcionScalarFieldEnum]
+
+
+export const AplicacionPagoRecepcionScalarFieldEnum = {
+  pagoId: 'pagoId',
+  cargoId: 'cargoId',
+  monto: 'monto'
+} as const
+
+export type AplicacionPagoRecepcionScalarFieldEnum = (typeof AplicacionPagoRecepcionScalarFieldEnum)[keyof typeof AplicacionPagoRecepcionScalarFieldEnum]
+
+
 export const AuditoriaScalarFieldEnum = {
   id: 'id',
   tenantId: 'tenantId',
@@ -711,6 +797,13 @@ export const SortOrder = {
 } as const
 
 export type SortOrder = (typeof SortOrder)[keyof typeof SortOrder]
+
+
+export const JsonNullValueInput = {
+  JsonNull: JsonNull
+} as const
+
+export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
 
 
 export const NullableJsonNullValueInput = {

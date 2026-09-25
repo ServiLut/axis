@@ -218,6 +218,8 @@ export function Sidebar({ className }: SidebarProps) {
             ...item,
             label: "Gestión de Citas",
             items: [
+              ...(process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true" && (role === "ADMIN" || role === "SU_ADMIN" || role === "ASESOR")
+                ? [{ href: "/dashboard/recepcion", label: "Recepción: impresiones y adicionales" }] : []),
               ...(item.items?.map((subItem) => {
                 const newHref = subItem.href.replace(
                   "/dashboard/servicios",
@@ -252,7 +254,7 @@ export function Sidebar({ className }: SidebarProps) {
         // Filter sub-items
         const filteredItems = item.items.filter((subItem) => {
           if (subItem.href === "/dashboard/contabilidad/caja") {
-            return process.env.NEXT_PUBLIC_CAJA_DIARIA_ENABLED === "true" && tenantId === 4 &&
+            return (process.env.NEXT_PUBLIC_CAJA_DIARIA_ENABLED === "true" || process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true") && tenantId === 4 &&
               (role === "ADMIN" || role === "SU_ADMIN" || role === "ASESOR");
           }
           // Admin Only Links

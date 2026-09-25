@@ -81,7 +81,9 @@ export function CajaDiaria() {
       <div className="mx-auto max-w-6xl space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Caja diaria</h1>
-          <p className="mt-2 text-sm text-slate-600">Registra ingresos y gastos manuales. Este registro es independiente de los cobros de citas.</p>
+          <p className="mt-2 text-sm text-slate-600">{process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true"
+            ? "Los pagos y devoluciones de impresiones y adicionales aparecen automáticamente. Registra aquí otros movimientos una sola vez. Los pagos base de citas conservan su circuito actual."
+            : "Registra ingresos y gastos manuales. Este registro es independiente de los cobros de citas."}</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <Label htmlFor="caja-fecha">Día de los movimientos</Label>

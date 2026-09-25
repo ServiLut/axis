@@ -2,8 +2,12 @@
 
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
-import { Prisma, Rol } from "@/prisma/generated/prisma/client";
+import { Prisma } from "@/prisma/generated/prisma/client";
 import { revalidatePath } from "next/cache";
+import { requireFinanceUser } from "@/lib/psychology-access";
+import { bookingTimes } from "@/lib/booking";
+import { lockAndValidateBooking } from "@/lib/booking-server";
+import { createAuditLog } from "@/lib/audit";
 import { fromZonedTime } from "date-fns-tz"; //Se elimina formatInTimeZone porque ya no se requiere formatear la fecha aquí, solo la conversión de zona horaria.
 
 // Helper to serialize BigInt and Decimal (same as in citas/actions.ts)
@@ -59,9 +63,7 @@ export async function getCitasByDateRange(
     };
 
     // Check Tenant
-    if (usuario.rol !== Rol.SU_ADMIN) {
-      whereClause.tenantId = usuario.tenantId;
-    }
+    whereClause.tenantId = usuario.tenantId;
 
     if (tecnicoId) {
       whereClause.psicologoId = tecnicoId;
@@ -127,7 +129,7 @@ export async function getCitasByDateRange(
         consultorio: serialized["consultorios"],
 
         // Mapped/Default fields
-        estado: serialized["realizada"] === null ? "CANCELADO" : "PROGRAMADO",
+        estado: serialized["realizada"] === null ? "CANCELADO" : serialized["realizada"] === true ? "REALIZADO" : "PROGRAMADO",
         realizada: serialized["realizada"] === null ? null : (serialized["realizada"] as boolean),
         direccionTexto: "Consultorio",
         municipio: "",
@@ -156,66 +158,30 @@ export async function moveCita(
   if (!payload) return { error: "No autorizado" };
 
   try {
-    const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
-      // Se agrega 'rol' para posterior validación de permisos
-      select: { tenantId: true, rol: true }, // // NOTA: Además del tenantId, ahora se consulta el rol del usuario para aplicar reglas de autorización basadas en su perfil.
-    });
-    if (!usuario) return { error: "Usuario no encontrado" };
-    
-    // Se estructuran las fechas combinando día y hora bajo la zona horaria de Bogotá para evitar desfases en el calendario
-    const TIMEZONE = "America/Bogota";
-    const start = fromZonedTime(`${dateStr}T${horaInicioStr}`, TIMEZONE);
-    const end = fromZonedTime(`${dateStr}T${horaFinStr}`, TIMEZONE);
-    
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-        return { error: "Fechas inválidas" };
-    }
-
-    if (start >= end) {
-      return { error: "La hora de inicio debe ser anterior a la hora de fin" };
-    }
-
-    // Validamos disponibilidad para no cruzar dos citas en el mismo consultorio.
-    const overlappingCita = await prisma.citasPsicologos.findFirst({
-      where: {
-        id: { not: BigInt(citaId) },
-        consultorioId: BigInt(consultorioId),
-        realizada: false,
-        ...(usuario.rol !== Rol.SU_ADMIN && { tenantId: usuario.tenantId }),
-        AND: [{ horaInicio: { lt: end } }, { horaFin: { gt: start } }],
-      },
-      include: { consultorios: true },
-    });
-
-    if (overlappingCita) {
-      return {
-        error: `El consultorio ${overlappingCita.consultorios?.nombre || ""} ya esta ocupado en ese horario`,
-      };
-    }
-
-    const fechaCita = fromZonedTime(`${dateStr}T00:00`, TIMEZONE);
-    // SU_ADMIN no depende de tenantId; los demas usuarios solo actualizan citas de su tenant.
-    const citaWhere =
-      usuario.rol === Rol.SU_ADMIN
-        ? { id: BigInt(citaId) }
-        : { id: BigInt(citaId), tenantId: usuario.tenantId };
-
-    await prisma.citasPsicologos.update({
-      where: citaWhere,
-      data: {
-        consultorioId: BigInt(consultorioId),
-        horaInicio: start,
-        horaFin: end,
-        fechaCita,
-      },
+    const usuario = await requireFinanceUser(token);
+    if (![citaId, consultorioId].every((n) => Number.isSafeInteger(n) && n > 0)) return { error: "Reserva o consultorio inválido." };
+    const horario = bookingTimes(dateStr, horaInicioStr, horaFinStr);
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Tenant" WHERE "id" = ${usuario.tenantId} FOR UPDATE`;
+      const cita = await tx.citasPsicologos.findFirst({ where: { id: BigInt(citaId), tenantId: usuario.tenantId },
+        include: { PaqueteAdquirido: { include: { TerapiasPsicologos: true } }, Servicio_CitasPsicologos_servicioIdToServicio: true } });
+      if (!cita || cita.realizada !== false) throw new Error("Solo puedes mover una cita programada de este sistema.");
+      const rental = /alquiler/i.test(cita.PaqueteAdquirido?.TerapiasPsicologos?.nombre || cita.Servicio_CitasPsicologos_servicioIdToServicio?.nombre || "");
+      if (rental && (!cita.horaInicio || !cita.horaFin || cita.horaFin.getTime() - cita.horaInicio.getTime() !== horario.fin.getTime() - horario.inicio.getTime())) {
+        throw new Error("Para cambiar la duración contratada, edita la reserva y revisa su valor. El exceso real se registra como adicional en Recepción.");
+      }
+      await lockAndValidateBooking(tx, { tenantId: usuario.tenantId, psicologoId: cita.psicologoId, consultorioId: BigInt(consultorioId), inicio: horario.inicio, fin: horario.fin, excludeId: cita.id });
+      const updated = await tx.citasPsicologos.update({ where: { id: cita.id, tenantId: usuario.tenantId },
+        data: { consultorioId: BigInt(consultorioId), horaInicio: horario.inicio, horaFin: horario.fin, fechaCita: horario.fecha } });
+      await createAuditLog({ tenantId: usuario.tenantId, usuarioId: usuario.id, accion: "UPDATE", entidad: "Cita", entidadId: citaId,
+        detalles: { descripcion: "Reprogramación desde calendario", antes: serializeBigInt(cita), despues: serializeBigInt(updated) }, tx });
     });
 
     revalidatePath("/dashboard/citas/programacion");
     return { success: true };
   } catch (error) {
     console.error("Error moviendo cita:", error);
-    return { error: "Error al mover la cita" };
+    return { error: error instanceof Error && error.name === "Error" ? error.message : "Error al mover la cita" };
   }
 }
 
@@ -224,22 +190,22 @@ export async function unassignCita(token: string, citaId: number) {
   if (!payload) return { error: "No autorizado" };
 
   try {
-    const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
-      select: { tenantId: true },
-    });
-
-    await prisma.citasPsicologos.update({
-      where: { id: BigInt(citaId), tenantId: usuario?.tenantId },
-      data: {
-        consultorioId: null,
-      },
+    const usuario = await requireFinanceUser(token);
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Tenant" WHERE "id" = ${usuario.tenantId} FOR UPDATE`;
+      const cita = await tx.citasPsicologos.findFirst({ where: { id: BigInt(citaId), tenantId: usuario.tenantId },
+        include: { PaqueteAdquirido: { include: { TerapiasPsicologos: true } }, Servicio_CitasPsicologos_servicioIdToServicio: true } });
+      if (!cita || cita.realizada !== false) throw new Error("Reserva no disponible.");
+      const rental = /alquiler/i.test(cita.PaqueteAdquirido?.TerapiasPsicologos?.nombre || cita.Servicio_CitasPsicologos_servicioIdToServicio?.nombre || "");
+      if (rental) throw new Error("Un alquiler requiere consultorio. Selecciona otro espacio o cancela la reserva.");
+      await tx.citasPsicologos.update({ where: { id: cita.id, tenantId: usuario.tenantId }, data: { consultorioId: null } });
+      await createAuditLog({ tenantId: usuario.tenantId, usuarioId: usuario.id, accion: "UPDATE", entidad: "Cita", entidadId: citaId, detalles: { consultorioAnterior: cita.consultorioId?.toString(), consultorioNuevo: null }, tx });
     });
 
     revalidatePath("/dashboard/citas/programacion");
     return { success: true };
   } catch (error) {
     console.error("Error desasignando cita:", error);
-    return { error: "Error al desasignar la cita" };
+    return { error: error instanceof Error && error.name === "Error" ? error.message : "Error al desasignar la cita" };
   }
 }

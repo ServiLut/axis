@@ -3,12 +3,16 @@
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
 import { Prisma } from "@/prisma/generated/prisma/client";
+import { requireFinanceUser } from "@/lib/psychology-access";
+import { getBogotaDayRange } from "@/lib/bogota-date";
 
 export type BalanceSummary = {
   ingresos: {
     totalRecaudado: number;
     totalRepuestos: number;
     cantidadServicios: number;
+    valorRealizado?: number;
+    valorPorConciliar?: number;
     desglosePorMetodo: {
       metodo: string;
       total: number;
@@ -28,6 +32,7 @@ export type BalanceSummary = {
     fin: Date;
   };
   isTenant4?: boolean;
+  caja?: { ingresos: string; egresos: string; neto: string };
 };
 
 export async function getBalanceGeneral(
@@ -39,23 +44,21 @@ export async function getBalanceGeneral(
   if (!payload) return { success: false as const, error: "No autorizado" };
 
   try {
-    const user = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
-      select: { tenantId: true, rol: true },
-    });
-
-    if (!user) return { success: false as const, error: "Usuario no encontrado" };
+    const user = await requireFinanceUser(token, true);
+    if (!Number.isFinite(fechaInicio.getTime()) || !Number.isFinite(fechaFin.getTime()) || fechaFin < fechaInicio) return { success: false as const, error: "Periodo inválido." };
+    const inicioDia = fechaInicio.toISOString().slice(0, 10), finDia = fechaFin.toISOString().slice(0, 10);
 
     // Filtros por fecha y tenant
     const dateFilter = {
-      gte: fechaInicio,
-      lte: fechaFin,
+      gte: getBogotaDayRange(inicioDia).start,
+      lt: getBogotaDayRange(finDia).end,
     };
 
     let totalIngresos = 0;
     let totalRepuestos = 0;
     let cantidadServicios = 0;
     let desglosePorMetodo: { metodo: string; total: number }[] = [];
+    let valorRealizado: number | undefined, valorPorConciliar: number | undefined;
     
     // Logic split for Tenant 4 vs Others
     if (user.tenantId === 4) {
@@ -72,6 +75,7 @@ export async function getBalanceGeneral(
           id: true,
           valor: true,
           metodoPago: true,
+          estadoPago: true,
           paqueteId: true,
           PaqueteAdquirido: {
             select: {
@@ -82,27 +86,29 @@ export async function getBalanceGeneral(
         }
       });
 
-      const metodoMap: Record<string, number> = {};
+      const metodoMap: Record<string, Prisma.Decimal> = {};
+      let realizado = new Prisma.Decimal(0), pendiente = new Prisma.Decimal(0);
 
       for (const cita of citas) {
-        let valorSesion = 0;
+        let valorSesion = new Prisma.Decimal(0);
 
         if (cita.PaqueteAdquirido && cita.PaqueteAdquirido.sesionesTotales > 0) {
            // Calculate pro-rated value from Package
-           const precioTotal = Number(cita.PaqueteAdquirido.precioPagado);
+           const precioTotal = new Prisma.Decimal(cita.PaqueteAdquirido.precioPagado);
            const sesiones = cita.PaqueteAdquirido.sesionesTotales;
-           valorSesion = precioTotal / sesiones;
+           valorSesion = precioTotal.div(sesiones);
         } else {
            // Direct value from appointment
-           valorSesion = Number(cita.valor || 0);
+           valorSesion = new Prisma.Decimal(cita.valor || 0);
         }
 
-        totalIngresos += valorSesion;
+        realizado = realizado.add(valorSesion);
+        if (cita.estadoPago !== "CONCILIADO") { pendiente = pendiente.add(valorSesion); continue; }
 
         // Grouping by payment method
         const metodo = cita.metodoPago || "No especificado";
-        if (!metodoMap[metodo]) metodoMap[metodo] = 0;
-        metodoMap[metodo] += valorSesion;
+        if (!metodoMap[metodo]) metodoMap[metodo] = new Prisma.Decimal(0);
+        metodoMap[metodo] = metodoMap[metodo].add(valorSesion);
       }
 
       cantidadServicios = citas.length;
@@ -110,8 +116,11 @@ export async function getBalanceGeneral(
 
       desglosePorMetodo = Object.entries(metodoMap).map(([metodo, total]) => ({
         metodo,
-        total
+        total: Number(total.toFixed(2))
       })).sort((a, b) => b.total - a.total);
+      totalIngresos = Number(desglosePorMetodo.reduce((sum, m) => sum.add(m.total), new Prisma.Decimal(0)).toFixed(2));
+      valorRealizado = Number(realizado.toFixed(2));
+      valorPorConciliar = Number(pendiente.toFixed(2));
 
     } else {
       // --- STANDARD LOGIC ---
@@ -179,7 +188,7 @@ export async function getBalanceGeneral(
       estado: "PAGADO",
     };
 
-    if (user.rol !== "SU_ADMIN") {
+    if (user.rol !== "SU_ADMIN" || user.tenantId === 4) {
       whereNominas.tenantId = user.tenantId;
     }
 
@@ -198,7 +207,7 @@ export async function getBalanceGeneral(
       created_at: dateFilter,
     };
 
-    if (user.rol !== "SU_ADMIN") {
+    if (user.rol !== "SU_ADMIN" || user.tenantId === 4) {
       whereAnticipos.tenantId = user.tenantId;
     }
 
@@ -220,7 +229,7 @@ export async function getBalanceGeneral(
       created_at: dateFilter,
     };
 
-    if (user.rol !== "SU_ADMIN") {
+    if (user.rol !== "SU_ADMIN" || user.tenantId === 4) {
       whereOtrosEgresos.tenantId = user.tenantId;
     }
 
@@ -241,7 +250,16 @@ export async function getBalanceGeneral(
     const totalAnticipos = Number(anticipos._sum.monto || 0);
     
     // Neto calculation
-    const neto = totalIngresos - (totalNomina + totalAnticipos + totalOtrosEgresos);
+    const neto = Number(new Prisma.Decimal(totalIngresos).sub(totalNomina).sub(totalAnticipos).sub(totalOtrosEgresos).toFixed(2));
+    let caja: BalanceSummary["caja"];
+    if (user.tenantId === 4 && process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true") {
+      const rows = await prisma.$queryRaw<{ ingresos: string; egresos: string; neto: string }[]>`
+        SELECT COALESCE(SUM("monto") FILTER (WHERE "tipo" = 'INGRESO'),0)::numeric(12,2)::text AS "ingresos",
+          COALESCE(SUM("monto") FILTER (WHERE "tipo" = 'EGRESO'),0)::numeric(12,2)::text AS "egresos",
+          COALESCE(SUM(CASE WHEN "tipo" = 'INGRESO' THEN "monto" ELSE -"monto" END),0)::numeric(12,2)::text AS "neto"
+        FROM "MovimientoCaja" WHERE "tenantId" = ${user.tenantId} AND "fecha" BETWEEN ${inicioDia}::date AND ${finDia}::date`;
+      caja = rows[0];
+    }
 
     const data: BalanceSummary = {
       ingresos: {
@@ -249,6 +267,8 @@ export async function getBalanceGeneral(
         totalRepuestos: totalRepuestos,
         cantidadServicios: cantidadServicios,
         desglosePorMetodo,
+        valorRealizado,
+        valorPorConciliar,
       },
       egresos: {
         totalNominaPagada: totalNomina,
@@ -263,7 +283,8 @@ export async function getBalanceGeneral(
         inicio: fechaInicio,
         fin: fechaFin,
       },
-      isTenant4: user.tenantId === 4
+      isTenant4: user.tenantId === 4,
+      caja,
     };
 
     return { success: true as const, data };

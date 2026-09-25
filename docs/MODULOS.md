@@ -1,5 +1,9 @@
 # Modulos funcionales
 
+## Recepción de Psicología — ampliación del 25/09/2026
+
+Ruta `/dashboard/recepcion`, solo tenant 4 y roles ADMIN, SU_ADMIN o ASESOR; flag `NEXT_PUBLIC_RECEPCION_ENABLED`. Incluye catálogo de impresión/adicionales, cargos por profesional, abonos y pagos, anulaciones/devoluciones administrativas y vínculo al libro diario. Instalación y límites en [RECEPCION_PSICOLOGIA.md](RECEPCION_PSICOLOGIA.md). Desactivado por defecto; instalación en producción pendiente.
+
 ## Vision general
 
 El dashboard esta organizado por modulos en `app/(protected)/dashboard`. La navegacion visible se define en `components/dashboard/sidebar.tsx` y cambia segun rol y tenant.

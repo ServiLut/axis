@@ -352,6 +352,10 @@ export type UsuarioWhereInput = {
   placa?: Prisma.StringNullableFilter<"Usuario"> | string | null
   moto?: Prisma.BoolNullableFilter<"Usuario"> | boolean | null
   codigoReferido?: Prisma.StringNullableFilter<"Usuario"> | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionListRelationFilter
+  cargosRecepcionCreados?: Prisma.CargoRecepcionListRelationFilter
+  pagosRecepcionCreados?: Prisma.PagoRecepcionListRelationFilter
+  movimientosCaja?: Prisma.MovimientoCajaListRelationFilter
   Anticipos?: Prisma.AnticiposListRelationFilter
   auditorias?: Prisma.AuditoriaListRelationFilter
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosListRelationFilter
@@ -401,6 +405,10 @@ export type UsuarioOrderByWithRelationInput = {
   placa?: Prisma.SortOrderInput | Prisma.SortOrder
   moto?: Prisma.SortOrderInput | Prisma.SortOrder
   codigoReferido?: Prisma.SortOrderInput | Prisma.SortOrder
+  cargosRecepcion?: Prisma.CargoRecepcionOrderByRelationAggregateInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionOrderByRelationAggregateInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionOrderByRelationAggregateInput
+  movimientosCaja?: Prisma.MovimientoCajaOrderByRelationAggregateInput
   Anticipos?: Prisma.AnticiposOrderByRelationAggregateInput
   auditorias?: Prisma.AuditoriaOrderByRelationAggregateInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosOrderByRelationAggregateInput
@@ -453,6 +461,10 @@ export type UsuarioWhereUniqueInput = Prisma.AtLeast<{
   placa?: Prisma.StringNullableFilter<"Usuario"> | string | null
   moto?: Prisma.BoolNullableFilter<"Usuario"> | boolean | null
   codigoReferido?: Prisma.StringNullableFilter<"Usuario"> | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionListRelationFilter
+  cargosRecepcionCreados?: Prisma.CargoRecepcionListRelationFilter
+  pagosRecepcionCreados?: Prisma.PagoRecepcionListRelationFilter
+  movimientosCaja?: Prisma.MovimientoCajaListRelationFilter
   Anticipos?: Prisma.AnticiposListRelationFilter
   auditorias?: Prisma.AuditoriaListRelationFilter
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosListRelationFilter
@@ -555,6 +567,10 @@ export type UsuarioCreateInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -604,6 +620,10 @@ export type UsuarioUncheckedCreateInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -648,6 +668,10 @@ export type UsuarioUpdateInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -697,6 +721,10 @@ export type UsuarioUncheckedUpdateInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -1221,6 +1249,62 @@ export type UsuarioUpdateOneWithoutEgresosNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.UsuarioUpdateToOneWithWhereWithoutEgresosInput, Prisma.UsuarioUpdateWithoutEgresosInput>, Prisma.UsuarioUncheckedUpdateWithoutEgresosInput>
 }
 
+export type UsuarioCreateNestedOneWithoutMovimientosCajaInput = {
+  create?: Prisma.XOR<Prisma.UsuarioCreateWithoutMovimientosCajaInput, Prisma.UsuarioUncheckedCreateWithoutMovimientosCajaInput>
+  connectOrCreate?: Prisma.UsuarioCreateOrConnectWithoutMovimientosCajaInput
+  connect?: Prisma.UsuarioWhereUniqueInput
+}
+
+export type UsuarioUpdateOneRequiredWithoutMovimientosCajaNestedInput = {
+  create?: Prisma.XOR<Prisma.UsuarioCreateWithoutMovimientosCajaInput, Prisma.UsuarioUncheckedCreateWithoutMovimientosCajaInput>
+  connectOrCreate?: Prisma.UsuarioCreateOrConnectWithoutMovimientosCajaInput
+  upsert?: Prisma.UsuarioUpsertWithoutMovimientosCajaInput
+  connect?: Prisma.UsuarioWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UsuarioUpdateToOneWithWhereWithoutMovimientosCajaInput, Prisma.UsuarioUpdateWithoutMovimientosCajaInput>, Prisma.UsuarioUncheckedUpdateWithoutMovimientosCajaInput>
+}
+
+export type UsuarioCreateNestedOneWithoutCargosRecepcionInput = {
+  create?: Prisma.XOR<Prisma.UsuarioCreateWithoutCargosRecepcionInput, Prisma.UsuarioUncheckedCreateWithoutCargosRecepcionInput>
+  connectOrCreate?: Prisma.UsuarioCreateOrConnectWithoutCargosRecepcionInput
+  connect?: Prisma.UsuarioWhereUniqueInput
+}
+
+export type UsuarioCreateNestedOneWithoutCargosRecepcionCreadosInput = {
+  create?: Prisma.XOR<Prisma.UsuarioCreateWithoutCargosRecepcionCreadosInput, Prisma.UsuarioUncheckedCreateWithoutCargosRecepcionCreadosInput>
+  connectOrCreate?: Prisma.UsuarioCreateOrConnectWithoutCargosRecepcionCreadosInput
+  connect?: Prisma.UsuarioWhereUniqueInput
+}
+
+export type UsuarioUpdateOneRequiredWithoutCargosRecepcionNestedInput = {
+  create?: Prisma.XOR<Prisma.UsuarioCreateWithoutCargosRecepcionInput, Prisma.UsuarioUncheckedCreateWithoutCargosRecepcionInput>
+  connectOrCreate?: Prisma.UsuarioCreateOrConnectWithoutCargosRecepcionInput
+  upsert?: Prisma.UsuarioUpsertWithoutCargosRecepcionInput
+  connect?: Prisma.UsuarioWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UsuarioUpdateToOneWithWhereWithoutCargosRecepcionInput, Prisma.UsuarioUpdateWithoutCargosRecepcionInput>, Prisma.UsuarioUncheckedUpdateWithoutCargosRecepcionInput>
+}
+
+export type UsuarioUpdateOneRequiredWithoutCargosRecepcionCreadosNestedInput = {
+  create?: Prisma.XOR<Prisma.UsuarioCreateWithoutCargosRecepcionCreadosInput, Prisma.UsuarioUncheckedCreateWithoutCargosRecepcionCreadosInput>
+  connectOrCreate?: Prisma.UsuarioCreateOrConnectWithoutCargosRecepcionCreadosInput
+  upsert?: Prisma.UsuarioUpsertWithoutCargosRecepcionCreadosInput
+  connect?: Prisma.UsuarioWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UsuarioUpdateToOneWithWhereWithoutCargosRecepcionCreadosInput, Prisma.UsuarioUpdateWithoutCargosRecepcionCreadosInput>, Prisma.UsuarioUncheckedUpdateWithoutCargosRecepcionCreadosInput>
+}
+
+export type UsuarioCreateNestedOneWithoutPagosRecepcionCreadosInput = {
+  create?: Prisma.XOR<Prisma.UsuarioCreateWithoutPagosRecepcionCreadosInput, Prisma.UsuarioUncheckedCreateWithoutPagosRecepcionCreadosInput>
+  connectOrCreate?: Prisma.UsuarioCreateOrConnectWithoutPagosRecepcionCreadosInput
+  connect?: Prisma.UsuarioWhereUniqueInput
+}
+
+export type UsuarioUpdateOneRequiredWithoutPagosRecepcionCreadosNestedInput = {
+  create?: Prisma.XOR<Prisma.UsuarioCreateWithoutPagosRecepcionCreadosInput, Prisma.UsuarioUncheckedCreateWithoutPagosRecepcionCreadosInput>
+  connectOrCreate?: Prisma.UsuarioCreateOrConnectWithoutPagosRecepcionCreadosInput
+  upsert?: Prisma.UsuarioUpsertWithoutPagosRecepcionCreadosInput
+  connect?: Prisma.UsuarioWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UsuarioUpdateToOneWithWhereWithoutPagosRecepcionCreadosInput, Prisma.UsuarioUpdateWithoutPagosRecepcionCreadosInput>, Prisma.UsuarioUncheckedUpdateWithoutPagosRecepcionCreadosInput>
+}
+
 export type UsuarioCreateNestedOneWithoutAuditoriasInput = {
   create?: Prisma.XOR<Prisma.UsuarioCreateWithoutAuditoriasInput, Prisma.UsuarioUncheckedCreateWithoutAuditoriasInput>
   connectOrCreate?: Prisma.UsuarioCreateOrConnectWithoutAuditoriasInput
@@ -1360,6 +1444,10 @@ export type UsuarioCreateWithoutTenantInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -1407,6 +1495,10 @@ export type UsuarioUncheckedCreateWithoutTenantInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -1504,6 +1596,10 @@ export type UsuarioCreateWithoutEmpresaInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -1551,6 +1647,10 @@ export type UsuarioUncheckedCreateWithoutEmpresaInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -1621,6 +1721,10 @@ export type UsuarioCreateWithoutClienteInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -1669,6 +1773,10 @@ export type UsuarioUncheckedCreateWithoutClienteInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -1728,6 +1836,10 @@ export type UsuarioUpdateWithoutClienteInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -1776,6 +1888,10 @@ export type UsuarioUncheckedUpdateWithoutClienteInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -1819,6 +1935,10 @@ export type UsuarioCreateWithoutServiciosCreadosInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -1867,6 +1987,10 @@ export type UsuarioUncheckedCreateWithoutServiciosCreadosInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -1915,6 +2039,10 @@ export type UsuarioCreateWithoutServiciosAsignadosInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -1963,6 +2091,10 @@ export type UsuarioUncheckedCreateWithoutServiciosAsignadosInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -2022,6 +2154,10 @@ export type UsuarioUpdateWithoutServiciosCreadosInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -2070,6 +2206,10 @@ export type UsuarioUncheckedUpdateWithoutServiciosCreadosInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -2124,6 +2264,10 @@ export type UsuarioUpdateWithoutServiciosAsignadosInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -2172,6 +2316,10 @@ export type UsuarioUncheckedUpdateWithoutServiciosAsignadosInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -2215,6 +2363,10 @@ export type UsuarioCreateWithoutGeolocalizacionesInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -2263,6 +2415,10 @@ export type UsuarioUncheckedCreateWithoutGeolocalizacionesInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -2322,6 +2478,10 @@ export type UsuarioUpdateWithoutGeolocalizacionesInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -2370,6 +2530,10 @@ export type UsuarioUncheckedUpdateWithoutGeolocalizacionesInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -2413,6 +2577,10 @@ export type UsuarioCreateWithoutConfiguracionPagosInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -2461,6 +2629,10 @@ export type UsuarioUncheckedCreateWithoutConfiguracionPagosInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -2520,6 +2692,10 @@ export type UsuarioUpdateWithoutConfiguracionPagosInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -2568,6 +2744,10 @@ export type UsuarioUncheckedUpdateWithoutConfiguracionPagosInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -2611,6 +2791,10 @@ export type UsuarioCreateWithoutNominasInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -2659,6 +2843,10 @@ export type UsuarioUncheckedCreateWithoutNominasInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -2718,6 +2906,10 @@ export type UsuarioUpdateWithoutNominasInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -2766,6 +2958,10 @@ export type UsuarioUncheckedUpdateWithoutNominasInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -2809,6 +3005,10 @@ export type UsuarioCreateWithoutAnticiposInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
   CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioInput
@@ -2857,6 +3057,10 @@ export type UsuarioUncheckedCreateWithoutAnticiposInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
   CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioInput
@@ -2916,6 +3120,10 @@ export type UsuarioUpdateWithoutAnticiposInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioNestedInput
@@ -2964,6 +3172,10 @@ export type UsuarioUncheckedUpdateWithoutAnticiposInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioNestedInput
@@ -3007,6 +3219,10 @@ export type UsuarioCreateWithoutCuentasPagoInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -3055,6 +3271,10 @@ export type UsuarioUncheckedCreateWithoutCuentasPagoInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -3114,6 +3334,10 @@ export type UsuarioUpdateWithoutCuentasPagoInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -3162,6 +3386,10 @@ export type UsuarioUncheckedUpdateWithoutCuentasPagoInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -3205,6 +3433,10 @@ export type UsuarioCreateWithoutCitasPsicologos_CitasPsicologos_creadoPorIdToUsu
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioInput
@@ -3253,6 +3485,10 @@ export type UsuarioUncheckedCreateWithoutCitasPsicologos_CitasPsicologos_creadoP
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioInput
@@ -3301,6 +3537,10 @@ export type UsuarioCreateWithoutCitasPsicologos_CitasPsicologos_psicologoIdToUsu
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -3349,6 +3589,10 @@ export type UsuarioUncheckedCreateWithoutCitasPsicologos_CitasPsicologos_psicolo
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -3408,6 +3652,10 @@ export type UsuarioUpdateWithoutCitasPsicologos_CitasPsicologos_creadoPorIdToUsu
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioNestedInput
@@ -3456,6 +3704,10 @@ export type UsuarioUncheckedUpdateWithoutCitasPsicologos_CitasPsicologos_creadoP
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioNestedInput
@@ -3510,6 +3762,10 @@ export type UsuarioUpdateWithoutCitasPsicologos_CitasPsicologos_psicologoIdToUsu
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -3558,6 +3814,10 @@ export type UsuarioUncheckedUpdateWithoutCitasPsicologos_CitasPsicologos_psicolo
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -3601,6 +3861,10 @@ export type UsuarioCreateWithoutTurnosInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -3649,6 +3913,10 @@ export type UsuarioUncheckedCreateWithoutTurnosInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -3708,6 +3976,10 @@ export type UsuarioUpdateWithoutTurnosInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -3756,6 +4028,10 @@ export type UsuarioUncheckedUpdateWithoutTurnosInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -3799,6 +4075,10 @@ export type UsuarioCreateWithoutCuentasCobroInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -3847,6 +4127,10 @@ export type UsuarioUncheckedCreateWithoutCuentasCobroInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -3906,6 +4190,10 @@ export type UsuarioUpdateWithoutCuentasCobroInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -3954,6 +4242,10 @@ export type UsuarioUncheckedUpdateWithoutCuentasCobroInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -3997,6 +4289,10 @@ export type UsuarioCreateWithoutPaqueteAdquiridoInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -4045,6 +4341,10 @@ export type UsuarioUncheckedCreateWithoutPaqueteAdquiridoInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -4104,6 +4404,10 @@ export type UsuarioUpdateWithoutPaqueteAdquiridoInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -4152,6 +4456,10 @@ export type UsuarioUncheckedUpdateWithoutPaqueteAdquiridoInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -4195,6 +4503,10 @@ export type UsuarioCreateWithoutSesionActividadInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -4243,6 +4555,10 @@ export type UsuarioUncheckedCreateWithoutSesionActividadInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -4302,6 +4618,10 @@ export type UsuarioUpdateWithoutSesionActividadInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -4350,6 +4670,10 @@ export type UsuarioUncheckedUpdateWithoutSesionActividadInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -4393,6 +4717,10 @@ export type UsuarioCreateWithoutEgresosInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -4441,6 +4769,10 @@ export type UsuarioUncheckedCreateWithoutEgresosInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -4500,6 +4832,10 @@ export type UsuarioUpdateWithoutEgresosInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -4548,6 +4884,10 @@ export type UsuarioUncheckedUpdateWithoutEgresosInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -4559,6 +4899,862 @@ export type UsuarioUncheckedUpdateWithoutEgresosInput = {
   cuentasCobro?: Prisma.CuentaCobroUncheckedUpdateManyWithoutUsuarioNestedInput
   CuentasPago?: Prisma.CuentasPagoUncheckedUpdateManyWithoutUsuarioNestedInput
   declaracionesEfectivo?: Prisma.DeclaracionEfectivoUncheckedUpdateManyWithoutTecnicoNestedInput
+  geolocalizaciones?: Prisma.GeolocalizacionUncheckedUpdateManyWithoutUsuarioNestedInput
+  nominas?: Prisma.NominaUncheckedUpdateManyWithoutUsuarioNestedInput
+  serviciosCreados?: Prisma.OrdenServicioUncheckedUpdateManyWithoutCreadoPorNestedInput
+  serviciosAsignados?: Prisma.OrdenServicioUncheckedUpdateManyWithoutTecnicoNestedInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoUncheckedUpdateManyWithoutUsuarioNestedInput
+  permisosAprobados?: Prisma.PermisoUncheckedUpdateManyWithoutAdminNestedInput
+  permisosSolicitados?: Prisma.PermisoUncheckedUpdateManyWithoutUsuarioNestedInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosUncheckedUpdateManyWithoutUsuarioNestedInput
+  referidos?: Prisma.ReferidosUncheckedUpdateManyWithoutUsuarioNestedInput
+  SesionActividad?: Prisma.SesionActividadUncheckedUpdateManyWithoutUsuarioNestedInput
+  turnos?: Prisma.TurnoUncheckedUpdateManyWithoutUsuarioNestedInput
+}
+
+export type UsuarioCreateWithoutMovimientosCajaInput = {
+  username: string
+  email: string
+  password: string
+  activo?: boolean
+  nombre: string
+  apellido: string
+  telefono?: string | null
+  tipoDocumento?: string | null
+  numeroDocumento?: string | null
+  rol?: $Enums.Rol | null
+  createdAt?: Date | string
+  aprobado?: boolean | null
+  numberId?: string | null
+  whatsappGroupId?: string | null
+  pushToken?: string | null
+  placa?: string | null
+  moto?: boolean | null
+  codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
+  auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
+  CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
+  CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioInput
+  Cliente?: Prisma.ClienteCreateNestedManyWithoutUsuarioInput
+  ConfiguracionPagos?: Prisma.ConfiguracionPagosCreateNestedManyWithoutUsuarioInput
+  consignacionesCreadas?: Prisma.ConsignacionEfectivoCreateNestedManyWithoutCreadoPorInput
+  consignacionesTecnico?: Prisma.ConsignacionEfectivoCreateNestedManyWithoutTecnicoInput
+  cuentasCobro?: Prisma.CuentaCobroCreateNestedManyWithoutUsuarioInput
+  CuentasPago?: Prisma.CuentasPagoCreateNestedManyWithoutUsuarioInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoCreateNestedManyWithoutTecnicoInput
+  Egresos?: Prisma.EgresosCreateNestedManyWithoutUsuarioInput
+  geolocalizaciones?: Prisma.GeolocalizacionCreateNestedManyWithoutUsuarioInput
+  nominas?: Prisma.NominaCreateNestedManyWithoutUsuarioInput
+  serviciosCreados?: Prisma.OrdenServicioCreateNestedManyWithoutCreadoPorInput
+  serviciosAsignados?: Prisma.OrdenServicioCreateNestedManyWithoutTecnicoInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoCreateNestedManyWithoutUsuarioInput
+  permisosAprobados?: Prisma.PermisoCreateNestedManyWithoutAdminInput
+  permisosSolicitados?: Prisma.PermisoCreateNestedManyWithoutUsuarioInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosCreateNestedManyWithoutUsuarioInput
+  referidos?: Prisma.ReferidosCreateNestedManyWithoutUsuarioInput
+  SesionActividad?: Prisma.SesionActividadCreateNestedManyWithoutUsuarioInput
+  turnos?: Prisma.TurnoCreateNestedManyWithoutUsuarioInput
+  empresa?: Prisma.EmpresaCreateNestedOneWithoutUsuariosInput
+  tenant: Prisma.TenantCreateNestedOneWithoutUsuariosInput
+}
+
+export type UsuarioUncheckedCreateWithoutMovimientosCajaInput = {
+  id?: number
+  tenantId: number
+  username: string
+  email: string
+  password: string
+  activo?: boolean
+  nombre: string
+  apellido: string
+  telefono?: string | null
+  tipoDocumento?: string | null
+  numeroDocumento?: string | null
+  rol?: $Enums.Rol | null
+  empresaId?: number | null
+  createdAt?: Date | string
+  aprobado?: boolean | null
+  numberId?: string | null
+  whatsappGroupId?: string | null
+  pushToken?: string | null
+  placa?: string | null
+  moto?: boolean | null
+  codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
+  auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
+  CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
+  CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioInput
+  Cliente?: Prisma.ClienteUncheckedCreateNestedManyWithoutUsuarioInput
+  ConfiguracionPagos?: Prisma.ConfiguracionPagosUncheckedCreateNestedManyWithoutUsuarioInput
+  consignacionesCreadas?: Prisma.ConsignacionEfectivoUncheckedCreateNestedManyWithoutCreadoPorInput
+  consignacionesTecnico?: Prisma.ConsignacionEfectivoUncheckedCreateNestedManyWithoutTecnicoInput
+  cuentasCobro?: Prisma.CuentaCobroUncheckedCreateNestedManyWithoutUsuarioInput
+  CuentasPago?: Prisma.CuentasPagoUncheckedCreateNestedManyWithoutUsuarioInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoUncheckedCreateNestedManyWithoutTecnicoInput
+  Egresos?: Prisma.EgresosUncheckedCreateNestedManyWithoutUsuarioInput
+  geolocalizaciones?: Prisma.GeolocalizacionUncheckedCreateNestedManyWithoutUsuarioInput
+  nominas?: Prisma.NominaUncheckedCreateNestedManyWithoutUsuarioInput
+  serviciosCreados?: Prisma.OrdenServicioUncheckedCreateNestedManyWithoutCreadoPorInput
+  serviciosAsignados?: Prisma.OrdenServicioUncheckedCreateNestedManyWithoutTecnicoInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoUncheckedCreateNestedManyWithoutUsuarioInput
+  permisosAprobados?: Prisma.PermisoUncheckedCreateNestedManyWithoutAdminInput
+  permisosSolicitados?: Prisma.PermisoUncheckedCreateNestedManyWithoutUsuarioInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosUncheckedCreateNestedManyWithoutUsuarioInput
+  referidos?: Prisma.ReferidosUncheckedCreateNestedManyWithoutUsuarioInput
+  SesionActividad?: Prisma.SesionActividadUncheckedCreateNestedManyWithoutUsuarioInput
+  turnos?: Prisma.TurnoUncheckedCreateNestedManyWithoutUsuarioInput
+}
+
+export type UsuarioCreateOrConnectWithoutMovimientosCajaInput = {
+  where: Prisma.UsuarioWhereUniqueInput
+  create: Prisma.XOR<Prisma.UsuarioCreateWithoutMovimientosCajaInput, Prisma.UsuarioUncheckedCreateWithoutMovimientosCajaInput>
+}
+
+export type UsuarioUpsertWithoutMovimientosCajaInput = {
+  update: Prisma.XOR<Prisma.UsuarioUpdateWithoutMovimientosCajaInput, Prisma.UsuarioUncheckedUpdateWithoutMovimientosCajaInput>
+  create: Prisma.XOR<Prisma.UsuarioCreateWithoutMovimientosCajaInput, Prisma.UsuarioUncheckedCreateWithoutMovimientosCajaInput>
+  where?: Prisma.UsuarioWhereInput
+}
+
+export type UsuarioUpdateToOneWithWhereWithoutMovimientosCajaInput = {
+  where?: Prisma.UsuarioWhereInput
+  data: Prisma.XOR<Prisma.UsuarioUpdateWithoutMovimientosCajaInput, Prisma.UsuarioUncheckedUpdateWithoutMovimientosCajaInput>
+}
+
+export type UsuarioUpdateWithoutMovimientosCajaInput = {
+  username?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  password?: Prisma.StringFieldUpdateOperationsInput | string
+  activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  apellido?: Prisma.StringFieldUpdateOperationsInput | string
+  telefono?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tipoDocumento?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  numeroDocumento?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  rol?: Prisma.NullableEnumRolFieldUpdateOperationsInput | $Enums.Rol | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  aprobado?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
+  numberId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  whatsappGroupId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  pushToken?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
+  codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
+  auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
+  CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
+  CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioNestedInput
+  Cliente?: Prisma.ClienteUpdateManyWithoutUsuarioNestedInput
+  ConfiguracionPagos?: Prisma.ConfiguracionPagosUpdateManyWithoutUsuarioNestedInput
+  consignacionesCreadas?: Prisma.ConsignacionEfectivoUpdateManyWithoutCreadoPorNestedInput
+  consignacionesTecnico?: Prisma.ConsignacionEfectivoUpdateManyWithoutTecnicoNestedInput
+  cuentasCobro?: Prisma.CuentaCobroUpdateManyWithoutUsuarioNestedInput
+  CuentasPago?: Prisma.CuentasPagoUpdateManyWithoutUsuarioNestedInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoUpdateManyWithoutTecnicoNestedInput
+  Egresos?: Prisma.EgresosUpdateManyWithoutUsuarioNestedInput
+  geolocalizaciones?: Prisma.GeolocalizacionUpdateManyWithoutUsuarioNestedInput
+  nominas?: Prisma.NominaUpdateManyWithoutUsuarioNestedInput
+  serviciosCreados?: Prisma.OrdenServicioUpdateManyWithoutCreadoPorNestedInput
+  serviciosAsignados?: Prisma.OrdenServicioUpdateManyWithoutTecnicoNestedInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoUpdateManyWithoutUsuarioNestedInput
+  permisosAprobados?: Prisma.PermisoUpdateManyWithoutAdminNestedInput
+  permisosSolicitados?: Prisma.PermisoUpdateManyWithoutUsuarioNestedInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosUpdateManyWithoutUsuarioNestedInput
+  referidos?: Prisma.ReferidosUpdateManyWithoutUsuarioNestedInput
+  SesionActividad?: Prisma.SesionActividadUpdateManyWithoutUsuarioNestedInput
+  turnos?: Prisma.TurnoUpdateManyWithoutUsuarioNestedInput
+  empresa?: Prisma.EmpresaUpdateOneWithoutUsuariosNestedInput
+  tenant?: Prisma.TenantUpdateOneRequiredWithoutUsuariosNestedInput
+}
+
+export type UsuarioUncheckedUpdateWithoutMovimientosCajaInput = {
+  id?: Prisma.IntFieldUpdateOperationsInput | number
+  tenantId?: Prisma.IntFieldUpdateOperationsInput | number
+  username?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  password?: Prisma.StringFieldUpdateOperationsInput | string
+  activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  apellido?: Prisma.StringFieldUpdateOperationsInput | string
+  telefono?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tipoDocumento?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  numeroDocumento?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  rol?: Prisma.NullableEnumRolFieldUpdateOperationsInput | $Enums.Rol | null
+  empresaId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  aprobado?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
+  numberId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  whatsappGroupId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  pushToken?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
+  codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
+  auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
+  CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
+  CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioNestedInput
+  Cliente?: Prisma.ClienteUncheckedUpdateManyWithoutUsuarioNestedInput
+  ConfiguracionPagos?: Prisma.ConfiguracionPagosUncheckedUpdateManyWithoutUsuarioNestedInput
+  consignacionesCreadas?: Prisma.ConsignacionEfectivoUncheckedUpdateManyWithoutCreadoPorNestedInput
+  consignacionesTecnico?: Prisma.ConsignacionEfectivoUncheckedUpdateManyWithoutTecnicoNestedInput
+  cuentasCobro?: Prisma.CuentaCobroUncheckedUpdateManyWithoutUsuarioNestedInput
+  CuentasPago?: Prisma.CuentasPagoUncheckedUpdateManyWithoutUsuarioNestedInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoUncheckedUpdateManyWithoutTecnicoNestedInput
+  Egresos?: Prisma.EgresosUncheckedUpdateManyWithoutUsuarioNestedInput
+  geolocalizaciones?: Prisma.GeolocalizacionUncheckedUpdateManyWithoutUsuarioNestedInput
+  nominas?: Prisma.NominaUncheckedUpdateManyWithoutUsuarioNestedInput
+  serviciosCreados?: Prisma.OrdenServicioUncheckedUpdateManyWithoutCreadoPorNestedInput
+  serviciosAsignados?: Prisma.OrdenServicioUncheckedUpdateManyWithoutTecnicoNestedInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoUncheckedUpdateManyWithoutUsuarioNestedInput
+  permisosAprobados?: Prisma.PermisoUncheckedUpdateManyWithoutAdminNestedInput
+  permisosSolicitados?: Prisma.PermisoUncheckedUpdateManyWithoutUsuarioNestedInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosUncheckedUpdateManyWithoutUsuarioNestedInput
+  referidos?: Prisma.ReferidosUncheckedUpdateManyWithoutUsuarioNestedInput
+  SesionActividad?: Prisma.SesionActividadUncheckedUpdateManyWithoutUsuarioNestedInput
+  turnos?: Prisma.TurnoUncheckedUpdateManyWithoutUsuarioNestedInput
+}
+
+export type UsuarioCreateWithoutCargosRecepcionInput = {
+  username: string
+  email: string
+  password: string
+  activo?: boolean
+  nombre: string
+  apellido: string
+  telefono?: string | null
+  tipoDocumento?: string | null
+  numeroDocumento?: string | null
+  rol?: $Enums.Rol | null
+  createdAt?: Date | string
+  aprobado?: boolean | null
+  numberId?: string | null
+  whatsappGroupId?: string | null
+  pushToken?: string | null
+  placa?: string | null
+  moto?: boolean | null
+  codigoReferido?: string | null
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
+  Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
+  auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
+  CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
+  CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioInput
+  Cliente?: Prisma.ClienteCreateNestedManyWithoutUsuarioInput
+  ConfiguracionPagos?: Prisma.ConfiguracionPagosCreateNestedManyWithoutUsuarioInput
+  consignacionesCreadas?: Prisma.ConsignacionEfectivoCreateNestedManyWithoutCreadoPorInput
+  consignacionesTecnico?: Prisma.ConsignacionEfectivoCreateNestedManyWithoutTecnicoInput
+  cuentasCobro?: Prisma.CuentaCobroCreateNestedManyWithoutUsuarioInput
+  CuentasPago?: Prisma.CuentasPagoCreateNestedManyWithoutUsuarioInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoCreateNestedManyWithoutTecnicoInput
+  Egresos?: Prisma.EgresosCreateNestedManyWithoutUsuarioInput
+  geolocalizaciones?: Prisma.GeolocalizacionCreateNestedManyWithoutUsuarioInput
+  nominas?: Prisma.NominaCreateNestedManyWithoutUsuarioInput
+  serviciosCreados?: Prisma.OrdenServicioCreateNestedManyWithoutCreadoPorInput
+  serviciosAsignados?: Prisma.OrdenServicioCreateNestedManyWithoutTecnicoInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoCreateNestedManyWithoutUsuarioInput
+  permisosAprobados?: Prisma.PermisoCreateNestedManyWithoutAdminInput
+  permisosSolicitados?: Prisma.PermisoCreateNestedManyWithoutUsuarioInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosCreateNestedManyWithoutUsuarioInput
+  referidos?: Prisma.ReferidosCreateNestedManyWithoutUsuarioInput
+  SesionActividad?: Prisma.SesionActividadCreateNestedManyWithoutUsuarioInput
+  turnos?: Prisma.TurnoCreateNestedManyWithoutUsuarioInput
+  empresa?: Prisma.EmpresaCreateNestedOneWithoutUsuariosInput
+  tenant: Prisma.TenantCreateNestedOneWithoutUsuariosInput
+}
+
+export type UsuarioUncheckedCreateWithoutCargosRecepcionInput = {
+  id?: number
+  tenantId: number
+  username: string
+  email: string
+  password: string
+  activo?: boolean
+  nombre: string
+  apellido: string
+  telefono?: string | null
+  tipoDocumento?: string | null
+  numeroDocumento?: string | null
+  rol?: $Enums.Rol | null
+  empresaId?: number | null
+  createdAt?: Date | string
+  aprobado?: boolean | null
+  numberId?: string | null
+  whatsappGroupId?: string | null
+  pushToken?: string | null
+  placa?: string | null
+  moto?: boolean | null
+  codigoReferido?: string | null
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
+  Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
+  auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
+  CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
+  CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioInput
+  Cliente?: Prisma.ClienteUncheckedCreateNestedManyWithoutUsuarioInput
+  ConfiguracionPagos?: Prisma.ConfiguracionPagosUncheckedCreateNestedManyWithoutUsuarioInput
+  consignacionesCreadas?: Prisma.ConsignacionEfectivoUncheckedCreateNestedManyWithoutCreadoPorInput
+  consignacionesTecnico?: Prisma.ConsignacionEfectivoUncheckedCreateNestedManyWithoutTecnicoInput
+  cuentasCobro?: Prisma.CuentaCobroUncheckedCreateNestedManyWithoutUsuarioInput
+  CuentasPago?: Prisma.CuentasPagoUncheckedCreateNestedManyWithoutUsuarioInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoUncheckedCreateNestedManyWithoutTecnicoInput
+  Egresos?: Prisma.EgresosUncheckedCreateNestedManyWithoutUsuarioInput
+  geolocalizaciones?: Prisma.GeolocalizacionUncheckedCreateNestedManyWithoutUsuarioInput
+  nominas?: Prisma.NominaUncheckedCreateNestedManyWithoutUsuarioInput
+  serviciosCreados?: Prisma.OrdenServicioUncheckedCreateNestedManyWithoutCreadoPorInput
+  serviciosAsignados?: Prisma.OrdenServicioUncheckedCreateNestedManyWithoutTecnicoInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoUncheckedCreateNestedManyWithoutUsuarioInput
+  permisosAprobados?: Prisma.PermisoUncheckedCreateNestedManyWithoutAdminInput
+  permisosSolicitados?: Prisma.PermisoUncheckedCreateNestedManyWithoutUsuarioInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosUncheckedCreateNestedManyWithoutUsuarioInput
+  referidos?: Prisma.ReferidosUncheckedCreateNestedManyWithoutUsuarioInput
+  SesionActividad?: Prisma.SesionActividadUncheckedCreateNestedManyWithoutUsuarioInput
+  turnos?: Prisma.TurnoUncheckedCreateNestedManyWithoutUsuarioInput
+}
+
+export type UsuarioCreateOrConnectWithoutCargosRecepcionInput = {
+  where: Prisma.UsuarioWhereUniqueInput
+  create: Prisma.XOR<Prisma.UsuarioCreateWithoutCargosRecepcionInput, Prisma.UsuarioUncheckedCreateWithoutCargosRecepcionInput>
+}
+
+export type UsuarioCreateWithoutCargosRecepcionCreadosInput = {
+  username: string
+  email: string
+  password: string
+  activo?: boolean
+  nombre: string
+  apellido: string
+  telefono?: string | null
+  tipoDocumento?: string | null
+  numeroDocumento?: string | null
+  rol?: $Enums.Rol | null
+  createdAt?: Date | string
+  aprobado?: boolean | null
+  numberId?: string | null
+  whatsappGroupId?: string | null
+  pushToken?: string | null
+  placa?: string | null
+  moto?: boolean | null
+  codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
+  Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
+  auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
+  CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
+  CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioInput
+  Cliente?: Prisma.ClienteCreateNestedManyWithoutUsuarioInput
+  ConfiguracionPagos?: Prisma.ConfiguracionPagosCreateNestedManyWithoutUsuarioInput
+  consignacionesCreadas?: Prisma.ConsignacionEfectivoCreateNestedManyWithoutCreadoPorInput
+  consignacionesTecnico?: Prisma.ConsignacionEfectivoCreateNestedManyWithoutTecnicoInput
+  cuentasCobro?: Prisma.CuentaCobroCreateNestedManyWithoutUsuarioInput
+  CuentasPago?: Prisma.CuentasPagoCreateNestedManyWithoutUsuarioInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoCreateNestedManyWithoutTecnicoInput
+  Egresos?: Prisma.EgresosCreateNestedManyWithoutUsuarioInput
+  geolocalizaciones?: Prisma.GeolocalizacionCreateNestedManyWithoutUsuarioInput
+  nominas?: Prisma.NominaCreateNestedManyWithoutUsuarioInput
+  serviciosCreados?: Prisma.OrdenServicioCreateNestedManyWithoutCreadoPorInput
+  serviciosAsignados?: Prisma.OrdenServicioCreateNestedManyWithoutTecnicoInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoCreateNestedManyWithoutUsuarioInput
+  permisosAprobados?: Prisma.PermisoCreateNestedManyWithoutAdminInput
+  permisosSolicitados?: Prisma.PermisoCreateNestedManyWithoutUsuarioInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosCreateNestedManyWithoutUsuarioInput
+  referidos?: Prisma.ReferidosCreateNestedManyWithoutUsuarioInput
+  SesionActividad?: Prisma.SesionActividadCreateNestedManyWithoutUsuarioInput
+  turnos?: Prisma.TurnoCreateNestedManyWithoutUsuarioInput
+  empresa?: Prisma.EmpresaCreateNestedOneWithoutUsuariosInput
+  tenant: Prisma.TenantCreateNestedOneWithoutUsuariosInput
+}
+
+export type UsuarioUncheckedCreateWithoutCargosRecepcionCreadosInput = {
+  id?: number
+  tenantId: number
+  username: string
+  email: string
+  password: string
+  activo?: boolean
+  nombre: string
+  apellido: string
+  telefono?: string | null
+  tipoDocumento?: string | null
+  numeroDocumento?: string | null
+  rol?: $Enums.Rol | null
+  empresaId?: number | null
+  createdAt?: Date | string
+  aprobado?: boolean | null
+  numberId?: string | null
+  whatsappGroupId?: string | null
+  pushToken?: string | null
+  placa?: string | null
+  moto?: boolean | null
+  codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
+  Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
+  auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
+  CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
+  CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioInput
+  Cliente?: Prisma.ClienteUncheckedCreateNestedManyWithoutUsuarioInput
+  ConfiguracionPagos?: Prisma.ConfiguracionPagosUncheckedCreateNestedManyWithoutUsuarioInput
+  consignacionesCreadas?: Prisma.ConsignacionEfectivoUncheckedCreateNestedManyWithoutCreadoPorInput
+  consignacionesTecnico?: Prisma.ConsignacionEfectivoUncheckedCreateNestedManyWithoutTecnicoInput
+  cuentasCobro?: Prisma.CuentaCobroUncheckedCreateNestedManyWithoutUsuarioInput
+  CuentasPago?: Prisma.CuentasPagoUncheckedCreateNestedManyWithoutUsuarioInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoUncheckedCreateNestedManyWithoutTecnicoInput
+  Egresos?: Prisma.EgresosUncheckedCreateNestedManyWithoutUsuarioInput
+  geolocalizaciones?: Prisma.GeolocalizacionUncheckedCreateNestedManyWithoutUsuarioInput
+  nominas?: Prisma.NominaUncheckedCreateNestedManyWithoutUsuarioInput
+  serviciosCreados?: Prisma.OrdenServicioUncheckedCreateNestedManyWithoutCreadoPorInput
+  serviciosAsignados?: Prisma.OrdenServicioUncheckedCreateNestedManyWithoutTecnicoInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoUncheckedCreateNestedManyWithoutUsuarioInput
+  permisosAprobados?: Prisma.PermisoUncheckedCreateNestedManyWithoutAdminInput
+  permisosSolicitados?: Prisma.PermisoUncheckedCreateNestedManyWithoutUsuarioInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosUncheckedCreateNestedManyWithoutUsuarioInput
+  referidos?: Prisma.ReferidosUncheckedCreateNestedManyWithoutUsuarioInput
+  SesionActividad?: Prisma.SesionActividadUncheckedCreateNestedManyWithoutUsuarioInput
+  turnos?: Prisma.TurnoUncheckedCreateNestedManyWithoutUsuarioInput
+}
+
+export type UsuarioCreateOrConnectWithoutCargosRecepcionCreadosInput = {
+  where: Prisma.UsuarioWhereUniqueInput
+  create: Prisma.XOR<Prisma.UsuarioCreateWithoutCargosRecepcionCreadosInput, Prisma.UsuarioUncheckedCreateWithoutCargosRecepcionCreadosInput>
+}
+
+export type UsuarioUpsertWithoutCargosRecepcionInput = {
+  update: Prisma.XOR<Prisma.UsuarioUpdateWithoutCargosRecepcionInput, Prisma.UsuarioUncheckedUpdateWithoutCargosRecepcionInput>
+  create: Prisma.XOR<Prisma.UsuarioCreateWithoutCargosRecepcionInput, Prisma.UsuarioUncheckedCreateWithoutCargosRecepcionInput>
+  where?: Prisma.UsuarioWhereInput
+}
+
+export type UsuarioUpdateToOneWithWhereWithoutCargosRecepcionInput = {
+  where?: Prisma.UsuarioWhereInput
+  data: Prisma.XOR<Prisma.UsuarioUpdateWithoutCargosRecepcionInput, Prisma.UsuarioUncheckedUpdateWithoutCargosRecepcionInput>
+}
+
+export type UsuarioUpdateWithoutCargosRecepcionInput = {
+  username?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  password?: Prisma.StringFieldUpdateOperationsInput | string
+  activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  apellido?: Prisma.StringFieldUpdateOperationsInput | string
+  telefono?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tipoDocumento?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  numeroDocumento?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  rol?: Prisma.NullableEnumRolFieldUpdateOperationsInput | $Enums.Rol | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  aprobado?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
+  numberId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  whatsappGroupId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  pushToken?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
+  codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
+  Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
+  auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
+  CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
+  CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioNestedInput
+  Cliente?: Prisma.ClienteUpdateManyWithoutUsuarioNestedInput
+  ConfiguracionPagos?: Prisma.ConfiguracionPagosUpdateManyWithoutUsuarioNestedInput
+  consignacionesCreadas?: Prisma.ConsignacionEfectivoUpdateManyWithoutCreadoPorNestedInput
+  consignacionesTecnico?: Prisma.ConsignacionEfectivoUpdateManyWithoutTecnicoNestedInput
+  cuentasCobro?: Prisma.CuentaCobroUpdateManyWithoutUsuarioNestedInput
+  CuentasPago?: Prisma.CuentasPagoUpdateManyWithoutUsuarioNestedInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoUpdateManyWithoutTecnicoNestedInput
+  Egresos?: Prisma.EgresosUpdateManyWithoutUsuarioNestedInput
+  geolocalizaciones?: Prisma.GeolocalizacionUpdateManyWithoutUsuarioNestedInput
+  nominas?: Prisma.NominaUpdateManyWithoutUsuarioNestedInput
+  serviciosCreados?: Prisma.OrdenServicioUpdateManyWithoutCreadoPorNestedInput
+  serviciosAsignados?: Prisma.OrdenServicioUpdateManyWithoutTecnicoNestedInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoUpdateManyWithoutUsuarioNestedInput
+  permisosAprobados?: Prisma.PermisoUpdateManyWithoutAdminNestedInput
+  permisosSolicitados?: Prisma.PermisoUpdateManyWithoutUsuarioNestedInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosUpdateManyWithoutUsuarioNestedInput
+  referidos?: Prisma.ReferidosUpdateManyWithoutUsuarioNestedInput
+  SesionActividad?: Prisma.SesionActividadUpdateManyWithoutUsuarioNestedInput
+  turnos?: Prisma.TurnoUpdateManyWithoutUsuarioNestedInput
+  empresa?: Prisma.EmpresaUpdateOneWithoutUsuariosNestedInput
+  tenant?: Prisma.TenantUpdateOneRequiredWithoutUsuariosNestedInput
+}
+
+export type UsuarioUncheckedUpdateWithoutCargosRecepcionInput = {
+  id?: Prisma.IntFieldUpdateOperationsInput | number
+  tenantId?: Prisma.IntFieldUpdateOperationsInput | number
+  username?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  password?: Prisma.StringFieldUpdateOperationsInput | string
+  activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  apellido?: Prisma.StringFieldUpdateOperationsInput | string
+  telefono?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tipoDocumento?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  numeroDocumento?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  rol?: Prisma.NullableEnumRolFieldUpdateOperationsInput | $Enums.Rol | null
+  empresaId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  aprobado?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
+  numberId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  whatsappGroupId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  pushToken?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
+  codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
+  Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
+  auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
+  CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
+  CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioNestedInput
+  Cliente?: Prisma.ClienteUncheckedUpdateManyWithoutUsuarioNestedInput
+  ConfiguracionPagos?: Prisma.ConfiguracionPagosUncheckedUpdateManyWithoutUsuarioNestedInput
+  consignacionesCreadas?: Prisma.ConsignacionEfectivoUncheckedUpdateManyWithoutCreadoPorNestedInput
+  consignacionesTecnico?: Prisma.ConsignacionEfectivoUncheckedUpdateManyWithoutTecnicoNestedInput
+  cuentasCobro?: Prisma.CuentaCobroUncheckedUpdateManyWithoutUsuarioNestedInput
+  CuentasPago?: Prisma.CuentasPagoUncheckedUpdateManyWithoutUsuarioNestedInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoUncheckedUpdateManyWithoutTecnicoNestedInput
+  Egresos?: Prisma.EgresosUncheckedUpdateManyWithoutUsuarioNestedInput
+  geolocalizaciones?: Prisma.GeolocalizacionUncheckedUpdateManyWithoutUsuarioNestedInput
+  nominas?: Prisma.NominaUncheckedUpdateManyWithoutUsuarioNestedInput
+  serviciosCreados?: Prisma.OrdenServicioUncheckedUpdateManyWithoutCreadoPorNestedInput
+  serviciosAsignados?: Prisma.OrdenServicioUncheckedUpdateManyWithoutTecnicoNestedInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoUncheckedUpdateManyWithoutUsuarioNestedInput
+  permisosAprobados?: Prisma.PermisoUncheckedUpdateManyWithoutAdminNestedInput
+  permisosSolicitados?: Prisma.PermisoUncheckedUpdateManyWithoutUsuarioNestedInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosUncheckedUpdateManyWithoutUsuarioNestedInput
+  referidos?: Prisma.ReferidosUncheckedUpdateManyWithoutUsuarioNestedInput
+  SesionActividad?: Prisma.SesionActividadUncheckedUpdateManyWithoutUsuarioNestedInput
+  turnos?: Prisma.TurnoUncheckedUpdateManyWithoutUsuarioNestedInput
+}
+
+export type UsuarioUpsertWithoutCargosRecepcionCreadosInput = {
+  update: Prisma.XOR<Prisma.UsuarioUpdateWithoutCargosRecepcionCreadosInput, Prisma.UsuarioUncheckedUpdateWithoutCargosRecepcionCreadosInput>
+  create: Prisma.XOR<Prisma.UsuarioCreateWithoutCargosRecepcionCreadosInput, Prisma.UsuarioUncheckedCreateWithoutCargosRecepcionCreadosInput>
+  where?: Prisma.UsuarioWhereInput
+}
+
+export type UsuarioUpdateToOneWithWhereWithoutCargosRecepcionCreadosInput = {
+  where?: Prisma.UsuarioWhereInput
+  data: Prisma.XOR<Prisma.UsuarioUpdateWithoutCargosRecepcionCreadosInput, Prisma.UsuarioUncheckedUpdateWithoutCargosRecepcionCreadosInput>
+}
+
+export type UsuarioUpdateWithoutCargosRecepcionCreadosInput = {
+  username?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  password?: Prisma.StringFieldUpdateOperationsInput | string
+  activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  apellido?: Prisma.StringFieldUpdateOperationsInput | string
+  telefono?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tipoDocumento?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  numeroDocumento?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  rol?: Prisma.NullableEnumRolFieldUpdateOperationsInput | $Enums.Rol | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  aprobado?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
+  numberId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  whatsappGroupId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  pushToken?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
+  codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
+  Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
+  auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
+  CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
+  CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioNestedInput
+  Cliente?: Prisma.ClienteUpdateManyWithoutUsuarioNestedInput
+  ConfiguracionPagos?: Prisma.ConfiguracionPagosUpdateManyWithoutUsuarioNestedInput
+  consignacionesCreadas?: Prisma.ConsignacionEfectivoUpdateManyWithoutCreadoPorNestedInput
+  consignacionesTecnico?: Prisma.ConsignacionEfectivoUpdateManyWithoutTecnicoNestedInput
+  cuentasCobro?: Prisma.CuentaCobroUpdateManyWithoutUsuarioNestedInput
+  CuentasPago?: Prisma.CuentasPagoUpdateManyWithoutUsuarioNestedInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoUpdateManyWithoutTecnicoNestedInput
+  Egresos?: Prisma.EgresosUpdateManyWithoutUsuarioNestedInput
+  geolocalizaciones?: Prisma.GeolocalizacionUpdateManyWithoutUsuarioNestedInput
+  nominas?: Prisma.NominaUpdateManyWithoutUsuarioNestedInput
+  serviciosCreados?: Prisma.OrdenServicioUpdateManyWithoutCreadoPorNestedInput
+  serviciosAsignados?: Prisma.OrdenServicioUpdateManyWithoutTecnicoNestedInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoUpdateManyWithoutUsuarioNestedInput
+  permisosAprobados?: Prisma.PermisoUpdateManyWithoutAdminNestedInput
+  permisosSolicitados?: Prisma.PermisoUpdateManyWithoutUsuarioNestedInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosUpdateManyWithoutUsuarioNestedInput
+  referidos?: Prisma.ReferidosUpdateManyWithoutUsuarioNestedInput
+  SesionActividad?: Prisma.SesionActividadUpdateManyWithoutUsuarioNestedInput
+  turnos?: Prisma.TurnoUpdateManyWithoutUsuarioNestedInput
+  empresa?: Prisma.EmpresaUpdateOneWithoutUsuariosNestedInput
+  tenant?: Prisma.TenantUpdateOneRequiredWithoutUsuariosNestedInput
+}
+
+export type UsuarioUncheckedUpdateWithoutCargosRecepcionCreadosInput = {
+  id?: Prisma.IntFieldUpdateOperationsInput | number
+  tenantId?: Prisma.IntFieldUpdateOperationsInput | number
+  username?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  password?: Prisma.StringFieldUpdateOperationsInput | string
+  activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  apellido?: Prisma.StringFieldUpdateOperationsInput | string
+  telefono?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tipoDocumento?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  numeroDocumento?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  rol?: Prisma.NullableEnumRolFieldUpdateOperationsInput | $Enums.Rol | null
+  empresaId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  aprobado?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
+  numberId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  whatsappGroupId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  pushToken?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
+  codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
+  Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
+  auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
+  CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
+  CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioNestedInput
+  Cliente?: Prisma.ClienteUncheckedUpdateManyWithoutUsuarioNestedInput
+  ConfiguracionPagos?: Prisma.ConfiguracionPagosUncheckedUpdateManyWithoutUsuarioNestedInput
+  consignacionesCreadas?: Prisma.ConsignacionEfectivoUncheckedUpdateManyWithoutCreadoPorNestedInput
+  consignacionesTecnico?: Prisma.ConsignacionEfectivoUncheckedUpdateManyWithoutTecnicoNestedInput
+  cuentasCobro?: Prisma.CuentaCobroUncheckedUpdateManyWithoutUsuarioNestedInput
+  CuentasPago?: Prisma.CuentasPagoUncheckedUpdateManyWithoutUsuarioNestedInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoUncheckedUpdateManyWithoutTecnicoNestedInput
+  Egresos?: Prisma.EgresosUncheckedUpdateManyWithoutUsuarioNestedInput
+  geolocalizaciones?: Prisma.GeolocalizacionUncheckedUpdateManyWithoutUsuarioNestedInput
+  nominas?: Prisma.NominaUncheckedUpdateManyWithoutUsuarioNestedInput
+  serviciosCreados?: Prisma.OrdenServicioUncheckedUpdateManyWithoutCreadoPorNestedInput
+  serviciosAsignados?: Prisma.OrdenServicioUncheckedUpdateManyWithoutTecnicoNestedInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoUncheckedUpdateManyWithoutUsuarioNestedInput
+  permisosAprobados?: Prisma.PermisoUncheckedUpdateManyWithoutAdminNestedInput
+  permisosSolicitados?: Prisma.PermisoUncheckedUpdateManyWithoutUsuarioNestedInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosUncheckedUpdateManyWithoutUsuarioNestedInput
+  referidos?: Prisma.ReferidosUncheckedUpdateManyWithoutUsuarioNestedInput
+  SesionActividad?: Prisma.SesionActividadUncheckedUpdateManyWithoutUsuarioNestedInput
+  turnos?: Prisma.TurnoUncheckedUpdateManyWithoutUsuarioNestedInput
+}
+
+export type UsuarioCreateWithoutPagosRecepcionCreadosInput = {
+  username: string
+  email: string
+  password: string
+  activo?: boolean
+  nombre: string
+  apellido: string
+  telefono?: string | null
+  tipoDocumento?: string | null
+  numeroDocumento?: string | null
+  rol?: $Enums.Rol | null
+  createdAt?: Date | string
+  aprobado?: boolean | null
+  numberId?: string | null
+  whatsappGroupId?: string | null
+  pushToken?: string | null
+  placa?: string | null
+  moto?: boolean | null
+  codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
+  Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
+  auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
+  CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
+  CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioInput
+  Cliente?: Prisma.ClienteCreateNestedManyWithoutUsuarioInput
+  ConfiguracionPagos?: Prisma.ConfiguracionPagosCreateNestedManyWithoutUsuarioInput
+  consignacionesCreadas?: Prisma.ConsignacionEfectivoCreateNestedManyWithoutCreadoPorInput
+  consignacionesTecnico?: Prisma.ConsignacionEfectivoCreateNestedManyWithoutTecnicoInput
+  cuentasCobro?: Prisma.CuentaCobroCreateNestedManyWithoutUsuarioInput
+  CuentasPago?: Prisma.CuentasPagoCreateNestedManyWithoutUsuarioInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoCreateNestedManyWithoutTecnicoInput
+  Egresos?: Prisma.EgresosCreateNestedManyWithoutUsuarioInput
+  geolocalizaciones?: Prisma.GeolocalizacionCreateNestedManyWithoutUsuarioInput
+  nominas?: Prisma.NominaCreateNestedManyWithoutUsuarioInput
+  serviciosCreados?: Prisma.OrdenServicioCreateNestedManyWithoutCreadoPorInput
+  serviciosAsignados?: Prisma.OrdenServicioCreateNestedManyWithoutTecnicoInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoCreateNestedManyWithoutUsuarioInput
+  permisosAprobados?: Prisma.PermisoCreateNestedManyWithoutAdminInput
+  permisosSolicitados?: Prisma.PermisoCreateNestedManyWithoutUsuarioInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosCreateNestedManyWithoutUsuarioInput
+  referidos?: Prisma.ReferidosCreateNestedManyWithoutUsuarioInput
+  SesionActividad?: Prisma.SesionActividadCreateNestedManyWithoutUsuarioInput
+  turnos?: Prisma.TurnoCreateNestedManyWithoutUsuarioInput
+  empresa?: Prisma.EmpresaCreateNestedOneWithoutUsuariosInput
+  tenant: Prisma.TenantCreateNestedOneWithoutUsuariosInput
+}
+
+export type UsuarioUncheckedCreateWithoutPagosRecepcionCreadosInput = {
+  id?: number
+  tenantId: number
+  username: string
+  email: string
+  password: string
+  activo?: boolean
+  nombre: string
+  apellido: string
+  telefono?: string | null
+  tipoDocumento?: string | null
+  numeroDocumento?: string | null
+  rol?: $Enums.Rol | null
+  empresaId?: number | null
+  createdAt?: Date | string
+  aprobado?: boolean | null
+  numberId?: string | null
+  whatsappGroupId?: string | null
+  pushToken?: string | null
+  placa?: string | null
+  moto?: boolean | null
+  codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
+  Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
+  auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
+  CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
+  CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioInput
+  Cliente?: Prisma.ClienteUncheckedCreateNestedManyWithoutUsuarioInput
+  ConfiguracionPagos?: Prisma.ConfiguracionPagosUncheckedCreateNestedManyWithoutUsuarioInput
+  consignacionesCreadas?: Prisma.ConsignacionEfectivoUncheckedCreateNestedManyWithoutCreadoPorInput
+  consignacionesTecnico?: Prisma.ConsignacionEfectivoUncheckedCreateNestedManyWithoutTecnicoInput
+  cuentasCobro?: Prisma.CuentaCobroUncheckedCreateNestedManyWithoutUsuarioInput
+  CuentasPago?: Prisma.CuentasPagoUncheckedCreateNestedManyWithoutUsuarioInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoUncheckedCreateNestedManyWithoutTecnicoInput
+  Egresos?: Prisma.EgresosUncheckedCreateNestedManyWithoutUsuarioInput
+  geolocalizaciones?: Prisma.GeolocalizacionUncheckedCreateNestedManyWithoutUsuarioInput
+  nominas?: Prisma.NominaUncheckedCreateNestedManyWithoutUsuarioInput
+  serviciosCreados?: Prisma.OrdenServicioUncheckedCreateNestedManyWithoutCreadoPorInput
+  serviciosAsignados?: Prisma.OrdenServicioUncheckedCreateNestedManyWithoutTecnicoInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoUncheckedCreateNestedManyWithoutUsuarioInput
+  permisosAprobados?: Prisma.PermisoUncheckedCreateNestedManyWithoutAdminInput
+  permisosSolicitados?: Prisma.PermisoUncheckedCreateNestedManyWithoutUsuarioInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosUncheckedCreateNestedManyWithoutUsuarioInput
+  referidos?: Prisma.ReferidosUncheckedCreateNestedManyWithoutUsuarioInput
+  SesionActividad?: Prisma.SesionActividadUncheckedCreateNestedManyWithoutUsuarioInput
+  turnos?: Prisma.TurnoUncheckedCreateNestedManyWithoutUsuarioInput
+}
+
+export type UsuarioCreateOrConnectWithoutPagosRecepcionCreadosInput = {
+  where: Prisma.UsuarioWhereUniqueInput
+  create: Prisma.XOR<Prisma.UsuarioCreateWithoutPagosRecepcionCreadosInput, Prisma.UsuarioUncheckedCreateWithoutPagosRecepcionCreadosInput>
+}
+
+export type UsuarioUpsertWithoutPagosRecepcionCreadosInput = {
+  update: Prisma.XOR<Prisma.UsuarioUpdateWithoutPagosRecepcionCreadosInput, Prisma.UsuarioUncheckedUpdateWithoutPagosRecepcionCreadosInput>
+  create: Prisma.XOR<Prisma.UsuarioCreateWithoutPagosRecepcionCreadosInput, Prisma.UsuarioUncheckedCreateWithoutPagosRecepcionCreadosInput>
+  where?: Prisma.UsuarioWhereInput
+}
+
+export type UsuarioUpdateToOneWithWhereWithoutPagosRecepcionCreadosInput = {
+  where?: Prisma.UsuarioWhereInput
+  data: Prisma.XOR<Prisma.UsuarioUpdateWithoutPagosRecepcionCreadosInput, Prisma.UsuarioUncheckedUpdateWithoutPagosRecepcionCreadosInput>
+}
+
+export type UsuarioUpdateWithoutPagosRecepcionCreadosInput = {
+  username?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  password?: Prisma.StringFieldUpdateOperationsInput | string
+  activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  apellido?: Prisma.StringFieldUpdateOperationsInput | string
+  telefono?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tipoDocumento?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  numeroDocumento?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  rol?: Prisma.NullableEnumRolFieldUpdateOperationsInput | $Enums.Rol | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  aprobado?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
+  numberId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  whatsappGroupId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  pushToken?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
+  codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
+  Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
+  auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
+  CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
+  CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioNestedInput
+  Cliente?: Prisma.ClienteUpdateManyWithoutUsuarioNestedInput
+  ConfiguracionPagos?: Prisma.ConfiguracionPagosUpdateManyWithoutUsuarioNestedInput
+  consignacionesCreadas?: Prisma.ConsignacionEfectivoUpdateManyWithoutCreadoPorNestedInput
+  consignacionesTecnico?: Prisma.ConsignacionEfectivoUpdateManyWithoutTecnicoNestedInput
+  cuentasCobro?: Prisma.CuentaCobroUpdateManyWithoutUsuarioNestedInput
+  CuentasPago?: Prisma.CuentasPagoUpdateManyWithoutUsuarioNestedInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoUpdateManyWithoutTecnicoNestedInput
+  Egresos?: Prisma.EgresosUpdateManyWithoutUsuarioNestedInput
+  geolocalizaciones?: Prisma.GeolocalizacionUpdateManyWithoutUsuarioNestedInput
+  nominas?: Prisma.NominaUpdateManyWithoutUsuarioNestedInput
+  serviciosCreados?: Prisma.OrdenServicioUpdateManyWithoutCreadoPorNestedInput
+  serviciosAsignados?: Prisma.OrdenServicioUpdateManyWithoutTecnicoNestedInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoUpdateManyWithoutUsuarioNestedInput
+  permisosAprobados?: Prisma.PermisoUpdateManyWithoutAdminNestedInput
+  permisosSolicitados?: Prisma.PermisoUpdateManyWithoutUsuarioNestedInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosUpdateManyWithoutUsuarioNestedInput
+  referidos?: Prisma.ReferidosUpdateManyWithoutUsuarioNestedInput
+  SesionActividad?: Prisma.SesionActividadUpdateManyWithoutUsuarioNestedInput
+  turnos?: Prisma.TurnoUpdateManyWithoutUsuarioNestedInput
+  empresa?: Prisma.EmpresaUpdateOneWithoutUsuariosNestedInput
+  tenant?: Prisma.TenantUpdateOneRequiredWithoutUsuariosNestedInput
+}
+
+export type UsuarioUncheckedUpdateWithoutPagosRecepcionCreadosInput = {
+  id?: Prisma.IntFieldUpdateOperationsInput | number
+  tenantId?: Prisma.IntFieldUpdateOperationsInput | number
+  username?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  password?: Prisma.StringFieldUpdateOperationsInput | string
+  activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  apellido?: Prisma.StringFieldUpdateOperationsInput | string
+  telefono?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tipoDocumento?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  numeroDocumento?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  rol?: Prisma.NullableEnumRolFieldUpdateOperationsInput | $Enums.Rol | null
+  empresaId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  aprobado?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
+  numberId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  whatsappGroupId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  pushToken?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
+  codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
+  Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
+  auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
+  CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
+  CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioNestedInput
+  Cliente?: Prisma.ClienteUncheckedUpdateManyWithoutUsuarioNestedInput
+  ConfiguracionPagos?: Prisma.ConfiguracionPagosUncheckedUpdateManyWithoutUsuarioNestedInput
+  consignacionesCreadas?: Prisma.ConsignacionEfectivoUncheckedUpdateManyWithoutCreadoPorNestedInput
+  consignacionesTecnico?: Prisma.ConsignacionEfectivoUncheckedUpdateManyWithoutTecnicoNestedInput
+  cuentasCobro?: Prisma.CuentaCobroUncheckedUpdateManyWithoutUsuarioNestedInput
+  CuentasPago?: Prisma.CuentasPagoUncheckedUpdateManyWithoutUsuarioNestedInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoUncheckedUpdateManyWithoutTecnicoNestedInput
+  Egresos?: Prisma.EgresosUncheckedUpdateManyWithoutUsuarioNestedInput
   geolocalizaciones?: Prisma.GeolocalizacionUncheckedUpdateManyWithoutUsuarioNestedInput
   nominas?: Prisma.NominaUncheckedUpdateManyWithoutUsuarioNestedInput
   serviciosCreados?: Prisma.OrdenServicioUncheckedUpdateManyWithoutCreadoPorNestedInput
@@ -4591,6 +5787,10 @@ export type UsuarioCreateWithoutAuditoriasInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
   CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioInput
@@ -4639,6 +5839,10 @@ export type UsuarioUncheckedCreateWithoutAuditoriasInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
   CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioInput
@@ -4698,6 +5902,10 @@ export type UsuarioUpdateWithoutAuditoriasInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioNestedInput
@@ -4746,6 +5954,10 @@ export type UsuarioUncheckedUpdateWithoutAuditoriasInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_psicologoIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_psicologoIdToUsuarioNestedInput
@@ -4789,6 +6001,10 @@ export type UsuarioCreateWithoutReferidosInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -4837,6 +6053,10 @@ export type UsuarioUncheckedCreateWithoutReferidosInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -4896,6 +6116,10 @@ export type UsuarioUpdateWithoutReferidosInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -4944,6 +6168,10 @@ export type UsuarioUncheckedUpdateWithoutReferidosInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -4987,6 +6215,10 @@ export type UsuarioCreateWithoutProductosFumigacionSolicitadosInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -5035,6 +6267,10 @@ export type UsuarioUncheckedCreateWithoutProductosFumigacionSolicitadosInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -5094,6 +6330,10 @@ export type UsuarioUpdateWithoutProductosFumigacionSolicitadosInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -5142,6 +6382,10 @@ export type UsuarioUncheckedUpdateWithoutProductosFumigacionSolicitadosInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -5185,6 +6429,10 @@ export type UsuarioCreateWithoutPermisosAprobadosInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -5233,6 +6481,10 @@ export type UsuarioUncheckedCreateWithoutPermisosAprobadosInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -5281,6 +6533,10 @@ export type UsuarioCreateWithoutPermisosSolicitadosInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -5329,6 +6585,10 @@ export type UsuarioUncheckedCreateWithoutPermisosSolicitadosInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -5388,6 +6648,10 @@ export type UsuarioUpdateWithoutPermisosAprobadosInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -5436,6 +6700,10 @@ export type UsuarioUncheckedUpdateWithoutPermisosAprobadosInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -5490,6 +6758,10 @@ export type UsuarioUpdateWithoutPermisosSolicitadosInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -5538,6 +6810,10 @@ export type UsuarioUncheckedUpdateWithoutPermisosSolicitadosInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -5581,6 +6857,10 @@ export type UsuarioCreateWithoutDeclaracionesEfectivoInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -5629,6 +6909,10 @@ export type UsuarioUncheckedCreateWithoutDeclaracionesEfectivoInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -5688,6 +6972,10 @@ export type UsuarioUpdateWithoutDeclaracionesEfectivoInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -5736,6 +7024,10 @@ export type UsuarioUncheckedUpdateWithoutDeclaracionesEfectivoInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -5779,6 +7071,10 @@ export type UsuarioCreateWithoutConsignacionesCreadasInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -5827,6 +7123,10 @@ export type UsuarioUncheckedCreateWithoutConsignacionesCreadasInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -5875,6 +7175,10 @@ export type UsuarioCreateWithoutConsignacionesTecnicoInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -5923,6 +7227,10 @@ export type UsuarioUncheckedCreateWithoutConsignacionesTecnicoInput = {
   placa?: string | null
   moto?: boolean | null
   codigoReferido?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutProfesionalInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutCreadoPorInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutCreadoPorInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutUsuarioInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutUsuarioInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioInput
@@ -5982,6 +7290,10 @@ export type UsuarioUpdateWithoutConsignacionesCreadasInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -6030,6 +7342,10 @@ export type UsuarioUncheckedUpdateWithoutConsignacionesCreadasInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -6084,6 +7400,10 @@ export type UsuarioUpdateWithoutConsignacionesTecnicoInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -6132,6 +7452,10 @@ export type UsuarioUncheckedUpdateWithoutConsignacionesTecnicoInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -6198,6 +7522,10 @@ export type UsuarioUpdateWithoutTenantInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -6245,6 +7573,10 @@ export type UsuarioUncheckedUpdateWithoutTenantInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -6335,6 +7667,10 @@ export type UsuarioUpdateWithoutEmpresaInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -6382,6 +7718,10 @@ export type UsuarioUncheckedUpdateWithoutEmpresaInput = {
   placa?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   moto?: Prisma.NullableBoolFieldUpdateOperationsInput | boolean | null
   codigoReferido?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutProfesionalNestedInput
+  cargosRecepcionCreados?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  pagosRecepcionCreados?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutCreadoPorNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutCreadoPorNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutUsuarioNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutUsuarioNestedInput
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutUsuario_CitasPsicologos_creadoPorIdToUsuarioNestedInput
@@ -6436,6 +7776,10 @@ export type UsuarioUncheckedUpdateManyWithoutEmpresaInput = {
  */
 
 export type UsuarioCountOutputType = {
+  cargosRecepcion: number
+  cargosRecepcionCreados: number
+  pagosRecepcionCreados: number
+  movimientosCaja: number
   Anticipos: number
   auditorias: number
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario: number
@@ -6462,6 +7806,10 @@ export type UsuarioCountOutputType = {
 }
 
 export type UsuarioCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  cargosRecepcion?: boolean | UsuarioCountOutputTypeCountCargosRecepcionArgs
+  cargosRecepcionCreados?: boolean | UsuarioCountOutputTypeCountCargosRecepcionCreadosArgs
+  pagosRecepcionCreados?: boolean | UsuarioCountOutputTypeCountPagosRecepcionCreadosArgs
+  movimientosCaja?: boolean | UsuarioCountOutputTypeCountMovimientosCajaArgs
   Anticipos?: boolean | UsuarioCountOutputTypeCountAnticiposArgs
   auditorias?: boolean | UsuarioCountOutputTypeCountAuditoriasArgs
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: boolean | UsuarioCountOutputTypeCountCitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioArgs
@@ -6495,6 +7843,34 @@ export type UsuarioCountOutputTypeDefaultArgs<ExtArgs extends runtime.Types.Exte
    * Select specific fields to fetch from the UsuarioCountOutputType
    */
   select?: Prisma.UsuarioCountOutputTypeSelect<ExtArgs> | null
+}
+
+/**
+ * UsuarioCountOutputType without action
+ */
+export type UsuarioCountOutputTypeCountCargosRecepcionArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.CargoRecepcionWhereInput
+}
+
+/**
+ * UsuarioCountOutputType without action
+ */
+export type UsuarioCountOutputTypeCountCargosRecepcionCreadosArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.CargoRecepcionWhereInput
+}
+
+/**
+ * UsuarioCountOutputType without action
+ */
+export type UsuarioCountOutputTypeCountPagosRecepcionCreadosArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.PagoRecepcionWhereInput
+}
+
+/**
+ * UsuarioCountOutputType without action
+ */
+export type UsuarioCountOutputTypeCountMovimientosCajaArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.MovimientoCajaWhereInput
 }
 
 /**
@@ -6681,6 +8057,10 @@ export type UsuarioSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   placa?: boolean
   moto?: boolean
   codigoReferido?: boolean
+  cargosRecepcion?: boolean | Prisma.Usuario$cargosRecepcionArgs<ExtArgs>
+  cargosRecepcionCreados?: boolean | Prisma.Usuario$cargosRecepcionCreadosArgs<ExtArgs>
+  pagosRecepcionCreados?: boolean | Prisma.Usuario$pagosRecepcionCreadosArgs<ExtArgs>
+  movimientosCaja?: boolean | Prisma.Usuario$movimientosCajaArgs<ExtArgs>
   Anticipos?: boolean | Prisma.Usuario$AnticiposArgs<ExtArgs>
   auditorias?: boolean | Prisma.Usuario$auditoriasArgs<ExtArgs>
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: boolean | Prisma.Usuario$CitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioArgs<ExtArgs>
@@ -6787,6 +8167,10 @@ export type UsuarioSelectScalar = {
 
 export type UsuarioOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "username" | "email" | "password" | "activo" | "nombre" | "apellido" | "telefono" | "tipoDocumento" | "numeroDocumento" | "rol" | "empresaId" | "createdAt" | "aprobado" | "numberId" | "whatsappGroupId" | "pushToken" | "placa" | "moto" | "codigoReferido", ExtArgs["result"]["usuario"]>
 export type UsuarioInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  cargosRecepcion?: boolean | Prisma.Usuario$cargosRecepcionArgs<ExtArgs>
+  cargosRecepcionCreados?: boolean | Prisma.Usuario$cargosRecepcionCreadosArgs<ExtArgs>
+  pagosRecepcionCreados?: boolean | Prisma.Usuario$pagosRecepcionCreadosArgs<ExtArgs>
+  movimientosCaja?: boolean | Prisma.Usuario$movimientosCajaArgs<ExtArgs>
   Anticipos?: boolean | Prisma.Usuario$AnticiposArgs<ExtArgs>
   auditorias?: boolean | Prisma.Usuario$auditoriasArgs<ExtArgs>
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario?: boolean | Prisma.Usuario$CitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioArgs<ExtArgs>
@@ -6826,6 +8210,10 @@ export type UsuarioIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Exte
 export type $UsuarioPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "Usuario"
   objects: {
+    cargosRecepcion: Prisma.$CargoRecepcionPayload<ExtArgs>[]
+    cargosRecepcionCreados: Prisma.$CargoRecepcionPayload<ExtArgs>[]
+    pagosRecepcionCreados: Prisma.$PagoRecepcionPayload<ExtArgs>[]
+    movimientosCaja: Prisma.$MovimientoCajaPayload<ExtArgs>[]
     Anticipos: Prisma.$AnticiposPayload<ExtArgs>[]
     auditorias: Prisma.$AuditoriaPayload<ExtArgs>[]
     CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario: Prisma.$CitasPsicologosPayload<ExtArgs>[]
@@ -7268,6 +8656,10 @@ readonly fields: UsuarioFieldRefs;
  */
 export interface Prisma__UsuarioClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
+  cargosRecepcion<T extends Prisma.Usuario$cargosRecepcionArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Usuario$cargosRecepcionArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$CargoRecepcionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  cargosRecepcionCreados<T extends Prisma.Usuario$cargosRecepcionCreadosArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Usuario$cargosRecepcionCreadosArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$CargoRecepcionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  pagosRecepcionCreados<T extends Prisma.Usuario$pagosRecepcionCreadosArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Usuario$pagosRecepcionCreadosArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PagoRecepcionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  movimientosCaja<T extends Prisma.Usuario$movimientosCajaArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Usuario$movimientosCajaArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$MovimientoCajaPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   Anticipos<T extends Prisma.Usuario$AnticiposArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Usuario$AnticiposArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AnticiposPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   auditorias<T extends Prisma.Usuario$auditoriasArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Usuario$auditoriasArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AuditoriaPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   CitasPsicologos_CitasPsicologos_creadoPorIdToUsuario<T extends Prisma.Usuario$CitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Usuario$CitasPsicologos_CitasPsicologos_creadoPorIdToUsuarioArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$CitasPsicologosPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
@@ -7736,6 +9128,102 @@ export type UsuarioDeleteManyArgs<ExtArgs extends runtime.Types.Extensions.Inter
    * Limit how many Usuarios to delete.
    */
   limit?: number
+}
+
+/**
+ * Usuario.cargosRecepcion
+ */
+export type Usuario$cargosRecepcionArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the CargoRecepcion
+   */
+  select?: Prisma.CargoRecepcionSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the CargoRecepcion
+   */
+  omit?: Prisma.CargoRecepcionOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.CargoRecepcionInclude<ExtArgs> | null
+  where?: Prisma.CargoRecepcionWhereInput
+  orderBy?: Prisma.CargoRecepcionOrderByWithRelationInput | Prisma.CargoRecepcionOrderByWithRelationInput[]
+  cursor?: Prisma.CargoRecepcionWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.CargoRecepcionScalarFieldEnum | Prisma.CargoRecepcionScalarFieldEnum[]
+}
+
+/**
+ * Usuario.cargosRecepcionCreados
+ */
+export type Usuario$cargosRecepcionCreadosArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the CargoRecepcion
+   */
+  select?: Prisma.CargoRecepcionSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the CargoRecepcion
+   */
+  omit?: Prisma.CargoRecepcionOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.CargoRecepcionInclude<ExtArgs> | null
+  where?: Prisma.CargoRecepcionWhereInput
+  orderBy?: Prisma.CargoRecepcionOrderByWithRelationInput | Prisma.CargoRecepcionOrderByWithRelationInput[]
+  cursor?: Prisma.CargoRecepcionWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.CargoRecepcionScalarFieldEnum | Prisma.CargoRecepcionScalarFieldEnum[]
+}
+
+/**
+ * Usuario.pagosRecepcionCreados
+ */
+export type Usuario$pagosRecepcionCreadosArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the PagoRecepcion
+   */
+  select?: Prisma.PagoRecepcionSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the PagoRecepcion
+   */
+  omit?: Prisma.PagoRecepcionOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.PagoRecepcionInclude<ExtArgs> | null
+  where?: Prisma.PagoRecepcionWhereInput
+  orderBy?: Prisma.PagoRecepcionOrderByWithRelationInput | Prisma.PagoRecepcionOrderByWithRelationInput[]
+  cursor?: Prisma.PagoRecepcionWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.PagoRecepcionScalarFieldEnum | Prisma.PagoRecepcionScalarFieldEnum[]
+}
+
+/**
+ * Usuario.movimientosCaja
+ */
+export type Usuario$movimientosCajaArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the MovimientoCaja
+   */
+  select?: Prisma.MovimientoCajaSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the MovimientoCaja
+   */
+  omit?: Prisma.MovimientoCajaOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.MovimientoCajaInclude<ExtArgs> | null
+  where?: Prisma.MovimientoCajaWhereInput
+  orderBy?: Prisma.MovimientoCajaOrderByWithRelationInput | Prisma.MovimientoCajaOrderByWithRelationInput[]
+  cursor?: Prisma.MovimientoCajaWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.MovimientoCajaScalarFieldEnum | Prisma.MovimientoCajaScalarFieldEnum[]
 }
 
 /**

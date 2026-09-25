@@ -240,6 +240,10 @@ export type TenantWhereInput = {
   nit?: Prisma.StringNullableFilter<"Tenant"> | string | null
   numero?: Prisma.StringNullableFilter<"Tenant"> | string | null
   pagina?: Prisma.StringNullableFilter<"Tenant"> | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionListRelationFilter
+  cargosRecepcion?: Prisma.CargoRecepcionListRelationFilter
+  pagosRecepcion?: Prisma.PagoRecepcionListRelationFilter
+  movimientosCaja?: Prisma.MovimientoCajaListRelationFilter
   Anticipos?: Prisma.AnticiposListRelationFilter
   auditorias?: Prisma.AuditoriaListRelationFilter
   CitasPsicologos?: Prisma.CitasPsicologosListRelationFilter
@@ -281,6 +285,10 @@ export type TenantOrderByWithRelationInput = {
   nit?: Prisma.SortOrderInput | Prisma.SortOrder
   numero?: Prisma.SortOrderInput | Prisma.SortOrder
   pagina?: Prisma.SortOrderInput | Prisma.SortOrder
+  serviciosRecepcion?: Prisma.ServicioRecepcionOrderByRelationAggregateInput
+  cargosRecepcion?: Prisma.CargoRecepcionOrderByRelationAggregateInput
+  pagosRecepcion?: Prisma.PagoRecepcionOrderByRelationAggregateInput
+  movimientosCaja?: Prisma.MovimientoCajaOrderByRelationAggregateInput
   Anticipos?: Prisma.AnticiposOrderByRelationAggregateInput
   auditorias?: Prisma.AuditoriaOrderByRelationAggregateInput
   CitasPsicologos?: Prisma.CitasPsicologosOrderByRelationAggregateInput
@@ -325,6 +333,10 @@ export type TenantWhereUniqueInput = Prisma.AtLeast<{
   nit?: Prisma.StringNullableFilter<"Tenant"> | string | null
   numero?: Prisma.StringNullableFilter<"Tenant"> | string | null
   pagina?: Prisma.StringNullableFilter<"Tenant"> | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionListRelationFilter
+  cargosRecepcion?: Prisma.CargoRecepcionListRelationFilter
+  pagosRecepcion?: Prisma.PagoRecepcionListRelationFilter
+  movimientosCaja?: Prisma.MovimientoCajaListRelationFilter
   Anticipos?: Prisma.AnticiposListRelationFilter
   auditorias?: Prisma.AuditoriaListRelationFilter
   CitasPsicologos?: Prisma.CitasPsicologosListRelationFilter
@@ -395,6 +407,10 @@ export type TenantCreateInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -436,6 +452,10 @@ export type TenantUncheckedCreateInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -476,6 +496,10 @@ export type TenantUpdateInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -517,6 +541,10 @@ export type TenantUncheckedUpdateInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -986,6 +1014,62 @@ export type TenantUpdateOneWithoutEgresosNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.TenantUpdateToOneWithWhereWithoutEgresosInput, Prisma.TenantUpdateWithoutEgresosInput>, Prisma.TenantUncheckedUpdateWithoutEgresosInput>
 }
 
+export type TenantCreateNestedOneWithoutMovimientosCajaInput = {
+  create?: Prisma.XOR<Prisma.TenantCreateWithoutMovimientosCajaInput, Prisma.TenantUncheckedCreateWithoutMovimientosCajaInput>
+  connectOrCreate?: Prisma.TenantCreateOrConnectWithoutMovimientosCajaInput
+  connect?: Prisma.TenantWhereUniqueInput
+}
+
+export type TenantUpdateOneRequiredWithoutMovimientosCajaNestedInput = {
+  create?: Prisma.XOR<Prisma.TenantCreateWithoutMovimientosCajaInput, Prisma.TenantUncheckedCreateWithoutMovimientosCajaInput>
+  connectOrCreate?: Prisma.TenantCreateOrConnectWithoutMovimientosCajaInput
+  upsert?: Prisma.TenantUpsertWithoutMovimientosCajaInput
+  connect?: Prisma.TenantWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.TenantUpdateToOneWithWhereWithoutMovimientosCajaInput, Prisma.TenantUpdateWithoutMovimientosCajaInput>, Prisma.TenantUncheckedUpdateWithoutMovimientosCajaInput>
+}
+
+export type TenantCreateNestedOneWithoutServiciosRecepcionInput = {
+  create?: Prisma.XOR<Prisma.TenantCreateWithoutServiciosRecepcionInput, Prisma.TenantUncheckedCreateWithoutServiciosRecepcionInput>
+  connectOrCreate?: Prisma.TenantCreateOrConnectWithoutServiciosRecepcionInput
+  connect?: Prisma.TenantWhereUniqueInput
+}
+
+export type TenantUpdateOneRequiredWithoutServiciosRecepcionNestedInput = {
+  create?: Prisma.XOR<Prisma.TenantCreateWithoutServiciosRecepcionInput, Prisma.TenantUncheckedCreateWithoutServiciosRecepcionInput>
+  connectOrCreate?: Prisma.TenantCreateOrConnectWithoutServiciosRecepcionInput
+  upsert?: Prisma.TenantUpsertWithoutServiciosRecepcionInput
+  connect?: Prisma.TenantWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.TenantUpdateToOneWithWhereWithoutServiciosRecepcionInput, Prisma.TenantUpdateWithoutServiciosRecepcionInput>, Prisma.TenantUncheckedUpdateWithoutServiciosRecepcionInput>
+}
+
+export type TenantCreateNestedOneWithoutCargosRecepcionInput = {
+  create?: Prisma.XOR<Prisma.TenantCreateWithoutCargosRecepcionInput, Prisma.TenantUncheckedCreateWithoutCargosRecepcionInput>
+  connectOrCreate?: Prisma.TenantCreateOrConnectWithoutCargosRecepcionInput
+  connect?: Prisma.TenantWhereUniqueInput
+}
+
+export type TenantUpdateOneRequiredWithoutCargosRecepcionNestedInput = {
+  create?: Prisma.XOR<Prisma.TenantCreateWithoutCargosRecepcionInput, Prisma.TenantUncheckedCreateWithoutCargosRecepcionInput>
+  connectOrCreate?: Prisma.TenantCreateOrConnectWithoutCargosRecepcionInput
+  upsert?: Prisma.TenantUpsertWithoutCargosRecepcionInput
+  connect?: Prisma.TenantWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.TenantUpdateToOneWithWhereWithoutCargosRecepcionInput, Prisma.TenantUpdateWithoutCargosRecepcionInput>, Prisma.TenantUncheckedUpdateWithoutCargosRecepcionInput>
+}
+
+export type TenantCreateNestedOneWithoutPagosRecepcionInput = {
+  create?: Prisma.XOR<Prisma.TenantCreateWithoutPagosRecepcionInput, Prisma.TenantUncheckedCreateWithoutPagosRecepcionInput>
+  connectOrCreate?: Prisma.TenantCreateOrConnectWithoutPagosRecepcionInput
+  connect?: Prisma.TenantWhereUniqueInput
+}
+
+export type TenantUpdateOneRequiredWithoutPagosRecepcionNestedInput = {
+  create?: Prisma.XOR<Prisma.TenantCreateWithoutPagosRecepcionInput, Prisma.TenantUncheckedCreateWithoutPagosRecepcionInput>
+  connectOrCreate?: Prisma.TenantCreateOrConnectWithoutPagosRecepcionInput
+  upsert?: Prisma.TenantUpsertWithoutPagosRecepcionInput
+  connect?: Prisma.TenantWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.TenantUpdateToOneWithWhereWithoutPagosRecepcionInput, Prisma.TenantUpdateWithoutPagosRecepcionInput>, Prisma.TenantUncheckedUpdateWithoutPagosRecepcionInput>
+}
+
 export type TenantCreateNestedOneWithoutAuditoriasInput = {
   create?: Prisma.XOR<Prisma.TenantCreateWithoutAuditoriasInput, Prisma.TenantUncheckedCreateWithoutAuditoriasInput>
   connectOrCreate?: Prisma.TenantCreateOrConnectWithoutAuditoriasInput
@@ -1098,6 +1182,10 @@ export type TenantCreateWithoutZonasInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -1138,6 +1226,10 @@ export type TenantUncheckedCreateWithoutZonasInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -1193,6 +1285,10 @@ export type TenantUpdateWithoutZonasInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -1233,6 +1329,10 @@ export type TenantUncheckedUpdateWithoutZonasInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -1272,6 +1372,10 @@ export type TenantCreateWithoutEmpresasInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -1312,6 +1416,10 @@ export type TenantUncheckedCreateWithoutEmpresasInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -1367,6 +1475,10 @@ export type TenantUpdateWithoutEmpresasInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -1407,6 +1519,10 @@ export type TenantUncheckedUpdateWithoutEmpresasInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -1446,6 +1562,10 @@ export type TenantCreateWithoutUsuariosInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -1486,6 +1606,10 @@ export type TenantUncheckedCreateWithoutUsuariosInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -1541,6 +1665,10 @@ export type TenantUpdateWithoutUsuariosInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -1581,6 +1709,10 @@ export type TenantUncheckedUpdateWithoutUsuariosInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -1620,6 +1752,10 @@ export type TenantCreateWithoutClientesInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -1660,6 +1796,10 @@ export type TenantUncheckedCreateWithoutClientesInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -1715,6 +1855,10 @@ export type TenantUpdateWithoutClientesInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -1755,6 +1899,10 @@ export type TenantUncheckedUpdateWithoutClientesInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -1794,6 +1942,10 @@ export type TenantCreateWithoutVehiculosInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -1834,6 +1986,10 @@ export type TenantUncheckedCreateWithoutVehiculosInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -1889,6 +2045,10 @@ export type TenantUpdateWithoutVehiculosInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -1929,6 +2089,10 @@ export type TenantUncheckedUpdateWithoutVehiculosInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -1968,6 +2132,10 @@ export type TenantCreateWithoutDireccionesInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -2008,6 +2176,10 @@ export type TenantUncheckedCreateWithoutDireccionesInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -2063,6 +2235,10 @@ export type TenantUpdateWithoutDireccionesInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -2103,6 +2279,10 @@ export type TenantUncheckedUpdateWithoutDireccionesInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -2142,6 +2322,10 @@ export type TenantCreateWithoutServiciosInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -2182,6 +2366,10 @@ export type TenantUncheckedCreateWithoutServiciosInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -2237,6 +2425,10 @@ export type TenantUpdateWithoutServiciosInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -2277,6 +2469,10 @@ export type TenantUncheckedUpdateWithoutServiciosInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -2316,6 +2512,10 @@ export type TenantCreateWithoutTiposServiciosInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -2356,6 +2556,10 @@ export type TenantUncheckedCreateWithoutTiposServiciosInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -2411,6 +2615,10 @@ export type TenantUpdateWithoutTiposServiciosInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -2451,6 +2659,10 @@ export type TenantUncheckedUpdateWithoutTiposServiciosInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -2490,6 +2702,10 @@ export type TenantCreateWithoutOrdenesServicioInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -2530,6 +2746,10 @@ export type TenantUncheckedCreateWithoutOrdenesServicioInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -2585,6 +2805,10 @@ export type TenantUpdateWithoutOrdenesServicioInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -2625,6 +2849,10 @@ export type TenantUncheckedUpdateWithoutOrdenesServicioInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -2664,6 +2892,10 @@ export type TenantCreateWithoutGeolocalizacionesInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -2704,6 +2936,10 @@ export type TenantUncheckedCreateWithoutGeolocalizacionesInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -2759,6 +2995,10 @@ export type TenantUpdateWithoutGeolocalizacionesInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -2799,6 +3039,10 @@ export type TenantUncheckedUpdateWithoutGeolocalizacionesInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -2838,6 +3082,10 @@ export type TenantCreateWithoutMetodosPagoInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -2878,6 +3126,10 @@ export type TenantUncheckedCreateWithoutMetodosPagoInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -2933,6 +3185,10 @@ export type TenantUpdateWithoutMetodosPagoInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -2973,6 +3229,10 @@ export type TenantUncheckedUpdateWithoutMetodosPagoInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -3012,6 +3272,10 @@ export type TenantCreateWithoutEstadoServicioInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -3052,6 +3316,10 @@ export type TenantUncheckedCreateWithoutEstadoServicioInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -3107,6 +3375,10 @@ export type TenantUpdateWithoutEstadoServicioInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -3147,6 +3419,10 @@ export type TenantUncheckedUpdateWithoutEstadoServicioInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -3186,6 +3462,10 @@ export type TenantCreateWithoutPicoPlacaInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -3226,6 +3506,10 @@ export type TenantUncheckedCreateWithoutPicoPlacaInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -3281,6 +3565,10 @@ export type TenantUpdateWithoutPicoPlacaInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -3321,6 +3609,10 @@ export type TenantUncheckedUpdateWithoutPicoPlacaInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -3360,6 +3652,10 @@ export type TenantCreateWithoutNominasInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -3400,6 +3696,10 @@ export type TenantUncheckedCreateWithoutNominasInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -3455,6 +3755,10 @@ export type TenantUpdateWithoutNominasInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -3495,6 +3799,10 @@ export type TenantUncheckedUpdateWithoutNominasInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -3534,6 +3842,10 @@ export type TenantCreateWithoutAnticiposInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
   clientes?: Prisma.ClienteCreateNestedManyWithoutTenantInput
@@ -3574,6 +3886,10 @@ export type TenantUncheckedCreateWithoutAnticiposInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
   clientes?: Prisma.ClienteUncheckedCreateNestedManyWithoutTenantInput
@@ -3629,6 +3945,10 @@ export type TenantUpdateWithoutAnticiposInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
   clientes?: Prisma.ClienteUpdateManyWithoutTenantNestedInput
@@ -3669,6 +3989,10 @@ export type TenantUncheckedUpdateWithoutAnticiposInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
   clientes?: Prisma.ClienteUncheckedUpdateManyWithoutTenantNestedInput
@@ -3708,6 +4032,10 @@ export type TenantCreateWithoutCuentasPagoInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -3748,6 +4076,10 @@ export type TenantUncheckedCreateWithoutCuentasPagoInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -3803,6 +4135,10 @@ export type TenantUpdateWithoutCuentasPagoInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -3843,6 +4179,10 @@ export type TenantUncheckedUpdateWithoutCuentasPagoInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -3882,6 +4222,10 @@ export type TenantCreateWithoutCitasPsicologosInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   clientes?: Prisma.ClienteCreateNestedManyWithoutTenantInput
@@ -3922,6 +4266,10 @@ export type TenantUncheckedCreateWithoutCitasPsicologosInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   clientes?: Prisma.ClienteUncheckedCreateNestedManyWithoutTenantInput
@@ -3977,6 +4325,10 @@ export type TenantUpdateWithoutCitasPsicologosInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   clientes?: Prisma.ClienteUpdateManyWithoutTenantNestedInput
@@ -4017,6 +4369,10 @@ export type TenantUncheckedUpdateWithoutCitasPsicologosInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   clientes?: Prisma.ClienteUncheckedUpdateManyWithoutTenantNestedInput
@@ -4056,6 +4412,10 @@ export type TenantCreateWithoutConsultoriosInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -4096,6 +4456,10 @@ export type TenantUncheckedCreateWithoutConsultoriosInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -4151,6 +4515,10 @@ export type TenantUpdateWithoutConsultoriosInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -4191,6 +4559,10 @@ export type TenantUncheckedUpdateWithoutConsultoriosInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -4230,6 +4602,10 @@ export type TenantCreateWithoutTurnosInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -4270,6 +4646,10 @@ export type TenantUncheckedCreateWithoutTurnosInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -4325,6 +4705,10 @@ export type TenantUpdateWithoutTurnosInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -4365,6 +4749,10 @@ export type TenantUncheckedUpdateWithoutTurnosInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -4404,6 +4792,10 @@ export type TenantCreateWithoutCuentasCobroInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -4444,6 +4836,10 @@ export type TenantUncheckedCreateWithoutCuentasCobroInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -4499,6 +4895,10 @@ export type TenantUpdateWithoutCuentasCobroInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -4539,6 +4939,10 @@ export type TenantUncheckedUpdateWithoutCuentasCobroInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -4578,6 +4982,10 @@ export type TenantCreateWithoutPaqueteAdquiridoInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -4618,6 +5026,10 @@ export type TenantUncheckedCreateWithoutPaqueteAdquiridoInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -4673,6 +5085,10 @@ export type TenantUpdateWithoutPaqueteAdquiridoInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -4713,6 +5129,10 @@ export type TenantUncheckedUpdateWithoutPaqueteAdquiridoInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -4752,6 +5172,10 @@ export type TenantCreateWithoutTerapiasPsicologos_TerapiasPsicologos_tenantIdToE
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -4792,6 +5216,10 @@ export type TenantUncheckedCreateWithoutTerapiasPsicologos_TerapiasPsicologos_te
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -4847,6 +5275,10 @@ export type TenantUpdateWithoutTerapiasPsicologos_TerapiasPsicologos_tenantIdToE
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -4887,6 +5319,10 @@ export type TenantUncheckedUpdateWithoutTerapiasPsicologos_TerapiasPsicologos_te
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -4926,6 +5362,10 @@ export type TenantCreateWithoutEgresosInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -4966,6 +5406,10 @@ export type TenantUncheckedCreateWithoutEgresosInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -5021,6 +5465,10 @@ export type TenantUpdateWithoutEgresosInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -5061,6 +5509,10 @@ export type TenantUncheckedUpdateWithoutEgresosInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -5092,6 +5544,766 @@ export type TenantUncheckedUpdateWithoutEgresosInput = {
   consultorios?: Prisma.consultoriosUncheckedUpdateManyWithoutTenantNestedInput
 }
 
+export type TenantCreateWithoutMovimientosCajaInput = {
+  nombre: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  correo?: string | null
+  nit?: string | null
+  numero?: string | null
+  pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
+  auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
+  CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
+  clientes?: Prisma.ClienteCreateNestedManyWithoutTenantInput
+  consignacionesEfectivo?: Prisma.ConsignacionEfectivoCreateNestedManyWithoutTenantInput
+  cuentasCobro?: Prisma.CuentaCobroCreateNestedManyWithoutTenantInput
+  CuentasPago?: Prisma.CuentasPagoCreateNestedManyWithoutTenantInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoCreateNestedManyWithoutTenantInput
+  direcciones?: Prisma.DireccionCreateNestedManyWithoutTenantInput
+  Egresos?: Prisma.EgresosCreateNestedManyWithoutTenantInput
+  empresas?: Prisma.EmpresaCreateNestedManyWithoutTenantInput
+  EstadoServicio?: Prisma.EstadoServicioCreateNestedManyWithoutTenantInput
+  geolocalizaciones?: Prisma.GeolocalizacionCreateNestedManyWithoutTenantInput
+  metodosPago?: Prisma.MetodoPagoCreateNestedManyWithoutTenantInput
+  nominas?: Prisma.NominaCreateNestedManyWithoutTenantInput
+  ordenesServicio?: Prisma.OrdenServicioCreateNestedManyWithoutTenantInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoCreateNestedManyWithoutTenantInput
+  permisos?: Prisma.PermisoCreateNestedManyWithoutTenantInput
+  PicoPlaca?: Prisma.PicoPlacaCreateNestedManyWithoutTenantInput
+  ProductosFumigacion?: Prisma.ProductosFumigacionCreateNestedManyWithoutTenantInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosCreateNestedManyWithoutTenantInput
+  Proveedores?: Prisma.ProveedoresCreateNestedManyWithoutTenantInput
+  servicios?: Prisma.ServicioCreateNestedManyWithoutTenantInput
+  TerapiasPsicologos_TerapiasPsicologos_tenantIdToEmpresa?: Prisma.TerapiasPsicologosCreateNestedManyWithoutEmpresa_TerapiasPsicologos_tenantIdToEmpresaInput
+  tiposServicios?: Prisma.TipoServicioCreateNestedManyWithoutTenantInput
+  turnos?: Prisma.TurnoCreateNestedManyWithoutTenantInput
+  usuarios?: Prisma.UsuarioCreateNestedManyWithoutTenantInput
+  vehiculos?: Prisma.VehiculoCreateNestedManyWithoutTenantInput
+  zonas?: Prisma.ZonaCreateNestedManyWithoutTenantInput
+  consultorios?: Prisma.consultoriosCreateNestedManyWithoutTenantInput
+}
+
+export type TenantUncheckedCreateWithoutMovimientosCajaInput = {
+  id?: number
+  nombre: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  correo?: string | null
+  nit?: string | null
+  numero?: string | null
+  pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
+  auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
+  CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
+  clientes?: Prisma.ClienteUncheckedCreateNestedManyWithoutTenantInput
+  consignacionesEfectivo?: Prisma.ConsignacionEfectivoUncheckedCreateNestedManyWithoutTenantInput
+  cuentasCobro?: Prisma.CuentaCobroUncheckedCreateNestedManyWithoutTenantInput
+  CuentasPago?: Prisma.CuentasPagoUncheckedCreateNestedManyWithoutTenantInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoUncheckedCreateNestedManyWithoutTenantInput
+  direcciones?: Prisma.DireccionUncheckedCreateNestedManyWithoutTenantInput
+  Egresos?: Prisma.EgresosUncheckedCreateNestedManyWithoutTenantInput
+  empresas?: Prisma.EmpresaUncheckedCreateNestedManyWithoutTenantInput
+  EstadoServicio?: Prisma.EstadoServicioUncheckedCreateNestedManyWithoutTenantInput
+  geolocalizaciones?: Prisma.GeolocalizacionUncheckedCreateNestedManyWithoutTenantInput
+  metodosPago?: Prisma.MetodoPagoUncheckedCreateNestedManyWithoutTenantInput
+  nominas?: Prisma.NominaUncheckedCreateNestedManyWithoutTenantInput
+  ordenesServicio?: Prisma.OrdenServicioUncheckedCreateNestedManyWithoutTenantInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoUncheckedCreateNestedManyWithoutTenantInput
+  permisos?: Prisma.PermisoUncheckedCreateNestedManyWithoutTenantInput
+  PicoPlaca?: Prisma.PicoPlacaUncheckedCreateNestedManyWithoutTenantInput
+  ProductosFumigacion?: Prisma.ProductosFumigacionUncheckedCreateNestedManyWithoutTenantInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosUncheckedCreateNestedManyWithoutTenantInput
+  Proveedores?: Prisma.ProveedoresUncheckedCreateNestedManyWithoutTenantInput
+  servicios?: Prisma.ServicioUncheckedCreateNestedManyWithoutTenantInput
+  TerapiasPsicologos_TerapiasPsicologos_tenantIdToEmpresa?: Prisma.TerapiasPsicologosUncheckedCreateNestedManyWithoutEmpresa_TerapiasPsicologos_tenantIdToEmpresaInput
+  tiposServicios?: Prisma.TipoServicioUncheckedCreateNestedManyWithoutTenantInput
+  turnos?: Prisma.TurnoUncheckedCreateNestedManyWithoutTenantInput
+  usuarios?: Prisma.UsuarioUncheckedCreateNestedManyWithoutTenantInput
+  vehiculos?: Prisma.VehiculoUncheckedCreateNestedManyWithoutTenantInput
+  zonas?: Prisma.ZonaUncheckedCreateNestedManyWithoutTenantInput
+  consultorios?: Prisma.consultoriosUncheckedCreateNestedManyWithoutTenantInput
+}
+
+export type TenantCreateOrConnectWithoutMovimientosCajaInput = {
+  where: Prisma.TenantWhereUniqueInput
+  create: Prisma.XOR<Prisma.TenantCreateWithoutMovimientosCajaInput, Prisma.TenantUncheckedCreateWithoutMovimientosCajaInput>
+}
+
+export type TenantUpsertWithoutMovimientosCajaInput = {
+  update: Prisma.XOR<Prisma.TenantUpdateWithoutMovimientosCajaInput, Prisma.TenantUncheckedUpdateWithoutMovimientosCajaInput>
+  create: Prisma.XOR<Prisma.TenantCreateWithoutMovimientosCajaInput, Prisma.TenantUncheckedCreateWithoutMovimientosCajaInput>
+  where?: Prisma.TenantWhereInput
+}
+
+export type TenantUpdateToOneWithWhereWithoutMovimientosCajaInput = {
+  where?: Prisma.TenantWhereInput
+  data: Prisma.XOR<Prisma.TenantUpdateWithoutMovimientosCajaInput, Prisma.TenantUncheckedUpdateWithoutMovimientosCajaInput>
+}
+
+export type TenantUpdateWithoutMovimientosCajaInput = {
+  nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  correo?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
+  auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
+  CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
+  clientes?: Prisma.ClienteUpdateManyWithoutTenantNestedInput
+  consignacionesEfectivo?: Prisma.ConsignacionEfectivoUpdateManyWithoutTenantNestedInput
+  cuentasCobro?: Prisma.CuentaCobroUpdateManyWithoutTenantNestedInput
+  CuentasPago?: Prisma.CuentasPagoUpdateManyWithoutTenantNestedInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoUpdateManyWithoutTenantNestedInput
+  direcciones?: Prisma.DireccionUpdateManyWithoutTenantNestedInput
+  Egresos?: Prisma.EgresosUpdateManyWithoutTenantNestedInput
+  empresas?: Prisma.EmpresaUpdateManyWithoutTenantNestedInput
+  EstadoServicio?: Prisma.EstadoServicioUpdateManyWithoutTenantNestedInput
+  geolocalizaciones?: Prisma.GeolocalizacionUpdateManyWithoutTenantNestedInput
+  metodosPago?: Prisma.MetodoPagoUpdateManyWithoutTenantNestedInput
+  nominas?: Prisma.NominaUpdateManyWithoutTenantNestedInput
+  ordenesServicio?: Prisma.OrdenServicioUpdateManyWithoutTenantNestedInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoUpdateManyWithoutTenantNestedInput
+  permisos?: Prisma.PermisoUpdateManyWithoutTenantNestedInput
+  PicoPlaca?: Prisma.PicoPlacaUpdateManyWithoutTenantNestedInput
+  ProductosFumigacion?: Prisma.ProductosFumigacionUpdateManyWithoutTenantNestedInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosUpdateManyWithoutTenantNestedInput
+  Proveedores?: Prisma.ProveedoresUpdateManyWithoutTenantNestedInput
+  servicios?: Prisma.ServicioUpdateManyWithoutTenantNestedInput
+  TerapiasPsicologos_TerapiasPsicologos_tenantIdToEmpresa?: Prisma.TerapiasPsicologosUpdateManyWithoutEmpresa_TerapiasPsicologos_tenantIdToEmpresaNestedInput
+  tiposServicios?: Prisma.TipoServicioUpdateManyWithoutTenantNestedInput
+  turnos?: Prisma.TurnoUpdateManyWithoutTenantNestedInput
+  usuarios?: Prisma.UsuarioUpdateManyWithoutTenantNestedInput
+  vehiculos?: Prisma.VehiculoUpdateManyWithoutTenantNestedInput
+  zonas?: Prisma.ZonaUpdateManyWithoutTenantNestedInput
+  consultorios?: Prisma.consultoriosUpdateManyWithoutTenantNestedInput
+}
+
+export type TenantUncheckedUpdateWithoutMovimientosCajaInput = {
+  id?: Prisma.IntFieldUpdateOperationsInput | number
+  nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  correo?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
+  auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
+  CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
+  clientes?: Prisma.ClienteUncheckedUpdateManyWithoutTenantNestedInput
+  consignacionesEfectivo?: Prisma.ConsignacionEfectivoUncheckedUpdateManyWithoutTenantNestedInput
+  cuentasCobro?: Prisma.CuentaCobroUncheckedUpdateManyWithoutTenantNestedInput
+  CuentasPago?: Prisma.CuentasPagoUncheckedUpdateManyWithoutTenantNestedInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoUncheckedUpdateManyWithoutTenantNestedInput
+  direcciones?: Prisma.DireccionUncheckedUpdateManyWithoutTenantNestedInput
+  Egresos?: Prisma.EgresosUncheckedUpdateManyWithoutTenantNestedInput
+  empresas?: Prisma.EmpresaUncheckedUpdateManyWithoutTenantNestedInput
+  EstadoServicio?: Prisma.EstadoServicioUncheckedUpdateManyWithoutTenantNestedInput
+  geolocalizaciones?: Prisma.GeolocalizacionUncheckedUpdateManyWithoutTenantNestedInput
+  metodosPago?: Prisma.MetodoPagoUncheckedUpdateManyWithoutTenantNestedInput
+  nominas?: Prisma.NominaUncheckedUpdateManyWithoutTenantNestedInput
+  ordenesServicio?: Prisma.OrdenServicioUncheckedUpdateManyWithoutTenantNestedInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoUncheckedUpdateManyWithoutTenantNestedInput
+  permisos?: Prisma.PermisoUncheckedUpdateManyWithoutTenantNestedInput
+  PicoPlaca?: Prisma.PicoPlacaUncheckedUpdateManyWithoutTenantNestedInput
+  ProductosFumigacion?: Prisma.ProductosFumigacionUncheckedUpdateManyWithoutTenantNestedInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosUncheckedUpdateManyWithoutTenantNestedInput
+  Proveedores?: Prisma.ProveedoresUncheckedUpdateManyWithoutTenantNestedInput
+  servicios?: Prisma.ServicioUncheckedUpdateManyWithoutTenantNestedInput
+  TerapiasPsicologos_TerapiasPsicologos_tenantIdToEmpresa?: Prisma.TerapiasPsicologosUncheckedUpdateManyWithoutEmpresa_TerapiasPsicologos_tenantIdToEmpresaNestedInput
+  tiposServicios?: Prisma.TipoServicioUncheckedUpdateManyWithoutTenantNestedInput
+  turnos?: Prisma.TurnoUncheckedUpdateManyWithoutTenantNestedInput
+  usuarios?: Prisma.UsuarioUncheckedUpdateManyWithoutTenantNestedInput
+  vehiculos?: Prisma.VehiculoUncheckedUpdateManyWithoutTenantNestedInput
+  zonas?: Prisma.ZonaUncheckedUpdateManyWithoutTenantNestedInput
+  consultorios?: Prisma.consultoriosUncheckedUpdateManyWithoutTenantNestedInput
+}
+
+export type TenantCreateWithoutServiciosRecepcionInput = {
+  nombre: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  correo?: string | null
+  nit?: string | null
+  numero?: string | null
+  pagina?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
+  Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
+  auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
+  CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
+  clientes?: Prisma.ClienteCreateNestedManyWithoutTenantInput
+  consignacionesEfectivo?: Prisma.ConsignacionEfectivoCreateNestedManyWithoutTenantInput
+  cuentasCobro?: Prisma.CuentaCobroCreateNestedManyWithoutTenantInput
+  CuentasPago?: Prisma.CuentasPagoCreateNestedManyWithoutTenantInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoCreateNestedManyWithoutTenantInput
+  direcciones?: Prisma.DireccionCreateNestedManyWithoutTenantInput
+  Egresos?: Prisma.EgresosCreateNestedManyWithoutTenantInput
+  empresas?: Prisma.EmpresaCreateNestedManyWithoutTenantInput
+  EstadoServicio?: Prisma.EstadoServicioCreateNestedManyWithoutTenantInput
+  geolocalizaciones?: Prisma.GeolocalizacionCreateNestedManyWithoutTenantInput
+  metodosPago?: Prisma.MetodoPagoCreateNestedManyWithoutTenantInput
+  nominas?: Prisma.NominaCreateNestedManyWithoutTenantInput
+  ordenesServicio?: Prisma.OrdenServicioCreateNestedManyWithoutTenantInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoCreateNestedManyWithoutTenantInput
+  permisos?: Prisma.PermisoCreateNestedManyWithoutTenantInput
+  PicoPlaca?: Prisma.PicoPlacaCreateNestedManyWithoutTenantInput
+  ProductosFumigacion?: Prisma.ProductosFumigacionCreateNestedManyWithoutTenantInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosCreateNestedManyWithoutTenantInput
+  Proveedores?: Prisma.ProveedoresCreateNestedManyWithoutTenantInput
+  servicios?: Prisma.ServicioCreateNestedManyWithoutTenantInput
+  TerapiasPsicologos_TerapiasPsicologos_tenantIdToEmpresa?: Prisma.TerapiasPsicologosCreateNestedManyWithoutEmpresa_TerapiasPsicologos_tenantIdToEmpresaInput
+  tiposServicios?: Prisma.TipoServicioCreateNestedManyWithoutTenantInput
+  turnos?: Prisma.TurnoCreateNestedManyWithoutTenantInput
+  usuarios?: Prisma.UsuarioCreateNestedManyWithoutTenantInput
+  vehiculos?: Prisma.VehiculoCreateNestedManyWithoutTenantInput
+  zonas?: Prisma.ZonaCreateNestedManyWithoutTenantInput
+  consultorios?: Prisma.consultoriosCreateNestedManyWithoutTenantInput
+}
+
+export type TenantUncheckedCreateWithoutServiciosRecepcionInput = {
+  id?: number
+  nombre: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  correo?: string | null
+  nit?: string | null
+  numero?: string | null
+  pagina?: string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
+  Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
+  auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
+  CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
+  clientes?: Prisma.ClienteUncheckedCreateNestedManyWithoutTenantInput
+  consignacionesEfectivo?: Prisma.ConsignacionEfectivoUncheckedCreateNestedManyWithoutTenantInput
+  cuentasCobro?: Prisma.CuentaCobroUncheckedCreateNestedManyWithoutTenantInput
+  CuentasPago?: Prisma.CuentasPagoUncheckedCreateNestedManyWithoutTenantInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoUncheckedCreateNestedManyWithoutTenantInput
+  direcciones?: Prisma.DireccionUncheckedCreateNestedManyWithoutTenantInput
+  Egresos?: Prisma.EgresosUncheckedCreateNestedManyWithoutTenantInput
+  empresas?: Prisma.EmpresaUncheckedCreateNestedManyWithoutTenantInput
+  EstadoServicio?: Prisma.EstadoServicioUncheckedCreateNestedManyWithoutTenantInput
+  geolocalizaciones?: Prisma.GeolocalizacionUncheckedCreateNestedManyWithoutTenantInput
+  metodosPago?: Prisma.MetodoPagoUncheckedCreateNestedManyWithoutTenantInput
+  nominas?: Prisma.NominaUncheckedCreateNestedManyWithoutTenantInput
+  ordenesServicio?: Prisma.OrdenServicioUncheckedCreateNestedManyWithoutTenantInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoUncheckedCreateNestedManyWithoutTenantInput
+  permisos?: Prisma.PermisoUncheckedCreateNestedManyWithoutTenantInput
+  PicoPlaca?: Prisma.PicoPlacaUncheckedCreateNestedManyWithoutTenantInput
+  ProductosFumigacion?: Prisma.ProductosFumigacionUncheckedCreateNestedManyWithoutTenantInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosUncheckedCreateNestedManyWithoutTenantInput
+  Proveedores?: Prisma.ProveedoresUncheckedCreateNestedManyWithoutTenantInput
+  servicios?: Prisma.ServicioUncheckedCreateNestedManyWithoutTenantInput
+  TerapiasPsicologos_TerapiasPsicologos_tenantIdToEmpresa?: Prisma.TerapiasPsicologosUncheckedCreateNestedManyWithoutEmpresa_TerapiasPsicologos_tenantIdToEmpresaInput
+  tiposServicios?: Prisma.TipoServicioUncheckedCreateNestedManyWithoutTenantInput
+  turnos?: Prisma.TurnoUncheckedCreateNestedManyWithoutTenantInput
+  usuarios?: Prisma.UsuarioUncheckedCreateNestedManyWithoutTenantInput
+  vehiculos?: Prisma.VehiculoUncheckedCreateNestedManyWithoutTenantInput
+  zonas?: Prisma.ZonaUncheckedCreateNestedManyWithoutTenantInput
+  consultorios?: Prisma.consultoriosUncheckedCreateNestedManyWithoutTenantInput
+}
+
+export type TenantCreateOrConnectWithoutServiciosRecepcionInput = {
+  where: Prisma.TenantWhereUniqueInput
+  create: Prisma.XOR<Prisma.TenantCreateWithoutServiciosRecepcionInput, Prisma.TenantUncheckedCreateWithoutServiciosRecepcionInput>
+}
+
+export type TenantUpsertWithoutServiciosRecepcionInput = {
+  update: Prisma.XOR<Prisma.TenantUpdateWithoutServiciosRecepcionInput, Prisma.TenantUncheckedUpdateWithoutServiciosRecepcionInput>
+  create: Prisma.XOR<Prisma.TenantCreateWithoutServiciosRecepcionInput, Prisma.TenantUncheckedCreateWithoutServiciosRecepcionInput>
+  where?: Prisma.TenantWhereInput
+}
+
+export type TenantUpdateToOneWithWhereWithoutServiciosRecepcionInput = {
+  where?: Prisma.TenantWhereInput
+  data: Prisma.XOR<Prisma.TenantUpdateWithoutServiciosRecepcionInput, Prisma.TenantUncheckedUpdateWithoutServiciosRecepcionInput>
+}
+
+export type TenantUpdateWithoutServiciosRecepcionInput = {
+  nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  correo?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
+  Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
+  auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
+  CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
+  clientes?: Prisma.ClienteUpdateManyWithoutTenantNestedInput
+  consignacionesEfectivo?: Prisma.ConsignacionEfectivoUpdateManyWithoutTenantNestedInput
+  cuentasCobro?: Prisma.CuentaCobroUpdateManyWithoutTenantNestedInput
+  CuentasPago?: Prisma.CuentasPagoUpdateManyWithoutTenantNestedInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoUpdateManyWithoutTenantNestedInput
+  direcciones?: Prisma.DireccionUpdateManyWithoutTenantNestedInput
+  Egresos?: Prisma.EgresosUpdateManyWithoutTenantNestedInput
+  empresas?: Prisma.EmpresaUpdateManyWithoutTenantNestedInput
+  EstadoServicio?: Prisma.EstadoServicioUpdateManyWithoutTenantNestedInput
+  geolocalizaciones?: Prisma.GeolocalizacionUpdateManyWithoutTenantNestedInput
+  metodosPago?: Prisma.MetodoPagoUpdateManyWithoutTenantNestedInput
+  nominas?: Prisma.NominaUpdateManyWithoutTenantNestedInput
+  ordenesServicio?: Prisma.OrdenServicioUpdateManyWithoutTenantNestedInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoUpdateManyWithoutTenantNestedInput
+  permisos?: Prisma.PermisoUpdateManyWithoutTenantNestedInput
+  PicoPlaca?: Prisma.PicoPlacaUpdateManyWithoutTenantNestedInput
+  ProductosFumigacion?: Prisma.ProductosFumigacionUpdateManyWithoutTenantNestedInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosUpdateManyWithoutTenantNestedInput
+  Proveedores?: Prisma.ProveedoresUpdateManyWithoutTenantNestedInput
+  servicios?: Prisma.ServicioUpdateManyWithoutTenantNestedInput
+  TerapiasPsicologos_TerapiasPsicologos_tenantIdToEmpresa?: Prisma.TerapiasPsicologosUpdateManyWithoutEmpresa_TerapiasPsicologos_tenantIdToEmpresaNestedInput
+  tiposServicios?: Prisma.TipoServicioUpdateManyWithoutTenantNestedInput
+  turnos?: Prisma.TurnoUpdateManyWithoutTenantNestedInput
+  usuarios?: Prisma.UsuarioUpdateManyWithoutTenantNestedInput
+  vehiculos?: Prisma.VehiculoUpdateManyWithoutTenantNestedInput
+  zonas?: Prisma.ZonaUpdateManyWithoutTenantNestedInput
+  consultorios?: Prisma.consultoriosUpdateManyWithoutTenantNestedInput
+}
+
+export type TenantUncheckedUpdateWithoutServiciosRecepcionInput = {
+  id?: Prisma.IntFieldUpdateOperationsInput | number
+  nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  correo?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
+  Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
+  auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
+  CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
+  clientes?: Prisma.ClienteUncheckedUpdateManyWithoutTenantNestedInput
+  consignacionesEfectivo?: Prisma.ConsignacionEfectivoUncheckedUpdateManyWithoutTenantNestedInput
+  cuentasCobro?: Prisma.CuentaCobroUncheckedUpdateManyWithoutTenantNestedInput
+  CuentasPago?: Prisma.CuentasPagoUncheckedUpdateManyWithoutTenantNestedInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoUncheckedUpdateManyWithoutTenantNestedInput
+  direcciones?: Prisma.DireccionUncheckedUpdateManyWithoutTenantNestedInput
+  Egresos?: Prisma.EgresosUncheckedUpdateManyWithoutTenantNestedInput
+  empresas?: Prisma.EmpresaUncheckedUpdateManyWithoutTenantNestedInput
+  EstadoServicio?: Prisma.EstadoServicioUncheckedUpdateManyWithoutTenantNestedInput
+  geolocalizaciones?: Prisma.GeolocalizacionUncheckedUpdateManyWithoutTenantNestedInput
+  metodosPago?: Prisma.MetodoPagoUncheckedUpdateManyWithoutTenantNestedInput
+  nominas?: Prisma.NominaUncheckedUpdateManyWithoutTenantNestedInput
+  ordenesServicio?: Prisma.OrdenServicioUncheckedUpdateManyWithoutTenantNestedInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoUncheckedUpdateManyWithoutTenantNestedInput
+  permisos?: Prisma.PermisoUncheckedUpdateManyWithoutTenantNestedInput
+  PicoPlaca?: Prisma.PicoPlacaUncheckedUpdateManyWithoutTenantNestedInput
+  ProductosFumigacion?: Prisma.ProductosFumigacionUncheckedUpdateManyWithoutTenantNestedInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosUncheckedUpdateManyWithoutTenantNestedInput
+  Proveedores?: Prisma.ProveedoresUncheckedUpdateManyWithoutTenantNestedInput
+  servicios?: Prisma.ServicioUncheckedUpdateManyWithoutTenantNestedInput
+  TerapiasPsicologos_TerapiasPsicologos_tenantIdToEmpresa?: Prisma.TerapiasPsicologosUncheckedUpdateManyWithoutEmpresa_TerapiasPsicologos_tenantIdToEmpresaNestedInput
+  tiposServicios?: Prisma.TipoServicioUncheckedUpdateManyWithoutTenantNestedInput
+  turnos?: Prisma.TurnoUncheckedUpdateManyWithoutTenantNestedInput
+  usuarios?: Prisma.UsuarioUncheckedUpdateManyWithoutTenantNestedInput
+  vehiculos?: Prisma.VehiculoUncheckedUpdateManyWithoutTenantNestedInput
+  zonas?: Prisma.ZonaUncheckedUpdateManyWithoutTenantNestedInput
+  consultorios?: Prisma.consultoriosUncheckedUpdateManyWithoutTenantNestedInput
+}
+
+export type TenantCreateWithoutCargosRecepcionInput = {
+  nombre: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  correo?: string | null
+  nit?: string | null
+  numero?: string | null
+  pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
+  Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
+  auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
+  CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
+  clientes?: Prisma.ClienteCreateNestedManyWithoutTenantInput
+  consignacionesEfectivo?: Prisma.ConsignacionEfectivoCreateNestedManyWithoutTenantInput
+  cuentasCobro?: Prisma.CuentaCobroCreateNestedManyWithoutTenantInput
+  CuentasPago?: Prisma.CuentasPagoCreateNestedManyWithoutTenantInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoCreateNestedManyWithoutTenantInput
+  direcciones?: Prisma.DireccionCreateNestedManyWithoutTenantInput
+  Egresos?: Prisma.EgresosCreateNestedManyWithoutTenantInput
+  empresas?: Prisma.EmpresaCreateNestedManyWithoutTenantInput
+  EstadoServicio?: Prisma.EstadoServicioCreateNestedManyWithoutTenantInput
+  geolocalizaciones?: Prisma.GeolocalizacionCreateNestedManyWithoutTenantInput
+  metodosPago?: Prisma.MetodoPagoCreateNestedManyWithoutTenantInput
+  nominas?: Prisma.NominaCreateNestedManyWithoutTenantInput
+  ordenesServicio?: Prisma.OrdenServicioCreateNestedManyWithoutTenantInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoCreateNestedManyWithoutTenantInput
+  permisos?: Prisma.PermisoCreateNestedManyWithoutTenantInput
+  PicoPlaca?: Prisma.PicoPlacaCreateNestedManyWithoutTenantInput
+  ProductosFumigacion?: Prisma.ProductosFumigacionCreateNestedManyWithoutTenantInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosCreateNestedManyWithoutTenantInput
+  Proveedores?: Prisma.ProveedoresCreateNestedManyWithoutTenantInput
+  servicios?: Prisma.ServicioCreateNestedManyWithoutTenantInput
+  TerapiasPsicologos_TerapiasPsicologos_tenantIdToEmpresa?: Prisma.TerapiasPsicologosCreateNestedManyWithoutEmpresa_TerapiasPsicologos_tenantIdToEmpresaInput
+  tiposServicios?: Prisma.TipoServicioCreateNestedManyWithoutTenantInput
+  turnos?: Prisma.TurnoCreateNestedManyWithoutTenantInput
+  usuarios?: Prisma.UsuarioCreateNestedManyWithoutTenantInput
+  vehiculos?: Prisma.VehiculoCreateNestedManyWithoutTenantInput
+  zonas?: Prisma.ZonaCreateNestedManyWithoutTenantInput
+  consultorios?: Prisma.consultoriosCreateNestedManyWithoutTenantInput
+}
+
+export type TenantUncheckedCreateWithoutCargosRecepcionInput = {
+  id?: number
+  nombre: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  correo?: string | null
+  nit?: string | null
+  numero?: string | null
+  pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
+  Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
+  auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
+  CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
+  clientes?: Prisma.ClienteUncheckedCreateNestedManyWithoutTenantInput
+  consignacionesEfectivo?: Prisma.ConsignacionEfectivoUncheckedCreateNestedManyWithoutTenantInput
+  cuentasCobro?: Prisma.CuentaCobroUncheckedCreateNestedManyWithoutTenantInput
+  CuentasPago?: Prisma.CuentasPagoUncheckedCreateNestedManyWithoutTenantInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoUncheckedCreateNestedManyWithoutTenantInput
+  direcciones?: Prisma.DireccionUncheckedCreateNestedManyWithoutTenantInput
+  Egresos?: Prisma.EgresosUncheckedCreateNestedManyWithoutTenantInput
+  empresas?: Prisma.EmpresaUncheckedCreateNestedManyWithoutTenantInput
+  EstadoServicio?: Prisma.EstadoServicioUncheckedCreateNestedManyWithoutTenantInput
+  geolocalizaciones?: Prisma.GeolocalizacionUncheckedCreateNestedManyWithoutTenantInput
+  metodosPago?: Prisma.MetodoPagoUncheckedCreateNestedManyWithoutTenantInput
+  nominas?: Prisma.NominaUncheckedCreateNestedManyWithoutTenantInput
+  ordenesServicio?: Prisma.OrdenServicioUncheckedCreateNestedManyWithoutTenantInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoUncheckedCreateNestedManyWithoutTenantInput
+  permisos?: Prisma.PermisoUncheckedCreateNestedManyWithoutTenantInput
+  PicoPlaca?: Prisma.PicoPlacaUncheckedCreateNestedManyWithoutTenantInput
+  ProductosFumigacion?: Prisma.ProductosFumigacionUncheckedCreateNestedManyWithoutTenantInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosUncheckedCreateNestedManyWithoutTenantInput
+  Proveedores?: Prisma.ProveedoresUncheckedCreateNestedManyWithoutTenantInput
+  servicios?: Prisma.ServicioUncheckedCreateNestedManyWithoutTenantInput
+  TerapiasPsicologos_TerapiasPsicologos_tenantIdToEmpresa?: Prisma.TerapiasPsicologosUncheckedCreateNestedManyWithoutEmpresa_TerapiasPsicologos_tenantIdToEmpresaInput
+  tiposServicios?: Prisma.TipoServicioUncheckedCreateNestedManyWithoutTenantInput
+  turnos?: Prisma.TurnoUncheckedCreateNestedManyWithoutTenantInput
+  usuarios?: Prisma.UsuarioUncheckedCreateNestedManyWithoutTenantInput
+  vehiculos?: Prisma.VehiculoUncheckedCreateNestedManyWithoutTenantInput
+  zonas?: Prisma.ZonaUncheckedCreateNestedManyWithoutTenantInput
+  consultorios?: Prisma.consultoriosUncheckedCreateNestedManyWithoutTenantInput
+}
+
+export type TenantCreateOrConnectWithoutCargosRecepcionInput = {
+  where: Prisma.TenantWhereUniqueInput
+  create: Prisma.XOR<Prisma.TenantCreateWithoutCargosRecepcionInput, Prisma.TenantUncheckedCreateWithoutCargosRecepcionInput>
+}
+
+export type TenantUpsertWithoutCargosRecepcionInput = {
+  update: Prisma.XOR<Prisma.TenantUpdateWithoutCargosRecepcionInput, Prisma.TenantUncheckedUpdateWithoutCargosRecepcionInput>
+  create: Prisma.XOR<Prisma.TenantCreateWithoutCargosRecepcionInput, Prisma.TenantUncheckedCreateWithoutCargosRecepcionInput>
+  where?: Prisma.TenantWhereInput
+}
+
+export type TenantUpdateToOneWithWhereWithoutCargosRecepcionInput = {
+  where?: Prisma.TenantWhereInput
+  data: Prisma.XOR<Prisma.TenantUpdateWithoutCargosRecepcionInput, Prisma.TenantUncheckedUpdateWithoutCargosRecepcionInput>
+}
+
+export type TenantUpdateWithoutCargosRecepcionInput = {
+  nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  correo?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
+  Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
+  auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
+  CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
+  clientes?: Prisma.ClienteUpdateManyWithoutTenantNestedInput
+  consignacionesEfectivo?: Prisma.ConsignacionEfectivoUpdateManyWithoutTenantNestedInput
+  cuentasCobro?: Prisma.CuentaCobroUpdateManyWithoutTenantNestedInput
+  CuentasPago?: Prisma.CuentasPagoUpdateManyWithoutTenantNestedInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoUpdateManyWithoutTenantNestedInput
+  direcciones?: Prisma.DireccionUpdateManyWithoutTenantNestedInput
+  Egresos?: Prisma.EgresosUpdateManyWithoutTenantNestedInput
+  empresas?: Prisma.EmpresaUpdateManyWithoutTenantNestedInput
+  EstadoServicio?: Prisma.EstadoServicioUpdateManyWithoutTenantNestedInput
+  geolocalizaciones?: Prisma.GeolocalizacionUpdateManyWithoutTenantNestedInput
+  metodosPago?: Prisma.MetodoPagoUpdateManyWithoutTenantNestedInput
+  nominas?: Prisma.NominaUpdateManyWithoutTenantNestedInput
+  ordenesServicio?: Prisma.OrdenServicioUpdateManyWithoutTenantNestedInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoUpdateManyWithoutTenantNestedInput
+  permisos?: Prisma.PermisoUpdateManyWithoutTenantNestedInput
+  PicoPlaca?: Prisma.PicoPlacaUpdateManyWithoutTenantNestedInput
+  ProductosFumigacion?: Prisma.ProductosFumigacionUpdateManyWithoutTenantNestedInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosUpdateManyWithoutTenantNestedInput
+  Proveedores?: Prisma.ProveedoresUpdateManyWithoutTenantNestedInput
+  servicios?: Prisma.ServicioUpdateManyWithoutTenantNestedInput
+  TerapiasPsicologos_TerapiasPsicologos_tenantIdToEmpresa?: Prisma.TerapiasPsicologosUpdateManyWithoutEmpresa_TerapiasPsicologos_tenantIdToEmpresaNestedInput
+  tiposServicios?: Prisma.TipoServicioUpdateManyWithoutTenantNestedInput
+  turnos?: Prisma.TurnoUpdateManyWithoutTenantNestedInput
+  usuarios?: Prisma.UsuarioUpdateManyWithoutTenantNestedInput
+  vehiculos?: Prisma.VehiculoUpdateManyWithoutTenantNestedInput
+  zonas?: Prisma.ZonaUpdateManyWithoutTenantNestedInput
+  consultorios?: Prisma.consultoriosUpdateManyWithoutTenantNestedInput
+}
+
+export type TenantUncheckedUpdateWithoutCargosRecepcionInput = {
+  id?: Prisma.IntFieldUpdateOperationsInput | number
+  nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  correo?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
+  Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
+  auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
+  CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
+  clientes?: Prisma.ClienteUncheckedUpdateManyWithoutTenantNestedInput
+  consignacionesEfectivo?: Prisma.ConsignacionEfectivoUncheckedUpdateManyWithoutTenantNestedInput
+  cuentasCobro?: Prisma.CuentaCobroUncheckedUpdateManyWithoutTenantNestedInput
+  CuentasPago?: Prisma.CuentasPagoUncheckedUpdateManyWithoutTenantNestedInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoUncheckedUpdateManyWithoutTenantNestedInput
+  direcciones?: Prisma.DireccionUncheckedUpdateManyWithoutTenantNestedInput
+  Egresos?: Prisma.EgresosUncheckedUpdateManyWithoutTenantNestedInput
+  empresas?: Prisma.EmpresaUncheckedUpdateManyWithoutTenantNestedInput
+  EstadoServicio?: Prisma.EstadoServicioUncheckedUpdateManyWithoutTenantNestedInput
+  geolocalizaciones?: Prisma.GeolocalizacionUncheckedUpdateManyWithoutTenantNestedInput
+  metodosPago?: Prisma.MetodoPagoUncheckedUpdateManyWithoutTenantNestedInput
+  nominas?: Prisma.NominaUncheckedUpdateManyWithoutTenantNestedInput
+  ordenesServicio?: Prisma.OrdenServicioUncheckedUpdateManyWithoutTenantNestedInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoUncheckedUpdateManyWithoutTenantNestedInput
+  permisos?: Prisma.PermisoUncheckedUpdateManyWithoutTenantNestedInput
+  PicoPlaca?: Prisma.PicoPlacaUncheckedUpdateManyWithoutTenantNestedInput
+  ProductosFumigacion?: Prisma.ProductosFumigacionUncheckedUpdateManyWithoutTenantNestedInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosUncheckedUpdateManyWithoutTenantNestedInput
+  Proveedores?: Prisma.ProveedoresUncheckedUpdateManyWithoutTenantNestedInput
+  servicios?: Prisma.ServicioUncheckedUpdateManyWithoutTenantNestedInput
+  TerapiasPsicologos_TerapiasPsicologos_tenantIdToEmpresa?: Prisma.TerapiasPsicologosUncheckedUpdateManyWithoutEmpresa_TerapiasPsicologos_tenantIdToEmpresaNestedInput
+  tiposServicios?: Prisma.TipoServicioUncheckedUpdateManyWithoutTenantNestedInput
+  turnos?: Prisma.TurnoUncheckedUpdateManyWithoutTenantNestedInput
+  usuarios?: Prisma.UsuarioUncheckedUpdateManyWithoutTenantNestedInput
+  vehiculos?: Prisma.VehiculoUncheckedUpdateManyWithoutTenantNestedInput
+  zonas?: Prisma.ZonaUncheckedUpdateManyWithoutTenantNestedInput
+  consultorios?: Prisma.consultoriosUncheckedUpdateManyWithoutTenantNestedInput
+}
+
+export type TenantCreateWithoutPagosRecepcionInput = {
+  nombre: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  correo?: string | null
+  nit?: string | null
+  numero?: string | null
+  pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
+  Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
+  auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
+  CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
+  clientes?: Prisma.ClienteCreateNestedManyWithoutTenantInput
+  consignacionesEfectivo?: Prisma.ConsignacionEfectivoCreateNestedManyWithoutTenantInput
+  cuentasCobro?: Prisma.CuentaCobroCreateNestedManyWithoutTenantInput
+  CuentasPago?: Prisma.CuentasPagoCreateNestedManyWithoutTenantInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoCreateNestedManyWithoutTenantInput
+  direcciones?: Prisma.DireccionCreateNestedManyWithoutTenantInput
+  Egresos?: Prisma.EgresosCreateNestedManyWithoutTenantInput
+  empresas?: Prisma.EmpresaCreateNestedManyWithoutTenantInput
+  EstadoServicio?: Prisma.EstadoServicioCreateNestedManyWithoutTenantInput
+  geolocalizaciones?: Prisma.GeolocalizacionCreateNestedManyWithoutTenantInput
+  metodosPago?: Prisma.MetodoPagoCreateNestedManyWithoutTenantInput
+  nominas?: Prisma.NominaCreateNestedManyWithoutTenantInput
+  ordenesServicio?: Prisma.OrdenServicioCreateNestedManyWithoutTenantInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoCreateNestedManyWithoutTenantInput
+  permisos?: Prisma.PermisoCreateNestedManyWithoutTenantInput
+  PicoPlaca?: Prisma.PicoPlacaCreateNestedManyWithoutTenantInput
+  ProductosFumigacion?: Prisma.ProductosFumigacionCreateNestedManyWithoutTenantInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosCreateNestedManyWithoutTenantInput
+  Proveedores?: Prisma.ProveedoresCreateNestedManyWithoutTenantInput
+  servicios?: Prisma.ServicioCreateNestedManyWithoutTenantInput
+  TerapiasPsicologos_TerapiasPsicologos_tenantIdToEmpresa?: Prisma.TerapiasPsicologosCreateNestedManyWithoutEmpresa_TerapiasPsicologos_tenantIdToEmpresaInput
+  tiposServicios?: Prisma.TipoServicioCreateNestedManyWithoutTenantInput
+  turnos?: Prisma.TurnoCreateNestedManyWithoutTenantInput
+  usuarios?: Prisma.UsuarioCreateNestedManyWithoutTenantInput
+  vehiculos?: Prisma.VehiculoCreateNestedManyWithoutTenantInput
+  zonas?: Prisma.ZonaCreateNestedManyWithoutTenantInput
+  consultorios?: Prisma.consultoriosCreateNestedManyWithoutTenantInput
+}
+
+export type TenantUncheckedCreateWithoutPagosRecepcionInput = {
+  id?: number
+  nombre: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  correo?: string | null
+  nit?: string | null
+  numero?: string | null
+  pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
+  Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
+  auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
+  CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
+  clientes?: Prisma.ClienteUncheckedCreateNestedManyWithoutTenantInput
+  consignacionesEfectivo?: Prisma.ConsignacionEfectivoUncheckedCreateNestedManyWithoutTenantInput
+  cuentasCobro?: Prisma.CuentaCobroUncheckedCreateNestedManyWithoutTenantInput
+  CuentasPago?: Prisma.CuentasPagoUncheckedCreateNestedManyWithoutTenantInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoUncheckedCreateNestedManyWithoutTenantInput
+  direcciones?: Prisma.DireccionUncheckedCreateNestedManyWithoutTenantInput
+  Egresos?: Prisma.EgresosUncheckedCreateNestedManyWithoutTenantInput
+  empresas?: Prisma.EmpresaUncheckedCreateNestedManyWithoutTenantInput
+  EstadoServicio?: Prisma.EstadoServicioUncheckedCreateNestedManyWithoutTenantInput
+  geolocalizaciones?: Prisma.GeolocalizacionUncheckedCreateNestedManyWithoutTenantInput
+  metodosPago?: Prisma.MetodoPagoUncheckedCreateNestedManyWithoutTenantInput
+  nominas?: Prisma.NominaUncheckedCreateNestedManyWithoutTenantInput
+  ordenesServicio?: Prisma.OrdenServicioUncheckedCreateNestedManyWithoutTenantInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoUncheckedCreateNestedManyWithoutTenantInput
+  permisos?: Prisma.PermisoUncheckedCreateNestedManyWithoutTenantInput
+  PicoPlaca?: Prisma.PicoPlacaUncheckedCreateNestedManyWithoutTenantInput
+  ProductosFumigacion?: Prisma.ProductosFumigacionUncheckedCreateNestedManyWithoutTenantInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosUncheckedCreateNestedManyWithoutTenantInput
+  Proveedores?: Prisma.ProveedoresUncheckedCreateNestedManyWithoutTenantInput
+  servicios?: Prisma.ServicioUncheckedCreateNestedManyWithoutTenantInput
+  TerapiasPsicologos_TerapiasPsicologos_tenantIdToEmpresa?: Prisma.TerapiasPsicologosUncheckedCreateNestedManyWithoutEmpresa_TerapiasPsicologos_tenantIdToEmpresaInput
+  tiposServicios?: Prisma.TipoServicioUncheckedCreateNestedManyWithoutTenantInput
+  turnos?: Prisma.TurnoUncheckedCreateNestedManyWithoutTenantInput
+  usuarios?: Prisma.UsuarioUncheckedCreateNestedManyWithoutTenantInput
+  vehiculos?: Prisma.VehiculoUncheckedCreateNestedManyWithoutTenantInput
+  zonas?: Prisma.ZonaUncheckedCreateNestedManyWithoutTenantInput
+  consultorios?: Prisma.consultoriosUncheckedCreateNestedManyWithoutTenantInput
+}
+
+export type TenantCreateOrConnectWithoutPagosRecepcionInput = {
+  where: Prisma.TenantWhereUniqueInput
+  create: Prisma.XOR<Prisma.TenantCreateWithoutPagosRecepcionInput, Prisma.TenantUncheckedCreateWithoutPagosRecepcionInput>
+}
+
+export type TenantUpsertWithoutPagosRecepcionInput = {
+  update: Prisma.XOR<Prisma.TenantUpdateWithoutPagosRecepcionInput, Prisma.TenantUncheckedUpdateWithoutPagosRecepcionInput>
+  create: Prisma.XOR<Prisma.TenantCreateWithoutPagosRecepcionInput, Prisma.TenantUncheckedCreateWithoutPagosRecepcionInput>
+  where?: Prisma.TenantWhereInput
+}
+
+export type TenantUpdateToOneWithWhereWithoutPagosRecepcionInput = {
+  where?: Prisma.TenantWhereInput
+  data: Prisma.XOR<Prisma.TenantUpdateWithoutPagosRecepcionInput, Prisma.TenantUncheckedUpdateWithoutPagosRecepcionInput>
+}
+
+export type TenantUpdateWithoutPagosRecepcionInput = {
+  nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  correo?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
+  Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
+  auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
+  CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
+  clientes?: Prisma.ClienteUpdateManyWithoutTenantNestedInput
+  consignacionesEfectivo?: Prisma.ConsignacionEfectivoUpdateManyWithoutTenantNestedInput
+  cuentasCobro?: Prisma.CuentaCobroUpdateManyWithoutTenantNestedInput
+  CuentasPago?: Prisma.CuentasPagoUpdateManyWithoutTenantNestedInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoUpdateManyWithoutTenantNestedInput
+  direcciones?: Prisma.DireccionUpdateManyWithoutTenantNestedInput
+  Egresos?: Prisma.EgresosUpdateManyWithoutTenantNestedInput
+  empresas?: Prisma.EmpresaUpdateManyWithoutTenantNestedInput
+  EstadoServicio?: Prisma.EstadoServicioUpdateManyWithoutTenantNestedInput
+  geolocalizaciones?: Prisma.GeolocalizacionUpdateManyWithoutTenantNestedInput
+  metodosPago?: Prisma.MetodoPagoUpdateManyWithoutTenantNestedInput
+  nominas?: Prisma.NominaUpdateManyWithoutTenantNestedInput
+  ordenesServicio?: Prisma.OrdenServicioUpdateManyWithoutTenantNestedInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoUpdateManyWithoutTenantNestedInput
+  permisos?: Prisma.PermisoUpdateManyWithoutTenantNestedInput
+  PicoPlaca?: Prisma.PicoPlacaUpdateManyWithoutTenantNestedInput
+  ProductosFumigacion?: Prisma.ProductosFumigacionUpdateManyWithoutTenantNestedInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosUpdateManyWithoutTenantNestedInput
+  Proveedores?: Prisma.ProveedoresUpdateManyWithoutTenantNestedInput
+  servicios?: Prisma.ServicioUpdateManyWithoutTenantNestedInput
+  TerapiasPsicologos_TerapiasPsicologos_tenantIdToEmpresa?: Prisma.TerapiasPsicologosUpdateManyWithoutEmpresa_TerapiasPsicologos_tenantIdToEmpresaNestedInput
+  tiposServicios?: Prisma.TipoServicioUpdateManyWithoutTenantNestedInput
+  turnos?: Prisma.TurnoUpdateManyWithoutTenantNestedInput
+  usuarios?: Prisma.UsuarioUpdateManyWithoutTenantNestedInput
+  vehiculos?: Prisma.VehiculoUpdateManyWithoutTenantNestedInput
+  zonas?: Prisma.ZonaUpdateManyWithoutTenantNestedInput
+  consultorios?: Prisma.consultoriosUpdateManyWithoutTenantNestedInput
+}
+
+export type TenantUncheckedUpdateWithoutPagosRecepcionInput = {
+  id?: Prisma.IntFieldUpdateOperationsInput | number
+  nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  correo?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
+  Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
+  auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
+  CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
+  clientes?: Prisma.ClienteUncheckedUpdateManyWithoutTenantNestedInput
+  consignacionesEfectivo?: Prisma.ConsignacionEfectivoUncheckedUpdateManyWithoutTenantNestedInput
+  cuentasCobro?: Prisma.CuentaCobroUncheckedUpdateManyWithoutTenantNestedInput
+  CuentasPago?: Prisma.CuentasPagoUncheckedUpdateManyWithoutTenantNestedInput
+  declaracionesEfectivo?: Prisma.DeclaracionEfectivoUncheckedUpdateManyWithoutTenantNestedInput
+  direcciones?: Prisma.DireccionUncheckedUpdateManyWithoutTenantNestedInput
+  Egresos?: Prisma.EgresosUncheckedUpdateManyWithoutTenantNestedInput
+  empresas?: Prisma.EmpresaUncheckedUpdateManyWithoutTenantNestedInput
+  EstadoServicio?: Prisma.EstadoServicioUncheckedUpdateManyWithoutTenantNestedInput
+  geolocalizaciones?: Prisma.GeolocalizacionUncheckedUpdateManyWithoutTenantNestedInput
+  metodosPago?: Prisma.MetodoPagoUncheckedUpdateManyWithoutTenantNestedInput
+  nominas?: Prisma.NominaUncheckedUpdateManyWithoutTenantNestedInput
+  ordenesServicio?: Prisma.OrdenServicioUncheckedUpdateManyWithoutTenantNestedInput
+  PaqueteAdquirido?: Prisma.PaqueteAdquiridoUncheckedUpdateManyWithoutTenantNestedInput
+  permisos?: Prisma.PermisoUncheckedUpdateManyWithoutTenantNestedInput
+  PicoPlaca?: Prisma.PicoPlacaUncheckedUpdateManyWithoutTenantNestedInput
+  ProductosFumigacion?: Prisma.ProductosFumigacionUncheckedUpdateManyWithoutTenantNestedInput
+  ProductosFumigacionSolicitados?: Prisma.ProductosFumigacionSolicitadosUncheckedUpdateManyWithoutTenantNestedInput
+  Proveedores?: Prisma.ProveedoresUncheckedUpdateManyWithoutTenantNestedInput
+  servicios?: Prisma.ServicioUncheckedUpdateManyWithoutTenantNestedInput
+  TerapiasPsicologos_TerapiasPsicologos_tenantIdToEmpresa?: Prisma.TerapiasPsicologosUncheckedUpdateManyWithoutEmpresa_TerapiasPsicologos_tenantIdToEmpresaNestedInput
+  tiposServicios?: Prisma.TipoServicioUncheckedUpdateManyWithoutTenantNestedInput
+  turnos?: Prisma.TurnoUncheckedUpdateManyWithoutTenantNestedInput
+  usuarios?: Prisma.UsuarioUncheckedUpdateManyWithoutTenantNestedInput
+  vehiculos?: Prisma.VehiculoUncheckedUpdateManyWithoutTenantNestedInput
+  zonas?: Prisma.ZonaUncheckedUpdateManyWithoutTenantNestedInput
+  consultorios?: Prisma.consultoriosUncheckedUpdateManyWithoutTenantNestedInput
+}
+
 export type TenantCreateWithoutAuditoriasInput = {
   nombre: string
   createdAt?: Date | string
@@ -5100,6 +6312,10 @@ export type TenantCreateWithoutAuditoriasInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
   clientes?: Prisma.ClienteCreateNestedManyWithoutTenantInput
@@ -5140,6 +6356,10 @@ export type TenantUncheckedCreateWithoutAuditoriasInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
   clientes?: Prisma.ClienteUncheckedCreateNestedManyWithoutTenantInput
@@ -5195,6 +6415,10 @@ export type TenantUpdateWithoutAuditoriasInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
   clientes?: Prisma.ClienteUpdateManyWithoutTenantNestedInput
@@ -5235,6 +6459,10 @@ export type TenantUncheckedUpdateWithoutAuditoriasInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
   clientes?: Prisma.ClienteUncheckedUpdateManyWithoutTenantNestedInput
@@ -5274,6 +6502,10 @@ export type TenantCreateWithoutProductosFumigacionInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -5314,6 +6546,10 @@ export type TenantUncheckedCreateWithoutProductosFumigacionInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -5369,6 +6605,10 @@ export type TenantUpdateWithoutProductosFumigacionInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -5409,6 +6649,10 @@ export type TenantUncheckedUpdateWithoutProductosFumigacionInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -5448,6 +6692,10 @@ export type TenantCreateWithoutProductosFumigacionSolicitadosInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -5488,6 +6736,10 @@ export type TenantUncheckedCreateWithoutProductosFumigacionSolicitadosInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -5543,6 +6795,10 @@ export type TenantUpdateWithoutProductosFumigacionSolicitadosInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -5583,6 +6839,10 @@ export type TenantUncheckedUpdateWithoutProductosFumigacionSolicitadosInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -5622,6 +6882,10 @@ export type TenantCreateWithoutProveedoresInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -5662,6 +6926,10 @@ export type TenantUncheckedCreateWithoutProveedoresInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -5717,6 +6985,10 @@ export type TenantUpdateWithoutProveedoresInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -5757,6 +7029,10 @@ export type TenantUncheckedUpdateWithoutProveedoresInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -5796,6 +7072,10 @@ export type TenantCreateWithoutPermisosInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -5836,6 +7116,10 @@ export type TenantUncheckedCreateWithoutPermisosInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -5891,6 +7175,10 @@ export type TenantUpdateWithoutPermisosInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -5931,6 +7219,10 @@ export type TenantUncheckedUpdateWithoutPermisosInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -5970,6 +7262,10 @@ export type TenantCreateWithoutDeclaracionesEfectivoInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -6010,6 +7306,10 @@ export type TenantUncheckedCreateWithoutDeclaracionesEfectivoInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -6065,6 +7365,10 @@ export type TenantUpdateWithoutDeclaracionesEfectivoInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -6105,6 +7409,10 @@ export type TenantUncheckedUpdateWithoutDeclaracionesEfectivoInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -6144,6 +7452,10 @@ export type TenantCreateWithoutConsignacionesEfectivoInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosCreateNestedManyWithoutTenantInput
@@ -6184,6 +7496,10 @@ export type TenantUncheckedCreateWithoutConsignacionesEfectivoInput = {
   nit?: string | null
   numero?: string | null
   pagina?: string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedCreateNestedManyWithoutTenantInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedCreateNestedManyWithoutTenantInput
   Anticipos?: Prisma.AnticiposUncheckedCreateNestedManyWithoutTenantInput
   auditorias?: Prisma.AuditoriaUncheckedCreateNestedManyWithoutTenantInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedCreateNestedManyWithoutTenantInput
@@ -6239,6 +7555,10 @@ export type TenantUpdateWithoutConsignacionesEfectivoInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUpdateManyWithoutTenantNestedInput
@@ -6279,6 +7599,10 @@ export type TenantUncheckedUpdateWithoutConsignacionesEfectivoInput = {
   nit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   numero?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pagina?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  serviciosRecepcion?: Prisma.ServicioRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  cargosRecepcion?: Prisma.CargoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  pagosRecepcion?: Prisma.PagoRecepcionUncheckedUpdateManyWithoutTenantNestedInput
+  movimientosCaja?: Prisma.MovimientoCajaUncheckedUpdateManyWithoutTenantNestedInput
   Anticipos?: Prisma.AnticiposUncheckedUpdateManyWithoutTenantNestedInput
   auditorias?: Prisma.AuditoriaUncheckedUpdateManyWithoutTenantNestedInput
   CitasPsicologos?: Prisma.CitasPsicologosUncheckedUpdateManyWithoutTenantNestedInput
@@ -6316,6 +7640,10 @@ export type TenantUncheckedUpdateWithoutConsignacionesEfectivoInput = {
  */
 
 export type TenantCountOutputType = {
+  serviciosRecepcion: number
+  cargosRecepcion: number
+  pagosRecepcion: number
+  movimientosCaja: number
   Anticipos: number
   auditorias: number
   CitasPsicologos: number
@@ -6349,6 +7677,10 @@ export type TenantCountOutputType = {
 }
 
 export type TenantCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  serviciosRecepcion?: boolean | TenantCountOutputTypeCountServiciosRecepcionArgs
+  cargosRecepcion?: boolean | TenantCountOutputTypeCountCargosRecepcionArgs
+  pagosRecepcion?: boolean | TenantCountOutputTypeCountPagosRecepcionArgs
+  movimientosCaja?: boolean | TenantCountOutputTypeCountMovimientosCajaArgs
   Anticipos?: boolean | TenantCountOutputTypeCountAnticiposArgs
   auditorias?: boolean | TenantCountOutputTypeCountAuditoriasArgs
   CitasPsicologos?: boolean | TenantCountOutputTypeCountCitasPsicologosArgs
@@ -6389,6 +7721,34 @@ export type TenantCountOutputTypeDefaultArgs<ExtArgs extends runtime.Types.Exten
    * Select specific fields to fetch from the TenantCountOutputType
    */
   select?: Prisma.TenantCountOutputTypeSelect<ExtArgs> | null
+}
+
+/**
+ * TenantCountOutputType without action
+ */
+export type TenantCountOutputTypeCountServiciosRecepcionArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.ServicioRecepcionWhereInput
+}
+
+/**
+ * TenantCountOutputType without action
+ */
+export type TenantCountOutputTypeCountCargosRecepcionArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.CargoRecepcionWhereInput
+}
+
+/**
+ * TenantCountOutputType without action
+ */
+export type TenantCountOutputTypeCountPagosRecepcionArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.PagoRecepcionWhereInput
+}
+
+/**
+ * TenantCountOutputType without action
+ */
+export type TenantCountOutputTypeCountMovimientosCajaArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.MovimientoCajaWhereInput
 }
 
 /**
@@ -6611,6 +7971,10 @@ export type TenantSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs =
   nit?: boolean
   numero?: boolean
   pagina?: boolean
+  serviciosRecepcion?: boolean | Prisma.Tenant$serviciosRecepcionArgs<ExtArgs>
+  cargosRecepcion?: boolean | Prisma.Tenant$cargosRecepcionArgs<ExtArgs>
+  pagosRecepcion?: boolean | Prisma.Tenant$pagosRecepcionArgs<ExtArgs>
+  movimientosCaja?: boolean | Prisma.Tenant$movimientosCajaArgs<ExtArgs>
   Anticipos?: boolean | Prisma.Tenant$AnticiposArgs<ExtArgs>
   auditorias?: boolean | Prisma.Tenant$auditoriasArgs<ExtArgs>
   CitasPsicologos?: boolean | Prisma.Tenant$CitasPsicologosArgs<ExtArgs>
@@ -6679,6 +8043,10 @@ export type TenantSelectScalar = {
 
 export type TenantOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "nombre" | "createdAt" | "updatedAt" | "correo" | "nit" | "numero" | "pagina", ExtArgs["result"]["tenant"]>
 export type TenantInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  serviciosRecepcion?: boolean | Prisma.Tenant$serviciosRecepcionArgs<ExtArgs>
+  cargosRecepcion?: boolean | Prisma.Tenant$cargosRecepcionArgs<ExtArgs>
+  pagosRecepcion?: boolean | Prisma.Tenant$pagosRecepcionArgs<ExtArgs>
+  movimientosCaja?: boolean | Prisma.Tenant$movimientosCajaArgs<ExtArgs>
   Anticipos?: boolean | Prisma.Tenant$AnticiposArgs<ExtArgs>
   auditorias?: boolean | Prisma.Tenant$auditoriasArgs<ExtArgs>
   CitasPsicologos?: boolean | Prisma.Tenant$CitasPsicologosArgs<ExtArgs>
@@ -6717,6 +8085,10 @@ export type TenantIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
 export type $TenantPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "Tenant"
   objects: {
+    serviciosRecepcion: Prisma.$ServicioRecepcionPayload<ExtArgs>[]
+    cargosRecepcion: Prisma.$CargoRecepcionPayload<ExtArgs>[]
+    pagosRecepcion: Prisma.$PagoRecepcionPayload<ExtArgs>[]
+    movimientosCaja: Prisma.$MovimientoCajaPayload<ExtArgs>[]
     Anticipos: Prisma.$AnticiposPayload<ExtArgs>[]
     auditorias: Prisma.$AuditoriaPayload<ExtArgs>[]
     CitasPsicologos: Prisma.$CitasPsicologosPayload<ExtArgs>[]
@@ -7151,6 +8523,10 @@ readonly fields: TenantFieldRefs;
  */
 export interface Prisma__TenantClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
+  serviciosRecepcion<T extends Prisma.Tenant$serviciosRecepcionArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$serviciosRecepcionArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ServicioRecepcionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  cargosRecepcion<T extends Prisma.Tenant$cargosRecepcionArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$cargosRecepcionArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$CargoRecepcionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  pagosRecepcion<T extends Prisma.Tenant$pagosRecepcionArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$pagosRecepcionArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PagoRecepcionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  movimientosCaja<T extends Prisma.Tenant$movimientosCajaArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$movimientosCajaArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$MovimientoCajaPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   Anticipos<T extends Prisma.Tenant$AnticiposArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$AnticiposArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AnticiposPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   auditorias<T extends Prisma.Tenant$auditoriasArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$auditoriasArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AuditoriaPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   CitasPsicologos<T extends Prisma.Tenant$CitasPsicologosArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Tenant$CitasPsicologosArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$CitasPsicologosPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
@@ -7603,6 +8979,102 @@ export type TenantDeleteManyArgs<ExtArgs extends runtime.Types.Extensions.Intern
    * Limit how many Tenants to delete.
    */
   limit?: number
+}
+
+/**
+ * Tenant.serviciosRecepcion
+ */
+export type Tenant$serviciosRecepcionArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the ServicioRecepcion
+   */
+  select?: Prisma.ServicioRecepcionSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the ServicioRecepcion
+   */
+  omit?: Prisma.ServicioRecepcionOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ServicioRecepcionInclude<ExtArgs> | null
+  where?: Prisma.ServicioRecepcionWhereInput
+  orderBy?: Prisma.ServicioRecepcionOrderByWithRelationInput | Prisma.ServicioRecepcionOrderByWithRelationInput[]
+  cursor?: Prisma.ServicioRecepcionWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.ServicioRecepcionScalarFieldEnum | Prisma.ServicioRecepcionScalarFieldEnum[]
+}
+
+/**
+ * Tenant.cargosRecepcion
+ */
+export type Tenant$cargosRecepcionArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the CargoRecepcion
+   */
+  select?: Prisma.CargoRecepcionSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the CargoRecepcion
+   */
+  omit?: Prisma.CargoRecepcionOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.CargoRecepcionInclude<ExtArgs> | null
+  where?: Prisma.CargoRecepcionWhereInput
+  orderBy?: Prisma.CargoRecepcionOrderByWithRelationInput | Prisma.CargoRecepcionOrderByWithRelationInput[]
+  cursor?: Prisma.CargoRecepcionWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.CargoRecepcionScalarFieldEnum | Prisma.CargoRecepcionScalarFieldEnum[]
+}
+
+/**
+ * Tenant.pagosRecepcion
+ */
+export type Tenant$pagosRecepcionArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the PagoRecepcion
+   */
+  select?: Prisma.PagoRecepcionSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the PagoRecepcion
+   */
+  omit?: Prisma.PagoRecepcionOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.PagoRecepcionInclude<ExtArgs> | null
+  where?: Prisma.PagoRecepcionWhereInput
+  orderBy?: Prisma.PagoRecepcionOrderByWithRelationInput | Prisma.PagoRecepcionOrderByWithRelationInput[]
+  cursor?: Prisma.PagoRecepcionWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.PagoRecepcionScalarFieldEnum | Prisma.PagoRecepcionScalarFieldEnum[]
+}
+
+/**
+ * Tenant.movimientosCaja
+ */
+export type Tenant$movimientosCajaArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the MovimientoCaja
+   */
+  select?: Prisma.MovimientoCajaSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the MovimientoCaja
+   */
+  omit?: Prisma.MovimientoCajaOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.MovimientoCajaInclude<ExtArgs> | null
+  where?: Prisma.MovimientoCajaWhereInput
+  orderBy?: Prisma.MovimientoCajaOrderByWithRelationInput | Prisma.MovimientoCajaOrderByWithRelationInput[]
+  cursor?: Prisma.MovimientoCajaWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.MovimientoCajaScalarFieldEnum | Prisma.MovimientoCajaScalarFieldEnum[]
 }
 
 /**

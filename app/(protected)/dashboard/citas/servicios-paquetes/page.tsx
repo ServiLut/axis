@@ -367,6 +367,9 @@ export default function TerapiasTratamientosPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {tenantId === 4 && process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true" && <Button variant="outline" onClick={() => router.push("/dashboard/recepcion")}>
+              Impresiones y adicionales
+            </Button>}
             <Button
               type="button"
               variant="outline"
