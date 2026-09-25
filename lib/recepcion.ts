@@ -58,7 +58,7 @@ export function quoteCargo(input: CargoInput, services: ReceptionService[], toda
   } else if (input.tipo === "TIEMPO_EXTRA") {
     if (!citaId) throw new Error("El tiempo extra debe estar vinculado a una reserva.");
     const minutes = input.minutosExtra;
-    if (!Number.isSafeInteger(minutes) || !minutes || minutes < 1 || minutes > 60) throw new Error("Registra de 1 a 60 minutos de exceso; más de una hora requiere revisión administrativa.");
+    if (!Number.isSafeInteger(minutes) || !minutes || minutes < 1 || minutes > 2147483647) throw new Error("Registra los minutos de exceso como un número entero positivo válido.");
     codigo = minutes <= 15 ? "EXTRA_CORTO" : minutes <= 30 ? "EXTRA_MEDIO" : "EXTRA_HORA";
     cantidad = 1;
     minutosExtra = minutes;

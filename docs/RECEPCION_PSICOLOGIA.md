@@ -19,7 +19,7 @@ Cada cargo conserva su descripción, cantidad y tarifa original. Cambiar el cat�
 
 La reserva inicia a la hora pactada; la entrega se solicita cinco minutos antes del final. La cortesía está incluida en el tiempo reservado. Por ejemplo, reserva 10:00–11:00: entrega prevista 10:55, cortesía hasta 11:00; 11:15 corresponde a 4.000, 11:16 y 11:30 a 8.000, 11:31 a la tarifa normal. El cobro no concede permiso para retrasar el siguiente turno.
 
-Los minutos se registran manualmente como enteros, después de verificar la entrega, con hora y responsable en la nota. No se han conectado lectores de huella, NFC, impresoras ni cámaras. La versión inicial deriva a revisión los excesos superiores a 60 minutos; falta definir si se repiten tramos u horas. Tampoco inventa una tarifa nueva para reservas contratadas menores de una hora: acepta horas completas o 55 minutos de uso más la cortesía; bloquea otras duraciones para revisión.
+Los minutos se registran manualmente como enteros, después de verificar la entrega, con hora y responsable en la nota. No se han conectado lectores de huella, NFC, impresoras ni cámaras. Se aplica literalmente el último tramo autorizado: todo exceso superior a 30 minutos genera una reserva normal, sin repetir automáticamente tramos u horas. La duración inicialmente contratada se registra aparte: admite horas completas o 55 minutos de uso más la cortesía; otras duraciones requieren definir su tarifa.
 
 ## Uso en recepción
 

@@ -139,7 +139,7 @@ export function Recepcion() {
               <select id="recepcion-reserva" className={selectStyle} value={citaId} required={tipo === "TIEMPO_EXTRA"} onChange={(e) => setCitaId(e.target.value)}>
                 <option value="">Seleccionar reserva</option>{professionalReservations.map((r) => <option key={r.id} value={r.id}>CITA-{r.id} · {time(r.inicio)}–{time(r.fin)} · {r.consultorio}</option>)}</select></div>
             <div className="space-y-2"><Label htmlFor="recepcion-cantidad">{tipo === "IMPRESION" ? "Cantidad de hojas" : "Minutos después del fin reservado"}</Label>
-              <Input id="recepcion-cantidad" type="number" min="1" max={tipo === "IMPRESION" ? 10000 : 60} step="1" required value={tipo === "IMPRESION" ? cantidad : minutos}
+              <Input id="recepcion-cantidad" type="number" min="1" max={tipo === "IMPRESION" ? 10000 : 2147483647} step="1" required value={tipo === "IMPRESION" ? cantidad : minutos}
                 onChange={(e) => tipo === "IMPRESION" ? setCantidad(e.target.value) : setMinutos(e.target.value)} /></div></div>
           {tipo === "TIEMPO_EXTRA" && <p className="text-sm text-slate-600">Los 5 minutos de cortesía están dentro de la hora. Exceso: 1–15 minutos, {money(data.catalogo.find((s) => s.codigo === "EXTRA_CORTO")?.precio || 0)}; 16–30 minutos, {money(data.catalogo.find((s) => s.codigo === "EXTRA_MEDIO")?.precio || 0)}; más de 30 minutos, tarifa normal del alquiler. Se cobra un solo tramo. Registra la entrega real del consultorio.</p>}
           <div className="space-y-2"><Label htmlFor="recepcion-nota">{tipo === "IMPRESION" ? "Observación (opcional)" : "Verificación de entrega: hora y responsable"}</Label>

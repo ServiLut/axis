@@ -8,7 +8,7 @@ const services: ReceptionService[] = [
   { codigo: "IMPRESION", nombre: "Impresión", unidad: "hoja", precio: "800.00" },
   { codigo: "EXTRA_CORTO", nombre: "1–15", unidad: "adicional", precio: "4000.00" },
   { codigo: "EXTRA_MEDIO", nombre: "16–30", unidad: "adicional", precio: "8000.00" },
-  { codigo: "EXTRA_HORA", nombre: "31–60", unidad: "hora", precio: "18900.00" },
+  { codigo: "EXTRA_HORA", nombre: "Más de 30 minutos", unidad: "reserva normal", precio: "18900.00" },
 ];
 const input: CargoInput = { solicitudId: id, fecha: "2026-09-25", profesionalId: 20, tipo: "IMPRESION", cantidad: 1, nota: "" };
 
@@ -19,11 +19,11 @@ test("printing multiplies positive integer sheets at the authorized 800 pesos ra
   for (const quantity of [0, -1, 1.5, NaN, Infinity, 10001]) assert.throws(() => quoteCargo({ ...input, cantidad: quantity }, services, input.fecha));
 });
 test("overtime uses the latest 15/30 minute rule, not the superseded hour-at-15 policy", () => {
-  for (const [minutes, expected] of [[1, "4000.00"], [14, "4000.00"], [15, "4000.00"], [16, "8000.00"], [30, "8000.00"], [31, "18900.00"], [60, "18900.00"]] as const) {
+  for (const [minutes, expected] of [[1, "4000.00"], [14, "4000.00"], [15, "4000.00"], [16, "8000.00"], [30, "8000.00"], [31, "18900.00"], [60, "18900.00"], [61, "18900.00"], [120, "18900.00"]] as const) {
     const quote = quoteCargo({ ...input, tipo: "TIEMPO_EXTRA", citaId: "1", minutosExtra: minutes, nota: "Salida validada por recepción" }, services, input.fecha);
     assert.equal(quote.total, expected); assert.equal(quote.cantidad, 1);
   }
-  for (const minutes of [0, -1, 1.5, 61, Infinity]) assert.throws(() => quoteCargo({ ...input, tipo: "TIEMPO_EXTRA", citaId: "1", minutosExtra: minutes, nota: "Revisado" }, services, input.fecha));
+  for (const minutes of [0, -1, 1.5, 2147483648, Infinity]) assert.throws(() => quoteCargo({ ...input, tipo: "TIEMPO_EXTRA", citaId: "1", minutosExtra: minutes, nota: "Revisado" }, services, input.fecha));
   assert.throws(() => quoteCargo({ ...input, tipo: "TIEMPO_EXTRA", minutosExtra: 1 }, services, input.fecha));
   assert.throws(() => quoteCargo({ ...input, tipo: "TIEMPO_EXTRA", citaId: "1", minutosExtra: 31, nota: "Revisado" }, services.filter((s) => s.codigo !== "EXTRA_HORA"), input.fecha));
 });

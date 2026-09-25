@@ -34,7 +34,7 @@ CREATE TABLE "CargoRecepcion" (
   CHECK (("codigo" = 'IMPRESION' AND "minutosExtra" IS NULL) OR
     ("codigo" = 'EXTRA_CORTO' AND "minutosExtra" IS NOT NULL AND "minutosExtra" BETWEEN 1 AND 15 AND "citaId" IS NOT NULL AND "cantidad" = 1) OR
     ("codigo" = 'EXTRA_MEDIO' AND "minutosExtra" IS NOT NULL AND "minutosExtra" BETWEEN 16 AND 30 AND "citaId" IS NOT NULL AND "cantidad" = 1) OR
-    ("codigo" = 'EXTRA_HORA' AND "minutosExtra" IS NOT NULL AND "minutosExtra" BETWEEN 31 AND 60 AND "citaId" IS NOT NULL AND "cantidad" = 1))
+    ("codigo" = 'EXTRA_HORA' AND "minutosExtra" IS NOT NULL AND "minutosExtra" >= 31 AND "citaId" IS NOT NULL AND "cantidad" = 1))
 );
 CREATE UNIQUE INDEX "CargoRecepcion_extra_unico" ON "CargoRecepcion" ("tenantId","citaId")
   WHERE "codigo" IN ('EXTRA_CORTO','EXTRA_MEDIO','EXTRA_HORA') AND NOT "anulado";

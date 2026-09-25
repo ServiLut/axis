@@ -15,7 +15,7 @@ async function fixture() {
     CREATE TABLE "Auditoria" ("id" BIGSERIAL PRIMARY KEY,"tenantId" INTEGER,"entidad" TEXT,"entidadId" TEXT,"accion" TEXT);
     INSERT INTO "Tenant" VALUES (4),(9);
     INSERT INTO "Usuario" VALUES (10,4,'Recepción','Prueba'),(20,4,'Profesional','Uno'),(21,4,'Profesional','Dos'),(90,9,'Otro','Sistema');
-    INSERT INTO "CitasPsicologos" VALUES (1),(2),(3),(4),(5),(6),(7),(8);`);
+    INSERT INTO "CitasPsicologos" VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9);`);
   await db.exec(readFileSync("docs/sql/2026-09-24-caja-diaria.sql", "utf8"));
   await db.exec(readFileSync("docs/sql/2026-09-25-recepcion.sql", "utf8"));
   const state = { tenantId: 4, rol: "ADMIN", activo: true, aprobado: true, auditFail: false, hourly: 18900, rentalCount: 1 };
@@ -92,16 +92,16 @@ test("Postgres: sale, partial/shared payment and reversal leave exact balances a
 test("Postgres: server enforces current tariff boundaries, immutable prices and one extra per reservation", async () => {
   const f = await fixture();
   try {
-    for (const [i, minutes] of [1,14,15,16,30,31,60].entries()) {
+    for (const [i, minutes] of [1,14,15,16,30,31,60,61].entries()) {
       const result = await f.create({ tipo: "TIEMPO_EXTRA", cantidad: 1, citaId: String(i + 1), minutosExtra: minutes, nota: "Entrega verificada por recepción" });
       assert.ok("id" in result, JSON.stringify(result));
     }
     const totals = await f.db.query<{ minutosExtra: number; total: string }>(`SELECT "minutosExtra","total"::text FROM "CargoRecepcion" ORDER BY "id"`);
-    assert.deepEqual(totals.rows.map((r) => r.total), ["4000.00","4000.00","4000.00","8000.00","8000.00","18900.00","18900.00"]);
+    assert.deepEqual(totals.rows.map((r) => r.total), ["4000.00","4000.00","4000.00","8000.00","8000.00","18900.00","18900.00","18900.00"]);
     assert.ok("error" in await f.create({ tipo: "TIEMPO_EXTRA", citaId: "1", minutosExtra: 30, nota: "Segunda solicitud" }));
     f.state.hourly = 20000;
-    assert.ok("id" in await f.create({ tipo: "TIEMPO_EXTRA", citaId: "8", minutosExtra: 31, nota: "Tarifa del catálogo" }));
-    assert.equal((await f.db.query<{ total: string }>(`SELECT "total"::text FROM "CargoRecepcion" WHERE "citaId" = 8`)).rows[0].total, "20000.00");
+    assert.ok("id" in await f.create({ tipo: "TIEMPO_EXTRA", citaId: "9", minutosExtra: 31, nota: "Tarifa del catálogo" }));
+    assert.equal((await f.db.query<{ total: string }>(`SELECT "total"::text FROM "CargoRecepcion" WHERE "citaId" = 9`)).rows[0].total, "20000.00");
     assert.ok("success" in await f.actions.updateReceptionRate("valid", "IMPRESION", "900.00", "Tarifa autorizada de prueba"));
     assert.ok("error" in await f.actions.updateReceptionRate("valid", "EXTRA_HORA", "25000.00", "No duplicar tarifa"));
     f.state.rentalCount = 2;
