@@ -66,7 +66,8 @@ test("restoring cancelled appointments cannot bypass professional/room conflicts
   f.state.ownerValid = true; f.state.active = false;
   assert.ok((await f.appointments.restoreCitaCancelada("valid", 1)).error);
   f.state.active = true;
-  assert.equal((await f.appointments.restoreCitaCancelada("valid", 1)).success, true);
+  const restored = await f.appointments.restoreCitaCancelada("valid", 1);
+  assert.ok("success" in restored && restored.success);
   assert.equal(f.state.writes, 1); assert.equal(f.state.audits, 1); assert.ok(f.state.locks > 0);
 });
 
