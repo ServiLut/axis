@@ -41,10 +41,10 @@ const getAdminUser = async (token: string): Promise<AdminContext> => {
 
   const usuario = await prisma.usuario.findUnique({
     where: { id: payload.userId },
-    select: { id: true, tenantId: true, rol: true },
+    select: { id: true, tenantId: true, rol: true, activo: true },
   });
 
-  if (!usuario || !usuario.rol) return { error: "Usuario no encontrado" };
+  if (!usuario || !usuario.rol || !usuario.activo) return { error: "Usuario no encontrado o inactivo" };
   if (!ADMIN_ROLES.includes(usuario.rol)) {
     return { error: "Acceso denegado" };
   }
@@ -116,10 +116,6 @@ const terapiasCatalogWhere = (
     return parsedTenantId ? { tenantId: parsedTenantId } : {};
   }
 
-  // El flujo actual de citas del tenant de psicólogos carga TerapiasPsicologos
-  // como catálogo global; mantenerlo igual evita ocultar datos existentes.
-  if (user.tenantId === 4) return {};
-
   return { tenantId: user.tenantId };
 };
 
@@ -136,9 +132,7 @@ const getOwnedTerapia = async (
   return prisma.terapiasPsicologos.findFirst({
     where: {
       id: BigInt(id),
-      ...(user.tenantId === 4
-        ? {}
-        : user.rol === Rol.SU_ADMIN && targetTenantId
+      ...(user.rol === Rol.SU_ADMIN && targetTenantId
         ? { tenantId: targetTenantId }
         : tenantWhere(user)),
     },

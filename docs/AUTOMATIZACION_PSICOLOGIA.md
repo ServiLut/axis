@@ -146,3 +146,31 @@ instalación 4.0.3 lo soporte: verificar versión/proveedor antes de migrar el n
 
 Evidencias locales sin claves: `.tmp/n8n-alertas-sandra-verificado.png` y
 `.tmp/n8n-axis-produccion-verificado.png`. No subir `.env.psicologos-n8n.local`.
+
+## Reparaciones verificadas el 26 de septiembre, 15:10 Bogotá
+
+- Se cotejaron los 50 registros visibles del catálogo de PSICOLOGOS. Los 48
+  registros clínicos antiguos estaban asociados al tenant 1, sin empresa. No
+  tenían paquetes adquiridos fuera del tenant 4. Una transacción serializable
+  corrigió solamente tenant y empresa, conservando IDs, precios y sesiones.
+  Se guardó copia anterior privada y 48 eventos de auditoría.
+- La API de producción devuelve ahora 48 servicios activos del tenant 4 y
+  empresa 3, incluido certificado de apoyo emocional a 200.000 COP. Los otros
+  dos registros permanecen inactivos. No se duplicó el catálogo.
+- Se eliminó la excepción que permitía a operadores de Psicólogos consultar y
+  modificar terapias de otros tenants. Las pruebas comprueban aislamiento y
+  denegación a usuarios inactivos. Los scripts de reparación fallan ante cambios
+  respecto de la evidencia; no ejecutarlos nuevamente sobre datos ya corregidos.
+- Chatwoot rechazaba SMTP con 535 por una contraseña fija antigua en Compose.
+  Se cambió a la variable de entorno y se verificó el envío real desde Rails.
+  Se conservaron imagen, volúmenes y canales existentes. Los dos correos llegaron
+  a Spam de la cuenta empresarial y se movieron a Recibidos. La titular debe
+  completar la confirmación y crear su contraseña.
+- Se verificó visualmente el número empresarial +57 301 6818845. Evolution API
+  2.3.7 responde y se creó una instancia exclusiva `psicologos-en-colombia`.
+  Todavía no está vinculada al teléfono: crear una instancia no equivale a
+  tener WhatsApp conectado. Las instancias de otros negocios no se modificaron.
+
+Las credenciales y copias privadas están excluidas de Git (`.env*`, `.tmp/`).
+Los correos de confirmación no se sustituyen por cambios manuales en la base de
+usuarios: el alta y la contraseña siguen bajo control de la titular.
