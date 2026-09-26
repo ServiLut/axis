@@ -21,6 +21,7 @@ COPY . .
 # Usamos variables para habilitar el cache de Next.js entre builds
 # Esto es lo que realmente acelera la compilación de 4 min a < 2 min.
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_PUBLIC_RECEPCION_ENABLED=true
 RUN --mount=type=cache,target=/app/.next/cache \
     npm run build
 
@@ -31,6 +32,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_PUBLIC_RECEPCION_ENABLED=true
 
 # Creamos un usuario de sistema para mayor seguridad
 RUN addgroup --system --gid 1001 nodejs
