@@ -195,7 +195,7 @@ export default function CitasPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
-  const { role, loading: roleLoading } = useUserRole();
+  const { role, tenantId, loading: roleLoading } = useUserRole();
 
   // Permission State
   const [canDownloadExcel, setCanDownloadExcel] = useState(false);
@@ -711,6 +711,10 @@ export default function CitasPage() {
   };
 
   const handleEditPayment = (cita: Cita) => {
+      if (tenantId === 4 && process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true") {
+        router.push("/dashboard/contabilidad/caja");
+        return;
+      }
       setPaymentCita(cita);
       setNewMetodoPago(cita.metodoPago || "");
       setNewEstadoPago(cita.estadoPago || EstadoPagoOrden.PENDIENTE);
@@ -1132,7 +1136,7 @@ export default function CitasPage() {
                            <div 
                              className="flex flex-col gap-1 cursor-pointer hover:bg-slate-100 p-1 rounded transition-colors group relative"
                              onClick={() => handleEditPayment(cita)}
-                             title="Click para editar pago"
+                             title={tenantId === 4 ? "Abrir caja para registrar el dinero recibido" : "Editar estado de pago"}
                            >
                                <div className="flex items-center justify-between">
                                  <span className="text-xs text-slate-600">{cita.metodoPago || 'No especificado'}</span>
@@ -1190,9 +1194,11 @@ export default function CitasPage() {
                                      <RotateCcw className="mr-2 h-4 w-4" /> Restaurar como Programada
                                  </DropdownMenuItem>
                              )}
-                             <DropdownMenuItem onClick={() => handleTogglePago(cita.id)} className={cita.estadoPago === EstadoPagoOrden.CONCILIADO ? "text-orange-600" : "text-green-600"}>
+                             <DropdownMenuItem onClick={() => tenantId === 4 && process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true"
+                               ? router.push("/dashboard/contabilidad/caja") : handleTogglePago(cita.id)} className={cita.estadoPago === EstadoPagoOrden.CONCILIADO ? "text-orange-600" : "text-green-600"}>
                                  <CheckCircle className="mr-2 h-4 w-4" /> 
-                                 {cita.estadoPago === EstadoPagoOrden.CONCILIADO ? "Marcar como Pendiente" : "Marcar como Conciliado"}
+                                 {tenantId === 4 && process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true" ? "Registrar cobro en caja" :
+                                   cita.estadoPago === EstadoPagoOrden.CONCILIADO ? "Marcar como Pendiente" : "Marcar como Conciliado"}
                              </DropdownMenuItem>
                              <DropdownMenuItem onClick={() => handleCopy(cita)}><Copy className="mr-2 h-4 w-4" /> Copiar info</DropdownMenuItem>
                              <DropdownMenuItem onClick={() => {

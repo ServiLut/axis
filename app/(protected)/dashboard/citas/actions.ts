@@ -1317,6 +1317,9 @@ export async function toggleCitaPago(token: string, citaId: number) {
       select: { tenantId: true },
     });
 
+    if (usuario?.tenantId === 4 && process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true")
+      return { error: "Registra el dinero recibido en Contabilidad → Caja diaria. Cambiar la etiqueta de pago no crea un ingreso." };
+
     const cita = await prisma.citasPsicologos.findFirst({
         where: { id: BigInt(citaId), tenantId: usuario?.tenantId },
         select: { estadoPago: true }
@@ -1368,6 +1371,9 @@ export async function updateCitaPago(
       where: { id: payload.userId },
       select: { tenantId: true },
     });
+
+    if (usuario?.tenantId === 4 && process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true")
+      return { error: "Registra el dinero recibido en Contabilidad → Caja diaria. Cambiar la etiqueta de pago no crea un ingreso." };
 
     const citaPrevia = await prisma.citasPsicologos.findFirst({
         where: { id: BigInt(citaId), tenantId: usuario?.tenantId },

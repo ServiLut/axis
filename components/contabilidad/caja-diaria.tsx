@@ -8,10 +8,11 @@ import { bogotaToday } from "@/lib/bogota-date";
 import { CAJA_METHODS, summarizeCaja, validateCajaInput, type CajaInput, type CajaMovement } from "@/lib/caja";
 import { createCajaMovement, getCajaMovements } from "@/app/(protected)/dashboard/contabilidad/caja/actions";
 import { toast } from "sonner";
+import { CobrosServicios } from "@/components/contabilidad/cobros-servicios";
 
 const methodLabels = { EFECTIVO: "Efectivo", TRANSFERENCIA: "Transferencia", TARJETA: "Tarjeta", OTRO: "Otro" };
 const currency = (cents: number) => new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 2 }).format(cents / 100);
-const emptyForm = { tipo: "INGRESO" as CajaInput["tipo"], metodoPago: "EFECTIVO" as CajaInput["metodoPago"], monto: "", concepto: "", referencia: "" };
+const emptyForm = { tipo: "EGRESO" as CajaInput["tipo"], metodoPago: "EFECTIVO" as CajaInput["metodoPago"], monto: "", concepto: "", referencia: "" };
 const selectClass = "h-11 w-full rounded-md border border-input bg-white px-3 text-sm";
 
 export function CajaDiaria() {
@@ -82,9 +83,12 @@ export function CajaDiaria() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Caja diaria</h1>
           <p className="mt-2 text-sm text-slate-600">{process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true"
-            ? "Los pagos y devoluciones de impresiones y adicionales aparecen automáticamente. Registra aquí otros movimientos una sola vez. Los pagos base de citas conservan su circuito actual."
+            ? "Los cobros registrados de citas, paquetes, impresiones y adicionales aparecen aquí por fecha y medio. Los gastos se registran abajo una sola vez. Un estado CONCILIADO anterior no demuestra ingreso en caja ni en banco."
             : "Registra ingresos y gastos manuales. Este registro es independiente de los cobros de citas."}</p>
         </div>
+
+        {process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true" &&
+          <CobrosServicios fecha={fecha} revision={revision} onSaved={() => setRevision((value) => value + 1)} />}
         <div className="flex flex-wrap items-center gap-3">
           <Label htmlFor="caja-fecha">Día de los movimientos</Label>
           <Input id="caja-fecha" type="date" value={fecha} max={bogotaToday()} disabled={saving} className="w-auto bg-white"
@@ -117,7 +121,11 @@ export function CajaDiaria() {
         )}
 
         <form onSubmit={save} className="rounded-lg border bg-white p-5">
-          <h2 className="mb-4 text-lg font-semibold">Nuevo movimiento</h2>
+          <h2 className="mb-4 text-lg font-semibold">Gasto u otro movimiento</h2>
+          <p className="mb-4 text-sm text-slate-600">Para consultas y paquetes usa «Registrar pago» arriba. Para impresiones y tiempo extra usa Recepción. Aquí puedes registrar internet, servicios, compras y otros gastos efectivamente pagados.</p>
+          {form.tipo === "INGRESO" && <p className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            Ingreso manual solo para conceptos que no sean citas, paquetes, impresiones ni adicionales; esos cobros ya se crean automáticamente en el libro.
+          </p>}
           <fieldset disabled={saving || loading || Boolean(error)} className="grid gap-4 md:grid-cols-3 disabled:opacity-60">
             <div className="space-y-2"><Label htmlFor="caja-tipo">Tipo</Label>
               <select id="caja-tipo" className={selectClass} value={form.tipo} onChange={(e) => setForm({ ...form, tipo: e.target.value as CajaInput["tipo"] })}>

@@ -97,6 +97,8 @@ export async function createEgreso(
 
   try {
     const user = await requireFinanceUser(token);
+    if (user.tenantId === 4 && process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true")
+      return { success: false as const, error: "Registra el gasto en Contabilidad → Caja diaria para que aparezca una sola vez con fecha y medio de pago." };
     const values = await validExpense(data, user.tenantId);
     const egreso = await prisma.$transaction(async (tx) => {
       const row = await tx.egresos.create({ data: { ...values, tenantId: user.tenantId } });

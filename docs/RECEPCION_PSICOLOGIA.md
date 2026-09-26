@@ -1,8 +1,8 @@
 # Recepción: impresiones y adicionales
 
-## Estado de entrega — 25 de septiembre de 2026
+## Estado de entrega — 26 de septiembre de 2026
 
-Implementado y probado en la copia de desarrollo de Axis. **No instalado en producción.** El módulo está desactivado por defecto y requiere las tablas nuevas y `NEXT_PUBLIC_RECEPCION_ENABLED=true` tanto al compilar como al ejecutar. No se modificaron citas ni pagos reales durante esta implementación.
+Recepción se instaló en producción en el commit `86ea4556ef8d2d7643d2b22605b6632e0293b33d`. Las tablas, tarifas y el acceso del backend fueron verificados en PostgreSQL, y Dokploy informó despliegue terminado. La sesión de Axis disponible pidió iniciar sesión; el recorrido completo autenticado de la interfaz sigue pendiente. Esta misma bandera habilita el módulo nuevo de cobros de citas y paquetes, documentado en `CAJA_INTEGRADA_PSICOLOGIA.md`, una vez instalada su migración adicional. No se modificaron citas ni pagos reales durante esta implementación.
 
 ## Tarifas autorizadas
 

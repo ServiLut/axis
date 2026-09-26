@@ -20,7 +20,7 @@ export function loadServerModule<T>(filename: string, mocks: Record<string, unkn
       module: loadedModule, exports: loadedModule.exports, Date, Intl, URL, FormData, Error, console: { error() {}, warn() {} }, process: { env },
       require: (id: string) => {
         if (id in mocks) return mocks[id];
-        if (["@/lib/bogota-date", "@/lib/client-phone", "@/lib/caja", "@/lib/constants/tenants", "@/lib/recepcion", "@/lib/booking", "@/lib/booking-server", "@/lib/psychology-access"].includes(id)) {
+        if (["@/lib/bogota-date", "@/lib/client-phone", "@/lib/caja", "@/lib/constants/tenants", "@/lib/recepcion", "@/lib/pago-servicio", "@/lib/booking", "@/lib/booking-server", "@/lib/psychology-access"].includes(id)) {
           return load(resolve(id.replace("@/", "") + ".ts"));
         }
         if (["./bogota-date", "./caja", "./booking", "./constants/tenants"].includes(id)) return load(resolve(dirname(absolute), `${id}.ts`));

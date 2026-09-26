@@ -8,7 +8,7 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
-    "test:psicologia": "tsx --test tests/psychology-inputs.test.ts tests/caja.test.ts tests/psychology-actions.test.ts tests/recepcion.test.ts tests/recepcion-sql.test.ts tests/booking-finance.test.ts",
+    "test:psicologia": "tsx --test tests/psychology-inputs.test.ts tests/caja.test.ts tests/psychology-actions.test.ts tests/recepcion.test.ts tests/recepcion-sql.test.ts tests/booking-finance.test.ts tests/pago-servicio.test.ts tests/pago-servicio-sql.test.ts tests/pago-servicio-actions.test.ts",
     "sb:init": "supabase init",
     "sb:start": "supabase start",
     "sb:stop": "supabase stop",

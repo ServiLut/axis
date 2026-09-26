@@ -62,7 +62,7 @@ interface Egreso {
 }
 
 export default function EgresosPage() {
-  const { role, loading: roleLoading } = useUserRole();
+  const { role, tenantId, loading: roleLoading } = useUserRole();
   const router = useRouter();
 
   const [egresos, setEgresos] = useState<Egreso[]>([]);
@@ -213,12 +213,15 @@ export default function EgresosPage() {
               Gestión de Egresos
             </h1>
             <p className="text-sm text-slate-600 mt-1">
-              Registro y control de gastos y salidas de dinero.
+              {tenantId === 4 && process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true"
+                ? "Histórico de egresos del módulo anterior. Registra los gastos nuevos en Caja diaria con fecha y medio de pago. Los históricos sin medio requieren revisión."
+                : "Registro y control de gastos y salidas de dinero."}
             </p>
           </div>
-          <Button onClick={handleOpenCreateModal} className="bg-indigo-600 hover:bg-indigo-700">
+          <Button onClick={tenantId === 4 && process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true"
+            ? () => router.push("/dashboard/contabilidad/caja") : handleOpenCreateModal} className="bg-indigo-600 hover:bg-indigo-700">
             <Plus className="h-4 w-4 mr-2" />
-            Registrar Egreso
+            {tenantId === 4 && process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true" ? "Registrar en libro diario" : "Registrar Egreso"}
           </Button>
         </div>
       </div>

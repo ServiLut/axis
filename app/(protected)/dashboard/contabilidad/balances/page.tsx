@@ -147,7 +147,7 @@ export default function BalancesPage() {
                     </div>}
                     {balance.caja && <div className="mb-5 rounded-lg border bg-white p-4 text-sm"><h2 className="font-semibold">Libro diario · movimientos de dinero registrados</h2>
                       <p className="mt-2">Entradas: ${Number(balance.caja.ingresos).toLocaleString("es-CO")} · Salidas: ${Number(balance.caja.egresos).toLocaleString("es-CO")} · Neto: ${Number(balance.caja.neto).toLocaleString("es-CO")}</p>
-                      <p className="mt-2 text-xs text-slate-600">Incluye pagos y devoluciones de recepción y otros movimientos manuales por su fecha real. No incluye automáticamente los pagos base de citas; no sumar ambas vistas como si fueran una conciliación bancaria. El neto no incluye saldo inicial.</p>
+                      <p className="mt-2 text-xs text-slate-600">Incluye pagos registrados de citas y paquetes, recepción, devoluciones y movimientos manuales por fecha efectiva. Los estados CONCILIADO anteriores y los egresos históricos sin medio no se convierten automáticamente en dinero. No sumes esta vista con el valor de servicios ni la presentes como saldo bancario: no incluye saldo inicial ni extracto verificado.</p>
                     </div>}
                     {/* Main Summary Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

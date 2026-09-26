@@ -75,13 +75,14 @@ function cajaFixture({ enabled = true, tenantId = 4, rol = "ASESOR", activo = tr
     usuario: { findUnique: async () => { userReads++; return { id: 10, tenantId, rol, activo, aprobado }; } },
     $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
       const sql = strings.join("?"); queries.push({ sql, values });
-      if (sql.includes("INSERT INTO")) return duplicate ? [] : [{ id: 1n }];
-      if (sql.includes('"solicitudId"')) return [{ ...input, id: "1" }];
+      if (sql.includes("INSERT INTO")) return [{ id: 1n }];
+      if (sql.includes('SELECT "id"::text') && duplicate) return [{ ...input, id: "1" }];
       return [];
     },
+    $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma),
   };
   return { queries, userReads: () => userReads, actions: loadServerModule<typeof Caja>("app/(protected)/dashboard/contabilidad/caja/actions.ts", {
-    "@/lib/prisma": prisma, "@/lib/auth": auth,
+    "@/lib/prisma": prisma, "@/lib/auth": auth, "@/lib/audit": { createAuditLog: async () => {} },
   }, enabled ? { NEXT_PUBLIC_CAJA_DIARIA_ENABLED: "true" } : {}) };
 }
 
@@ -106,18 +107,18 @@ test("cash parameterizes user input and stamps user/tenant from the authenticate
   const fixture = cajaFixture();
   const concept = "Papelería '); DROP TABLE fake; --";
   assert.equal((await fixture.actions.createCajaMovement("valid", { ...input, concepto: concept })).success, true);
-  assert.equal(fixture.queries.length, 1);
-  assert.ok(!fixture.queries[0].sql.includes(concept));
-  assert.ok(fixture.queries[0].values.includes(concept));
-  assert.equal(fixture.queries[0].values[0], 4);
-  assert.equal(fixture.queries[0].values[1], 10);
+  assert.equal(fixture.queries.length, 3);
+  assert.ok(!fixture.queries[2].sql.includes(concept));
+  assert.ok(fixture.queries[2].values.includes(concept));
+  assert.equal(fixture.queries[2].values[0], 4);
+  assert.equal(fixture.queries[2].values[1], 10);
 });
 
 test("cash retries return the existing movement; conflicting reuse cannot create another", async () => {
   const fixture = cajaFixture({ duplicate: true });
   assert.equal((await fixture.actions.createCajaMovement("valid", input)).id, "1");
   assert.ok((await fixture.actions.createCajaMovement("valid", { ...input, monto: "200.00" })).error);
-  assert.ok(fixture.queries[0].sql.includes("ON CONFLICT"));
+  assert.equal(fixture.queries.length, 4);
 });
 
 test("invalid cash amounts and dates cannot reach the ledger", async () => {
