@@ -87,14 +87,15 @@ export function CajaDiaria() {
             : "Registra ingresos y gastos manuales. Este registro es independiente de los cobros de citas."}</p>
         </div>
 
-        {process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true" &&
-          <CobrosServicios fecha={fecha} revision={revision} onSaved={() => setRevision((value) => value + 1)} />}
         <div className="flex flex-wrap items-center gap-3">
           <Label htmlFor="caja-fecha">Día de los movimientos</Label>
           <Input id="caja-fecha" type="date" value={fecha} max={bogotaToday()} disabled={saving} className="w-auto bg-white"
             onChange={(e) => { if (e.target.value && e.target.validity.valid) setFecha(e.target.value); }} />
           <Button variant="outline" disabled={saving} onClick={() => setRevision((value) => value + 1)}>Actualizar</Button>
         </div>
+
+        {process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true" &&
+          <CobrosServicios fecha={fecha} revision={revision} onSaved={() => setRevision((value) => value + 1)} />}
 
         {loading ? <p role="status">Cargando movimientos…</p> : error ? (
           <p role="alert" className="text-red-700">{error}</p>

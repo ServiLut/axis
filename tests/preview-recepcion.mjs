@@ -37,6 +37,23 @@ export const refundReceptionPayment=async(_,id,fecha)=>{const p=pagos.find(p=>p.
 export const updateReceptionRate=async(_,code,price)=>{catalogo.find(s=>s.codigo===code).precio=price;return {success:true};};
 export const getCajaMovements=async(_,fecha)=>({movements:movements.filter(m=>m.fecha===fecha)});
 export const createCajaMovement=async()=>({error:'La vista de prueba solo registra pagos de recepción.'});
+const dateBogota=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Bogota',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+const serviceFixture={origen:'CITA',id:'901',fecha:dateBogota(),persona:'Paciente de prueba',valor:'50000.00',registrado:'0.00',estado:'PENDIENTE',situacion:'PENDIENTE'};
+const servicePayments=[];
+export const getPendientesPsicologia=async(_,fecha,offset=0)=>{const all=Number(serviceFixture.registrado)<Number(serviceFixture.valor)?[serviceFixture]:[];
+ return {items:all.slice(offset,offset+200),summary:{total:all.length,vencidos:serviceFixture.fecha<fecha?all.length:0,sinLibro:0,legado:0,
+ valorVencido:serviceFixture.fecha<fecha?(Number(serviceFixture.valor)-Number(serviceFixture.registrado)).toFixed(2):'0.00',valorSinLibro:'0.00'}};};
+export const getPagosServicioDelDia=async(_,fecha)=>({pagos:servicePayments.filter(p=>p.fecha===fecha),admin:true});
+export const registrarPagoServicio=async(_,input)=>{const amount=input.lineas.reduce((sum,l)=>sum+Number(l.monto),0);
+ if(Number(serviceFixture.registrado)+amount>Number(serviceFixture.valor))return {error:'El pago supera el saldo.'};
+ const ids=[];for(const l of input.lineas){const id=String(servicePayments.length+1);ids.push(id);
+  servicePayments.push({id,origen:input.origen,origenId:input.origenId,monto:Number(l.monto).toFixed(2),metodoPago:l.metodoPago,referencia:l.referencia,reversado:false,fecha:input.fecha});
+  movements.push({id:'s'+id,fecha:input.fecha,tipo:'INGRESO',metodoPago:l.metodoPago,monto:Number(l.monto).toFixed(2),concepto:'Pago de cita ficticia',referencia:l.referencia,creadoPor:'Prueba local',createdAt:new Date().toISOString()});}
+ serviceFixture.registrado=(Number(serviceFixture.registrado)+amount).toFixed(2);return {success:true,ids};};
+export const devolverPagoServicio=async(_,id,fecha)=>{const p=servicePayments.find(x=>x.id===id);if(!p)return {error:'Pago ficticio no encontrado'};
+ if(!p.reversado){p.reversado=true;serviceFixture.registrado=(Number(serviceFixture.registrado)-Number(p.monto)).toFixed(2);
+ movements.push({id:'d'+id,fecha,tipo:'EGRESO',metodoPago:p.metodoPago,monto:p.monto,concepto:'Devolución ficticia',referencia:'DEV-'+id,creadoPor:'Prueba local',createdAt:new Date().toISOString()});}
+ return {success:true};};
 `;
 await build({stdin:{contents:`import React from 'react';import {createRoot} from 'react-dom/client';import {Toaster} from 'sonner';
 import {Recepcion} from './components/contabilidad/recepcion';import {CajaDiaria} from './components/contabilidad/caja-diaria';
