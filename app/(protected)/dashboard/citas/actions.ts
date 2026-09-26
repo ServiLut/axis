@@ -11,6 +11,7 @@ import { requireFinanceUser } from "@/lib/psychology-access";
 import { bookingTimes } from "@/lib/booking";
 import { lockAndValidateBooking, normalizedRental } from "@/lib/booking-server";
 import { cajaAmountInCents } from "@/lib/caja";
+import { getPackagePaymentState } from "@/lib/package-payment";
 
 // Helper to serialize BigInt and Decimal
 const serializeBigInt = (obj: unknown): unknown => {
@@ -642,6 +643,7 @@ export async function createCita(token: string, formData: FormData) {
             });
         }
 
+        const packagePayment = finalPaqueteId ? await getPackagePaymentState(tx, usuario.tenantId, finalPaqueteId) : null;
         const created = await tx.citasPsicologos.create({
           data: {
             tenantId: usuario.tenantId,
@@ -659,6 +661,7 @@ export async function createCita(token: string, formData: FormData) {
             metodoPago,
             paqueteId: finalPaqueteId,
             consultorioId,
+            ...(packagePayment ?? {}),
           },
         });
         await createAuditLog({
@@ -1258,13 +1261,14 @@ export async function restoreCitaCancelada(token: string, citaId: number) {
 
       // Condicionamos la transición desde el estado cancelado para que una solicitud
       // repetida no reserve una segunda sesión.
+      const packagePayment = cita.paqueteId ? await getPackagePaymentState(tx, usuario.tenantId, cita.paqueteId) : null;
       const restoredCita = await tx.citasPsicologos.updateMany({
         where: {
           id: cita.id,
           tenantId: usuario.tenantId,
           realizada: null,
         },
-        data: { realizada: false },
+        data: { realizada: false, ...(packagePayment ?? {}) },
       });
 
       if (restoredCita.count === 0) {
@@ -1285,7 +1289,7 @@ export async function restoreCitaCancelada(token: string, citaId: number) {
         detalles: {
           descripcion: "Cancelación de cita revertida",
           antes: { realizada: null },
-          despues: { realizada: false },
+          despues: { realizada: false, ...(packagePayment ?? {}) },
         },
         tx,
       });
@@ -1585,6 +1589,8 @@ export async function updateCita(token: string, id: number, formData: FormData) 
             }
         }
 
+        const paymentPackageId = newPaqueteId ?? currentCita.paqueteId;
+        const packagePayment = paymentPackageId ? await getPackagePaymentState(tx, usuario.tenantId, paymentPackageId) : null;
         const citaActualizada = await tx.citasPsicologos.update({
           where: { id: BigInt(id), tenantId: usuario.tenantId },
           data: {
@@ -1596,7 +1602,8 @@ export async function updateCita(token: string, id: number, formData: FormData) 
             observacion,
             metodoPago,
             consultorioId,
-            ...(newPaqueteId && { paqueteId: newPaqueteId })
+            ...(newPaqueteId && { paqueteId: newPaqueteId }),
+            ...(packagePayment ?? {}),
           },
         });
 

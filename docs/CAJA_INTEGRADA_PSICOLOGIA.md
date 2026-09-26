@@ -7,7 +7,7 @@ En **Contabilidad → Caja diaria** se muestran ingresos y salidas por el día e
 ## Circuitos de captura
 
 - **Consulta directa:** seleccionar la cita, confirmar dinero recibido y registrar hasta cuatro líneas de pago. Por ejemplo, $20.000 en efectivo y $30.000 por transferencia generan dos movimientos de caja enlazados a una sola cita. Se admite pago parcial; no se admite pagar más que el precio de la cita. La fecha de la cita puede ser futura y la caja conserva la fecha efectiva del ingreso.
-- **Paquete:** registrar el cobro contra el paquete completo. Las sesiones consumidas no generan un segundo ingreso. El paquete adquirido antes del 26/09/2026 requiere revisión de sus soportes históricos antes de registrar un cobro nuevo.
+- **Paquete:** registrar el cobro contra el paquete completo. Las sesiones consumidas no generan un segundo ingreso. El pago completo actualiza las citas vigentes del paquete; una devolución vuelve a calcular su estado, y las citas posteriores heredan los pagos que constan en el libro. Los paquetes cancelados no se ofrecen como cobros ordinarios. El paquete adquirido antes del 26/09/2026 requiere revisión de sus soportes históricos antes de registrar un cobro nuevo.
 - **Impresiones y tiempo extra:** siguen su captura en Recepción; al confirmar pago crean automáticamente el movimiento en la misma caja.
 - **Gastos:** internet, servicios públicos, papelería y otros pagos efectuados se registran como EGRESO en Caja diaria, con fecha, medio, importe, concepto y referencia. El antiguo módulo de Egresos conserva su historial, pero no admite nuevas partidas para PSICOLOGOS cuando Recepción está activa, para evitar dobles gastos.
 - **Otros ingresos:** solo para conceptos distintos de consultas, paquetes, impresiones o adicionales. Se debe revisar el concepto y soporte para evitar duplicidad.
@@ -17,6 +17,8 @@ Un pago no efectivo requiere referencia. La aplicación bloquea la reutilizació
 ## Alertas y lectura de cifras
 
 El panel muestra rojo para citas o paquetes anteriores cuyo valor no consta completamente en el nuevo libro, y para citas posteriores al inicio de este circuito que aparecen marcadas como cobradas sin asiento. **Rojo significa investigar o cobrar según el soporte**, no prueba deuda, pérdida ni responsabilidad personal. Los estados de pago históricos se muestran para verificación separada y no se inventan como dinero recibido. Los contadores cubren toda la consulta; la lista se carga en páginas de 200 registros para poder recorrerla completa.
+
+La columna Paciente / profesional muestra al titular del paquete: paciente en terapia y profesional en alquileres. La consulta respeta el sistema activo y no toma nombres de otra empresa.
 
 Un comprobante adjunto o la marca `CONCILIADO` en Axis no demuestra por sí solo el abono en banco. Se requiere cotejo contra caja física, pasarela o extracto. El libro tampoco descubre citas que jamás fueron creadas: eso requiere cruzar agenda, WhatsApp, Doctoralia, comprobantes y banco.
 
@@ -28,7 +30,7 @@ Un comprobante adjunto o la marca `CONCILIADO` en Axis no demuestra por sí solo
 4. En una copia de pruebas, recorrer con sesión autenticada consulta con dos medios, paquete, pago parcial, gasto y devolución. Confirmar que cada movimiento aparece exactamente una vez en el libro y que una cita cancelada no se ofrece como cobro ordinario.
 5. En producción verificar visualmente la pantalla con un usuario de PSICOLOGOS. No crear pagos ficticios en producción. Si falta la sesión, registrar esta cobertura como pendiente.
 
-`npm.cmd run test:psicologia` cubre 35 casos; `npm.cmd run build` compila con la función activa y variables ficticias locales.
+`npm.cmd run test:psicologia` cubre 37 casos, incluidos pagos parciales y mixtos, sincronización del paquete con sus citas, devolución, identificación del profesional y exclusión de paquetes cancelados.
 
 ## Límites para la siguiente fase
 

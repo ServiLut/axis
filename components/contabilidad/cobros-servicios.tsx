@@ -119,7 +119,7 @@ export function CobrosServicios({ fecha, revision, onSaved }: { fecha: string; r
       <p className="text-xs text-slate-500">Se muestran {items.length} de {summary.total} registros; carga más para revisar toda la lista. Un pago de paquete se registra una vez en el paquete; sus sesiones no se vuelven a sumar como ingreso.</p>
       <div className="max-h-80 overflow-auto rounded-md border">
         <table className="w-full min-w-[650px] text-left text-sm"><thead className="sticky top-0 bg-slate-100"><tr>
-          <th className="p-2">Fecha</th><th className="p-2">Origen</th><th className="p-2">Cliente</th><th className="p-2 text-right">Saldo sin registrar</th><th className="p-2">Revisión</th>
+          <th className="p-2">Fecha</th><th className="p-2">Origen</th><th className="p-2">Paciente / profesional</th><th className="p-2 text-right">Saldo sin registrar</th><th className="p-2">Revisión</th>
         </tr></thead><tbody>{items.length === 0 ? <tr><td colSpan={5} className="p-4 text-slate-600">No hay pendientes en el rango consultado.</td></tr> : items.map((item) =>
           <tr key={`${item.origen}-${item.id}`} className={`border-t ${item.situacion === "SIN_LIBRO" || item.fecha < fecha && item.situacion === "PENDIENTE" ? "bg-red-50" : ""}`}>
             <td className="p-2">{item.fecha}</td><td className="p-2">{item.origen === "CITA" ? "Cita" : "Paquete"} #{item.id}</td>

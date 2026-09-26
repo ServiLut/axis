@@ -7,6 +7,7 @@ import { createAuditLog } from "@/lib/audit";
 import { bogotaToday, getBogotaDayRange } from "@/lib/bogota-date";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
+import { syncPackagePaymentState } from "@/lib/package-payment";
 
 type ExistingLine = { id: string; citaId: string | null; paqueteId: string | null; fecha: string;
   monto: string; metodoPago: string; referencia: string; linea: number };
@@ -37,27 +38,30 @@ export async function getPendientesPsicologia(token: string, fecha: string, offs
         WHERE "tenantId" = ${user.tenantId} AND NOT "reversado" AND "paqueteId" IS NOT NULL GROUP BY "paqueteId"
       ), pendientes AS (
       SELECT 'CITA' AS "origen", (c."id"::text) AS "id", (c."fechaCita" AT TIME ZONE 'America/Bogota')::date::text AS "fecha",
-        CONCAT_WS(' ',cl."nombre",cl."apellido") AS "persona", c."valor"::numeric(12,2)::text AS "valor",
+        COALESCE(NULLIF(CONCAT_WS(' ',cl."nombre",cl."apellido"),''),CONCAT_WS(' ',u."nombre",u."apellido")) AS "persona", c."valor"::numeric(12,2)::text AS "valor",
         COALESCE(pc.total,0)::numeric(12,2)::text AS "registrado", COALESCE(c."estadoPago"::text,'PENDIENTE') AS "estado",
         CASE WHEN c."estadoPago" IN ('CONCILIADO','CONSIGNADO','EFECTIVO_DECLARADO') AND COALESCE(pc.total,0)=0
           THEN CASE WHEN (c."fechaCita" AT TIME ZONE 'America/Bogota')::date < '2026-09-26'::date
             THEN 'REVISAR_LEGADO' ELSE 'SIN_LIBRO' END
           ELSE 'PENDIENTE' END AS "situacion"
       FROM "CitasPsicologos" c LEFT JOIN "Cliente" cl ON cl."id"=c."pacienteId" AND cl."tenantId"=c."tenantId"
+      LEFT JOIN "Usuario" u ON u."id"=c."psicologoId" AND u."tenantId"=c."tenantId" AND c."pacienteId" IS NULL
       LEFT JOIN cobros_cita pc ON pc."citaId"=c."id"
       WHERE c."tenantId"=${user.tenantId} AND c."paqueteId" IS NULL AND c."realizada" IS DISTINCT FROM NULL
         AND c."fechaCita" IS NOT NULL AND c."valor">0
         AND c."valor" > COALESCE(pc.total,0)
       UNION ALL
       SELECT 'PAQUETE', p."id"::text, (p."fechaCompra" AT TIME ZONE 'America/Bogota')::date::text,
-        CONCAT_WS(' ',cl."nombre",cl."apellido"), p."precioPagado"::numeric(12,2)::text,
+        COALESCE(NULLIF(CONCAT_WS(' ',cl."nombre",cl."apellido"),''),CONCAT_WS(' ',u."nombre",u."apellido")), p."precioPagado"::numeric(12,2)::text,
         COALESCE(pp.total,0)::numeric(12,2)::text,
         p."estado"::text,
         CASE WHEN (p."fechaCompra" AT TIME ZONE 'America/Bogota')::date < '2026-09-26'::date
           AND COALESCE(pp.total,0)=0 THEN 'REVISAR_LEGADO' ELSE 'PENDIENTE' END
       FROM "PaqueteAdquirido" p LEFT JOIN "Cliente" cl ON cl."id"=p."clienteId" AND cl."tenantId"=p."tenantId"
+      LEFT JOIN "Usuario" u ON u."id"=p."usuarioId" AND u."tenantId"=p."tenantId" AND p."clienteId" IS NULL
       LEFT JOIN cobros_paquete pp ON pp."paqueteId"=p."id"
-      WHERE p."tenantId"=${user.tenantId} AND p."precioPagado">0 AND p."fechaCompra" IS NOT NULL
+      WHERE p."tenantId"=${user.tenantId} AND p."estado" IS DISTINCT FROM 'CANCELADO'
+        AND p."precioPagado">0 AND p."fechaCompra" IS NOT NULL
         AND (p."fechaCompra" AT TIME ZONE 'America/Bogota')::date <= ${fecha}::date
         AND p."precioPagado">COALESCE(pp.total,0)
       )
@@ -101,8 +105,9 @@ export async function registrarPagoServicio(token: string, input: PagoServicioIn
         id: BigInt(data.origenId), tenantId: user.tenantId, paqueteId: null, realizada: { not: null } },
         select: { valor: true, estadoPago: true, fechaCita: true } }) : null;
       const paquete = data.origen === "PAQUETE" ? await tx.paqueteAdquirido.findFirst({ where: {
-        id: BigInt(data.origenId), tenantId: user.tenantId }, select: { precioPagado: true, fechaCompra: true } }) : null;
+        id: BigInt(data.origenId), tenantId: user.tenantId }, select: { precioPagado: true, fechaCompra: true, estado: true } }) : null;
       if (!cita && !paquete) throw new Error("La cita o el paquete no está disponible en PSICOLOGOS.");
+      if (paquete?.estado === "CANCELADO") throw new Error("El paquete está cancelado. Revisa su devolución o ajuste; no registres un cobro ordinario.");
       if (cita?.estadoPago && cita.estadoPago !== "PENDIENTE")
         throw new Error("Esta cita ya tiene un estado de cobro anterior. Revisa el comprobante y el banco antes de registrar otro pago.");
       if (paquete?.fechaCompra && paquete.fechaCompra < new Date("2026-09-26T05:00:00Z"))
@@ -139,15 +144,21 @@ export async function registrarPagoServicio(token: string, input: PagoServicioIn
             ${line.monto}::numeric,${line.metodoPago},${line.referencia},${data.solicitudId}::uuid,${index + 1}) RETURNING "id"::text`;
         ids.push(payment[0].id);
       }
-      if (cita) await tx.citasPsicologos.update({ where: { id: BigInt(data.origenId) },
-        data: { estadoPago: already + data.totalCentavos === Math.round(valor * 100) ? "CONCILIADO" : "PENDIENTE",
-          metodoPago: data.lineas.length === 1 ? data.lineas[0].metodoPago : "MIXTO" } });
+      if (cita) {
+        const methods = await tx.$queryRaw<{ metodo: string }[]>`SELECT CASE WHEN COUNT(DISTINCT "metodoPago")>1
+          THEN 'MIXTO' ELSE MIN("metodoPago") END AS "metodo" FROM "PagoServicioPsicologia"
+          WHERE "tenantId"=${user.tenantId} AND "citaId"=${data.origenId}::bigint AND NOT "reversado"`;
+        await tx.citasPsicologos.update({ where: { id: BigInt(data.origenId) },
+          data: { estadoPago: already + data.totalCentavos === Math.round(valor * 100) ? "CONCILIADO" : "PENDIENTE",
+            metodoPago: methods[0].metodo } });
+      }
+      if (paquete) await syncPackagePaymentState(tx, user.tenantId, BigInt(data.origenId));
       await createAuditLog({ tenantId: user.tenantId, usuarioId: user.id, accion: "CREATE", entidad: "PagoServicioPsicologia",
         entidadId: ids.join(","), detalles: { origen: data.origen, origenId: data.origenId, fecha: data.fecha,
           lineas: data.lineas.map((line) => ({ metodoPago: line.metodoPago, monto: line.monto, referencia: line.referencia })) }, tx });
       return ids;
     });
-    revalidatePath("/dashboard/contabilidad/caja"); revalidatePath("/dashboard/citas");
+    revalidatePath("/dashboard/contabilidad/caja"); revalidatePath("/dashboard/citas"); revalidatePath("/dashboard");
     return { success: true, ids };
   } catch (error) { return fail(error); }
 }
@@ -193,10 +204,11 @@ export async function devolverPagoServicio(token: string, id: string, fecha: str
       await tx.$executeRaw`UPDATE "PagoServicioPsicologia" SET "reversado"=TRUE,
         "reversoMovimientoId"=${movement[0].id}::bigint WHERE "tenantId"=${user.tenantId} AND "id"=${id}::bigint`;
       if (pago.citaId) await tx.citasPsicologos.update({ where: { id: BigInt(pago.citaId) }, data: { estadoPago: "PENDIENTE" } });
+      if (pago.paqueteId) await syncPackagePaymentState(tx, user.tenantId, BigInt(pago.paqueteId));
       await createAuditLog({ tenantId: user.tenantId, usuarioId: user.id, accion: "REFUND", entidad: "PagoServicioPsicologia",
         entidadId: id, detalles: { fecha, motivo: reason, movimientoId: movement[0].id }, tx });
     });
-    revalidatePath("/dashboard/contabilidad/caja"); revalidatePath("/dashboard/citas");
+    revalidatePath("/dashboard/contabilidad/caja"); revalidatePath("/dashboard/citas"); revalidatePath("/dashboard");
     return { success: true };
   } catch (error) { return fail(error); }
 }

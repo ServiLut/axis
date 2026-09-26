@@ -6,6 +6,8 @@ import { PGlite, type Transaction } from "@electric-sql/pglite";
 import { loadServerModule } from "./load-server-module";
 import type * as Actions from "../app/(protected)/dashboard/contabilidad/caja/pagos-actions";
 import type * as Cash from "../app/(protected)/dashboard/contabilidad/caja/actions";
+import type * as PackagePayment from "../lib/package-payment";
+import type { Prisma } from "../prisma/generated/prisma/client";
 
 async function fixture() {
   const db = new PGlite();
@@ -24,7 +26,9 @@ async function fixture() {
     INSERT INTO "CitasPsicologos" VALUES
       (1,4,100,'2026-09-26T14:00:00Z',50000,'PENDIENTE',false,NULL,NULL),
       (2,4,100,'2026-09-25T14:00:00Z',20000,'CONCILIADO',true,NULL,'EFECTIVO');
-    INSERT INTO "PaqueteAdquirido" VALUES(3,4,100,'2026-09-26T15:00:00Z',90000,'ACTIVO');`);
+    INSERT INTO "PaqueteAdquirido" VALUES(3,4,100,'2026-09-26T15:00:00Z',90000,'ACTIVO');
+    ALTER TABLE "CitasPsicologos" ADD "psicologoId" integer;
+    ALTER TABLE "PaqueteAdquirido" ADD "usuarioId" integer;`);
   await db.exec(readFileSync("docs/sql/2026-09-24-caja-diaria.sql", "utf8"));
   await db.exec(readFileSync("docs/sql/2026-09-25-recepcion.sql", "utf8"));
   await db.exec(readFileSync("docs/sql/2026-09-26-pagos-servicios.sql", "utf8"));
@@ -46,10 +50,14 @@ async function fixture() {
           await driver.query(`UPDATE "CitasPsicologos" SET "estadoPago"=$1,"metodoPago"=COALESCE($2,"metodoPago") WHERE "id"=$3`,
             [data.estadoPago,data.metodoPago || null,where.id.toString()]);
         },
+        updateMany: async ({ where, data }: { where: { tenantId: number; paqueteId: bigint }; data: { estadoPago: string; metodoPago: string | null } }) =>
+          driver.query(`UPDATE "CitasPsicologos" SET "estadoPago"=$1,"metodoPago"=$2
+            WHERE "tenantId"=$3 AND "paqueteId"=$4 AND "realizada" IS NOT NULL`,
+            [data.estadoPago,data.metodoPago,where.tenantId,where.paqueteId.toString()]),
       },
       paqueteAdquirido: { findFirst: async ({ where }: { where: { id: bigint; tenantId: number } }) =>
-        (await driver.query<{ precioPagado: string; fechaCompra: Date }>(
-          `SELECT "precioPagado"::text,"fechaCompra" FROM "PaqueteAdquirido" WHERE "id"=$1 AND "tenantId"=$2`,
+        (await driver.query<{ precioPagado: string; fechaCompra: Date; estado: string }>(
+          `SELECT "precioPagado"::text,"fechaCompra","estado" FROM "PaqueteAdquirido" WHERE "id"=$1 AND "tenantId"=$2`,
           [where.id.toString(),where.tenantId])).rows[0] || null },
     };
   };
@@ -73,7 +81,9 @@ async function fixture() {
     } },
   }, { NEXT_PUBLIC_RECEPCION_ENABLED: "true" });
   const count = async (table: string) => Number((await db.query<{ n: string }>(`SELECT count(*)::text AS n FROM "${table}"`)).rows[0].n);
-  return { db, actions, cashActions, state, count };
+  const packagePayment = loadServerModule<typeof PackagePayment>("lib/package-payment.ts", {}, { NEXT_PUBLIC_RECEPCION_ENABLED:"true" });
+  return { db, actions, cashActions, state, count,
+    packageState: () => packagePayment.getPackagePaymentState(prisma as unknown as Prisma.TransactionClient,4,3n) };
 }
 
 test("cobro mixto de cita se escribe una vez en el libro, se reintenta y no supera el saldo", async () => {
@@ -115,11 +125,19 @@ test("no convierte conciliaciones viejas en ingresos y falla en bloque si no hay
 test("el paquete se cobra una sola vez y la devolución abre saldo sin borrar el ingreso", async () => {
   const f = await fixture();
   try {
+    await f.db.exec(`INSERT INTO "CitasPsicologos"("id","tenantId","paqueteId","realizada","estadoPago")
+      VALUES(10,4,3,false,'PENDIENTE'),(11,4,3,true,'PENDIENTE'),(12,4,3,NULL,'PENDIENTE'),(13,9,3,false,'PENDIENTE');`);
+    assert.equal(await f.packageState(),null);
     const payment = await f.actions.registrarPagoServicio("valid", { origen: "PAQUETE", origenId: "3", fecha: "2026-09-26", solicitudId: randomUUID(), confirmado: true,
       lineas: [{ metodoPago: "TRANSFERENCIA", monto: "90000", referencia: "PKG-001" }] });
     assert.ok("ids" in payment, JSON.stringify(payment));
     if (!("ids" in payment)) return;
     assert.equal(await f.count("MovimientoCaja"),1);
+    assert.equal((await f.packageState())?.estadoPago,"CONCILIADO");
+    const appointments = await f.db.query<{ id: number; estadoPago: string; metodoPago: string | null }>(
+      `SELECT "id"::int,"estadoPago","metodoPago" FROM "CitasPsicologos" WHERE "id">=10 ORDER BY "id"`);
+    assert.deepEqual(appointments.rows.map(r=>[r.id,r.estadoPago,r.metodoPago]),[
+      [10,"CONCILIADO","TRANSFERENCIA"],[11,"CONCILIADO","TRANSFERENCIA"],[12,"PENDIENTE",null],[13,"PENDIENTE",null]]);
     const duplicate = await f.actions.registrarPagoServicio("valid", { origen: "PAQUETE", origenId: "3", fecha: "2026-09-26", solicitudId: randomUUID(), confirmado: true,
       lineas: [{ metodoPago: "TRANSFERENCIA", monto: "90000", referencia: "PKG-001" }] });
     assert.ok("error" in duplicate);
@@ -128,9 +146,50 @@ test("el paquete se cobra una sola vez y la devolución abre saldo sin borrar el
     assert.equal(await f.count("MovimientoCaja"),2);
     const net = await f.db.query<{ total: string }>(`SELECT SUM(CASE WHEN "tipo"='INGRESO' THEN "monto" ELSE -"monto" END)::text AS total FROM "MovimientoCaja"`);
     assert.equal(net.rows[0].total,"0.00");
+    const afterRefund = await f.db.query<{ estadoPago: string }>(`SELECT "estadoPago" FROM "CitasPsicologos" WHERE "id"=10`);
+    assert.equal(afterRefund.rows[0].estadoPago,"PENDIENTE");
+    assert.equal((await f.packageState())?.estadoPago,"PENDIENTE");
     const open = await f.actions.getPendientesPsicologia("valid","2026-09-26");
     assert.ok("items" in open);
     if ("items" in open) assert.equal(open.items.find((item) => item.origen === "PAQUETE" && item.id === "3")?.registrado,"0.00");
+  } finally { await f.db.close(); }
+});
+
+test("abonos sucesivos de paquete conservan saldo y propagan el medio mixto sin duplicar caja", async () => {
+  const f = await fixture();
+  try {
+    await f.db.exec(`INSERT INTO "CitasPsicologos"("id","tenantId","paqueteId","realizada","estadoPago")
+      VALUES(10,4,3,false,'PENDIENTE');`);
+    const base = {origen:"PAQUETE" as const,origenId:"3",fecha:"2026-09-26",confirmado:true};
+    assert.ok("ids" in await f.actions.registrarPagoServicio("valid",{...base,solicitudId:randomUUID(),
+      lineas:[{metodoPago:"EFECTIVO",monto:"30000",referencia:""}]}));
+    assert.equal((await f.packageState())?.estadoPago,"PENDIENTE");
+    assert.ok("ids" in await f.actions.registrarPagoServicio("valid",{...base,solicitudId:randomUUID(),
+      lineas:[{metodoPago:"TRANSFERENCIA",monto:"60000",referencia:"FINAL-001"}]}));
+    const settlement=await f.packageState();
+    assert.equal(settlement?.estadoPago,"CONCILIADO"); assert.equal(settlement?.metodoPago,"MIXTO");
+    const cita=await f.db.query<{estadoPago:string;metodoPago:string}>(`SELECT "estadoPago","metodoPago" FROM "CitasPsicologos" WHERE "id"=10`);
+    assert.equal(cita.rows[0].metodoPago,"MIXTO"); assert.equal(cita.rows[0].estadoPago,"CONCILIADO");
+    assert.equal(await f.count("MovimientoCaja"),2);
+  } finally { await f.db.close(); }
+});
+
+test("alquiler identifica al profesional, conserva legado y excluye paquetes cancelados", async () => {
+  const f = await fixture();
+  try {
+    await f.db.exec(`UPDATE "PaqueteAdquirido" SET "clienteId"=NULL,"usuarioId"=10 WHERE "id"=3;
+      INSERT INTO "PaqueteAdquirido"("id","tenantId","clienteId","fechaCompra","precioPagado","estado")
+      VALUES(4,4,100,'2026-09-26T15:00:00Z',30000,'CANCELADO');`);
+    const open = await f.actions.getPendientesPsicologia("valid","2026-09-26");
+    assert.ok("items" in open,JSON.stringify(open));
+    if ("items" in open) {
+      assert.equal(open.items.find(r=>r.origen==="PAQUETE" && r.id==="3")?.persona,"Recepción Prueba");
+      assert.equal(open.items.some(r=>r.origen==="PAQUETE" && r.id==="4"),false);
+    }
+    const canceled = await f.actions.registrarPagoServicio("valid", { origen:"PAQUETE",origenId:"4",fecha:"2026-09-26",
+      solicitudId:randomUUID(),confirmado:true,lineas:[{metodoPago:"EFECTIVO",monto:"30000",referencia:""}] });
+    assert.ok("error" in canceled);
+    assert.equal(await f.count("MovimientoCaja"),0);
   } finally { await f.db.close(); }
 });
 
