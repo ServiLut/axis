@@ -16,7 +16,7 @@ import { sendPushNotification } from "@/lib/notifications";
 
 export async function getProducts(token: string) {
 
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) throw new Error("Unauthorized");
 
@@ -54,7 +54,7 @@ export async function getProducts(token: string) {
 
 export async function getProductRequests(token: string) {
 
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) throw new Error("Unauthorized");
 
@@ -112,7 +112,7 @@ export async function updateProductRequestStatus(
 
 ) {
 
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) throw new Error("Unauthorized");
 

@@ -13,7 +13,7 @@ export async function requestPermission(
   entidadId?: string,
   motivo?: string
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -99,7 +99,7 @@ export async function requestPermission(
 
 // Obtener solicitudes pendientes (para admin)
 export async function getPendingPermissions(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   // Solo ADMIN y SU_ADMIN pueden ver solicitudes de otros
@@ -142,7 +142,7 @@ export async function approvePermission(
   permisoId: number, 
   durationMinutes: number = 60
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload || !["ADMIN", "SU_ADMIN"].includes(payload.role)) {
     return { error: "No autorizado" };
   }
@@ -171,7 +171,7 @@ export async function approvePermission(
 
 // Rechazar permiso
 export async function rejectPermission(token: string, permisoId: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload || !["ADMIN", "SU_ADMIN"].includes(payload.role)) {
     return { error: "No autorizado" };
   }
@@ -200,7 +200,7 @@ export async function checkPermission(
   tipo: TipoPermiso,
   entidadId?: string
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { allowed: false };
 
   // SU_ADMIN siempre tiene permiso (opcional, dependiendo de reglas de negocio)
@@ -231,7 +231,7 @@ export async function checkPermission(
 
 // Obtener historial de permisos (para admin)
 export async function getPermissionHistory(token: string) {
-    const payload = verifyToken(token);
+    const payload = await verifyToken(token);
     if (!payload || !["ADMIN", "SU_ADMIN"].includes(payload.role)) {
       return { error: "No autorizado" };
     }
@@ -271,7 +271,7 @@ export async function getPermissionHistory(token: string) {
 
 // Check status of a specific permission for the current user (to show pending status)
 export async function getMyPermissionStatus(token: string, tipo: TipoPermiso, entidadId?: string) {
-    const payload = verifyToken(token);
+    const payload = await verifyToken(token);
     if (!payload) return { status: null };
 
     try {

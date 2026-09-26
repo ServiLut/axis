@@ -34,7 +34,7 @@ export async function getSugerenciasRefuerzo(
     estado?: "PENDIENTE" | "RECHAZADO" | "TODOS";
   }
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -231,7 +231,7 @@ export async function getSeguimientoTrimestral(
   token: string,
   filters?: { estado?: "PENDIENTE" | "RECHAZADO" | "TODOS" }
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -345,7 +345,7 @@ export async function getSeguimientoTrimestral(
 }
 
 export async function rechazarSeguimiento(token: string, ordenId: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -368,7 +368,7 @@ export async function registrarRefuerzo(
   fechaNueva: Date, 
   montoNuevo: number
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {

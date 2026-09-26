@@ -98,6 +98,7 @@ const allMenuItems: MenuConfig[] = [
     label: "Equipo de Trabajo",
     icon: UserPlus,
     items: [
+      { href: "/dashboard/usuarios/accesos", label: "Usuarios y accesos" },
       { href: "/dashboard/usuarios/ranking", label: "Ranking de Usuarios" },
       { href: "/dashboard/usuarios/asesores", label: "Listado de Asesores" },
       { href: "/dashboard/usuarios/tecnicos", label: "Listado de Tecnicos" },
@@ -259,6 +260,7 @@ export function Sidebar({ className }: SidebarProps) {
           }
           // Admin Only Links
           const adminOnlyPaths = [
+            "/dashboard/usuarios/accesos",
             "/dashboard/usuarios/aprobar",
             "/dashboard/usuarios/nuevo",
             "/dashboard/configuracion/permisos",

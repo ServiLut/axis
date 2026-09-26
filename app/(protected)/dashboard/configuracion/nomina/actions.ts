@@ -49,7 +49,7 @@ const validateNominaData = (data: NominaFormData): NominaFormData | null => {
 };
 
 export async function getUsuariosNomina(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
   
   try {
@@ -116,7 +116,7 @@ export async function getUsuariosNomina(token: string) {
 }
 
 export async function saveConfiguracionNomina(token: string, data: NominaFormData) {
-   const payload = verifyToken(token);
+   const payload = await verifyToken(token);
    if (!payload) return { error: "No autorizado" };
 
    const parsed = validateNominaData(data);

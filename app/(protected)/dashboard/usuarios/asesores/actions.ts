@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { Prisma } from "@/prisma/generated/prisma/client";
 
 export async function getAsesores(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };
@@ -50,7 +50,7 @@ export async function getAsesores(token: string) {
 }
 
 export async function getAsesor(token: string, id: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };
@@ -96,7 +96,7 @@ export async function getAsesor(token: string, id: number) {
 }
 
 export async function deleteAsesor(token: string, id: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };
@@ -144,7 +144,7 @@ export async function deleteAsesor(token: string, id: number) {
 }
 
 export async function updateAsesor(token: string, id: number, formData: FormData) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };
@@ -205,7 +205,7 @@ export async function getServiciosFinalizadosPorAsesor(
     fechaFin?: string;
   }
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };
@@ -273,7 +273,7 @@ export async function getReporteServiciosFinalizados(
     fechaFin?: string;
   }
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };

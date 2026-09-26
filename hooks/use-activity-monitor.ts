@@ -23,6 +23,7 @@ export function useActivityMonitor(userId: number | null | undefined) {
         keepalive: true, // Permite que la petición sobreviva si se cierra la pestaña
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
         },
         body: JSON.stringify({
           userId,

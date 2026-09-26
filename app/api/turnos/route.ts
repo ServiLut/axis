@@ -10,7 +10,7 @@ export async function POST(request: Request) {
         if (!authorization) return NextResponse.json({ message: "No autorizado" }, { status: 401 });
 
         const token = authorization.split(" ")[1];
-        const payload = verifyToken(token);
+        const payload = await verifyToken(token);
         
         if (!payload) return NextResponse.json({ message: "Token inválido" }, { status: 401 });
 

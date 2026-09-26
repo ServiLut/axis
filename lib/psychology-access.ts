@@ -3,7 +3,7 @@ import { verifyToken } from "./auth";
 import { PSYCHOLOGY_TENANT_ID } from "./constants/tenants";
 
 export async function requireFinanceUser(token: string, adminOnly = false) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) throw new Error("No autorizado.");
   const user = await prisma.usuario.findUnique({ where: { id: payload.userId },
     select: { id: true, tenantId: true, rol: true, activo: true, aprobado: true } });

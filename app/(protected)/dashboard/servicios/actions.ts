@@ -50,7 +50,7 @@ export async function getOrdenesServicio(
     municipio?: string;
   } = {}
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -242,7 +242,7 @@ export async function getOrdenesServicio(
 }
 
 export async function getOrdenServicio(token: string, id: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -303,7 +303,7 @@ export async function getOrdenServicio(token: string, id: number) {
 }
 
 export async function deleteOrdenServicio(token: string, id: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -369,7 +369,7 @@ export async function deleteOrdenServicio(token: string, id: number) {
 }
 
 export async function getOrdenesStats(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -465,7 +465,7 @@ export async function getOrdenesStats(token: string) {
 
 // NUEVA FUNCIÓN OPTIMIZADA SOLO PARA FILTROS
 export async function getFilterData(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -540,7 +540,7 @@ export async function getFilterData(token: string) {
 export async function getFormData(token: string, simpleMode: boolean = false) {
   noStore();
   console.error(">>> [ACTION] getFormData START (Cache Bypassed)");
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -673,7 +673,7 @@ export async function addDireccionToCliente(
   clienteId: number,
   addressData: AddressData,
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -719,7 +719,7 @@ export async function addVehiculoToCliente(
   clienteId: number,
   vehicleData: VehicleData,
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -750,7 +750,7 @@ export async function addVehiculoToCliente(
 }
 
 export async function createOrdenServicio(token: string, formData: FormData) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -994,7 +994,7 @@ export async function updateOrdenServicio(
   id: number,
   formData: FormData,
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -1173,7 +1173,7 @@ export async function sendServiceToTechnician(
   ordenId: number,
   message: string,
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -1244,7 +1244,7 @@ export async function sendServiceToTechnician(
 
 
 export async function searchClientes(token: string, term: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   if (!term || term.length < 6) {
@@ -1292,7 +1292,7 @@ export async function searchClientes(token: string, term: string) {
 }
 
 export async function getTenantsList(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -1333,7 +1333,7 @@ export async function getAllOrdenesServicioForExport(
     municipio?: string;
   }
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -1539,7 +1539,7 @@ export async function uploadFacturaElectronica(
   ordenId: number,
   formData: FormData
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -1616,7 +1616,7 @@ export async function uploadComprobantePago(
   ordenId: number,
   formData: FormData
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -1694,7 +1694,7 @@ export async function uploadEvidence(
   ordenId: number,
   formData: FormData
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -1774,7 +1774,7 @@ export async function registrarRefuerzo(
   montoNuevo: number,
   tecnicoId?: number
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -1860,7 +1860,7 @@ export async function liquidarOrdenTransferencia(
     comprobantePath?: string;
   }
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {

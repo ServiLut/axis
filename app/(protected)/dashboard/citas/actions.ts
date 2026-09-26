@@ -205,7 +205,7 @@ export async function getCitas(
     tenantId?: string;
   } = {}
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -452,7 +452,7 @@ export async function getCitas(
 }
 
 export async function getCita(token: string, id: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -534,7 +534,7 @@ export async function getCita(token: string, id: number) {
 }
 
 export async function createCita(token: string, formData: FormData) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -688,7 +688,7 @@ export async function createCita(token: string, formData: FormData) {
 }
 
 export async function getCitasStats(token: string) {
-    const payload = verifyToken(token);
+    const payload = await verifyToken(token);
     if (!payload) return { error: "No autorizado" };
     
     const usuario = await prisma.usuario.findUnique({ where: { id: payload.userId }});
@@ -757,7 +757,7 @@ export async function getCitasStats(token: string) {
 }
 
 export async function deleteCita(token: string, id: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -800,7 +800,7 @@ export async function deleteCita(token: string, id: number) {
 }
 
 export async function getFormDataCitas(token: string) {
-    const payload = verifyToken(token);
+    const payload = await verifyToken(token);
     if (!payload) return { error: "No autorizado" };
 
     try {
@@ -850,7 +850,7 @@ export async function getFormDataCitas(token: string) {
 }
 
 export async function getConsultorios(token: string) {
-    const payload = verifyToken(token);
+    const payload = await verifyToken(token);
     if (!payload) return { error: "No autorizado" };
 
     try {
@@ -873,7 +873,7 @@ export async function getConsultorios(token: string) {
 }
 
 export async function getClientPackages(token: string, clientId: number) {
-    const payload = verifyToken(token);
+    const payload = await verifyToken(token);
     if (!payload) return { error: "No autorizado" };
 
     try {
@@ -911,7 +911,7 @@ export async function getClientPackages(token: string, clientId: number) {
 }
 
 export async function searchClientes(token: string, term: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   if (!term || term.length < 6) {
@@ -954,7 +954,7 @@ export async function searchClientes(token: string, term: string) {
 }
 
 export async function sendCitaToPsicologo(token: string) {
-   const payload = verifyToken(token);
+   const payload = await verifyToken(token);
    if (!payload) return { error: "No autorizado" };
 
    // There is no configured transport here. Never report a delivery that did not happen.
@@ -973,14 +973,14 @@ export async function getAllCitasForExport(token: string, filters: {
     endDate?: string;
     tenantId?: string;
 }) {
-    const payload = verifyToken(token);
+    const payload = await verifyToken(token);
     if (!payload) return { error: "No autorizado" };
     const result = await getCitas(token, 1, 10000, filters);
     return result.ordenes ? { ordenes: result.ordenes } : { error: "Error exportando" };
 }
 
 export async function getTenantsList(token: string) {
-    const payload = verifyToken(token);
+    const payload = await verifyToken(token);
     if (!payload) return { error: "No autorizado" };
     
     const tenants = await prisma.tenant.findMany({ select: { id: true, nombre: true }});
@@ -992,7 +992,7 @@ export async function uploadComprobantePagoCita(
   citaId: number,
   formData: FormData
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -1066,7 +1066,7 @@ export async function uploadComprobantePagoCita(
 }
 
 export async function markCitaAsRealizada(token: string, citaId: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -1108,7 +1108,7 @@ export async function markCitaAsRealizada(token: string, citaId: number) {
 }
 
 export async function markCitaAsProgramada(token: string, citaId: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -1172,7 +1172,7 @@ export async function markCitaAsProgramada(token: string, citaId: number) {
 }
 
 export async function markCitaAsCancelada(token: string, citaId: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -1235,7 +1235,7 @@ export async function markCitaAsCancelada(token: string, citaId: number) {
 }
 
 export async function restoreCitaCancelada(token: string, citaId: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -1309,7 +1309,7 @@ export async function restoreCitaCancelada(token: string, citaId: number) {
 }
 
 export async function toggleCitaPago(token: string, citaId: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -1364,7 +1364,7 @@ export async function updateCitaPago(
   metodoPago: string, 
   estadoPago: EstadoPagoOrden
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -1420,7 +1420,7 @@ export async function checkConsultorioDisponibilidad(
   horaFinStr: string,
   excludeCitaId?: number
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -1467,7 +1467,7 @@ export async function checkConsultorioDisponibilidad(
 }
 
 export async function updateCita(token: string, id: number, formData: FormData) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {

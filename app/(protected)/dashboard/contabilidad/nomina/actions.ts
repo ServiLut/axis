@@ -48,7 +48,7 @@ type GetServiciosPendientesResponse =
     };
 
 export async function updateValorRepuestosTecnico(token: string, ordenId: number, valor: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { success: false, error: "No autorizado" };
 
   try {
@@ -64,7 +64,7 @@ export async function updateValorRepuestosTecnico(token: string, ordenId: number
 }
 
 export async function getNominas(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { success: false as const, error: "No autorizado" };
 
   try {
@@ -125,7 +125,7 @@ export async function getServiciosPendientes(
   fechaInicio: string,
   fechaFin: string,
 ): Promise<GetServiciosPendientesResponse> {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { success: false, error: "No autorizado" };
 
   try {
@@ -284,7 +284,7 @@ export async function getServiciosPendientes(
 }
 
 export async function getTecnicos(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { success: false as const, error: "No autorizado" };
 
   try {
@@ -347,7 +347,7 @@ type CreateNominaInput = {
 };
 
 export async function createNomina(token: string, data: CreateNominaInput) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { success: false as const, error: "No autorizado" };
 
   try {
@@ -421,7 +421,7 @@ export async function createNomina(token: string, data: CreateNominaInput) {
 }
 
 export async function getNominaById(token: string, id: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { success: false as const, error: "No autorizado" };
 
   try {
@@ -531,7 +531,7 @@ export async function updateNominaEstado(
   id: number,
   estado: "PAGADO" | "ANULADO",
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { success: false as const, error: "No autorizado" };
 
   try {

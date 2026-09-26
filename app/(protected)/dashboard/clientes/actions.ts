@@ -40,7 +40,7 @@ export async function getClientes(
   onlyWithNoServices: boolean = false,
   filters: ClientFilters = {}
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };
@@ -151,7 +151,7 @@ export async function getClientes(
 }
 
 export async function getCliente(token: string, id: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };
@@ -183,7 +183,7 @@ export async function getCliente(token: string, id: number) {
 }
 
 export async function deleteCliente(token: string, id: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };
@@ -269,7 +269,7 @@ interface VehiculoForm {
 }
 
 export async function updateCliente(token: string, id: number, formData: FormData) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };
@@ -517,7 +517,7 @@ export async function updateCliente(token: string, id: number, formData: FormDat
 }
 
 export async function getClientesStats(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };
@@ -598,7 +598,7 @@ export async function getClientesStats(token: string) {
 }
 
 export async function getClienteServicios(token: string, clienteId: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };
@@ -648,7 +648,7 @@ export async function getAllClientesForExport(
   onlyWithNoServices: boolean = false,
   filters: ClientFilters = {}
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };

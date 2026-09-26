@@ -5,7 +5,7 @@ import { verifyToken } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
 export async function getMetodosPago(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
     if (!payload || (payload.role !== "ADMIN" && payload.role !== "SU_ADMIN")) {
       return { error: "No autorizado" };
@@ -48,7 +48,7 @@ export async function getMetodosPago(token: string) {
 }
 
 export async function getEmpresasOptions(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
     if (!payload || (payload.role !== "ADMIN" && payload.role !== "SU_ADMIN")) {
       return { error: "No autorizado" };
@@ -84,7 +84,7 @@ export async function getEmpresasOptions(token: string) {
 }
 
 export async function createMetodoPago(token: string, formData: FormData) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
     if (!payload || (payload.role !== "ADMIN" && payload.role !== "SU_ADMIN")) {
       return { error: "No autorizado" };
@@ -125,7 +125,7 @@ export async function createMetodoPago(token: string, formData: FormData) {
 }
 
 export async function updateMetodoPago(token: string, id: number, formData: FormData) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
     if (!payload || (payload.role !== "ADMIN" && payload.role !== "SU_ADMIN")) {
       return { error: "No autorizado" };
@@ -166,7 +166,7 @@ export async function updateMetodoPago(token: string, id: number, formData: Form
 }
 
 export async function deleteMetodoPago(token: string, id: number) {
-    const payload = verifyToken(token);
+    const payload = await verifyToken(token);
   
       if (!payload || (payload.role !== "ADMIN" && payload.role !== "SU_ADMIN")) {
         return { error: "No autorizado" };

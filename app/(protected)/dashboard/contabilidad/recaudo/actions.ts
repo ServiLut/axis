@@ -31,7 +31,7 @@ export interface PendingOrder {
 // --- Actions ---
 
 export async function getTechniciansFinancialStatus(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -141,7 +141,7 @@ export async function getTechniciansFinancialStatus(token: string) {
 }
 
 export async function getPendingCashOrders(token: string, tecnicoId: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -224,7 +224,7 @@ export async function registerConsignation(
     comprobantePath?: string; 
   }
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -337,7 +337,7 @@ export async function registerAdvanceFromOrders(
     fecha: Date;
   }
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -400,7 +400,7 @@ export async function registerAdvanceFromOrders(
 }
 
 export async function uploadConsignationProof(token: string, formData: FormData) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -471,7 +471,7 @@ export interface DeclaracionHistoryItem {
 }
 
 export async function getConsignacionHistory(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -546,7 +546,7 @@ export async function getConsignacionHistory(token: string) {
 }
 
 export async function getDeclaracionHistory(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -615,7 +615,7 @@ export async function updateConsignacion(
     fecha?: Date;
   }
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -652,7 +652,7 @@ export async function updateDeclaracion(
   id: number, 
   data: { observacion?: string; consignado?: boolean }
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {

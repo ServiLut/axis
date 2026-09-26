@@ -5,7 +5,7 @@ import { verifyToken } from "@/lib/auth";
 import { Expo } from "expo-server-sdk";
 
 export async function sendUpdateNotification(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   // Only Admin/SuAdmin can send

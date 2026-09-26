@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { createAuditLog } from "@/lib/audit";
 
 export async function getServicios(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };
@@ -49,7 +49,7 @@ export async function getServicios(token: string) {
 }
 
 export async function getEmpresasOptions(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };
@@ -86,7 +86,7 @@ export async function getEmpresasOptions(token: string) {
 }
 
 export async function createServicio(token: string, formData: FormData) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };
@@ -140,7 +140,7 @@ export async function createServicio(token: string, formData: FormData) {
 }
 
 export async function updateServicio(token: string, id: number, formData: FormData) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };
@@ -199,7 +199,7 @@ export async function updateServicio(token: string, id: number, formData: FormDa
 }
 
 export async function deleteServicio(token: string, id: number) {
-    const payload = verifyToken(token);
+    const payload = await verifyToken(token);
   
     if (!payload) {
       return { error: "No autorizado" };

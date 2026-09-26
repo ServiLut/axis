@@ -44,7 +44,7 @@ export function DashboardLayoutClient({
           },
         });
 
-        if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
           const data = await res.json();
           // Avoid toast loop or duplicate
           if (data.message === "User not approved" || data.message === "User inactive") {
@@ -55,6 +55,7 @@ export function DashboardLayoutClient({
           }
           
           localStorage.removeItem("token");
+          localStorage.removeItem("user");
           router.push("/sign-in");
         }
       } catch (error) {
@@ -63,6 +64,13 @@ export function DashboardLayoutClient({
     };
 
     validateSession();
+    const interval = window.setInterval(validateSession, 30_000);
+    const onVisible = () => { if (!document.hidden) void validateSession(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [pathname, router]);
 
   // Evitar renderizar el contenido hasta confirmar autenticación y rol

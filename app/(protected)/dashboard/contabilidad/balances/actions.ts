@@ -40,7 +40,7 @@ export async function getBalanceGeneral(
   fechaInicio: Date,
   fechaFin: Date
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { success: false as const, error: "No autorizado" };
 
   try {

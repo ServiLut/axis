@@ -4,7 +4,7 @@ import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
 
 export async function getOrdenesByDateRange(token: string, startDate: Date, endDate: Date, tecnicoId?: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {

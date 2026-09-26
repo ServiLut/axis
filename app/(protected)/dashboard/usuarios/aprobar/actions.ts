@@ -8,7 +8,7 @@ import { createAuditLog } from "@/lib/audit";
 import { Rol } from "@/prisma/generated/prisma/client";
 
 export async function getUsuariosPendientes(token: string, status: boolean | null = false) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -63,7 +63,7 @@ export async function getUsuariosPendientes(token: string, status: boolean | nul
 }
 
 export async function aprobarUsuario(token: string, userId: number, data: { rol: Rol; empresaId: number | null }) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -114,7 +114,7 @@ export async function aprobarUsuario(token: string, userId: number, data: { rol:
 }
 
 export async function getEmpresasOptions(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -146,7 +146,7 @@ export async function getEmpresasOptions(token: string) {
 }
 
 export async function rechazarUsuario(token: string, userId: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {

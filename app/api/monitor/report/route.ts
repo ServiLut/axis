@@ -19,7 +19,7 @@ export async function GET(request: Request) {
     }
 
     const token = authHeader.split(" ")[1];
-    const user = verifyToken(token);
+    const user = await verifyToken(token);
 
     if (!user || (user.role !== "ADMIN" && user.role !== "SU_ADMIN")) {
       return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });

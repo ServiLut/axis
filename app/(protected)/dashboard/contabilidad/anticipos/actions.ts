@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { Prisma } from "@/prisma/generated/prisma/client";
 
 export async function getAnticipos(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { success: false as const, error: "No autorizado" };
 
   try {
@@ -52,7 +52,7 @@ export async function getAnticipos(token: string) {
 }
 
 export async function getTecnicos(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { success: false as const, error: "No autorizado" };
 
   try {
@@ -94,7 +94,7 @@ export async function createAnticipo(
   token: string,
   data: { usuarioId: number; monto: number; razon: string }
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { success: false as const, error: "No autorizado" };
 
   try {
@@ -127,7 +127,7 @@ export async function updateAnticipo(
   id: string,
   data: { usuarioId: number; monto: number; razon: string }
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { success: false as const, error: "No autorizado" };
 
   try {
@@ -149,7 +149,7 @@ export async function updateAnticipo(
 }
 
 export async function deleteAnticipo(token: string, id: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { success: false as const, error: "No autorizado" };
 
   try {

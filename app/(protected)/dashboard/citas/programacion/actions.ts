@@ -36,7 +36,7 @@ export async function getCitasByDateRange(
   dateStr: string,
   tecnicoId?: number,
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -154,7 +154,7 @@ export async function moveCita(
   horaInicioStr: string,
   horaFinStr: string,
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -186,7 +186,7 @@ export async function moveCita(
 }
 
 export async function unassignCita(token: string, citaId: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {

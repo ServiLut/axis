@@ -17,7 +17,7 @@ async function validExpense(data: { userId?: number; monto: number; razon: strin
 }
 
 export async function getEgresos(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { success: false as const, error: "No autorizado" };
 
   try {
@@ -54,7 +54,7 @@ export async function getEgresos(token: string) {
 }
 
 export async function getUsuarios(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { success: false as const, error: "No autorizado" };
 
   try {
@@ -92,7 +92,7 @@ export async function createEgreso(
   token: string,
   data: { userId?: number; monto: number; razon: string; titulo: string }
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { success: false as const, error: "No autorizado" };
 
   try {
@@ -119,7 +119,7 @@ export async function updateEgreso(
   id: string,
   data: { userId?: number; monto: number; razon: string; titulo: string }
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { success: false as const, error: "No autorizado" };
 
   try {
@@ -146,7 +146,7 @@ export async function updateEgreso(
 }
 
 export async function deleteEgreso(token: string, id: string, motivo: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { success: false as const, error: "No autorizado" };
 
   try {

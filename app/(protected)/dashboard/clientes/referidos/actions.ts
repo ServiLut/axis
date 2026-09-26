@@ -5,7 +5,7 @@ import { verifyToken } from "@/lib/auth";
 import { Prisma } from "@/prisma/generated/prisma/client";
 
 export async function getReferidos(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {

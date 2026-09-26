@@ -65,6 +65,7 @@ export async function POST(request: Request) {
       apellido: user.apellido,
       role: user.rol,
       aprobado: user.aprobado ?? false,
+      authVersion: user.authVersion,
     });
 
     // Crear objeto de usuario sin password para la respuesta

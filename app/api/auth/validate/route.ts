@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ valid: false, message: "No token provided" }, { status: 401 });
   }
 
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   // Even if verifyToken returns payload (valid signature and claim), we must check DB
   // But if it returns null, it's definitely invalid

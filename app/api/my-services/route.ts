@@ -31,7 +31,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const decoded = verifyToken(token);
+    const decoded = await verifyToken(token);
 
     if (!decoded || !decoded.userId) {
       return NextResponse.json({ message: "Token inválido" }, { status: 401 });

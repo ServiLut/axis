@@ -8,7 +8,7 @@ import { Rol } from "@/prisma/generated/prisma/client";
 import { createAuditLog } from "@/lib/audit";
 
 export async function createUsuario(token: string, formData: FormData) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };
@@ -106,7 +106,7 @@ export async function createUsuario(token: string, formData: FormData) {
 }
 
 export async function getEmpresasOptions(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {

@@ -36,7 +36,7 @@ interface VehiculoInput {
 }
 
 export async function createCliente(token: string, formData: FormData) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado. Por favor inicie sesión nuevamente." };
@@ -196,7 +196,7 @@ export async function createCliente(token: string, formData: FormData) {
 }
 
 export async function getClientForMigration(token: string, clientId: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -273,7 +273,7 @@ export async function getClientForMigration(token: string, clientId: number) {
 }
 
 export async function getServilutionClientForMigration(token: string, clientId: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {

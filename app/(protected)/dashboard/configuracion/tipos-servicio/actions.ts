@@ -5,7 +5,7 @@ import { verifyToken } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
 export async function getTiposServicio(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload || (payload.role !== "ADMIN" && payload.role !== "SU_ADMIN")) {
     return { error: "No autorizado" };
@@ -49,7 +49,7 @@ export async function getTiposServicio(token: string) {
 }
 
 export async function getEmpresasOptions(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload || (payload.role !== "ADMIN" && payload.role !== "SU_ADMIN")) {
     return { error: "No autorizado" };
@@ -86,7 +86,7 @@ export async function getEmpresasOptions(token: string) {
 }
 
 export async function createTipoServicio(token: string, formData: FormData) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload || (payload.role !== "ADMIN" && payload.role !== "SU_ADMIN")) {
     return { error: "No autorizado" };
@@ -128,7 +128,7 @@ export async function createTipoServicio(token: string, formData: FormData) {
 }
 
 export async function updateTipoServicio(token: string, id: number, formData: FormData) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload || (payload.role !== "ADMIN" && payload.role !== "SU_ADMIN")) {
     return { error: "No autorizado" };
@@ -170,7 +170,7 @@ export async function updateTipoServicio(token: string, id: number, formData: Fo
 }
 
 export async function deleteTipoServicio(token: string, id: number) {
-    const payload = verifyToken(token);
+    const payload = await verifyToken(token);
   
     if (!payload) {
       return { error: "No autorizado" };

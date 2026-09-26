@@ -36,7 +36,7 @@ export async function POST(
 
     if (!token)
       return NextResponse.json({ message: "No autorizado" }, { status: 401 });
-    const decoded = verifyToken(token);
+    const decoded = await verifyToken(token);
     if (!decoded)
       return NextResponse.json({ message: "Token inválido" }, { status: 401 });
 

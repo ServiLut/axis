@@ -97,6 +97,7 @@ model Usuario {
   username                                             String                           @unique
   email                                                String                           @unique
   password                                             String
+  authVersion                                          Int                              @default(0)
   activo                                               Boolean                          @default(true)
   nombre                                               String
   apellido                                             String

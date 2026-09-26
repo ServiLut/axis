@@ -5,7 +5,7 @@ import { verifyToken } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
 export async function getZonas(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };
@@ -40,7 +40,7 @@ export async function getZonas(token: string) {
 }
 
 export async function createZona(token: string, formData: FormData) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };
@@ -80,7 +80,7 @@ export async function createZona(token: string, formData: FormData) {
 }
 
 export async function updateZona(token: string, id: number, formData: FormData) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };
@@ -120,7 +120,7 @@ export async function updateZona(token: string, id: number, formData: FormData) 
 }
 
 export async function deleteZona(token: string, id: number) {
-    const payload = verifyToken(token);
+    const payload = await verifyToken(token);
   
     if (!payload) {
       return { error: "No autorizado" };

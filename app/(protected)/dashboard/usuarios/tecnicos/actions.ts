@@ -2,11 +2,12 @@
 
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
+import { setUserAccess } from "../accesos/actions";
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@/prisma/generated/prisma/client";
 
 export async function getTecnicos(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };
@@ -51,7 +52,7 @@ export async function getTecnicos(token: string) {
 }
 
 export async function getTecnico(token: string, id: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };
@@ -98,7 +99,7 @@ export async function getTecnico(token: string, id: number) {
 }
 
 export async function toggleTecnicoStatus(token: string, id: number, activo: boolean) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };
@@ -128,13 +129,7 @@ export async function toggleTecnicoStatus(token: string, id: number, activo: boo
       return { error: "Técnico no encontrado" };
     }
 
-    await prisma.usuario.update({
-      where: { id: id },
-      data: { activo },
-    });
-
-    revalidatePath("/dashboard/usuarios/tecnicos");
-    return { success: true, message: `Técnico ${activo ? "activado" : "desactivado"} exitosamente` };
+    return await setUserAccess(token, id, activo, "Cambio de acceso desde el listado de técnicos.");
   } catch (error) {
     console.error("Error cambiando estado técnico:", error);
     return { error: "Error al cambiar el estado del técnico" };
@@ -142,7 +137,7 @@ export async function toggleTecnicoStatus(token: string, id: number, activo: boo
 }
 
 export async function deleteTecnico(token: string, id: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };
@@ -190,7 +185,7 @@ export async function deleteTecnico(token: string, id: number) {
 }
 
 export async function updateTecnico(token: string, id: number, formData: FormData) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };

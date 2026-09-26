@@ -5,7 +5,7 @@ import { verifyToken } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
 export async function getTurnos(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };
@@ -60,7 +60,7 @@ export async function getTurnos(token: string) {
 }
 
 export async function updateTurno(token: string, id: number, formData: FormData) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };
@@ -154,7 +154,7 @@ export async function updateTurno(token: string, id: number, formData: FormData)
 }
 
 export async function deleteTurno(token: string, id: number) {
-    const payload = verifyToken(token);
+    const payload = await verifyToken(token);
   
     if (!payload) {
       return { error: "No autorizado" };
@@ -189,7 +189,7 @@ export async function deleteTurno(token: string, id: number) {
   }
 
 export async function createCuentaCobroGroup(token: string) {
-    const payload = verifyToken(token);
+    const payload = await verifyToken(token);
 
     if (!payload) {
         return { error: "No autorizado" };
@@ -256,7 +256,7 @@ export async function createCuentaCobroGroup(token: string) {
 }
 
 export async function getCuentasCobro(token: string) {
-    const payload = verifyToken(token);
+    const payload = await verifyToken(token);
 
     if (!payload) {
         return { error: "No autorizado" };
@@ -300,7 +300,7 @@ export async function getCuentasCobro(token: string) {
 }
 
 export async function getCuentaCobroDetails(token: string, cuentaId: number) {
-    const payload = verifyToken(token);
+    const payload = await verifyToken(token);
 
     if (!payload) {
         return { error: "No autorizado" };
@@ -355,7 +355,7 @@ export async function getCuentaCobroDetails(token: string, cuentaId: number) {
 }
 
 export async function getCuentaCobroPdfData(token: string, cuentaId: number) {
-    const payload = verifyToken(token);
+    const payload = await verifyToken(token);
 
     if (!payload) {
         return { error: "No autorizado" };
@@ -416,7 +416,7 @@ export async function getCuentaCobroPdfData(token: string, cuentaId: number) {
 }
 
 export async function sendCuentaCobro(token: string, cuentaId: number) {
-    const payload = verifyToken(token);
+    const payload = await verifyToken(token);
 
     if (!payload) {
         return { error: "No autorizado" };
@@ -461,7 +461,7 @@ export async function sendCuentaCobro(token: string, cuentaId: number) {
 }
 
 export async function updateCuentaCobroStatus(token: string, cuentaId: number, estado: "PAGADA" | "RECHAZADA") {
-    const payload = verifyToken(token);
+    const payload = await verifyToken(token);
 
     if (!payload) {
         return { error: "No autorizado" };

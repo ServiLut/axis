@@ -17,7 +17,7 @@ export async function getAuditoria(
     entidadId?: string;
   } = {}
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return { error: "No autorizado" };
@@ -173,7 +173,7 @@ export async function getAuditoria(
 }
 
 export async function getEntidadesAuditadas(token: string) {
-    const payload = verifyToken(token);
+    const payload = await verifyToken(token);
     if (!payload) return { error: "No autorizado" };
 
     try {
@@ -188,7 +188,7 @@ export async function getEntidadesAuditadas(token: string) {
 }
 
 export async function getAuditFilterOptions(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -226,7 +226,7 @@ export async function getAuditoriaForExport(
     entidadId?: string;
   } = {}
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {

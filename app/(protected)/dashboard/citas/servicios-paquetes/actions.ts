@@ -36,7 +36,7 @@ const serializeValue = (value: unknown): unknown => {
 };
 
 const getAdminUser = async (token: string): Promise<AdminContext> => {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   const usuario = await prisma.usuario.findUnique({

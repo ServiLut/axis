@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { verifyToken } from "@/lib/auth";
 
 // Función auxiliar para log de debug
 const debugLog = (msg: string) => {
@@ -10,8 +11,13 @@ const debugLog = (msg: string) => {
 
 export async function POST(request: Request) {
   try {
+    const token = request.headers.get("authorization")?.replace(/^Bearer /, "");
+    const actor = token ? await verifyToken(token) : null;
+    if (!actor) return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     const body = await request.json();
-    const { userId, tipo, ruta, detalles } = body;
+    const { tipo, ruta, detalles } = body;
+    const userId = actor.userId;
+    if (body.userId && body.userId !== userId) return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
 
     debugLog(`Recibida petición: userId=${userId}, tipo=${tipo}`);
 

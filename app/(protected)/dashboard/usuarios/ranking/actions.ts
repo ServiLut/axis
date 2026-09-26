@@ -5,7 +5,7 @@ import { verifyToken } from "@/lib/auth";
 import { startOfDay, endOfDay } from "date-fns";
 
 export async function getUserRanking(token: string, startDate?: string, endDate?: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -92,7 +92,7 @@ export async function getUserRanking(token: string, startDate?: string, endDate?
 }
 
 export async function getUserDetails(token: string, targetUserId: number, startDate?: string, endDate?: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {

@@ -29,12 +29,14 @@ export type AggregateUsuario = {
 export type UsuarioAvgAggregateOutputType = {
   id: number | null
   tenantId: number | null
+  authVersion: number | null
   empresaId: number | null
 }
 
 export type UsuarioSumAggregateOutputType = {
   id: number | null
   tenantId: number | null
+  authVersion: number | null
   empresaId: number | null
 }
 
@@ -44,6 +46,7 @@ export type UsuarioMinAggregateOutputType = {
   username: string | null
   email: string | null
   password: string | null
+  authVersion: number | null
   activo: boolean | null
   nombre: string | null
   apellido: string | null
@@ -68,6 +71,7 @@ export type UsuarioMaxAggregateOutputType = {
   username: string | null
   email: string | null
   password: string | null
+  authVersion: number | null
   activo: boolean | null
   nombre: string | null
   apellido: string | null
@@ -92,6 +96,7 @@ export type UsuarioCountAggregateOutputType = {
   username: number
   email: number
   password: number
+  authVersion: number
   activo: number
   nombre: number
   apellido: number
@@ -115,12 +120,14 @@ export type UsuarioCountAggregateOutputType = {
 export type UsuarioAvgAggregateInputType = {
   id?: true
   tenantId?: true
+  authVersion?: true
   empresaId?: true
 }
 
 export type UsuarioSumAggregateInputType = {
   id?: true
   tenantId?: true
+  authVersion?: true
   empresaId?: true
 }
 
@@ -130,6 +137,7 @@ export type UsuarioMinAggregateInputType = {
   username?: true
   email?: true
   password?: true
+  authVersion?: true
   activo?: true
   nombre?: true
   apellido?: true
@@ -154,6 +162,7 @@ export type UsuarioMaxAggregateInputType = {
   username?: true
   email?: true
   password?: true
+  authVersion?: true
   activo?: true
   nombre?: true
   apellido?: true
@@ -178,6 +187,7 @@ export type UsuarioCountAggregateInputType = {
   username?: true
   email?: true
   password?: true
+  authVersion?: true
   activo?: true
   nombre?: true
   apellido?: true
@@ -289,6 +299,7 @@ export type UsuarioGroupByOutputType = {
   username: string
   email: string
   password: string
+  authVersion: number
   activo: boolean
   nombre: string
   apellido: string
@@ -336,6 +347,7 @@ export type UsuarioWhereInput = {
   username?: Prisma.StringFilter<"Usuario"> | string
   email?: Prisma.StringFilter<"Usuario"> | string
   password?: Prisma.StringFilter<"Usuario"> | string
+  authVersion?: Prisma.IntFilter<"Usuario"> | number
   activo?: Prisma.BoolFilter<"Usuario"> | boolean
   nombre?: Prisma.StringFilter<"Usuario"> | string
   apellido?: Prisma.StringFilter<"Usuario"> | string
@@ -389,6 +401,7 @@ export type UsuarioOrderByWithRelationInput = {
   username?: Prisma.SortOrder
   email?: Prisma.SortOrder
   password?: Prisma.SortOrder
+  authVersion?: Prisma.SortOrder
   activo?: Prisma.SortOrder
   nombre?: Prisma.SortOrder
   apellido?: Prisma.SortOrder
@@ -446,6 +459,7 @@ export type UsuarioWhereUniqueInput = Prisma.AtLeast<{
   NOT?: Prisma.UsuarioWhereInput | Prisma.UsuarioWhereInput[]
   tenantId?: Prisma.IntFilter<"Usuario"> | number
   password?: Prisma.StringFilter<"Usuario"> | string
+  authVersion?: Prisma.IntFilter<"Usuario"> | number
   activo?: Prisma.BoolFilter<"Usuario"> | boolean
   nombre?: Prisma.StringFilter<"Usuario"> | string
   apellido?: Prisma.StringFilter<"Usuario"> | string
@@ -498,6 +512,7 @@ export type UsuarioOrderByWithAggregationInput = {
   username?: Prisma.SortOrder
   email?: Prisma.SortOrder
   password?: Prisma.SortOrder
+  authVersion?: Prisma.SortOrder
   activo?: Prisma.SortOrder
   nombre?: Prisma.SortOrder
   apellido?: Prisma.SortOrder
@@ -530,6 +545,7 @@ export type UsuarioScalarWhereWithAggregatesInput = {
   username?: Prisma.StringWithAggregatesFilter<"Usuario"> | string
   email?: Prisma.StringWithAggregatesFilter<"Usuario"> | string
   password?: Prisma.StringWithAggregatesFilter<"Usuario"> | string
+  authVersion?: Prisma.IntWithAggregatesFilter<"Usuario"> | number
   activo?: Prisma.BoolWithAggregatesFilter<"Usuario"> | boolean
   nombre?: Prisma.StringWithAggregatesFilter<"Usuario"> | string
   apellido?: Prisma.StringWithAggregatesFilter<"Usuario"> | string
@@ -552,6 +568,7 @@ export type UsuarioCreateInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -604,6 +621,7 @@ export type UsuarioUncheckedCreateInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -653,6 +671,7 @@ export type UsuarioUpdateInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -705,6 +724,7 @@ export type UsuarioUncheckedUpdateInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -756,6 +776,7 @@ export type UsuarioCreateManyInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -778,6 +799,7 @@ export type UsuarioUpdateManyMutationInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -801,6 +823,7 @@ export type UsuarioUncheckedUpdateManyInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -835,6 +858,7 @@ export type UsuarioCountOrderByAggregateInput = {
   username?: Prisma.SortOrder
   email?: Prisma.SortOrder
   password?: Prisma.SortOrder
+  authVersion?: Prisma.SortOrder
   activo?: Prisma.SortOrder
   nombre?: Prisma.SortOrder
   apellido?: Prisma.SortOrder
@@ -856,6 +880,7 @@ export type UsuarioCountOrderByAggregateInput = {
 export type UsuarioAvgOrderByAggregateInput = {
   id?: Prisma.SortOrder
   tenantId?: Prisma.SortOrder
+  authVersion?: Prisma.SortOrder
   empresaId?: Prisma.SortOrder
 }
 
@@ -865,6 +890,7 @@ export type UsuarioMaxOrderByAggregateInput = {
   username?: Prisma.SortOrder
   email?: Prisma.SortOrder
   password?: Prisma.SortOrder
+  authVersion?: Prisma.SortOrder
   activo?: Prisma.SortOrder
   nombre?: Prisma.SortOrder
   apellido?: Prisma.SortOrder
@@ -889,6 +915,7 @@ export type UsuarioMinOrderByAggregateInput = {
   username?: Prisma.SortOrder
   email?: Prisma.SortOrder
   password?: Prisma.SortOrder
+  authVersion?: Prisma.SortOrder
   activo?: Prisma.SortOrder
   nombre?: Prisma.SortOrder
   apellido?: Prisma.SortOrder
@@ -910,6 +937,7 @@ export type UsuarioMinOrderByAggregateInput = {
 export type UsuarioSumOrderByAggregateInput = {
   id?: Prisma.SortOrder
   tenantId?: Prisma.SortOrder
+  authVersion?: Prisma.SortOrder
   empresaId?: Prisma.SortOrder
 }
 
@@ -1429,6 +1457,7 @@ export type UsuarioCreateWithoutTenantInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -1479,6 +1508,7 @@ export type UsuarioUncheckedCreateWithoutTenantInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -1559,6 +1589,7 @@ export type UsuarioScalarWhereInput = {
   username?: Prisma.StringFilter<"Usuario"> | string
   email?: Prisma.StringFilter<"Usuario"> | string
   password?: Prisma.StringFilter<"Usuario"> | string
+  authVersion?: Prisma.IntFilter<"Usuario"> | number
   activo?: Prisma.BoolFilter<"Usuario"> | boolean
   nombre?: Prisma.StringFilter<"Usuario"> | string
   apellido?: Prisma.StringFilter<"Usuario"> | string
@@ -1581,6 +1612,7 @@ export type UsuarioCreateWithoutEmpresaInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -1632,6 +1664,7 @@ export type UsuarioUncheckedCreateWithoutEmpresaInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -1706,6 +1739,7 @@ export type UsuarioCreateWithoutClienteInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -1757,6 +1791,7 @@ export type UsuarioUncheckedCreateWithoutClienteInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -1821,6 +1856,7 @@ export type UsuarioUpdateWithoutClienteInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -1872,6 +1908,7 @@ export type UsuarioUncheckedUpdateWithoutClienteInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -1920,6 +1957,7 @@ export type UsuarioCreateWithoutServiciosCreadosInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -1971,6 +2009,7 @@ export type UsuarioUncheckedCreateWithoutServiciosCreadosInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -2024,6 +2063,7 @@ export type UsuarioCreateWithoutServiciosAsignadosInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -2075,6 +2115,7 @@ export type UsuarioUncheckedCreateWithoutServiciosAsignadosInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -2139,6 +2180,7 @@ export type UsuarioUpdateWithoutServiciosCreadosInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -2190,6 +2232,7 @@ export type UsuarioUncheckedUpdateWithoutServiciosCreadosInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -2249,6 +2292,7 @@ export type UsuarioUpdateWithoutServiciosAsignadosInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -2300,6 +2344,7 @@ export type UsuarioUncheckedUpdateWithoutServiciosAsignadosInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -2348,6 +2393,7 @@ export type UsuarioCreateWithoutGeolocalizacionesInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -2399,6 +2445,7 @@ export type UsuarioUncheckedCreateWithoutGeolocalizacionesInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -2463,6 +2510,7 @@ export type UsuarioUpdateWithoutGeolocalizacionesInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -2514,6 +2562,7 @@ export type UsuarioUncheckedUpdateWithoutGeolocalizacionesInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -2562,6 +2611,7 @@ export type UsuarioCreateWithoutConfiguracionPagosInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -2613,6 +2663,7 @@ export type UsuarioUncheckedCreateWithoutConfiguracionPagosInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -2677,6 +2728,7 @@ export type UsuarioUpdateWithoutConfiguracionPagosInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -2728,6 +2780,7 @@ export type UsuarioUncheckedUpdateWithoutConfiguracionPagosInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -2776,6 +2829,7 @@ export type UsuarioCreateWithoutNominasInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -2827,6 +2881,7 @@ export type UsuarioUncheckedCreateWithoutNominasInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -2891,6 +2946,7 @@ export type UsuarioUpdateWithoutNominasInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -2942,6 +2998,7 @@ export type UsuarioUncheckedUpdateWithoutNominasInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -2990,6 +3047,7 @@ export type UsuarioCreateWithoutAnticiposInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -3041,6 +3099,7 @@ export type UsuarioUncheckedCreateWithoutAnticiposInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -3105,6 +3164,7 @@ export type UsuarioUpdateWithoutAnticiposInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -3156,6 +3216,7 @@ export type UsuarioUncheckedUpdateWithoutAnticiposInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -3204,6 +3265,7 @@ export type UsuarioCreateWithoutCuentasPagoInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -3255,6 +3317,7 @@ export type UsuarioUncheckedCreateWithoutCuentasPagoInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -3319,6 +3382,7 @@ export type UsuarioUpdateWithoutCuentasPagoInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -3370,6 +3434,7 @@ export type UsuarioUncheckedUpdateWithoutCuentasPagoInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -3418,6 +3483,7 @@ export type UsuarioCreateWithoutCitasPsicologos_CitasPsicologos_creadoPorIdToUsu
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -3469,6 +3535,7 @@ export type UsuarioUncheckedCreateWithoutCitasPsicologos_CitasPsicologos_creadoP
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -3522,6 +3589,7 @@ export type UsuarioCreateWithoutCitasPsicologos_CitasPsicologos_psicologoIdToUsu
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -3573,6 +3641,7 @@ export type UsuarioUncheckedCreateWithoutCitasPsicologos_CitasPsicologos_psicolo
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -3637,6 +3706,7 @@ export type UsuarioUpdateWithoutCitasPsicologos_CitasPsicologos_creadoPorIdToUsu
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -3688,6 +3758,7 @@ export type UsuarioUncheckedUpdateWithoutCitasPsicologos_CitasPsicologos_creadoP
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -3747,6 +3818,7 @@ export type UsuarioUpdateWithoutCitasPsicologos_CitasPsicologos_psicologoIdToUsu
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -3798,6 +3870,7 @@ export type UsuarioUncheckedUpdateWithoutCitasPsicologos_CitasPsicologos_psicolo
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -3846,6 +3919,7 @@ export type UsuarioCreateWithoutTurnosInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -3897,6 +3971,7 @@ export type UsuarioUncheckedCreateWithoutTurnosInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -3961,6 +4036,7 @@ export type UsuarioUpdateWithoutTurnosInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -4012,6 +4088,7 @@ export type UsuarioUncheckedUpdateWithoutTurnosInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -4060,6 +4137,7 @@ export type UsuarioCreateWithoutCuentasCobroInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -4111,6 +4189,7 @@ export type UsuarioUncheckedCreateWithoutCuentasCobroInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -4175,6 +4254,7 @@ export type UsuarioUpdateWithoutCuentasCobroInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -4226,6 +4306,7 @@ export type UsuarioUncheckedUpdateWithoutCuentasCobroInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -4274,6 +4355,7 @@ export type UsuarioCreateWithoutPaqueteAdquiridoInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -4325,6 +4407,7 @@ export type UsuarioUncheckedCreateWithoutPaqueteAdquiridoInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -4389,6 +4472,7 @@ export type UsuarioUpdateWithoutPaqueteAdquiridoInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -4440,6 +4524,7 @@ export type UsuarioUncheckedUpdateWithoutPaqueteAdquiridoInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -4488,6 +4573,7 @@ export type UsuarioCreateWithoutSesionActividadInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -4539,6 +4625,7 @@ export type UsuarioUncheckedCreateWithoutSesionActividadInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -4603,6 +4690,7 @@ export type UsuarioUpdateWithoutSesionActividadInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -4654,6 +4742,7 @@ export type UsuarioUncheckedUpdateWithoutSesionActividadInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -4702,6 +4791,7 @@ export type UsuarioCreateWithoutEgresosInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -4753,6 +4843,7 @@ export type UsuarioUncheckedCreateWithoutEgresosInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -4817,6 +4908,7 @@ export type UsuarioUpdateWithoutEgresosInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -4868,6 +4960,7 @@ export type UsuarioUncheckedUpdateWithoutEgresosInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -4916,6 +5009,7 @@ export type UsuarioCreateWithoutMovimientosCajaInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -4967,6 +5061,7 @@ export type UsuarioUncheckedCreateWithoutMovimientosCajaInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -5031,6 +5126,7 @@ export type UsuarioUpdateWithoutMovimientosCajaInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -5082,6 +5178,7 @@ export type UsuarioUncheckedUpdateWithoutMovimientosCajaInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -5130,6 +5227,7 @@ export type UsuarioCreateWithoutCargosRecepcionInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -5181,6 +5279,7 @@ export type UsuarioUncheckedCreateWithoutCargosRecepcionInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -5234,6 +5333,7 @@ export type UsuarioCreateWithoutCargosRecepcionCreadosInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -5285,6 +5385,7 @@ export type UsuarioUncheckedCreateWithoutCargosRecepcionCreadosInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -5349,6 +5450,7 @@ export type UsuarioUpdateWithoutCargosRecepcionInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -5400,6 +5502,7 @@ export type UsuarioUncheckedUpdateWithoutCargosRecepcionInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -5459,6 +5562,7 @@ export type UsuarioUpdateWithoutCargosRecepcionCreadosInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -5510,6 +5614,7 @@ export type UsuarioUncheckedUpdateWithoutCargosRecepcionCreadosInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -5558,6 +5663,7 @@ export type UsuarioCreateWithoutPagosRecepcionCreadosInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -5609,6 +5715,7 @@ export type UsuarioUncheckedCreateWithoutPagosRecepcionCreadosInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -5673,6 +5780,7 @@ export type UsuarioUpdateWithoutPagosRecepcionCreadosInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -5724,6 +5832,7 @@ export type UsuarioUncheckedUpdateWithoutPagosRecepcionCreadosInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -5772,6 +5881,7 @@ export type UsuarioCreateWithoutAuditoriasInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -5823,6 +5933,7 @@ export type UsuarioUncheckedCreateWithoutAuditoriasInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -5887,6 +5998,7 @@ export type UsuarioUpdateWithoutAuditoriasInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -5938,6 +6050,7 @@ export type UsuarioUncheckedUpdateWithoutAuditoriasInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -5986,6 +6099,7 @@ export type UsuarioCreateWithoutReferidosInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -6037,6 +6151,7 @@ export type UsuarioUncheckedCreateWithoutReferidosInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -6101,6 +6216,7 @@ export type UsuarioUpdateWithoutReferidosInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -6152,6 +6268,7 @@ export type UsuarioUncheckedUpdateWithoutReferidosInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -6200,6 +6317,7 @@ export type UsuarioCreateWithoutProductosFumigacionSolicitadosInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -6251,6 +6369,7 @@ export type UsuarioUncheckedCreateWithoutProductosFumigacionSolicitadosInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -6315,6 +6434,7 @@ export type UsuarioUpdateWithoutProductosFumigacionSolicitadosInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -6366,6 +6486,7 @@ export type UsuarioUncheckedUpdateWithoutProductosFumigacionSolicitadosInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -6414,6 +6535,7 @@ export type UsuarioCreateWithoutPermisosAprobadosInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -6465,6 +6587,7 @@ export type UsuarioUncheckedCreateWithoutPermisosAprobadosInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -6518,6 +6641,7 @@ export type UsuarioCreateWithoutPermisosSolicitadosInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -6569,6 +6693,7 @@ export type UsuarioUncheckedCreateWithoutPermisosSolicitadosInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -6633,6 +6758,7 @@ export type UsuarioUpdateWithoutPermisosAprobadosInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -6684,6 +6810,7 @@ export type UsuarioUncheckedUpdateWithoutPermisosAprobadosInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -6743,6 +6870,7 @@ export type UsuarioUpdateWithoutPermisosSolicitadosInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -6794,6 +6922,7 @@ export type UsuarioUncheckedUpdateWithoutPermisosSolicitadosInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -6842,6 +6971,7 @@ export type UsuarioCreateWithoutDeclaracionesEfectivoInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -6893,6 +7023,7 @@ export type UsuarioUncheckedCreateWithoutDeclaracionesEfectivoInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -6957,6 +7088,7 @@ export type UsuarioUpdateWithoutDeclaracionesEfectivoInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -7008,6 +7140,7 @@ export type UsuarioUncheckedUpdateWithoutDeclaracionesEfectivoInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -7056,6 +7189,7 @@ export type UsuarioCreateWithoutConsignacionesCreadasInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -7107,6 +7241,7 @@ export type UsuarioUncheckedCreateWithoutConsignacionesCreadasInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -7160,6 +7295,7 @@ export type UsuarioCreateWithoutConsignacionesTecnicoInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -7211,6 +7347,7 @@ export type UsuarioUncheckedCreateWithoutConsignacionesTecnicoInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -7275,6 +7412,7 @@ export type UsuarioUpdateWithoutConsignacionesCreadasInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -7326,6 +7464,7 @@ export type UsuarioUncheckedUpdateWithoutConsignacionesCreadasInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -7385,6 +7524,7 @@ export type UsuarioUpdateWithoutConsignacionesTecnicoInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -7436,6 +7576,7 @@ export type UsuarioUncheckedUpdateWithoutConsignacionesTecnicoInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -7485,6 +7626,7 @@ export type UsuarioCreateManyTenantInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -7507,6 +7649,7 @@ export type UsuarioUpdateWithoutTenantInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -7557,6 +7700,7 @@ export type UsuarioUncheckedUpdateWithoutTenantInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -7607,6 +7751,7 @@ export type UsuarioUncheckedUpdateManyWithoutTenantInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -7631,6 +7776,7 @@ export type UsuarioCreateManyEmpresaInput = {
   username: string
   email: string
   password: string
+  authVersion?: number
   activo?: boolean
   nombre: string
   apellido: string
@@ -7652,6 +7798,7 @@ export type UsuarioUpdateWithoutEmpresaInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -7703,6 +7850,7 @@ export type UsuarioUncheckedUpdateWithoutEmpresaInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -7753,6 +7901,7 @@ export type UsuarioUncheckedUpdateManyWithoutEmpresaInput = {
   username?: Prisma.StringFieldUpdateOperationsInput | string
   email?: Prisma.StringFieldUpdateOperationsInput | string
   password?: Prisma.StringFieldUpdateOperationsInput | string
+  authVersion?: Prisma.IntFieldUpdateOperationsInput | number
   activo?: Prisma.BoolFieldUpdateOperationsInput | boolean
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
   apellido?: Prisma.StringFieldUpdateOperationsInput | string
@@ -8041,6 +8190,7 @@ export type UsuarioSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   username?: boolean
   email?: boolean
   password?: boolean
+  authVersion?: boolean
   activo?: boolean
   nombre?: boolean
   apellido?: boolean
@@ -8095,6 +8245,7 @@ export type UsuarioSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
   username?: boolean
   email?: boolean
   password?: boolean
+  authVersion?: boolean
   activo?: boolean
   nombre?: boolean
   apellido?: boolean
@@ -8121,6 +8272,7 @@ export type UsuarioSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
   username?: boolean
   email?: boolean
   password?: boolean
+  authVersion?: boolean
   activo?: boolean
   nombre?: boolean
   apellido?: boolean
@@ -8147,6 +8299,7 @@ export type UsuarioSelectScalar = {
   username?: boolean
   email?: boolean
   password?: boolean
+  authVersion?: boolean
   activo?: boolean
   nombre?: boolean
   apellido?: boolean
@@ -8165,7 +8318,7 @@ export type UsuarioSelectScalar = {
   codigoReferido?: boolean
 }
 
-export type UsuarioOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "username" | "email" | "password" | "activo" | "nombre" | "apellido" | "telefono" | "tipoDocumento" | "numeroDocumento" | "rol" | "empresaId" | "createdAt" | "aprobado" | "numberId" | "whatsappGroupId" | "pushToken" | "placa" | "moto" | "codigoReferido", ExtArgs["result"]["usuario"]>
+export type UsuarioOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tenantId" | "username" | "email" | "password" | "authVersion" | "activo" | "nombre" | "apellido" | "telefono" | "tipoDocumento" | "numeroDocumento" | "rol" | "empresaId" | "createdAt" | "aprobado" | "numberId" | "whatsappGroupId" | "pushToken" | "placa" | "moto" | "codigoReferido", ExtArgs["result"]["usuario"]>
 export type UsuarioInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   cargosRecepcion?: boolean | Prisma.Usuario$cargosRecepcionArgs<ExtArgs>
   cargosRecepcionCreados?: boolean | Prisma.Usuario$cargosRecepcionCreadosArgs<ExtArgs>
@@ -8246,6 +8399,7 @@ export type $UsuarioPayload<ExtArgs extends runtime.Types.Extensions.InternalArg
     username: string
     email: string
     password: string
+    authVersion: number
     activo: boolean
     nombre: string
     apellido: string
@@ -8719,6 +8873,7 @@ export interface UsuarioFieldRefs {
   readonly username: Prisma.FieldRef<"Usuario", 'String'>
   readonly email: Prisma.FieldRef<"Usuario", 'String'>
   readonly password: Prisma.FieldRef<"Usuario", 'String'>
+  readonly authVersion: Prisma.FieldRef<"Usuario", 'Int'>
   readonly activo: Prisma.FieldRef<"Usuario", 'Boolean'>
   readonly nombre: Prisma.FieldRef<"Usuario", 'String'>
   readonly apellido: Prisma.FieldRef<"Usuario", 'String'>

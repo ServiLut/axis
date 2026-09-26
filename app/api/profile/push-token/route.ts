@@ -19,7 +19,7 @@ export async function PUT(request: Request) {
     }
 
     if (!token) return NextResponse.json({ message: "No autorizado" }, { status: 401 });
-    const decoded = verifyToken(token);
+    const decoded = await verifyToken(token);
     if (!decoded) return NextResponse.json({ message: "Token inválido" }, { status: 401 });
 
     const { pushToken } = await request.json();

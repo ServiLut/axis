@@ -7,13 +7,13 @@ export async function POST(request: Request) {
   try {
     const cookieStore = await cookies();
     let token = cookieStore.get("token")?.value;
-    let user = token ? verifyToken(token) : null;
+    let user = token ? await verifyToken(token) : null;
 
     if (!user) {
       const authHeader = request.headers.get("Authorization");
       if (authHeader && authHeader.startsWith("Bearer ")) {
         token = authHeader.split(" ")[1];
-        user = verifyToken(token);
+        user = await verifyToken(token);
       }
     }
 

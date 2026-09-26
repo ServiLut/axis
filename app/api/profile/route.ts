@@ -19,7 +19,7 @@ export async function GET() {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return NextResponse.json({ error: "Token inválido" }, { status: 401 });
@@ -91,7 +91,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
 
   if (!payload) {
     return NextResponse.json({ error: "Token inválido" }, { status: 401 });
@@ -128,6 +128,7 @@ export async function PUT(req: NextRequest) {
     if (password && password.trim() !== "") {
         const hashedPassword = await bcrypt.hash(password, 10);
         dataToUpdate.password = hashedPassword;
+        dataToUpdate.authVersion = { increment: 1 };
     }
 
     // Update user info

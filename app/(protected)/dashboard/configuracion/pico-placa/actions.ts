@@ -17,7 +17,7 @@ export interface TecnicoPicoPlaca {
 }
 
 export async function getPicoPlacaRules(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: 'No autorizado' };
 
   try {
@@ -41,7 +41,7 @@ export async function getPicoPlacaRules(token: string) {
 
 // Actualización batch para las reglas (para el nuevo modal)
 export async function updatePicoPlacaRulesBatch(token: string, rules: { dia: string; n1: number | null; n2: number | null }[]) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: 'No autorizado' };
 
   try {
@@ -87,7 +87,7 @@ export async function updatePicoPlacaRulesBatch(token: string, rules: { dia: str
 
 // Actualizar vehículo de usuario
 export async function updateUsuarioVehiculo(token: string, userId: number, placa: string | null, isMoto: boolean) {
-    const payload = verifyToken(token);
+    const payload = await verifyToken(token);
     if (!payload) return { error: 'No autorizado' };
 
     try {
@@ -126,7 +126,7 @@ export async function updateUsuarioVehiculo(token: string, userId: number, placa
 
 
 export async function getTecnicosStatus(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: 'No autorizado' };
 
   try {

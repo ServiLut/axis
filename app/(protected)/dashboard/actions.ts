@@ -166,7 +166,7 @@ async function getPsychologyDashboardStats(selectedDate?: string): Promise<Psych
 }
 
 export async function getDashboardStats(token: string, selectedDate?: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -461,7 +461,7 @@ export async function getPsychologyOutstandingDetails(
   type: "today" | "total",
   selectedDate?: string,
 ) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -531,7 +531,7 @@ export async function getPsychologyOutstandingDetails(
 }
 
 export async function getAllTenants(token: string) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -552,7 +552,7 @@ export async function getAllTenants(token: string) {
 }
 
 export async function switchUserTenant(token: string, newTenantId: number) {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
@@ -578,6 +578,7 @@ export async function switchUserTenant(token: string, newTenantId: number) {
       apellido: updatedUser.apellido,
       role: updatedUser.rol!,
       aprobado: updatedUser.aprobado || false,
+      authVersion: updatedUser.authVersion,
     });
 
     return { success: true, newToken };
@@ -588,7 +589,7 @@ export async function switchUserTenant(token: string, newTenantId: number) {
 }
 
 export async function getUnpaidServicesDetails(token: string, type: 'today' | 'total') {
-  const payload = verifyToken(token);
+  const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
 
   try {
