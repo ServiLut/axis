@@ -125,3 +125,24 @@ Respuestas rápidas observadas que requieren resolución antes de envío:
 
 El flujo actual de coexistencia descrito por Chatwoot no demuestra que la
 instalación 4.0.3 lo soporte: verificar versión/proveedor antes de migrar el número.
+
+## Verificación en producción, 26 de septiembre, 14:42 Bogotá
+
+- `8c00e8da41103072122d6617bf995c98d7e1f9fe` subido a main; Dokploy terminó
+  correctamente en 1 min 52 s.
+- Flujo manual `P7tAdnvzYvYugUWG` consultó Axis con la credencial dedicada y
+  devolvió tenant 4 / empresa 3 / PSICOLOGOS / Psicologos en Colombia.
+- Se consultó disponibilidad de Dixon (29) y consultorio 10 (1): intervalos
+  ocupados y cobertura completa en esa consulta, sin datos de pacientes.
+- El catálogo estricto de esa empresa devolvió solamente Alquiler de Consultorio
+  (49), 18.900 COP. El código antiguo carga terapias globalmente para tenant 4.
+  Debe reconciliarse la pertenencia de los servicios antes de habilitar ventas;
+  no ampliar la API a otros tenants para ocultar esa inconsistencia.
+- 54 casos pasaron dentro de n8n, incluidos avisos exclusivamente a Sandra.
+  Sigue siendo una prueba sin envíos. No equivale a atención autónoma.
+- Chatwoot sigue en login, pendiente confirmación de correo de la titular.
+- El navegador bloqueó la apertura del dominio Evolution con
+  `ERR_BLOCKED_BY_CLIENT`; no se comprobó un número conectado.
+
+Evidencias locales sin claves: `.tmp/n8n-alertas-sandra-verificado.png` y
+`.tmp/n8n-axis-produccion-verificado.png`. No subir `.env.psicologos-n8n.local`.
