@@ -89,6 +89,12 @@ Los controles entre tablas se aplican en las acciones del servidor y las restric
 
 Las cuatro pruebas de SQL ejecutan ambos scripts en PostgreSQL embebido (PGlite), sin bases externas. Verifican restricciones y transacciones reales, pero no sustituyen pruebas de varias conexiones concurrentes sobre el PostgreSQL del VPS.
 
+### Recorrido visual local
+
+`node tests/preview-recepcion.mjs` sirve los componentes reales de Recepción y Caja en `http://127.0.0.1:4175`, con acciones simuladas en memoria, un profesional ficticio y una reserva ficticia. El aviso visible identifica la prueba; no usa la BD ni credenciales de producción. `--build-only` reconstruye los archivos sin abrir otro servidor.
+
+El 25/09 se verificó en Chrome: diez hojas por $8.000; dieciséis minutos extra en otro cargo por $8.000; aplicación de un pago compartido de $12.000 con saldo restante de $4.000; y, en una segunda ejecución, un pago de $8.000 reflejado una sola vez en el libro diario. Esta comprobación cubre interacción y presentación con datos simulados. No prueba por sí sola la conexión entre el servidor real y PostgreSQL; esa parte tiene las pruebas SQL anteriores y requiere validación posterior en el entorno de despliegue.
+
 También aprobados: Prisma validate/generate, TypeScript y ESLint sobre los archivos de aplicación modificados. `npm.cmd run build` terminó con código 0 y 71 páginas prerenderizadas usando endpoints y claves ficticios locales, con Recepción habilitada. El empaquetado standalone emitió dos advertencias de Windows por nombres `node:buffer`; el artefacto Windows no se debe desplegar al VPS: reconstruir y validar allí en Linux. El primer intento sin variables había fallado por configuración ausente, no por TypeScript.
 
 ## Hallazgos que requieren la siguiente revisión
