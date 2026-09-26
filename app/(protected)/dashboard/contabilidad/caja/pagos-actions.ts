@@ -74,7 +74,9 @@ export async function getPendientesPsicologia(token: string, fecha: string, offs
           (WHERE "fecha" < ${fecha} AND "situacion" = 'PENDIENTE') OVER(),0)::numeric(12,2)::text AS "valorVencido",
         COALESCE(SUM("valor"::numeric-"registrado"::numeric) FILTER
           (WHERE "situacion" = 'SIN_LIBRO') OVER(),0)::numeric(12,2)::text AS "valorSinLibro"
-      FROM pendientes ORDER BY "fecha" DESC,"id"::bigint DESC,"origen" DESC LIMIT 200 OFFSET ${offset}`;
+      FROM pendientes ORDER BY CASE WHEN "situacion"='SIN_LIBRO' OR ("situacion"='PENDIENTE' AND "fecha"<${fecha}) THEN 0
+        WHEN "situacion"='PENDIENTE' THEN 1 ELSE 2 END,
+        "fecha" DESC,"id"::bigint DESC,"origen" DESC LIMIT 200 OFFSET ${offset}`;
     return { items: rows.map((row): OpenItem => ({ origen: row.origen, id: row.id, fecha: row.fecha,
       persona: row.persona, valor: row.valor, registrado: row.registrado, estado: row.estado, situacion: row.situacion })),
       summary: { total: rows[0]?.totalRegistros ?? 0, vencidos: rows[0]?.vencidos ?? 0,

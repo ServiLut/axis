@@ -178,11 +178,15 @@ test("alquiler identifica al profesional, conserva legado y excluye paquetes can
   const f = await fixture();
   try {
     await f.db.exec(`UPDATE "PaqueteAdquirido" SET "clienteId"=NULL,"usuarioId"=10 WHERE "id"=3;
+      INSERT INTO "CitasPsicologos"("id","tenantId","pacienteId","fechaCita","valor","estadoPago","realizada")
+      VALUES(20,4,100,'2026-09-20T14:00:00Z',5000,'PENDIENTE',true);
       INSERT INTO "PaqueteAdquirido"("id","tenantId","clienteId","fechaCompra","precioPagado","estado")
       VALUES(4,4,100,'2026-09-26T15:00:00Z',30000,'CANCELADO');`);
     const open = await f.actions.getPendientesPsicologia("valid","2026-09-26");
     assert.ok("items" in open,JSON.stringify(open));
     if ("items" in open) {
+      assert.equal(open.items[0].id,"20");
+      assert.equal(open.items[0].origen,"CITA");
       assert.equal(open.items.find(r=>r.origen==="PAQUETE" && r.id==="3")?.persona,"Recepción Prueba");
       assert.equal(open.items.some(r=>r.origen==="PAQUETE" && r.id==="4"),false);
     }
