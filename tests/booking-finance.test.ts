@@ -13,6 +13,13 @@ const auth = { verifyToken: (token: string) => token === "valid" ? { userId: 10 
 const actor = { id: 10, tenantId: 4, rol: "SU_ADMIN", activo: true, aprobado: true };
 const mockEnums = { Prisma, Rol: { SU_ADMIN: "SU_ADMIN" }, EstadoPagoOrden: { PENDIENTE: "PENDIENTE", CONCILIADO: "CONCILIADO" } };
 
+test("unconfigured WhatsApp transport never confirms a delivery", async () => {
+  const f = bookingFixture();
+  assert.match((await f.appointments.sendCitaToPsicologo("valid")).error || "", /No se envió ningún mensaje/);
+  assert.match((await f.appointments.sendCitaToPsicologo("invalid")).error || "", /No autorizado/);
+  assert.equal(f.state.writes, 0);
+});
+
 function bookingFixture() {
   const state = { occupied: false, active: true, ownerValid: true, writes: 0, audits: 0, locks: 0, query: "", cancelled: false };
   const cita = { id: 1n, tenantId: 4, psicologoId: 20, consultorioId: 2n, realizada: false as boolean | null,

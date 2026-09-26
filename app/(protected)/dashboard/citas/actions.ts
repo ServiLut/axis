@@ -956,12 +956,9 @@ export async function searchClientes(token: string, term: string) {
 export async function sendCitaToPsicologo(token: string) {
    const payload = verifyToken(token);
    if (!payload) return { error: "No autorizado" };
- 
-   try {
-     return { success: true, message: "Información enviada al psicólogo" };
-   } catch {
-     return { error: "Error al enviar información" };
-   }
+
+   // There is no configured transport here. Never report a delivery that did not happen.
+   return { error: "No se envió ningún mensaje. La conexión de WhatsApp está pendiente de configuración y verificación." };
 }
 
 export async function getAllCitasForExport(token: string, filters: {
