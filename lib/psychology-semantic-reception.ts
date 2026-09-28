@@ -3,7 +3,8 @@ import type {Understanding} from './psychology-ai';
 
 /** AI chooses intent; approved templates and persisted state control prices and actions. */
 export function semanticReception(event:ReceptionEvent,stage:string,state:ReceptionState,templates:ReceptionTemplates,policy:string,u:Understanding|null):ReceptionResult{
- if(event.fromMe||!u)return decideReception(event,stage,state,templates,policy);
+ const baseline=decideReception(event,stage,state,templates,policy);
+ if(event.fromMe||!u||baseline.handoff==='Atención humana urgente')return baseline;
  if(u.intent==='urgent')return decideReception({...event,text:'me quiero morir'},stage,state,templates,policy);
  if(stage==='HUMAN')return {stage,state,messages:[]};
  if(u.intent==='stop')return decideReception({...event,text:'no me escriban'},stage,state,templates,policy);

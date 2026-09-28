@@ -66,9 +66,10 @@ async function processOne(config:AutomationConfig) {
     let understanding:Understanding|null=null;
     if(row.analysis){try{understanding=parseUnderstanding(row.analysis)}catch{ /* Invalid model output has no authority. */ }}
     if(!e.fromMe&&understanding?.intent==='confirm'&&understanding.confidence>=0.9){
-      const proposals=await tx.$queryRaw<{code:string}[]>`SELECT code FROM "PsicologiaBotProposal" WHERE status='PENDING' AND "expiresAt">NOW() AND ("customerPhone"=${e.phone} OR "professionalPhone"=${e.phone}) LIMIT 2`;
+      const proposals=await tx.$queryRaw<{code:string;details:{date:string;start:string;end:string;serviceId:string;roomId:string|null;professionalId:number}}[]>`SELECT code,details FROM "PsicologiaBotProposal" WHERE status='PENDING' AND "expiresAt">NOW() AND ("customerPhone"=${e.phone} OR "professionalPhone"=${e.phone}) LIMIT 2`;
       const last=await tx.$queryRaw<{content:string}[]>`SELECT content FROM "PsicologiaBotOutbox" WHERE phone=${e.phone} AND status='ACCEPTED' ORDER BY "createdAt" DESC,id DESC LIMIT 1`;
-      if(proposals.length===1&&last[0]?.content.includes('CONFIRMAR '+proposals[0].code))e.text='CONFIRMAR '+proposals[0].code;
+      const unchanged=proposals.length===1&&(['date','start','end','serviceId','roomId','professionalId'] as const).every(key=>understanding![key]===null||understanding![key]===proposals[0].details[key]);
+      if(unchanged&&last[0]?.content.includes('CONFIRMAR '+proposals[0].code))e.text='CONFIRMAR '+proposals[0].code;
     }
     let bookingHandled=false;
     if(!e.fromMe&&e.kind==='text'&&/^(RESERVAR|CONFIRMAR|SOPORTE)\s/i.test(e.text)) {

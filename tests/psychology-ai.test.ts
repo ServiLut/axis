@@ -36,6 +36,7 @@ test('semantic intent retains native pricing and payment order and respects huma
  assert.equal(d.stage,'OFFER');assert.ok(d.messages.includes(templates.individual.text));assert.ok(!d.messages.join().includes('500'));assert.ok(!d.messages.join().includes('20.000'));
  assert.deepEqual(semanticReception(e,'HUMAN',{},templates,'DEPOSIT_20000',u).messages,[]);
  const urgent=semanticReception(e,'HUMAN',{},templates,'DEPOSIT_20000',{...u,intent:'urgent'});assert.equal(urgent.handoff,'Atención humana urgente');
+ const missed=semanticReception({...e,text:'me quiero morir'},'NEED',{},templates,'DEPOSIT_20000',{...u,intent:'unknown',confidence:0.1});assert.equal(missed.handoff,'Atención humana urgente');
  const stop=semanticReception(e,'OFFER',{},templates,'DEPOSIT_20000',{...u,intent:'stop'});assert.equal(stop.state.reason,'No contactar');
 });
 test('private AI workflow authenticates, strips credentials, validates media and disables execution logs',async()=>{

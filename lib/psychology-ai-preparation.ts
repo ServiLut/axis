@@ -9,6 +9,7 @@ export async function prepareNextPsychologyEvent(){
   SELECT id,phone,"eventAt",kind,text,"fromMe",analysis,transcript,"analysisError" FROM "PsicologiaBotEvent" WHERE status='PENDING' ORDER BY "receivedAt",id LIMIT 1`;
  const row=rows[0];if(!row||row.fromMe||row.analysis||row.analysisError||row.kind==='attachment')return;
  if(row.kind==='text'&&/^(RESERVAR|CONFIRMAR|SOPORTE|PAUSAR|REANUDAR|POLITICA PAGO)\s|^(ESTADO BOT|AYUDA BOT)$/i.test(row.text.trim()))return;
+ if(row.kind==='text'&&/suicid|matarme|quitarme la vida|me quiero morir|me corte|me estoy cortando|sobredosis|no quiero vivir/i.test(row.text.normalize('NFD').replace(/[\u0300-\u036f]/g,'')))return;
  const event={...row,at:row.eventAt.toISOString()};
  try{
   if(row.kind==='audio'){
