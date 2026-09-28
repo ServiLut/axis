@@ -1,12 +1,17 @@
 import {decideReception,type ReceptionEvent,type ReceptionState,type ReceptionTemplates,type ReceptionResult} from './psychology-reception';
 import type {Understanding} from './psychology-ai';
+import {contextReception} from './psychology-reception-context';
 
 /** AI chooses intent; approved templates and persisted state control prices and actions. */
 export function semanticReception(event:ReceptionEvent,stage:string,state:ReceptionState,templates:ReceptionTemplates,policy:string,u:Understanding|null):ReceptionResult{
  const baseline=decideReception(event,stage,state,templates,policy);
- if(event.fromMe||!u||baseline.handoff==='Atención humana urgente')return baseline;
- if(u.intent==='urgent')return decideReception({...event,text:'me quiero morir'},stage,state,templates,policy);
+ if(event.fromMe||baseline.handoff==='Atención humana urgente')return baseline;
+ if(u?.intent==='urgent')return decideReception({...event,text:'me quiero morir'},stage,state,templates,policy);
  if(stage==='HUMAN')return {stage,state,messages:[]};
+ const contextual=contextReception(event,stage,state);if(contextual)return contextual;
+ if(!u)return baseline;
+ if(u.intent==='greeting'&&stage==='NEW'&&state.context?.hasHistory)return {stage:'NEED',state,messages:['Hola 😊 ¿En qué podemos ayudarte con lo que venían conversando?']};
+ if(state.resumedFrom&&u.intent==='greeting'&&stage==='NEED')return {stage,state,messages:['Hola 😊 Estoy aquí para continuar contigo. ¿Qué necesitas completar?']};
  if(u.intent==='stop')return decideReception({...event,text:'no me escriban'},stage,state,templates,policy);
  if(u.confidence<0.85){
   const next={...state,clarifications:(state.clarifications||0)+1};

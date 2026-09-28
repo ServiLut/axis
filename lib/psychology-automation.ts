@@ -1,7 +1,7 @@
 import prisma from './prisma';
 import type { Prisma } from '@/prisma/generated/prisma/client';
 import { createAuditLog } from './audit';
-import { decideReception, phoneDigits, SANDRA_PHONE, type ReceptionEvent, type ReceptionTemplates, type ReceptionState } from './psychology-reception';
+import { pauseForStaff,resumeReception,phoneDigits, SANDRA_PHONE, type ReceptionEvent, type ReceptionTemplates, type ReceptionState } from './psychology-reception';
 import { ensurePsychologyConversation, sendPsychologyMessage, verifyPsychologyChannel } from './psychology-chatwoot';
 import { handleBookingMessage } from './psychology-bot-booking';
 import {randomUUID} from 'node:crypto';
@@ -13,11 +13,14 @@ import {handlePatientIntake} from './psychology-patient-intake';
 import {handleReturningPatient} from './psychology-returning-patient';
 import {claimPsychologyOutbox} from './psychology-outbox';
 import {reviewCampaignContext} from './psychology-campaign-review';
+import {enqueueIdleChatResumes,idleChatSources,idleResumeDecision,idleReplyStillCurrent} from './psychology-handover';
+import {chiefHelpMessage,chiefBookingProblem} from './psychology-chief-messages';
+import {contextReception} from './psychology-reception-context';
 
 type Tx=Prisma.TransactionClient;
-export type AutomationConfig={ enabled:boolean; activatedAt:Date|null; templates:ReceptionTemplates; paymentPolicy:string };
+export type AutomationConfig={ enabled:boolean; activatedAt:Date|null; templates:ReceptionTemplates; paymentPolicy:string;staffIdleMinutes?:number };
 export async function automationConfig():Promise<AutomationConfig> {
-  const rows=await prisma.$queryRaw<AutomationConfig[]>`SELECT enabled,"activatedAt",templates,"paymentPolicy" FROM "PsicologiaBotConfig" WHERE id=4`;
+  const rows=await prisma.$queryRaw<AutomationConfig[]>`SELECT enabled,"activatedAt",templates,"paymentPolicy","staffIdleMinutes" FROM "PsicologiaBotConfig" WHERE id=4`;
   const company=await prisma.empresa.findFirst({where:{id:3,tenantId:4,estado:true},include:{tenant:true}});
   const normalize=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
   if(!company||normalize(company.nombre)!=='PSICOLOGOS EN COLOMBIA'||normalize(company.tenant.nombre)!=='PSICOLOGOS'||!rows[0]) throw new Error('BOT_SCOPE');
@@ -26,8 +29,8 @@ export async function automationConfig():Promise<AutomationConfig> {
 export async function enqueuePsychologyEvent(event:ReceptionEvent) {
   return prisma.$transaction(async tx=>{
     await tx.$executeRaw`INSERT INTO "PsicologiaBotConversation" (phone) VALUES (${event.phone}) ON CONFLICT DO NOTHING`;
-    const count=await tx.$executeRaw`INSERT INTO "PsicologiaBotEvent" (id,phone,"eventAt",kind,text,"fromMe")
-      VALUES (${event.id},${event.phone},${new Date(event.at)},${event.kind},${event.text},${event.fromMe}) ON CONFLICT DO NOTHING`;
+    const count=await tx.$executeRaw`INSERT INTO "PsicologiaBotEvent" (id,phone,"eventAt",kind,text,"fromMe","quotedText")
+      VALUES (${event.id},${event.phone},${new Date(event.at)},${event.kind},${event.text},${event.fromMe},${event.quotedText||null}) ON CONFLICT DO NOTHING`;
     return {accepted:true,duplicate:count===0};
   });
 }
@@ -46,9 +49,13 @@ async function adminMessage(tx:Tx,e:ReceptionEvent) {
   const command=/^(PAUSAR|REANUDAR)\s+(\+?[1-9][\d\s-]{7,20})$/i.exec(e.text.trim());
   if(command) {
     const phone=phoneDigits(command[2]);if(!phone||phone===SANDRA_PHONE)return;
-    const stage=command[1].toUpperCase()==='PAUSAR'?'HUMAN':'NEW';
-    await tx.$executeRaw`INSERT INTO "PsicologiaBotConversation" (phone,stage) VALUES (${phone},${stage})
-      ON CONFLICT (phone) DO UPDATE SET stage=EXCLUDED.stage,state='{}',"updatedAt"=NOW()`;
+    const previous=(await tx.$queryRaw<{stage:string;state:ReceptionState}[]>`SELECT stage,state FROM "PsicologiaBotConversation" WHERE phone=${phone} FOR UPDATE`)[0];
+    const pause=command[1].toUpperCase()==='PAUSAR';
+    const next=pause?{stage:'HUMAN',state:{...previous?.state,reason:'Pausa solicitada por Sandra',humanHold:{kind:'manual' as const,resumeStage:previous?.state.humanHold?.resumeStage||previous?.stage||'NEED',since:e.at}}}:{...resumeReception(previous?.state||{})};
+    if(!pause)next.state.resumedFrom=e.id;
+    const {stage,state}=next;
+    await tx.$executeRaw`INSERT INTO "PsicologiaBotConversation" (phone,stage,state) VALUES (${phone},${stage},${JSON.stringify(state)}::jsonb)
+      ON CONFLICT (phone) DO UPDATE SET stage=EXCLUDED.stage,state=EXCLUDED.state,"updatedAt"=NOW()`;
     if(stage==='HUMAN')await tx.$executeRaw`UPDATE "PsicologiaBotOutbox" SET status='CANCELLED' WHERE phone=${phone} AND status='PENDING'`;
     await queuePsychologyMessage(tx,e.id+':admin',SANDRA_PHONE,`${stage==='HUMAN'?'Atención automática pausada':'Atención automática habilitada para el próximo mensaje'}: +${phone}.`);
     await createAuditLog({tenantId:4,accion:'BOT_CONVERSATION_MODE',entidad:'WhatsApp',entidadId:phone,detalles:{stage,sourceEvent:e.id,actor:'Sandra verificada por canal'},tx});
@@ -64,11 +71,22 @@ async function processOne(config:AutomationConfig) {
   return prisma.$transaction(async tx=>{
     // All workers lock in the same order. Serialize state transitions, including sender echoes.
     await tx.$queryRaw`SELECT id FROM "PsicologiaBotConfig" WHERE id=4 FOR UPDATE`;
-    const rows=await tx.$queryRaw<(ReceptionEvent&{eventAt:Date;analysis:unknown;transcript:string|null;analysisError:string|null})[]>`SELECT id,phone,"eventAt",kind,text,"fromMe",analysis,transcript,"analysisError" FROM "PsicologiaBotEvent" WHERE status='PENDING' ORDER BY "receivedAt",id LIMIT 1 FOR UPDATE SKIP LOCKED`;
+    const rows=await tx.$queryRaw<(ReceptionEvent&{eventAt:Date;analysis:unknown;transcript:string|null;analysisError:string|null;resumeOf:string|null})[]>`SELECT id,phone,"eventAt",kind,text,"fromMe",analysis,transcript,"analysisError","resumeOf" FROM "PsicologiaBotEvent" WHERE status='PENDING' ORDER BY "receivedAt",id LIMIT 1 FOR UPDATE SKIP LOCKED`;
     const row=rows[0];if(!row)return false;
     const e:ReceptionEvent={...row,at:row.eventAt.toISOString(),...(row.kind==='audio'&&row.transcript?{kind:'text',text:row.transcript}:{})};
     let understanding:Understanding|null=null;
     if(row.analysis){try{understanding=parseUnderstanding(row.analysis)}catch{ /* Invalid model output has no authority. */ }}
+    if(row.resumeOf){
+      const candidate=(await idleChatSources(tx,config.staffIdleMinutes??15,row.resumeOf))[0];
+      const resumed=!row.analysisError&&candidate?idleResumeDecision(candidate.state,understanding,row.resumeOf):null;
+      if(!resumed){
+        await tx.$executeRaw`UPDATE "PsicologiaBotEvent" SET status='DONE',"processedAt"=NOW() WHERE id=${e.id}`;
+        await createAuditLog({tenantId:4,accion:'BOT_IDLE_REVIEW',entidad:'WhatsAppEvento',entidadId:e.id,detalles:{sourceEvent:row.resumeOf,resumed:false,contextRequired:!!row.analysisError},tx});
+        return true;
+      }
+      await tx.$executeRaw`UPDATE "PsicologiaBotConversation" SET stage=${resumed.stage},state=${JSON.stringify(resumed.state)}::jsonb,"updatedAt"=NOW() WHERE phone=${e.phone}`;
+      await createAuditLog({tenantId:4,accion:'BOT_IDLE_RESUMED',entidad:'WhatsAppEvento',entidadId:e.id,detalles:{sourceEvent:row.resumeOf,idleMinutes:config.staffIdleMinutes??15,contextRechecked:true},tx});
+    }
     if(!e.fromMe&&understanding?.intent==='confirm'&&understanding.confidence>=0.9){
       const proposals=await tx.$queryRaw<{code:string;details:{date:string;start:string;end:string;serviceId:string;roomId:string|null;professionalId:number}}[]>`SELECT code,details FROM "PsicologiaBotProposal" WHERE status='PENDING' AND "expiresAt">NOW() AND ("customerPhone"=${e.phone} OR "professionalPhone"=${e.phone}) LIMIT 2`;
       const last=await tx.$queryRaw<{content:string}[]>`SELECT content FROM "PsicologiaBotOutbox" WHERE phone=${e.phone} AND status='ACCEPTED' ORDER BY "createdAt" DESC,id DESC LIMIT 1`;
@@ -79,10 +97,10 @@ async function processOne(config:AutomationConfig) {
     if(!e.fromMe&&e.kind==='text'&&/^(RESERVAR|CONFIRMAR|SOPORTE)\s/i.test(e.text)) {
       await tx.$executeRawUnsafe('SAVEPOINT bot_booking');
       try {bookingHandled=await handleBookingMessage(tx,e,queuePsychologyMessage);}
-      catch {
+      catch (error) {
         await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT bot_booking');
         bookingHandled=true;
-        await queuePsychologyMessage(tx,e.id+':booking-review',SANDRA_PHONE,'No se pudo completar una propuesta de reserva. Revisa registro del paciente, profesional, horario, tarifa y soporte. No se confirmó una cita. Referencia de revisión: '+e.id);
+        await queuePsychologyMessage(tx,e.id+':booking-review',SANDRA_PHONE,chiefBookingProblem(e.phone,error));
         await createAuditLog({tenantId:4,accion:'BOT_BOOKING_REVIEW',entidad:'WhatsAppEvento',entidadId:e.id,detalles:{requiresReview:true,appointmentConfirmed:false},tx});
       }
       await tx.$executeRawUnsafe('RELEASE SAVEPOINT bot_booking');
@@ -102,8 +120,8 @@ async function processOne(config:AutomationConfig) {
         const c=conversations[0];
         // A human reply received while the model was working takes precedence.
         const humanLater=!e.fromMe?await tx.$queryRaw<{id:string}[]>`SELECT id FROM "PsicologiaBotEvent" h WHERE phone=${e.phone} AND "fromMe"=true AND "receivedAt">(SELECT "receivedAt" FROM "PsicologiaBotEvent" WHERE id=${e.id}) AND NOT EXISTS(SELECT 1 FROM "PsicologiaBotOutbox" o WHERE o.phone=h.phone AND o.content=h.text AND o.status IN ('SENDING','ACCEPTED','UNCERTAIN')) LIMIT 1`:[];
-        let decision=humanLater.length?{stage:'HUMAN',state:{...c.state,reason:'Atención de una persona'},messages:[],handoff:undefined}:semanticReception(e,c.stage,c.state,config.templates,config.paymentPolicy,understanding);
-        if(!humanLater.length&&!row.analysisError&&understanding&&decision.handoff!=='Atención humana urgente'){
+        let decision=humanLater.length?pauseForStaff(c.stage,c.state,e.at):semanticReception(e,c.stage,c.state,config.templates,config.paymentPolicy,understanding);
+        if(!humanLater.length&&!row.analysisError&&understanding&&decision.handoff!=='Atención humana urgente'&&!contextReception(e,c.stage,c.state)){
           await tx.$executeRawUnsafe('SAVEPOINT bot_intake');
           try{decision=await handleReturningPatient(tx,e,c.stage,c.state,understanding)??await handlePatientIntake(tx,e,c.stage,c.state,understanding)??decision;}
           catch{
@@ -114,11 +132,12 @@ async function processOne(config:AutomationConfig) {
           await tx.$executeRawUnsafe('RELEASE SAVEPOINT bot_intake');
         }
         if(row.analysisError&&c.stage!=='HUMAN'&&!humanLater.length){decision.handoff='No fue posible interpretar el mensaje: '+row.analysisError;decision.stage='HUMAN';decision.messages=[row.kind==='audio'?'No pude escuchar bien tu audio 😊 ¿Me escribes lo que necesitas, por favor?':'Estoy pidiendo apoyo a nuestra coordinadora para responderte bien.'];}
+        if(decision.handoff)decision.state.humanHold={kind:decision.handoff==='Atención humana urgente'?'urgent':'review',resumeStage:c.stage,since:e.at};
         if(understanding?.intent==='stop'||decision.state.reason==='No contactar')await tx.$executeRaw`INSERT INTO "PsicologiaBotContactPermission" (phone,"optedOut","sourceEvent") VALUES (${e.phone},true,${e.id}) ON CONFLICT(phone) DO UPDATE SET "optedOut"=true,marketing=false,"sourceEvent"=EXCLUDED."sourceEvent","updatedAt"=NOW()`;
         if(e.fromMe||understanding?.intent==='stop'||decision.state.reason==='No contactar')await tx.$executeRaw`UPDATE "PsicologiaBotOutbox" SET status='CANCELLED' WHERE phone=${e.phone} AND status='PENDING'`;
         for(const [i,content] of decision.messages.entries())await queuePsychologyMessage(tx,e.id+':reply:'+i,e.phone,content);
         if(decision.handoff&&(!c.state.alerted||decision.handoff==='Atención humana urgente')) {
-          await queuePsychologyMessage(tx,e.id+':handoff',SANDRA_PHONE,`Recepción Psicólogos: +${e.phone} requiere apoyo. ${decision.handoff}. Revisa el chat antes de responder.\nhttps://chatwoot.servilutioncrm.cloud/app/accounts/2/dashboard`);
+          await queuePsychologyMessage(tx,e.id+':handoff',SANDRA_PHONE,chiefHelpMessage(e.phone,decision.handoff));
           decision.state.alerted=true;
         }
         await tx.$executeRaw`UPDATE "PsicologiaBotConversation" SET stage=${decision.stage},state=${JSON.stringify(decision.state)}::jsonb,"updatedAt"=NOW() WHERE phone=${e.phone}`;
@@ -136,6 +155,7 @@ export async function drainPsychologyAutomation(config:AutomationConfig) {
   if(lease){
     const started=Date.now();
     try{
+      await prisma.$transaction(async tx=>{await tx.$queryRaw`SELECT id FROM "PsicologiaBotConfig" WHERE id=4 FOR UPDATE`;await enqueueIdleChatResumes(tx,config.staffIdleMinutes??15)},{timeout:15000});
       for(let i=0;i<3&&Date.now()-started<20000;i++){await prepareNextPsychologyEvent();if(!await processOne(config))break;processed++;}
       await prisma.$transaction(async tx=>{await tx.$queryRaw`SELECT id FROM "PsicologiaBotConfig" WHERE id=4 FOR UPDATE`;await runChiefReactivationTask(tx,queuePsychologyMessage)},{timeout:15000});
     }
@@ -175,6 +195,10 @@ export async function drainPsychologyAutomation(config:AutomationConfig) {
           await prisma.$executeRaw`UPDATE "PsicologiaBotOutbox" SET status=${gate[0]?.allowed?'PENDING':'CANCELLED'},"lastError"='CAMPAIGN_RECHECK' WHERE id=${item.id} AND status='SENDING'`;
           continue;
         }
+      }
+      if(!await idleReplyStillCurrent(prisma,item.id,item.phone)){
+        await prisma.$executeRaw`UPDATE "PsicologiaBotOutbox" SET status='CANCELLED',"lastError"='IDLE_CONTEXT_CHANGED' WHERE id=${item.id} AND status='SENDING'`;
+        continue;
       }
       sending=true;
       const msg=await sendPsychologyMessage(conversation.id,item.content);
