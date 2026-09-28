@@ -20,8 +20,15 @@ export function chiefAction(event:ReceptionEvent,u:Understanding){
 
 export async function handleChiefUnderstanding(tx:Tx,e:ReceptionEvent,u:Understanding|null,queue:Queue,command:(tx:Tx,e:ReceptionEvent)=>Promise<void>){
  if(e.fromMe||e.phone!==SANDRA_PHONE)return false;
- const action=u?chiefAction(e,u):null;
  const ack=(message:string)=>queue(tx,e.id+':chief-result',SANDRA_PHONE,message);
+ const normalized=e.text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+ if((!u?.adminAction||u.adminAction==='none')&&/era para otra persona|mensaje equivocado|me confundi/.test(normalized)){
+  await ack('Entendido, Sandra 😊 Gracias por aclararlo. Ese mensaje no lo aplicaré a Psicólogos en Colombia.');return true;
+ }
+ if(/fumigaci|control de plagas|reparacion de electrodomesticos/.test(normalized)){
+  await ack('Sandra, este canal corresponde a *Psicólogos en Colombia*. La instrucción menciona otro negocio, así que no inicié esa tarea. ¿Querías enviarla a otro equipo?');return true;
+ }
+ const action=u?chiefAction(e,u):null;
  if(!action){await ack(u?.question?.slice(0,400)||'Sandra, necesito que me aclares la acción y, si aplica, el número de la persona. ¿Qué debo hacer exactamente?');return true;}
  if(action.type==='command'){await command(tx,{...e,text:action.text});return true;}
  if(action.type==='learn'){

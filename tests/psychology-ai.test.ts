@@ -24,6 +24,14 @@ test('outbound administrative messages must preserve an actual quoted instructio
  assert.equal(chiefAction(event,u),null);
  assert.deepEqual(chiefAction({...event,text:'Escribe al 3001112233: Hola, confirmamos tu solicitud.'},u),{type:'send',phone:'573001112233',text:u.instruction});
 });
+test('chief corrections are acknowledged and other businesses never trigger actions',async()=>{
+ const output:string[]=[];const queue=async(_:unknown,id:string,phone:string,text:string)=>{output.push(text)};
+ const command=async()=>{throw Error('Must not execute')};
+ await handleChiefUnderstanding({} as never,{...event,text:'Luisa, me confundí, era para otra persona'},understanding({adminAction:'none',confidence:0.83}),queue,command);
+ assert.ok(output[0].includes('Gracias por aclararlo'));
+ await handleChiefUnderstanding({} as never,{...event,text:'Manda a los clientes un mensaje de fumigación'},understanding({adminAction:'reactivate'}),queue,command);
+ assert.ok(output[1].includes('no inicié esa tarea'));
+});
 test('incomplete model output cannot invent defaults, roles, prices or booking IDs',()=>{
  assert.throws(()=>parseUnderstanding({intent:'admin'}));
  for(const patch of [{confidence:2},{professionalId:1.5},{date:'mañana'},{start:'25:30'},{serviceId:'-1'},{service:'invented'},{explicitConsent:'true'}])assert.throws(()=>understanding(patch as never));
