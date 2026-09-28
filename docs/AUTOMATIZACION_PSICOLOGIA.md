@@ -1,5 +1,69 @@
 # Integración de Psicólogos en Colombia
 
+## Recepción duradera — implementación del 28/09/2026
+
+Endpoint separado: `POST /api/integrations/psicologos/automation`. La clave de
+consulta anterior conserva acceso de solo lectura. La recepción requiere
+`PSICOLOGOS_AUTOMATION_ENABLED`, `PSICOLOGOS_AUTOMATION_TOKEN_HASH`,
+`PSICOLOGOS_CHATWOOT_TOKEN` y `PSICOLOGOS_EVOLUTION_TOKEN`; secretos fuera de Git.
+Aplicar primero `docs/sql/2026-09-28-psychology-automation.sql`.
+
+`PsicologiaBotConfig.enabled` inicia en falso. Activar solo después de comprobar
+el despliegue, identidad del número, respuestas rápidas y workflow autenticado.
+La plantilla exportable está en `automation/n8n/psicologos-recepcion.json`, con
+referencias de credenciales de ejemplo. El flujo real debe conservar su proyecto
+PSICOLOGOS EN COLOMBIA y no guardar payloads de ejecución, ni siquiera en errores:
+Evolution incluye una clave en su envelope y el nodo inicial la descarta.
+
+El sistema guarda eventos antes de acusar recibo, usa identificadores únicos y
+una bandeja de salida duradera. Un envío de resultado incierto no se repite:
+queda pendiente de revisión. Una respuesta de una persona pausa el chat y
+cancela mensajes automáticos aún pendientes. El silencio durante atención humana
+no impide avisar a Sandra si llega una nueva señal urgente.
+
+La aclaración de Sandra, reproducida por la titular el 28/09, es:
+sesión suelta: abono de 20.000 COP descontable del total; paquete: pago único;
+paquete ya pagado: sin nuevo anticipo. Inasistencia: abono no reembolsable según
+la política comunicada. Cancelaciones, excepciones y reprogramaciones se revisan
+con Sandra. No crear multas ni devolver dinero automáticamente. Las plantillas y
+la regla aprobada quedan versionadas en la configuración y Auditoria.
+
+### Controles desde el número autorizado de Sandra
+
+- `ESTADO BOT`: cantidades pendientes, atención humana y envíos por verificar.
+- `PAUSAR 573001234567` / `REANUDAR 573001234567`: control del chat indicado.
+- `POLITICA PAGO ABONO 20000`: conserva la política expresamente acordada.
+- `RESERVAR telefono servicioID profesionalID consultorioID YYYY-MM-DD HH:mm HH:mm`:
+  crea una propuesta, no una cita inmediata. Para modalidad virtual se usa
+  `VIRTUAL` en lugar del consultorio. Los ID se verifican en Axis, tenant4/empresa3.
+- Cliente y profesional aceptan con `CONFIRMAR CODIGO`. Una persona diferente
+  no puede confirmar. En alquiler el profesional registrado es el solicitante.
+- `SOPORTE CODIGO URL`: Sandra asocia un archivo existente del almacenamiento
+  de comprobantes de Psicólogos que ya revisó. No acredita un abono bancario.
+
+La propuesta expira como máximo a las 24 horas o al comenzar el horario.
+Al registrar, la transacción revisa de nuevo profesional, precio, consultorio,
+agenda y paquete, bloquea las reservas concurrentes y crea auditoría y mensajes
+en la misma transacción. Una sesión de paquete consumido no vuelve a generar
+el precio del paquete. Alquiler no exige soporte anticipado. Un paquete pagado
+con movimientos completos en el libro no requiere otro comprobante por sesión.
+
+### Límites que deben seguir visibles
+
+El alta de pacientes, interpretación libre de fechas, audios, casos clínicos,
+imágenes y correcciones de registros requieren revisión humana en esta versión.
+No atribuirle transcripción automática, diagnóstico, confirmación bancaria,
+vigilancia continua ni un agendamiento libre sin intervención. Las propuestas
+se preparan con el comando autorizado; el resto del proceso confirma y registra.
+Los reportes anteriores no se reemplazan ni se duplican desde este flujo.
+
+Verificación: `tsx --test tests/psychology-reception.test.ts
+tests/psychology-bot-booking.test.ts tests/psychology-bot.test.mjs
+tests/psychology-integration.test.ts`; TypeScript y compilación Next. La
+compilación local utiliza valores ficticios y no conecta al banco ni a WhatsApp.
+La prueba de mensajes de producción solo se realiza con Sandra, sin pacientes
+ficticios ni citas artificiales.
+
 ## Estado de esta entrega
 
 Base comprobable, todavía no es un bot autónomo de producción. No interpretar

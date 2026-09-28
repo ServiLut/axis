@@ -1,0 +1,201 @@
+{
+  "name": "Psicólogos | Recepción WhatsApp y Axis",
+  "nodes": [
+    {
+      "id": "92a0bdd6-41c2-483c-994a-7500f392aa53",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "a696c285-ef54-48fa-9fd6-523b1d85e54d",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WEBHOOK_CREDENTIAL_ID",
+          "name": "Psicólogos - recepción Evolution"
+        }
+      },
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "a696c285-ef54-48fa-9fd6-523b1d85e54d",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "sanitize",
+      "name": "Validar y minimizar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "jsCode": "\nconst b=$json.body;\nconst ignore=()=>[{json:{action:'ignore'}}];\nif(!b||b.instance!=='psicologos-en-colombia'||b.event!=='messages.upsert')return ignore();\nconst owner=String(b.sender||'').split('@')[0].split(':')[0];\nif(owner!=='573016818845')return ignore();\nconst d=b.data, k=d?.key;\nif(!k||typeof k.id!=='string'||typeof k.fromMe!=='boolean')return ignore();\nif(String(k.remoteJid).endsWith('@g.us')||k.remoteJid==='status@broadcast')return ignore();\nconst jid=[k.remoteJid,k.remoteJidAlt].find(x=>typeof x==='string'&&/^[1-9]\\d{7,14}@s\\.whatsapp\\.net$/.test(x));\nif(!jid)return ignore();\nconst phone=jid.split('@')[0];\nconst m=d.message||{};\nif(m.protocolMessage||m.reactionMessage||m.senderKeyDistributionMessage)return ignore();\nconst text=m.conversation??m.extendedTextMessage?.text??m.imageMessage?.caption??m.documentMessage?.caption??'';\nif(typeof text!=='string')return ignore();\nlet seconds=Number(d.messageTimestamp?.low??d.messageTimestamp);\nif(!Number.isFinite(seconds)||seconds<0||seconds>100000000000)return ignore();\nconst kind=m.audioMessage?'audio':(m.conversation!==undefined||m.extendedTextMessage?'text':'attachment');\n// Whitelist only: discard provider apikey, headers, media blobs, quoted context and credentials.\nreturn [{json:{action:'event',instance:b.instance,owner,event:{id:k.id,phone,fromMe:k.fromMe,at:new Date(seconds*1000).toISOString(),kind,text:text.slice(0,8000)}}}];\n"
+      }
+    },
+    {
+      "id": "Guardar en Axis",
+      "name": "Guardar en Axis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_AXIS_CREDENTIAL_ID",
+          "name": "Axis Psicólogos - recepción"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.servilutioncrm.com/api/integrations/psicologos/automation",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 150000
+        }
+      }
+    },
+    {
+      "id": "ack",
+      "name": "Confirmar recepción",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        720,
+        0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 202
+        }
+      }
+    },
+    {
+      "id": "Procesar pendientes",
+      "name": "Procesar pendientes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_AXIS_CREDENTIAL_ID",
+          "name": "Axis Psicólogos - recepción"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.servilutioncrm.com/api/integrations/psicologos/automation",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"action\":\"drain\"}",
+        "options": {
+          "timeout": 150000
+        }
+      }
+    },
+    {
+      "id": "schedule",
+      "name": "Recuperar pendientes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        240
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validar y minimizar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar y minimizar": {
+      "main": [
+        [
+          {
+            "node": "Guardar en Axis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar en Axis": {
+      "main": [
+        [
+          {
+            "node": "Confirmar recepción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirmar recepción": {
+      "main": [
+        [
+          {
+            "node": "Procesar pendientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recuperar pendientes": {
+      "main": [
+        [
+          {
+            "node": "Procesar pendientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Bogota",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false,
+    "saveExecutionProgress": false,
+    "executionTimeout": 180
+  }
+}

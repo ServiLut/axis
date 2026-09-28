@@ -23,7 +23,14 @@ export async function GET(request: NextRequest) {
     if (!tenant || !company || normalize(tenant.nombre) !== "PSICOLOGOS" || normalize(company.nombre) !== "PSICOLOGOS EN COLOMBIA") return response({ error: "Ámbito de Psicólogos no verificado" }, 503);
     const resource = params.get("resource") || "status";
     const identity = { tenantId: scope.tenantId, companyId: scope.empresaId, tenant: tenant.nombre, company: company.nombre, timezone: "America/Bogota" };
-    if (resource === "status") return response({ ...identity, version: 1, capabilities: ["catalog.read", "availability.read"], bookingEnabled: false, whatsappEnabled: false });
+    if (resource === "status") {
+      const configured=process.env.PSICOLOGOS_AUTOMATION_ENABLED==='true';
+      const rows=configured?await prisma.$queryRaw<{enabled:boolean}[]>`SELECT enabled FROM "PsicologiaBotConfig" WHERE id=4`:[];
+      const active=rows[0]?.enabled===true;
+      return response({ ...identity, version: 2, capabilities: ["catalog.read", "availability.read",...(active?["reception.process","booking.confirmed-proposal"]:[])],
+        bookingEnabled: active, whatsappEnabled: active, automationMode:active?'human-reviewed-reception':'disabled',
+        bookingRequiresExactConfirmations:true, channelHealth:'requires-live-check' });
+    }
     if (resource === "catalog") {
       const [services, professionals, rooms] = await Promise.all([
         prisma.terapiasPsicologos.findMany({ where: { ...scope, activo: true },
