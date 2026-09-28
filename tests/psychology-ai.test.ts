@@ -54,6 +54,12 @@ test('incomplete model output cannot invent defaults, roles, prices or booking I
  for(const patch of [{confidence:2},{professionalId:1.5},{date:'mañana'},{start:'25:30'},{serviceId:'-1'},{service:'invented'},{explicitConsent:'true'}])assert.throws(()=>understanding(patch as never));
 });
 
+test('chief asks for clearer wording and receives the missing detail of the actual pending task',async()=>{
+ const output:string[]=[];const tx={$queryRaw:async()=>[{state:{pendingContactList:{status:'WAITING_LIST'},reactivationTask:{status:'WAITING_PERMISSION'}}}],$executeRaw:async()=>1,auditoria:{create:async()=>({})}};
+ await handleChiefUnderstanding(tx as never,{...event,text:'No entiendo lo que quieres decir con si aplica el número. Hazme la pregunta más clara. Si es una conversación nueva debes crear el cliente.'},understanding({adminAction:'learn',instruction:'Solicitar datos y crear clientes nuevos sin duplicar'}),async(_,id,phone,message)=>{assert.ok(id.endsWith(':chief-clarification'));output.push(message)},async()=>{});
+ assert.equal(output.length,1);assert.ok(output[0].includes('las listas'));assert.ok(output[0].includes('datos necesarios'));assert.ok(!output[0].includes('Qué debo hacer'));
+});
+
 test('courtesy continues context, appointment questions request actual verification, repeated uncertainty goes to Sandra',()=>{
  const e={...event,phone:'573001111111',text:'Gracias'};
  const courtesy=semanticReception(e,'OFFER',{service:'individual'},{},'DEPOSIT_20000',understanding({intent:'courtesy'}));assert.equal(courtesy.stage,'OFFER');assert.equal(courtesy.handoff,undefined);

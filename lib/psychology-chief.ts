@@ -38,13 +38,20 @@ export async function handleChiefUnderstanding(tx:Tx,e:ReceptionEvent,u:Understa
   await queue(tx,e.id+':chief-list',SANDRA_PHONE,'Claro, Sandra 😊 Envíame las listas de clientes y psicólogos. Revisaré teléfonos y duplicados; si falta algún dato para contactarles, te lo consultaré.');
   return true;
  }
- const stateRows=await tx.$queryRaw<{state:{reactivationTask?:ReactivationTask}}[]>`SELECT state FROM "PsicologiaBotConversation" WHERE phone=${SANDRA_PHONE}`;
+ const stateRows=await tx.$queryRaw<{state:{reactivationTask?:ReactivationTask;pendingContactList?:{status:string}}}[]>`SELECT state FROM "PsicologiaBotConversation" WHERE phone=${SANDRA_PHONE}`;
  const pending=stateRows[0]?.state.reactivationTask;
- if(/explicate|no entendi|no entiendo (la|tu) pregunta/.test(normalized)){
-  if(pending?.status==='NEEDS_CRITERION')await ack('Me refiero a cómo elegir los clientes: ¿miramos la fecha de su última cita en Axis o la fecha de la última conversación en WhatsApp? Son datos distintos.');
+ if(/explicate|no entendi|no entiendo|mas clar[ao]|hazme la pregunta|a que te refieres|aclarame/.test(normalized)){
+  const clarify=(message:string)=>queue(tx,e.id+':chief-clarification',SANDRA_PHONE,message);
+  if(u?.adminAction==='learn'&&u.confidence>=0.9&&u.instruction?.trim()){
+   await tx.$executeRaw`INSERT INTO "PsicologiaBotKnowledge" (id,instruction,"sourceEvent","approvedBy") VALUES (${e.id+':knowledge'},${u.instruction.trim()},${e.id},${SANDRA_PHONE}) ON CONFLICT DO NOTHING`;
+   await createAuditLog({tenantId:4,accion:'BOT_CHIEF_CLARIFICATION',entidad:'PsicologiaBotKnowledge',entidadId:e.id,detalles:{sourceEvent:e.id,actorPhone:SANDRA_PHONE,instruction:u.instruction.trim()},tx});
+  }
+  if(stateRows[0]?.state.pendingContactList?.status==='WAITING_LIST')await clarify('Perdón, Sandra 😊 Me refería a las listas que vas a enviarme. Revisaré quién ya está registrado; a los clientes nuevos les pediré los datos necesarios y su confirmación para registrarlos sin duplicar.');
+  else if(pending?.status==='WAITING_PERMISSION')await clarify('Me refiero al permiso de los clientes para recibir invitaciones por WhatsApp. Aún no está registrado en el bot. ¿Dónde podemos consultar esa autorización: formulario, documento o conversación?');
+  else if(pending?.status==='NEEDS_CRITERION')await clarify('Me refiero a cómo elegir los clientes: ¿miramos la fecha de su última cita en Axis o la fecha de la última conversación en WhatsApp? Son datos distintos.');
   else{
    const prior=await tx.$queryRaw<{text:string}[]>`SELECT COALESCE(transcript,text) AS text FROM "PsicologiaBotEvent" WHERE phone=${SANDRA_PHONE} AND "fromMe"=false AND id<>${e.id} AND "eventAt"<=${new Date(e.at)} ORDER BY "eventAt" DESC LIMIT 3`;
-   await ack(prior.some(p=>/fumigaci|control de plagas/i.test(p.text))?'Perdón, Sandra. Mi pregunta fue poco clara. El audio anterior hablaba de fumigación y aquí gestiono Psicólogos en Colombia. No inicié esa tarea.':'Perdón, Sandra. Necesito saber qué acción quieres que haga y sobre qué cliente o registro. Si es un envío individual, indícame el número y el mensaje.');
+   await clarify(prior.some(p=>/fumigaci|control de plagas/i.test(p.text))?'Perdón, Sandra. Mi pregunta fue poco clara. El audio anterior hablaba de fumigación y aquí gestiono Psicólogos en Colombia. No inicié esa tarea.':'Perdón, Sandra. Para enviar un mensaje a una persona necesito su número y el texto que deseas enviarle. Si hablas de otra tarea, dime cuál y reviso su estado.');
   }return true;
  }
  if(pending&&/(?:cancela|deten|pausa).*(?:campana|reactivacion|envios)/.test(normalized)){
