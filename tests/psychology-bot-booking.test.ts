@@ -7,6 +7,7 @@ import { loadServerModule } from './load-server-module';
 import { phoneDigits,SANDRA_PHONE } from '../lib/psychology-reception';
 import type * as Booking from '../lib/psychology-bot-booking';
 import type * as Identity from '../lib/psychology-booking-identity';
+import {validateBookingSpecialty} from '../lib/psychology-bot-booking';
 async function fixture(rental=false) {
  const db=new PGlite();await db.exec(`CREATE TABLE "CitasPsicologos" (id BIGINT PRIMARY KEY,"tenantId" INT,"empresaId" INT,"pacienteId" INT,"psicologoId" INT);
  CREATE TABLE "Cliente" (id INT,"tenantId" INT,"empresaId" INT,telefono TEXT,telefono2 TEXT,"deletedAt" TIMESTAMPTZ);
@@ -14,16 +15,16 @@ async function fixture(rental=false) {
  INSERT INTO "Cliente" VALUES (1,4,3,'573001111111',NULL,NULL);
  INSERT INTO "Usuario" VALUES (29,4,3,'Profesional','Prueba','573002222222',true,'TECNICO');`);await db.exec(readFileSync('docs/sql/2026-09-28-psychology-automation.sql','utf8'));
  const date=new Date(Date.now()+86400000).toISOString().slice(0,10);
- const details={customerId:rental?null:1,professionalId:29,roomId:'1',serviceId:rental?'49':'1',date,start:'10:00',end:'11:00',rental,serviceName:rental?'Alquiler':'Individual',amount:rental?'18900':'119900',professionalName:'Profesional'};
+ const details={customerId:rental?null:1,professionalId:29,roomId:'1',serviceId:rental?'49':'1',date,start:'10:00',end:'11:00',rental,serviceName:rental?'Alquiler':'Individual',sessionCount:1,amount:rental?'18900':'119900',professionalName:'Profesional'};
  await db.query(`INSERT INTO "PsicologiaBotProposal" (code,"customerPhone","professionalPhone",details,"expiresAt") VALUES ('ABCD1234ABCD',$1,$2,$3,NOW()+INTERVAL '12 hours')`,[rental?'573002222222':'573001111111','573002222222',JSON.stringify(details)]);
- const state={writes:0,audits:0,occupied:false,active:true,package:false,consumed:0,missing:0};const sent:{phone:string;text:string}[]=[];
+ const state={writes:0,audits:0,occupied:false,active:true,package:false,consumed:0,missing:0,price:rental?18900:119900,sessions:1,category:rental?'Alquiler':'Terapia Individual',serviceName:rental?'Alquiler':'Individual'};const sent:{phone:string;text:string}[]=[];
  const raw=async(s:TemplateStringsArray,...v:unknown[])=>db.query(s.reduce((q,p,i)=>q+(i?'$'+i:'')+p,''),v.map(x=>typeof x==='bigint'?String(x):x));
  const tx={
   $queryRaw:async(s:TemplateStringsArray,...v:unknown[])=>(await raw(s,...v)).rows,
   $executeRaw:async(s:TemplateStringsArray,...v:unknown[])=>(await raw(s,...v)).affectedRows,
   usuario:{findFirst:async({where}:{where:{id:number;tenantId:number;empresaId:number}})=>state.active?(await db.query('SELECT * FROM "Usuario" WHERE id=$1 AND "tenantId"=$2 AND "empresaId"=$3',[where.id,where.tenantId,where.empresaId])).rows[0]:null},
   cliente:{findFirst:async({where}:{where:{id:number;tenantId:number;empresaId:number}})=>(await db.query('SELECT * FROM "Cliente" WHERE id=$1 AND "tenantId"=$2 AND "empresaId"=$3',[where.id,where.tenantId,where.empresaId])).rows[0]},consultorios:{findFirst:async()=>({id:1n})},
-  terapiasPsicologos:{findFirst:async()=>({id:rental?49n:1n,nombre:rental?'Alquiler':'Individual',precioBase:rental?18900:119900,cantidadSesiones:1})},
+  terapiasPsicologos:{findFirst:async()=>({id:rental?49n:1n,nombre:state.serviceName,categoria:state.category,precioBase:state.price,cantidadSesiones:state.sessions})},
   paqueteAdquirido:{findFirst:async()=>state.package?{id:1n}:null,updateMany:async()=>{state.consumed++;return {count:1}},create:async()=>({id:1n})},
   citasPsicologos:{count:async()=>state.missing,create:async({data}:{data:Record<string,unknown>})=>{state.writes++;assert.equal(data.estadoPago,undefined);await db.exec('INSERT INTO "CitasPsicologos" (id) VALUES (100)');return {id:100n}}},
  };
@@ -109,4 +110,40 @@ test('final confirmation rejects changed customer phone, duplicate identity and 
    await assert.rejects(()=>f.message('573002222222'),mutation);assert.equal(f.state.writes,0);assert.equal(f.state.consumed,0);
   }finally{await f.db.close()}
  }
+});
+
+test('paused participant or pending staff takeover prevents confirmation and any appointment write',async()=>{
+ for(const mode of ['paused-patient','paused-professional','staff-pending','sender-echo'] as const){
+  const f=await fixture();try{
+   const phone=mode==='paused-professional'?'573002222222':'573001111111';
+   await f.db.query('INSERT INTO "PsicologiaBotConversation" (phone,stage) VALUES ($1,$2)',[phone,mode.startsWith('paused')?'HUMAN':'NEW']);
+   await f.db.exec(`UPDATE "PsicologiaBotProposal" SET "customerConfirmedAt"=NOW(),"evidenceApprovedAt"=NOW(),"evidencePath"='verified-receipt'`);
+   if(mode==='staff-pending'||mode==='sender-echo'){
+    await f.db.query(`INSERT INTO "PsicologiaBotEvent" (id,phone,"eventAt",kind,text,"fromMe") VALUES ('pending-staff',$1,NOW(),'text','confirmed by staff',true)`,[phone]);
+    if(mode==='sender-echo')await f.db.query(`INSERT INTO "PsicologiaBotOutbox" (id,phone,content,status) VALUES ('bot-echo',$1,'confirmed by staff','ACCEPTED')`,[phone]);
+   }
+   if(mode==='sender-echo'){await f.message('573002222222');assert.equal(f.state.writes,1);}
+   else{await assert.rejects(()=>f.message('573002222222'),/humana/i);assert.equal(f.state.writes,0);assert.equal(f.state.consumed,0);assert.equal(f.sent.length,0);}
+  }finally{await f.db.close()}
+ }
+});
+
+test('catalog price, package size or service identity changes require a new proposal',async()=>{
+ for(const field of ['price','sessions','serviceName'] as const){const f=await fixture();try{
+  await f.db.exec(`UPDATE "PsicologiaBotProposal" SET "customerConfirmedAt"=NOW(),"evidenceApprovedAt"=NOW(),"evidencePath"='verified-receipt'`);
+  if(field==='price')f.state.price=120000;else if(field==='sessions')f.state.sessions=3;else f.state.serviceName='Another therapy';
+  await assert.rejects(()=>f.message('573002222222'));assert.equal(f.state.writes,0);assert.equal(f.state.consumed,0);
+ }finally{await f.db.close()}}
+});
+
+test('specialty restrictions are enforced before proposing or committing',async()=>{
+ for(const [category,id] of [['Neuropsicología',28],['Terapia de Sexología',82],['Apoyo Emocional Mascotas',24],['Terapia Individual',29],['Terapia Familiar',24]] as const)assert.doesNotThrow(()=>validateBookingSpecialty(category,id,false));
+ for(const id of [28,82]){assert.doesNotThrow(()=>validateBookingSpecialty('Alquiler',id,true));assert.throws(()=>validateBookingSpecialty('Terapia Individual',id,false));}
+ for(const category of ['Neuropsicología','Terapia de Sexología','Apoyo Emocional Mascotas']){const f=await fixture();try{
+  f.state.category=category;
+  const date=new Date(Date.now()+86400000).toISOString().slice(0,10);
+  await assert.rejects(()=>f.message(SANDRA_PHONE,`RESERVAR 573001111111 1 29 1 ${date} 10:00 11:00`));
+  await f.db.exec(`UPDATE "PsicologiaBotProposal" SET "customerConfirmedAt"=NOW(),"evidenceApprovedAt"=NOW(),"evidencePath"='verified-receipt'`);
+  await assert.rejects(()=>f.message('573002222222'));assert.equal(f.state.writes,0);
+ }finally{await f.db.close()}}
 });

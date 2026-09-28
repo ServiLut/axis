@@ -1,7 +1,8 @@
 import prisma from './prisma';
 import {aiConfigured,transcribePsychologyAudio,understandPsychologyMessage} from './psychology-ai';
-import {SANDRA_PHONE,type ReceptionEvent} from './psychology-reception';
+import {type ReceptionEvent} from './psychology-reception';
 import {readPsychologyHistory} from './psychology-chatwoot';
+import {readChiefKnowledge} from './psychology-knowledge';
 
 /** No network call while a database transaction or row lock is held. */
 export async function prepareNextPsychologyEvent(){
@@ -19,7 +20,7 @@ export async function prepareNextPsychologyEvent(){
    await prisma.$executeRaw`UPDATE "PsicologiaBotEvent" SET transcript=${event.text} WHERE id=${row.id} AND status='PENDING'`;
    event.kind='text';
   }
-  const conversations=await prisma.$queryRaw<{stage:string;state:unknown}[]>`SELECT stage,state FROM "PsicologiaBotConversation" WHERE phone=${row.phone}`;
+  const conversations=await prisma.$queryRaw<{stage:string;state:{service?:string}}[]>`SELECT stage,state FROM "PsicologiaBotConversation" WHERE phone=${row.phone}`;
   const history=await prisma.$queryRaw<{direction:string;text:string;at:Date;source:string}[]>`
    SELECT direction,text,at,source FROM (
     SELECT CASE WHEN "fromMe" THEN 'outbound_staff_or_bot' ELSE 'inbound' END AS direction,COALESCE(transcript,text) AS text,"eventAt" AS at,id AS source FROM "PsicologiaBotEvent" WHERE phone=${row.phone} AND id<>${row.id} AND "eventAt"<=${row.eventAt}
@@ -30,9 +31,9 @@ export async function prepareNextPsychologyEvent(){
    .sort((a,b)=>a.at.localeCompare(b.at))
    .filter((h,i,a)=>!a.slice(i+1).some(other=>other.source===h.source||(other.text===h.text&&other.direction.startsWith('outbound')===h.direction.startsWith('outbound')&&Math.abs(Date.parse(other.at)-Date.parse(h.at))<60000)))
    .slice(-30);
-  const knowledge=await prisma.$queryRaw<{instruction:string}[]>`SELECT instruction FROM "PsicologiaBotKnowledge" WHERE "tenantId"=4 AND active=true AND "approvedBy"=${SANDRA_PHONE} ORDER BY "createdAt" DESC LIMIT 12`;
+  const knowledge=await readChiefKnowledge(prisma,event.text+' '+(conversations[0]?.state.service||''));
   const catalog=await prisma.terapiasPsicologos.findMany({where:{tenantId:4,empresaId:3,activo:true},select:{id:true,nombre:true,cantidadSesiones:true,precioBase:true}});
-  const result=await understandPsychologyMessage(event,{...conversations[0],history:context,historyCoverage:remote.coverage,chiefInstructions:knowledge.map(k=>k.instruction),catalog:catalog.map(s=>({...s,id:String(s.id),precioBase:String(s.precioBase)}))});
+  const result=await understandPsychologyMessage(event,{...conversations[0],history:context,historyCoverage:remote.coverage,chiefInstructions:knowledge.map(k=>k.instruction),chiefKnowledgeSources:knowledge.map(k=>({id:k.id,sourceEvent:k.sourceEvent,approvedAt:k.createdAt.toISOString()})),catalog:catalog.map(s=>({...s,id:String(s.id),precioBase:String(s.precioBase)}))});
   await prisma.$executeRaw`UPDATE "PsicologiaBotEvent" SET analysis=${JSON.stringify(result)}::jsonb WHERE id=${row.id} AND status='PENDING'`;
  }catch(error){
   const code=error instanceof Error&&/^(AI|AUDIO)_[A-Z0-9_]+$/.test(error.message)?error.message:'AI_UNAVAILABLE';
