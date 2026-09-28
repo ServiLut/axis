@@ -3,7 +3,7 @@ import {test} from 'node:test';
 import {readFileSync} from 'node:fs';
 import {PGlite} from '@electric-sql/pglite';
 import {parseUnderstanding,understandingSchema,type Understanding} from '../lib/psychology-ai';
-import {chiefAction} from '../lib/psychology-chief';
+import {chiefAction,handleChiefUnderstanding} from '../lib/psychology-chief';
 import {semanticReception} from '../lib/psychology-semantic-reception';
 import {SANDRA_PHONE,type ReceptionEvent} from '../lib/psychology-reception';
 import {aiSanitize,buildPsychologyAi} from '../scripts/build-psychology-ai.mjs';
@@ -59,4 +59,24 @@ test('new storage remains additive, scope locked and re-entrant; expired lease c
   await db.exec(`UPDATE "PsicologiaBotConfig" SET "aiLeaseUntil"=NOW()-INTERVAL '1 minute' WHERE id=4`);
   const recovered=await db.exec(`UPDATE "PsicologiaBotConfig" SET "aiLeaseToken"='b' WHERE id=4 AND "aiLeaseUntil"<NOW()`);assert.equal(recovered[0].affectedRows,1);
  }finally{await db.close()}
+});
+test('reactivation excludes future bookings, opt-outs, recent outreach and unverified permission',async(t)=>{
+ t.mock.timers.enable({apis:['Date'],now:new Date('2026-09-28T17:00:00Z')});
+ const db=new PGlite();try{
+  await db.exec(`CREATE TABLE "CitasPsicologos"(id BIGINT PRIMARY KEY,"tenantId" INT,"empresaId" INT,"pacienteId" INT,realizada BOOLEAN,"horaFin" TIMESTAMPTZ,"fechaCita" TIMESTAMPTZ,"horaInicio" TIMESTAMPTZ);
+   CREATE TABLE "Cliente"(id INT PRIMARY KEY,"tenantId" INT,"empresaId" INT,telefono TEXT,"deletedAt" TIMESTAMPTZ)`);
+  await db.exec(readFileSync('docs/sql/2026-09-28-psychology-automation.sql','utf8'));await db.exec(readFileSync('docs/sql/2026-09-28-psychology-autonomy.sql','utf8'));
+  await db.exec(`INSERT INTO "PsicologiaBotConversation"(phone) VALUES('${SANDRA_PHONE}');INSERT INTO "PsicologiaBotEvent"(id,phone,"eventAt",kind) VALUES('verified-source','${SANDRA_PHONE}',NOW(),'text');
+   INSERT INTO "Cliente"(id,"tenantId","empresaId",telefono) SELECT n,4,3,'300111220'||n FROM generate_series(1,5)n;
+   INSERT INTO "CitasPsicologos"(id,"tenantId","empresaId","pacienteId",realizada,"fechaCita") SELECT n,4,3,n,true,NOW()-INTERVAL '8 months' FROM generate_series(1,5)n;
+   INSERT INTO "CitasPsicologos"(id,"tenantId","empresaId","pacienteId",realizada,"fechaCita") VALUES(6,4,3,2,false,NOW()+INTERVAL '1 day');
+   INSERT INTO "PsicologiaBotContactPermission"(phone,marketing,"optedOut","sourceEvent") VALUES('573001112201',true,false,'verified-source'),('573001112202',true,false,'verified-source'),('573001112203',true,true,'verified-source'),('573001112205',true,false,'verified-source');
+   INSERT INTO "PsicologiaBotOutreach"(id,phone,"clientId","sourceEvent","lastCompletedAt") VALUES('previous','573001112205',5,'verified-source',NOW()-INTERVAL '8 months');`);
+  const sql=(strings:TemplateStringsArray,values:unknown[])=>strings.reduce((s,p,i)=>s+(i?'$'+i:'')+p,'');
+  const tx={$queryRaw:async(s:TemplateStringsArray,...v:unknown[])=>(await db.query(sql(s,v),v)).rows,$executeRaw:async(s:TemplateStringsArray,...v:unknown[])=>(await db.query(sql(s,v),v)).affectedRows,auditoria:{create:async()=>({})}};
+  const sent:{phone:string;text:string}[]=[];
+  await handleChiefUnderstanding(tx as never,event,understanding({adminAction:'reactivate'}),async(_,id,phone,text)=>{sent.push({phone,text})},async()=>{});
+  assert.deepEqual(sent.filter(m=>m.phone!==SANDRA_PHONE).map(m=>m.phone),['573001112201']);
+  assert.ok(sent.find(m=>m.phone===SANDRA_PHONE)?.text.includes('autorización promocional'));
+ }finally{await db.close();t.mock.timers.reset()}
 });
