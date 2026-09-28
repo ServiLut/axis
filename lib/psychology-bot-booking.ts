@@ -6,9 +6,10 @@ import { createAuditLog } from './audit';
 import { getPackagePaymentState } from './package-payment';
 import { phoneDigits, SANDRA_PHONE, type ReceptionEvent } from './psychology-reception';
 import {findBookingCustomer,findBookingProfessional} from './psychology-booking-identity';
+import {bookingPrompts,bookedMessage,type BookingMessageDetails} from './psychology-booking-messages';
 type Tx=Prisma.TransactionClient;
 type Queue=(tx:Tx,id:string,phone:string,text:string)=>Promise<void>;
-type Details={customerId:number|null;professionalId:number;roomId:string|null;serviceId:string;date:string;start:string;end:string;rental:boolean;serviceName:string;sessionCount:number;amount:string;professionalName:string};
+type Details=BookingMessageDetails&{customerId:number|null;professionalId:number;serviceId:string;professionalName:string};
 type Proposal={code:string;customerPhone:string;professionalPhone:string;details:Details;customerConfirmedAt:Date|null;professionalConfirmedAt:Date|null;evidencePath:string|null;evidenceApprovedAt:Date|null;expiresAt:Date;citaId:bigint|null;status:string};
 
 /** IDs verified in company 3; these are operational assignments, not inferred clinical credentials. */
@@ -60,14 +61,14 @@ export async function proposeBooking(tx:Tx,event:ReceptionEvent,{rawPhone,servic
     const missing=await tx.citasPsicologos.count({where:{tenantId:4,realizada:{not:null},fechaCita:when.fecha,AND:[{OR:[{psicologoId:professional.id},...(roomId?[{consultorioId:roomId}]:[])]},{OR:[{horaInicio:null},{horaFin:null}]}]}});
     if(missing)throw Error('Hay citas con horario incompleto. Revisa la agenda antes de proponer.');
     const details:Details={customerId:customer?.id??null,professionalId:professional.id,roomId:roomId?.toString()??null,serviceId:service.id.toString(),date,start,end:finalEnd,rental,serviceName:service.nombre,sessionCount:service.cantidadSesiones,amount:String(quote?.valor??service.precioBase),professionalName:`${professional.nombre||''} ${professional.apellido||''}`.trim()};
+    details.roomName=selectedRoom?.nombre||undefined;
+    const prompts=bookingPrompts(details,customerPhone);details.customerPrompt=prompts.customer;details.professionalPrompt=prompts.professional;
     const code=createHash('sha256').update(event.id).digest('hex').slice(0,12).toUpperCase();
     const expiresAt=new Date(Math.min(when.inicio.getTime(),Date.now()+24*3600000));
     await tx.$executeRaw`INSERT INTO "PsicologiaBotProposal" (code,"customerPhone","professionalPhone",details,"expiresAt") VALUES (${code},${customerPhone},${professionalPhone},${JSON.stringify(details)}::jsonb,${expiresAt}) ON CONFLICT DO NOTHING`;
-    const slot=`${date}, ${start}–${finalEnd} (Colombia), ${selectedRoom?.nombre|| (roomId?'consultorio '+roomId:'virtual')}`;
-    const amount=new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(Number(details.amount));
-    await queue(tx,event.id+':proposal-customer',customerPhone,`Tenemos esta propuesta: ${slot}. ${service.nombre}: ${amount}${service.cantidadSesiones>1?' por el paquete; se verificará el saldo existente':''}. Aún no está reservada.\nSi estás de acuerdo, responde CONFIRMAR ${code}.`);
-    if(customerPhone!==professionalPhone)await queue(tx,event.id+':proposal-professional',professionalPhone,`¿Tienes disponibilidad para ${service.nombre} el ${slot}?\nPara aceptar responde CONFIRMAR ${code}. Si no puedes, envíanos otra disponibilidad.`);
-    if(event.phone===SANDRA_PHONE)await queue(tx,event.id+':proposal-chief',SANDRA_PHONE,`Propuesta ${code} enviada. Se registrará solo con las confirmaciones exactas, disponibilidad vigente y soporte revisado cuando sea paciente.`);
+    await queue(tx,event.id+':proposal-customer',customerPhone,prompts.customer);
+    if(customerPhone!==professionalPhone)await queue(tx,event.id+':proposal-professional',professionalPhone,prompts.professional);
+    if(event.phone===SANDRA_PHONE)await queue(tx,event.id+':proposal-chief',SANDRA_PHONE,'Ya compartí el horario para que lo confirmen 😊 Te aviso cuando la reserva quede lista.');
     await createAuditLog({tenantId:4,accion:'BOT_PROPOSAL',entidad:'CitaPropuesta',entidadId:code,detalles:{sourceEvent:event.id,details},tx});
     return code;
 }
@@ -92,7 +93,7 @@ export async function handleBookingMessage(tx:Tx,event:ReceptionEvent,queue:Queu
   if(confirm) {
     if(event.phone===p.customerPhone){p.customerConfirmedAt=new Date();await tx.$executeRaw`UPDATE "PsicologiaBotProposal" SET "customerConfirmedAt"=NOW() WHERE code=${code}`;}
     if(event.phone===p.professionalPhone){p.professionalConfirmedAt=new Date();await tx.$executeRaw`UPDATE "PsicologiaBotProposal" SET "professionalConfirmedAt"=NOW() WHERE code=${code}`;}
-    await queue(tx,event.id+':confirmation',event.phone,'Gracias 😊 Recibimos tu confirmación. Te avisaremos cuando la reserva quede registrada.');
+    if(!(p.customerConfirmedAt&&p.professionalConfirmedAt))await queue(tx,event.id+':confirmation',event.phone,'Gracias 😊 Te aviso en cuanto tengamos todo confirmado.');
   } else {
     const url=new URL(support![2]);
     const prefix='/storage/v1/object/public/comprobantePagoPsicologos/4/';
@@ -145,8 +146,8 @@ async function finalizeBooking(tx:Tx,p:Proposal,event:ReceptionEvent,queue:Queue
   const cita=await tx.citasPsicologos.create({data:{tenantId:4,empresaId:3,pacienteId:d.customerId,psicologoId:d.professionalId,consultorioId:d.roomId?BigInt(d.roomId):null,fechaCita:when.fecha,horaInicio:when.inicio,horaFin:when.fin,valor:value,paqueteId:pkg.id,comprobantePath:p.evidencePath,observacion:`Recepción WhatsApp; propuesta ${p.code}. Soporte sujeto a verificación bancaria.`,...(payment??{})}});
   await tx.$executeRaw`UPDATE "PsicologiaBotProposal" SET status='BOOKED',"citaId"=${cita.id} WHERE code=${p.code}`;
   await createAuditLog({tenantId:4,accion:'CREATE',entidad:'Cita',entidadId:cita.id.toString(),detalles:{origin:'WhatsApp',proposal:p.code,sourceEvent:event.id,patientConfirmed:true,professionalConfirmed:true,bankVerified:false,packageId:pkg.id.toString(),value},tx});
-  const content=`Tu reserva quedó registrada 😊 ${d.date}, ${d.start}–${d.end} (Colombia). Referencia CITA-${cita.id}.`;
+  const content=bookedMessage(d);
   await queue(tx,'proposal:'+p.code+':booked-customer',p.customerPhone,content);
-  if(p.customerPhone!==p.professionalPhone)await queue(tx,'proposal:'+p.code+':booked-professional',p.professionalPhone,`Reserva registrada: ${d.date}, ${d.start}–${d.end}. CITA-${cita.id}.`);
+  if(p.customerPhone!==p.professionalPhone)await queue(tx,'proposal:'+p.code+':booked-professional',p.professionalPhone,bookedMessage(d));
   await queue(tx,'proposal:'+p.code+':booked-chief',SANDRA_PHONE,`Axis registró CITA-${cita.id}, ${d.date} ${d.start}. No se registró un abono bancario por esta acción.`);
 }

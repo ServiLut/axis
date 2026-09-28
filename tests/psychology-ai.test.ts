@@ -9,7 +9,7 @@ import {SANDRA_PHONE,type ReceptionEvent} from '../lib/psychology-reception';
 import {aiSanitize,buildPsychologyAi} from '../scripts/build-psychology-ai.mjs';
 import {campaignFixture} from './psychology-campaign-fixture';
 const base=Object.fromEntries(Object.keys(understandingSchema.properties).map(k=>[k,null]));
-const understanding=(patch:Partial<Understanding>={}):Understanding=>parseUnderstanding({...base,intent:'admin',confidence:0.99,explicitConsent:false,additionalServices:[],rentalRequests:[],...patch});
+const understanding=(patch:Partial<Understanding>={}):Understanding=>parseUnderstanding({...base,intent:'admin',confidence:0.99,explicitConsent:false,additionalServices:[],rentalRequests:[],roomPreferenceChanges:[],...patch});
 const event:ReceptionEvent={id:'verified-source',phone:SANDRA_PHONE,kind:'text',text:'Pausa la atención al 3001112233',fromMe:false,at:new Date().toISOString()};
 
 test('invalid AI classification is retried once without changing the source or inventing defaults',async()=>{

@@ -77,11 +77,11 @@ export async function handlePatientIntake(tx:Prisma.TransactionClient,event:Rece
 
  function preferences():ReceptionResult{
   if(!intake.clientId)return review('Falta identificar el registro antes de agendar');
-  if(!intake.preference&&!intake.professionalId)return result('PREFERENCES',['¿Prefieres psicólogo, psicóloga o te es indiferente?']);
+  if(!intake.preference&&!intake.professionalId)return result('PREFERENCES',['¿Te sentirías más a gusto con un psicólogo o una psicóloga, o no tienes preferencia?']);
   if(!intake.modality)return result('PREFERENCES',['¿Prefieres atención presencial o virtual?']);
   if(!intake.date||!intake.start)return result('PREFERENCES',['¿Qué fecha y hora te quedan mejor? Si tienes varias opciones, cuéntame 😊']);
   const time=new Date(intake.date+'T'+intake.start+':00-05:00').getTime();
-  if(!Number.isFinite(time)||time<=Date.now()||time>Date.now()+90*86400000){delete intake.date;delete intake.start;return result('PREFERENCES',['Indícame una fecha y hora futura dentro de los próximos 90 días, por favor 😊']);}
+  if(!Number.isFinite(time)||time<=Date.now()||time>Date.now()+90*86400000){delete intake.date;delete intake.start;return result('PREFERENCES',['¿Me confirmas la fecha y la hora, por favor? Podemos coordinar citas para los próximos tres meses 😊']);}
   const d=result('HUMAN',['Gracias 😊 Revisaremos ese horario con el profesional antes de confirmar tu cita.']);
   d.handoff=`Coordinar disponibilidad: cliente Axis ${intake.clientId}, ${intake.date} ${intake.start}, ${intake.modality}, ${intake.professionalId?'profesional solicitado Axis '+intake.professionalId:'preferencia '+(intake.preference==='male'?'psicólogo':intake.preference==='female'?'psicóloga':'indiferente')}. Datos ya registrados${intake.returning?'; revisar continuidad, tarifa y saldo del paquete antes de cobrar; servicio anterior '+intake.priorServiceId:''}`;
   return d;

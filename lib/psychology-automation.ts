@@ -17,6 +17,7 @@ import {enqueueIdleChatResumes,idleChatSources,idleResumeDecision,idleReplyStill
 import {chiefHelpMessage,chiefBookingProblem} from './psychology-chief-messages';
 import {contextReception} from './psychology-reception-context';
 import {handleRentalIntake} from './psychology-rental-intake';
+import {naturalBookingConfirmation,type ConfirmableProposal} from './psychology-booking-messages';
 
 type Tx=Prisma.TransactionClient;
 export type AutomationConfig={ enabled:boolean; activatedAt:Date|null; templates:ReceptionTemplates; paymentPolicy:string;staffIdleMinutes?:number };
@@ -88,11 +89,17 @@ async function processOne(config:AutomationConfig) {
       await tx.$executeRaw`UPDATE "PsicologiaBotConversation" SET stage=${resumed.stage},state=${JSON.stringify(resumed.state)}::jsonb,"updatedAt"=NOW() WHERE phone=${e.phone}`;
       await createAuditLog({tenantId:4,accion:'BOT_IDLE_RESUMED',entidad:'WhatsAppEvento',entidadId:e.id,detalles:{sourceEvent:row.resumeOf,idleMinutes:config.staffIdleMinutes??15,contextRechecked:true},tx});
     }
-    if(!e.fromMe&&understanding?.intent==='confirm'&&understanding.confidence>=0.9){
-      const proposals=await tx.$queryRaw<{code:string;details:{date:string;start:string;end:string;serviceId:string;roomId:string|null;professionalId:number}}[]>`SELECT code,details FROM "PsicologiaBotProposal" WHERE status='PENDING' AND "expiresAt">NOW() AND ("customerPhone"=${e.phone} OR "professionalPhone"=${e.phone}) LIMIT 2`;
-      const last=await tx.$queryRaw<{content:string}[]>`SELECT content FROM "PsicologiaBotOutbox" WHERE phone=${e.phone} AND status='ACCEPTED' ORDER BY "createdAt" DESC,id DESC LIMIT 1`;
-      const unchanged=proposals.length===1&&(['date','start','end','serviceId','roomId','professionalId'] as const).every(key=>understanding![key]===null||understanding![key]===proposals[0].details[key]);
-      if(unchanged&&last[0]?.content.includes('CONFIRMAR '+proposals[0].code))e.text='CONFIRMAR '+proposals[0].code;
+    if(!e.fromMe&&understanding&&['confirm','accept'].includes(understanding.intent)&&understanding.confidence>=0.9){
+      const proposals=await tx.$queryRaw<ConfirmableProposal[]>`
+        SELECT p.code,p.details||jsonb_build_object('roomName',r.nombre) AS details FROM "PsicologiaBotProposal" p
+        LEFT JOIN consultorios r ON r.id::text=p.details->>'roomId' AND r."tenantId"=4 AND r."empresaId"=3
+        WHERE p.status='PENDING' AND p."expiresAt">NOW() AND (p."customerPhone"=${e.phone} OR p."professionalPhone"=${e.phone})
+        AND EXISTS(SELECT 1 FROM "PsicologiaBotOutbox" o WHERE o.phone=${e.phone} AND o.status='ACCEPTED'
+          AND o."attemptedAt"<=${new Date(e.at)} AND (o.content=p.details->>'customerPrompt' OR o.content=p.details->>'professionalPrompt' OR position('CONFIRMAR '||p.code in o.content)>0))
+        AND NOT EXISTS(SELECT 1 FROM "PsicologiaBotConversation" c WHERE c.phone=${e.phone} AND c.stage='HUMAN') LIMIT 8`;
+      const last=await tx.$queryRaw<{content:string}[]>`SELECT content FROM "PsicologiaBotOutbox" WHERE phone=${e.phone} AND status='ACCEPTED' AND "attemptedAt"<=${new Date(e.at)} ORDER BY "createdAt" DESC,id DESC LIMIT 1`;
+      const code=naturalBookingConfirmation(e,understanding,proposals,last[0]?.content||'');
+      if(code)e.text='CONFIRMAR '+code;
     }
     let bookingHandled=false;
     if(!e.fromMe&&e.kind==='text'&&/^(RESERVAR|CONFIRMAR|SOPORTE)\s/i.test(e.text)) {

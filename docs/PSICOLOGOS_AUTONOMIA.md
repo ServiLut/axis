@@ -66,6 +66,12 @@ Las tareas diarias vuelven a comprobar elegibilidad cada día; no reiteran una i
 
 ## Supervisión temporal
 
+La comunicación de reservas usa días y horas cotidianos y confirmaciones naturales. Un «sí» debe corresponder a una única pregunta de reserva enviada antes de la respuesta; si hay varios horarios o una contradicción, se pide aclaración. Los códigos siguen siendo internos. El mensaje de reserva completada se envía después del registro transaccional. Los precios y respuestas rápidas aprobadas conservan su fuente.
+
+Las preferencias de consultorio se guardan por profesional verificado con cita textual, evento y fecha, únicamente cuando expresa un gusto o rechazo. No se deducen de visitas anteriores. Se consulta disponibilidad actual, se presentan primero las opciones preferidas disponibles y la persona elige; no se asigna automáticamente una alternativa. Las dudas de identidad o instrucciones contradictorias requieren Sandra. Una regla general aprendida de Sandra no identifica por sí sola la preferencia de cada profesional.
+
+Los reportes existentes de 5:30 a. m. y 9:30 p. m., hora de Colombia, incluyen recomendaciones de captación y retención basadas en fuentes disponibles, separan ingresos de gastos y declaran cobertura incompleta. Son tareas de Codex que requieren equipo y conexiones disponibles; no equivalen todavía a reportes completamente autónomos en n8n.
+
 Automatización `supervisi-n-y-autonom-a-psic-logos`, cada 30 minutos en este chat. Debe revisar salud, mensajes nuevos y bloqueos, continuar correcciones y verificar despliegues. Guardar línea base; no repetir alertas ni tocar conversaciones tomadas por humanos. Mantener silencio si no cambió nada accionable. La ejecución necesita el equipo encendido y Codex disponible; el bot de servidor tiene infraestructura independiente.
 
 No declarar el objetivo completo hasta verificar:

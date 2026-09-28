@@ -8,6 +8,7 @@ import { phoneDigits,SANDRA_PHONE } from '../lib/psychology-reception';
 import type * as Booking from '../lib/psychology-bot-booking';
 import type * as Identity from '../lib/psychology-booking-identity';
 import {validateBookingSpecialty} from '../lib/psychology-bot-booking';
+import * as bookingMessages from '../lib/psychology-booking-messages';
 async function fixture(rental=false) {
  const db=new PGlite();await db.exec(`CREATE TABLE "CitasPsicologos" (id BIGINT PRIMARY KEY,"tenantId" INT,"empresaId" INT,"pacienteId" INT,"psicologoId" INT);
  CREATE TABLE "Cliente" (id INT,"tenantId" INT,"empresaId" INT,telefono TEXT,telefono2 TEXT,"deletedAt" TIMESTAMPTZ);
@@ -30,6 +31,7 @@ async function fixture(rental=false) {
  };
  const identity=loadServerModule<typeof Identity>('lib/psychology-booking-identity.ts',{'./psychology-reception':{phoneDigits}});
  const api=loadServerModule<typeof Booking>('lib/psychology-bot-booking.ts',{
+  './psychology-booking-messages':bookingMessages,
   'node:crypto':{createHash},'./psychology-reception':{phoneDigits,SANDRA_PHONE},
   './psychology-booking-identity':identity,
   './booking-server':{normalizedRental:async(_tx:unknown,_tenant:number,_service:bigint,inicio:Date)=>rental?{valor:18900,fin:new Date(inicio.getTime()+3600000)}:null,lockAndValidateBooking:async()=>{if(state.occupied)throw Error('Occupied')}},

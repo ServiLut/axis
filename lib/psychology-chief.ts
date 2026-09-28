@@ -76,7 +76,7 @@ export async function handleChiefUnderstanding(tx:Tx,e:ReceptionEvent,u:Understa
  if(action.type==='learn'){
   await tx.$executeRaw`INSERT INTO "PsicologiaBotKnowledge" (id,instruction,"sourceEvent","approvedBy") VALUES (${e.id+':knowledge'},${action.instruction},${e.id},${SANDRA_PHONE}) ON CONFLICT DO NOTHING`;
   await createAuditLog({tenantId:4,accion:'BOT_CHIEF_INSTRUCTION',entidad:'PsicologiaBotKnowledge',entidadId:e.id,detalles:{sourceEvent:e.id,actorPhone:SANDRA_PHONE,instruction:action.instruction},tx});
-  await ack('Anoté tu instrucción para las próximas conversaciones. Si entra en conflicto con una tarifa, disponibilidad o regla vigente, te pediré aclaración antes de aplicarla.');return true;
+  await ack('Entendido, Sandra 😊 Lo tendré en cuenta en las próximas conversaciones. Si surge alguna duda, te consultaré.');return true;
  }
  if(action.type==='send'){
   await queue(tx,e.id+':chief-send',action.phone,action.text);

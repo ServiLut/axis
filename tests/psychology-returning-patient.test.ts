@@ -7,7 +7,7 @@ import {parseUnderstanding,understandingSchema,type Understanding} from '../lib/
 import type * as Intake from '../lib/psychology-patient-intake';
 import type * as Returning from '../lib/psychology-returning-patient';
 const base=Object.fromEntries(Object.keys(understandingSchema.properties).map(k=>[k,null]));
-const understand=(data:Partial<Understanding>={})=>parseUnderstanding({...base,additionalServices:[],rentalRequests:[],confidence:0.99,intent:'accept',explicitConsent:false,...data});
+const understand=(data:Partial<Understanding>={})=>parseUnderstanding({...base,additionalServices:[],rentalRequests:[],roomPreferenceChanges:[],confidence:0.99,intent:'accept',explicitConsent:false,...data});
 const event:reception.ReceptionEvent={id:'returning-contract',phone:'34600111222',kind:'text',text:'Me fue muy bien en la primera sesión, por eso decido continuar con la señorita Deicy',fromMe:false,at:new Date().toISOString()};
 async function fixture(){
  const db=new PGlite();await db.exec(`
@@ -71,7 +71,7 @@ test('an existing future appointment prevents a second intake proposal; a cancel
 test('an unspecified, negated or changed professional is not silently assigned to the previous provider',async()=>{
  const f=await fixture();try{
   for(const text of ['Quiero continuar','Quiero continuar, pero no con Deicy','Quiero continuar con otra psicóloga, diferente a Deicy']){
-   const r=await f.run({},text);assert.equal(r?.state.intake?.professionalId,undefined);assert.ok(r?.messages[0].includes('psicólogo, psicóloga'));
+   const r=await f.run({},text);assert.equal(r?.state.intake?.professionalId,undefined);assert.match(r!.messages[0],/psicólogo.*psicóloga.*preferencia/);
   }
   let r=await f.run();
   let next=await f.intake.handlePatientIntake(f.tx as never,event,r!.stage,r!.state,understand({intent:'preferences',professionalId:99}));assert.equal(next?.stage,'HUMAN');

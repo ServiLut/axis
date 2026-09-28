@@ -25,13 +25,13 @@ export function contextReception(event:ReceptionEvent,stage:string,state:Recepti
  const c=state.context;if(!c||event.fromMe||stage==='HUMAN')return null;
  const text=normalizeText(event.text);
  const review=(reason:string,message:string):ReceptionResult=>({stage:'HUMAN',state:{...state,reason},messages:[message],handoff:reason});
- if(c.role==='ambiguous')return review('Identidad ambigua del contacto','Voy a verificar con Sandra cómo continuar para atenderte correctamente.');
+ if(c.role==='ambiguous')return review('Identidad ambigua del contacto','Permíteme consultarlo con Sandra para orientarte bien.');
  if(c.role==='professional'){
   if(/\b(terapia|consulta|sesion)\b/.test(text)&&/\b(para mi|como paciente|para mi hijo|para mi hija|para mi pareja)\b/.test(text))return null;
   if(/certificad|certificacion|carta laboral/.test(text+' '+normalizeText(c.quotedText||'')))return review('Profesional consulta certificado administrativo pendiente','Gracias por recordárnoslo. Voy a consultar con Sandra cómo va el certificado pendiente.');
   if(/consultorio|alquiler|reservar (?:un )?espacio/.test(text)||isRentalBookingRequest(event,state))return null;
   if(/^(hola[!.\s😊]*|buenos dias|buenas tardes|buenas noches|buenas)$/.test(text)&&!c.continuation)return {stage:'PROFESSIONAL',state,messages:['Hola 😊 ¿Cómo estás? ¿En qué podemos ayudarte hoy?']};
-  return review('Consulta administrativa de profesional; revisar conversación previa','Gracias por escribirnos. Voy a revisar tu solicitud con Sandra para darte una respuesta correcta.');
+  return review('Consulta administrativa de profesional; revisar conversación previa','Gracias por escribirnos 😊 Permíteme consultarlo con Sandra.');
  }
  if(c.continuation)return review('Solicitud anterior sin resolver; revisar contexto','Gracias por recordárnoslo. Voy a revisar lo que quedó pendiente con Sandra.');
  if(c.hasHistory&&stage==='NEW'&&/^(hola[!.\s😊]*|buenos dias|buenas tardes|buenas noches|buenas)$/.test(text))return {stage:'NEED',state,messages:['Hola 😊 ¿En qué podemos ayudarte con lo que venían conversando?']};
