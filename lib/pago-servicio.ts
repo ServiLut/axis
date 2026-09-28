@@ -7,6 +7,7 @@ export type PagoServicioInput = {
   fecha: string;
   solicitudId: string;
   confirmado: boolean;
+  historicoRevisado?: boolean;
   lineas: { metodoPago: CajaMethod; monto: string; referencia: string }[];
 };
 
@@ -24,6 +25,7 @@ export function validatePagoServicio(input: PagoServicioInput, today = bogotaTod
     if (!CAJA_METHODS.includes(linea.metodoPago)) throw new Error("Medio de pago inválido.");
     const montoCentavos = cajaAmountInCents(linea.monto);
     const referencia = linea.referencia.trim();
+    if(input.historicoRevisado===true&&!referencia)throw new Error('Indica la referencia del soporte del pago anterior, también si fue en efectivo.');
     if (referencia.length > 120) throw new Error("Referencia demasiado larga.");
     if (linea.metodoPago !== "EFECTIVO" && !referencia) throw new Error("Indica la referencia o comprobante del pago no efectivo.");
     return { metodoPago: linea.metodoPago, monto: (montoCentavos / 100).toFixed(2), montoCentavos, referencia };

@@ -17,7 +17,7 @@ export function loadServerModule<T>(filename: string, mocks: Record<string, unkn
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
     }).outputText;
     runInNewContext(code, {
-      module: loadedModule, exports: loadedModule.exports, Date, Intl, URL, FormData, Error, console: { error() {}, warn() {} }, process: { env },
+      module: loadedModule, exports: loadedModule.exports, Date, Intl, URL, FormData, File, Error, console: { error() {}, warn() {} }, process: { env },
       require: (id: string) => {
         if (id in mocks) return mocks[id];
         if (["@/lib/bogota-date", "@/lib/client-phone", "@/lib/caja", "@/lib/constants/tenants", "@/lib/recepcion", "@/lib/pago-servicio", "@/lib/package-payment", "@/lib/booking", "@/lib/booking-server", "@/lib/psychology-access"].includes(id)) {

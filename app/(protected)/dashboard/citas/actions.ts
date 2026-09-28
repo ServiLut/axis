@@ -996,22 +996,21 @@ export async function uploadComprobantePagoCita(
   if (!payload) return { error: "No autorizado" };
 
   try {
-    const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
-      select: { tenantId: true },
-    });
-
-    if (!usuario) return { error: "Usuario no encontrado" };
-
-    const file = formData.get("file") as File;
-    if (!file) return { error: "No se ha proporcionado ningún archivo" };
+    const usuario = await requireFinanceUser(token);
+    if(!Number.isSafeInteger(citaId)||citaId<1)return {error:'Cita inválida.'};
+    const file = formData.get("file");
+    if (!(file instanceof File) || !file.size) return { error: "Selecciona un comprobante PDF o imagen." };
+    if(file.size>8*1024*1024)return {error:'El comprobante debe pesar máximo 8 MB.'};
+    const extensions:Record<string,string>={'application/pdf':'pdf','image/jpeg':'jpg','image/png':'png','image/webp':'webp'};
+    const fileExt=extensions[file.type];if(!fileExt)return {error:'Usa un PDF o una imagen JPG, PNG o WEBP.'};
+    const citaPrevia=await prisma.citasPsicologos.findFirst({where:{id:BigInt(citaId),tenantId:usuario.tenantId,...(usuario.tenantId===4?{empresaId:3}:{})},select:{comprobantePath:true}});
+    if(!citaPrevia)return {error:'No se encontró la cita en tu empresa.'};
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    const fileExt = file.name.split(".").pop();
     const fileName = `comprobante-cita-${citaId}-${Date.now()}.${fileExt}`;
     const filePath = `${usuario.tenantId}/${fileName}`;
 
@@ -1023,7 +1022,7 @@ export async function uploadComprobantePagoCita(
       });
 
     if (uploadError) {
-      console.error("Supabase Upload Error:", uploadError);
+      console.error("Comprobante storage upload failed", uploadError.name);
       return { error: "Error al subir el archivo a Supabase" };
     }
 
@@ -1031,15 +1030,12 @@ export async function uploadComprobantePagoCita(
       .from("comprobantePagoPsicologos")
       .getPublicUrl(filePath);
 
-    const citaPrevia = await prisma.citasPsicologos.findFirst({
-        where: { id: BigInt(citaId), tenantId: usuario.tenantId },
-        select: { comprobantePath: true }
-    });
-
-    await prisma.citasPsicologos.update({
+    await prisma.$transaction(async tx=>{
+    const changed=await tx.citasPsicologos.updateMany({
       where: { id: BigInt(citaId), tenantId: usuario.tenantId },
       data: { comprobantePath: publicUrlData.publicUrl },
     });
+    if(changed.count!==1)throw Error('CITA_CHANGED');
 
     await createAuditLog({
         tenantId: usuario.tenantId,
@@ -1047,6 +1043,7 @@ export async function uploadComprobantePagoCita(
         accion: "UPLOAD_FILE",
         entidad: "Cita",
         entidadId: citaId,
+        tx,
         detalles: {
             descripcion: "Comprobante de pago subido",
             archivo: fileName,
@@ -1055,13 +1052,13 @@ export async function uploadComprobantePagoCita(
             despues: { archivo: publicUrlData.publicUrl }
         },
     });
+    });
 
     revalidatePath("/dashboard/citas");
-    return { success: true, message: "Comprobante subido correctamente" };
+    return { success: true, message: "Comprobante subido correctamente",url:publicUrlData.publicUrl };
   } catch (error) {
-    console.error("Error uploading comprobante pago cita:", error);
-    const errorMessage = error instanceof Error ? error.message : "Error desconocido";
-    return { error: `Error al procesar la subida del comprobante: ${errorMessage}` };
+    console.error("Error uploading comprobante pago cita:", error instanceof Error?error.name:'unknown');
+    return { error: 'No se pudo guardar el comprobante. Conserva el archivo e intenta nuevamente; el pago no fue modificado.' };
   }
 }
 

@@ -126,7 +126,7 @@ test("acceso desde una cita resuelve su paquete completo y saldo sin crear ingre
 test("acceso directo a cobro respeta empresa, sesión, cancelación, legado y vínculo de paquete", async () => {
   const f=await fixture();try {
     assert.ok("item" in await f.actions.getCobroDesdeCita("valid","1"));
-    assert.ok("notice" in await f.actions.getCobroDesdeCita("valid","2"));
+    const legacy=await f.actions.getCobroDesdeCita("valid","2");assert.ok('item' in legacy);if('item' in legacy)assert.equal(legacy.item.situacion,'REVISAR_LEGADO');
     assert.ok("error" in await f.actions.getCobroDesdeCita("invalid","1"));
     for (const id of ["1 OR 1=1","-1","9999999999999999999999","missing"]) assert.ok("error" in await f.actions.getCobroDesdeCita("valid",id));
     await f.db.exec('UPDATE "CitasPsicologos" SET "empresaId"=2 WHERE id=1');assert.ok("error" in await f.actions.getCobroDesdeCita("valid","1"));
@@ -134,7 +134,7 @@ test("acceso directo a cobro respeta empresa, sesión, cancelación, legado y v�
     await f.db.exec('UPDATE "CitasPsicologos" SET "tenantId"=4,realizada=NULL WHERE id=1');assert.ok("error" in await f.actions.getCobroDesdeCita("valid","1"));
     await f.db.exec('UPDATE "CitasPsicologos" SET realizada=true,"paqueteId"=999 WHERE id=1');assert.ok("error" in await f.actions.getCobroDesdeCita("valid","1"));
     await f.db.exec(`UPDATE "CitasPsicologos" SET "paqueteId"=3 WHERE id=1; UPDATE "PaqueteAdquirido" SET estado='CANCELADO' WHERE id=3`);assert.ok("error" in await f.actions.getCobroDesdeCita("valid","1"));
-    await f.db.exec(`UPDATE "PaqueteAdquirido" SET estado='ACTIVO',"fechaCompra"='2026-09-25T15:00:00Z' WHERE id=3`);assert.ok("notice" in await f.actions.getCobroDesdeCita("valid","1"));
+    await f.db.exec(`UPDATE "PaqueteAdquirido" SET estado='ACTIVO',"fechaCompra"='2026-09-25T15:00:00Z' WHERE id=3`);assert.ok("item" in await f.actions.getCobroDesdeCita("valid","1"));
     assert.equal(await f.count("MovimientoCaja"),0);assert.equal(await f.count("PagoServicioPsicologia"),0);
   }finally{await f.db.close();}
 });
@@ -229,6 +229,16 @@ test("alquiler identifica al profesional, conserva legado y excluye paquetes can
     assert.ok("error" in canceled);
     assert.equal(await f.count("MovimientoCaja"),0);
   } finally { await f.db.close(); }
+});
+
+test('conciliación histórica requiere revisión y referencia; reintento no duplica el libro',async()=>{
+ const f=await fixture();try{
+  const input={origen:'CITA' as const,origenId:'2',fecha:'2026-09-25',solicitudId:randomUUID(),confirmado:true,historicoRevisado:true,lineas:[{metodoPago:'EFECTIVO' as const,monto:'20000',referencia:''}]};
+  assert.ok('error' in await f.actions.registrarPagoServicio('valid',input));input.lineas[0].referencia='RECIBO-ANTERIOR-1';
+  assert.ok('ids' in await f.actions.registrarPagoServicio('valid',input));assert.ok('ids' in await f.actions.registrarPagoServicio('valid',input));assert.equal(await f.count('MovimientoCaja'),1);
+  const rows=await f.db.query<{fecha:string}>(`SELECT fecha::text FROM "MovimientoCaja"`);assert.equal(rows.rows[0].fecha,'2026-09-25');
+  assert.ok('error' in await f.actions.registrarPagoServicio('valid',{...input,solicitudId:randomUUID()}));
+ }finally{await f.db.close()}
 });
 
 test("gasto de internet y cobro de cita comparten libro sin duplicar el ingreso", async () => {

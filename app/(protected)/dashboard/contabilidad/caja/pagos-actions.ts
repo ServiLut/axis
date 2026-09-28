@@ -55,7 +55,6 @@ export async function getCobroDesdeCita(token: string, citaId: string): Promise<
     if (!item) throw new Error("La cita o su paquete no están disponibles en Psicólogos. Revisa si se cancelaron.");
     if (!item.fecha || !Number.isFinite(Number(item.valor)) || Number(item.valor)<=0) throw new Error("El servicio requiere revisar su fecha o valor antes de registrar el pago.");
     if (Number(item.registrado)>=Number(item.valor)) return { notice: "Este servicio ya tiene el valor completo registrado en el libro. No registres otro cobro." };
-    if (item.situacion !== 'PENDIENTE') return { notice: "Este servicio tiene un estado de pago anterior. Revisa el soporte histórico antes de registrar otro ingreso." };
     return { item };
   } catch (error) { return fail(error); }
 }
@@ -148,9 +147,9 @@ export async function registrarPagoServicio(token: string, input: PagoServicioIn
         id: BigInt(data.origenId), tenantId: user.tenantId }, select: { precioPagado: true, fechaCompra: true, estado: true } }) : null;
       if (!cita && !paquete) throw new Error("La cita o el paquete no está disponible en PSICOLOGOS.");
       if (paquete?.estado === "CANCELADO") throw new Error("El paquete está cancelado. Revisa su devolución o ajuste; no registres un cobro ordinario.");
-      if (cita?.estadoPago && cita.estadoPago !== "PENDIENTE")
+      if (cita?.estadoPago && cita.estadoPago !== "PENDIENTE" && data.historicoRevisado!==true)
         throw new Error("Esta cita ya tiene un estado de cobro anterior. Revisa el comprobante y el banco antes de registrar otro pago.");
-      if (paquete?.fechaCompra && paquete.fechaCompra < new Date("2026-09-26T05:00:00Z"))
+      if (paquete?.fechaCompra && paquete.fechaCompra < new Date("2026-09-26T05:00:00Z") && data.historicoRevisado!==true)
         throw new Error("Este paquete es anterior al nuevo libro. Verifica primero su pago histórico para no duplicar ingresos.");
       const valor = Number(cita?.valor ?? paquete?.precioPagado ?? 0);
       if (!Number.isFinite(valor) || valor <= 0) throw new Error("El servicio no tiene precio válido.");
@@ -171,7 +170,8 @@ export async function registrarPagoServicio(token: string, input: PagoServicioIn
           const duplicateReception = await tx.$queryRaw<{ id: string }[]>`SELECT "id"::text FROM "PagoRecepcion"
             WHERE "tenantId"=${user.tenantId} AND NOT "reversado" AND "metodoPago"=${line.metodoPago}
               AND lower(trim("referencia"))=lower(${line.referencia}) LIMIT 1`;
-          if (duplicate.length || duplicateReception.length) throw new Error("La referencia ya existe en el libro. Verifica si este dinero se registró antes.");
+          const duplicateLedger=await tx.$queryRaw<{id:string}[]>`SELECT id::text FROM "MovimientoCaja" WHERE "tenantId"=${user.tenantId} AND tipo='INGRESO' AND "metodoPago"=${line.metodoPago} AND lower(trim(referencia))=lower(${line.referencia}) LIMIT 1`;
+          if (duplicate.length || duplicateReception.length || duplicateLedger.length) throw new Error("La referencia ya existe en el libro. Verifica si este dinero se registró antes.");
         }
         const movement = await tx.$queryRaw<{ id: string }[]>`INSERT INTO "MovimientoCaja"
           ("tenantId","creadoPorId","fecha","tipo","metodoPago","monto","concepto","referencia","solicitudId")
@@ -194,7 +194,7 @@ export async function registrarPagoServicio(token: string, input: PagoServicioIn
       }
       if (paquete) await syncPackagePaymentState(tx, user.tenantId, BigInt(data.origenId));
       await createAuditLog({ tenantId: user.tenantId, usuarioId: user.id, accion: "CREATE", entidad: "PagoServicioPsicologia",
-        entidadId: ids.join(","), detalles: { origen: data.origen, origenId: data.origenId, fecha: data.fecha,
+        entidadId: ids.join(","), detalles: { origen: data.origen, origenId: data.origenId, fecha: data.fecha, historicoRevisado:data.historicoRevisado===true,
           lineas: data.lineas.map((line) => ({ metodoPago: line.metodoPago, monto: line.monto, referencia: line.referencia })) }, tx });
       return ids;
     });

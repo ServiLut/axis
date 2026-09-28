@@ -84,6 +84,7 @@ import { EstadoPagoOrden } from "@/prisma/generated/prisma/enums";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { useUserRole } from "@/hooks/use-user-role";
 import { checkPermission, requestPermission, getMyPermissionStatus } from "@/app/(protected)/dashboard/configuracion/permisos/actions";
+import {ConciliarCita} from '@/components/contabilidad/conciliar-cita';
 
 type PaqueteCita = PaqueteAdquirido & {
   TerapiasPsicologos: TerapiasPsicologos;
@@ -711,10 +712,6 @@ export default function CitasPage() {
   };
 
   const handleEditPayment = (cita: Cita) => {
-      if (tenantId === 4 && process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true") {
-        router.push("/dashboard/contabilidad/caja");
-        return;
-      }
       setPaymentCita(cita);
       setNewMetodoPago(cita.metodoPago || "");
       setNewEstadoPago(cita.estadoPago || EstadoPagoOrden.PENDIENTE);
@@ -822,15 +819,16 @@ export default function CitasPage() {
       const formData = new FormData();
       formData.append("file", file);
       
-      toast.promise(uploadComprobantePagoCita(token, uploadingCitaId, formData), {
+      toast.promise(uploadComprobantePagoCita(token, uploadingCitaId, formData).then(result=>{if('error' in result)throw Error(result.error);return result}), {
           loading: "Subiendo...",
           success: () => {
             fetchCitasData();
             return "Comprobante subido";
           },
-          error: "Error al subir"
+          error: (error:unknown) => error instanceof Error?error.message:"Error al subir"
       });
       setUploadingCitaId(null);
+      e.target.value='';
   };
 
   return (
@@ -1195,13 +1193,14 @@ export default function CitasPage() {
                                  </DropdownMenuItem>
                              )}
                              <DropdownMenuItem onClick={() => tenantId === 4 && process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true"
-                               ? router.push(`/dashboard/contabilidad/caja?citaId=${cita.id}`) : handleTogglePago(cita.id)} className={cita.estadoPago === EstadoPagoOrden.CONCILIADO ? "text-orange-600" : "text-green-600"}>
+                               ? handleEditPayment(cita) : handleTogglePago(cita.id)} className={cita.estadoPago === EstadoPagoOrden.CONCILIADO ? "text-orange-600" : "text-green-600"}>
                                  <CheckCircle className="mr-2 h-4 w-4" /> 
-                                 {tenantId === 4 && process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true" ? "Registrar cobro en caja" :
+                                 {tenantId === 4 && process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true" ? "Conciliar pago / comprobante" :
                                    cita.estadoPago === EstadoPagoOrden.CONCILIADO ? "Marcar como Pendiente" : "Marcar como Conciliado"}
                              </DropdownMenuItem>
                              <DropdownMenuItem onClick={() => handleCopy(cita)}><Copy className="mr-2 h-4 w-4" /> Copiar info</DropdownMenuItem>
                              <DropdownMenuItem onClick={() => {
+                                if(tenantId===4&&process.env.NEXT_PUBLIC_RECEPCION_ENABLED==='true'){handleEditPayment(cita);return;}
                                 setUploadingCitaId(cita.id);
                                 fileInputRef.current?.click();
                              }}>
@@ -1441,14 +1440,16 @@ export default function CitasPage() {
 
       {/* Payment Modal */}
       <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[760px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Editar Pago</DialogTitle>
+            <DialogTitle>{tenantId===4&&process.env.NEXT_PUBLIC_RECEPCION_ENABLED==='true'?'Conciliar pago y comprobante':'Editar Pago'}</DialogTitle>
             <DialogDescription>
-              Actualiza el método y estado de pago de la cita.
+              Revisa el pago de la cita seleccionada y conserva su soporte.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+          {tenantId===4&&process.env.NEXT_PUBLIC_RECEPCION_ENABLED==='true'&&paymentCita?
+           <ConciliarCita key={paymentCita.id} citaId={paymentCita.id} comprobante={paymentCita.comprobantePath} onSaved={()=>{fetchCitasData();fetchAux();}}/>:
+          <><div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label htmlFor="metodo-pago">Método de Pago</Label>
               <Select value={newMetodoPago} onValueChange={setNewMetodoPago}>
@@ -1486,7 +1487,7 @@ export default function CitasPage() {
             <Button onClick={handleUpdatePayment} disabled={isUpdatingPayment}>
               {isUpdatingPayment ? "Guardando..." : "Guardar Cambios"}
             </Button>
-          </DialogFooter>
+          </DialogFooter></>}
         </DialogContent>
       </Dialog>
 

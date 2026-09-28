@@ -17,7 +17,7 @@ const labels: Record<CajaMethod,string> = { EFECTIVO: "Efectivo", TRANSFERENCIA:
 const format = (value: number) => new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(value);
 const newLine = () => ({ metodoPago: "EFECTIVO" as CajaMethod, monto: "", referencia: "" });
 
-export function CobrosServicios({ fecha, revision, onSaved, citaId }: { fecha: string; revision: number; onSaved: () => void; citaId?: string }) {
+export function CobrosServicios({ fecha, revision, onSaved, citaId, soloCita=false }: { fecha: string; revision: number; onSaved: () => void; citaId?: string; soloCita?:boolean }) {
   const [items, setItems] = useState<Item[]>([]);
   const [summary, setSummary] = useState({ total: 0, vencidos: 0, sinLibro: 0, legado: 0,
     valorVencido: "0.00", valorSinLibro: "0.00" });
@@ -32,6 +32,7 @@ export function CobrosServicios({ fecha, revision, onSaved, citaId }: { fecha: s
   const [selected, setSelected] = useState<Item | null>(null);
   const [lines, setLines] = useState([newLine()]);
   const [confirmed, setConfirmed] = useState(false);
+  const [historicoRevisado,setHistoricoRevisado]=useState(false);
   const [saving, setSaving] = useState(false);
   const requestId = useRef<string | null>(null);
   const [targetNotice, setTargetNotice] = useState("");
@@ -56,11 +57,12 @@ export function CobrosServicios({ fecha, revision, onSaved, citaId }: { fecha: s
     }
     void resolveTarget();
     return () => { cancelled=true; };
-  }, [citaId]);
+  }, [citaId,revision]);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
+      if(soloCita){setLoading(false);return;}
       setLoading(true); setError("");
       try {
         const token = localStorage.getItem("token");
@@ -78,7 +80,7 @@ export function CobrosServicios({ fecha, revision, onSaved, citaId }: { fecha: s
     }
     void load();
     return () => { cancelled = true; };
-  }, [fecha, revision]);
+  }, [fecha, revision,soloCita]);
 
   async function loadMore() {
     if (loadingMore || items.length >= summary.total) return;
@@ -103,7 +105,7 @@ export function CobrosServicios({ fecha, revision, onSaved, citaId }: { fecha: s
       if (!token) throw new Error("Inicia sesión para registrar pagos.");
       requestId.current ||= crypto.randomUUID();
       const input: PagoServicioInput = { origen: selected.origen, origenId: selected.id, fecha,
-        solicitudId: requestId.current, confirmado: confirmed, lineas: lines };
+        solicitudId: requestId.current, confirmado: confirmed, lineas: lines, historicoRevisado };
       const validated = validatePagoServicio(input);
       const remaining = Math.round((Number(selected.valor) - Number(selected.registrado)) * 100);
       if (validated.totalCentavos > remaining) throw new Error("La suma supera el saldo mostrado. Actualiza el libro.");
@@ -148,15 +150,16 @@ export function CobrosServicios({ fecha, revision, onSaved, citaId }: { fecha: s
           placeholder={line.metodoPago === "EFECTIVO" ? "Opcional en efectivo" : "Obligatoria"}
           onChange={(event) => { const copy=[...lines]; copy[index]={...line,referencia:event.target.value}; setLines(copy); requestId.current=null; }} /></div>
       </div>)}
+      {selected.situacion!=='PENDIENTE'&&<label className="flex items-start gap-2 rounded border border-amber-300 bg-amber-50 p-3 text-sm"><input type="checkbox" required checked={historicoRevisado} onChange={e=>{setHistoricoRevisado(e.target.checked);requestId.current=null;}}/>Revisé este pago anterior: comprobé el dinero y que no existe ya en el libro diario. Estoy registrándolo en la fecha real en que se recibió, sin cobrar de nuevo.</label>}
       <label className="flex items-start gap-2 text-sm"><input type="checkbox" required checked={confirmed}
         onChange={(event) => { setConfirmed(event.target.checked); requestId.current=null; }} />
         Confirmo que recibí este dinero y revisé recibos, caja y banco para evitar registrar de nuevo un pago anterior.</label>
       <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={lines.length >= 4 || saving} onClick={() => setLines([...lines,newLine()])}>+ Otro medio</Button>
         {lines.length > 1 && <Button type="button" variant="outline" disabled={saving} onClick={() => setLines(lines.slice(0,-1))}>Quitar último</Button>}
-        <Button type="submit" disabled={saving}>{saving ? "Registrando…" : "Confirmar dinero recibido"}</Button>
+        <Button type="submit" disabled={saving}>{saving ? "Registrando…" : soloCita ? "Registrar pago y actualizar conciliación" : "Confirmar dinero recibido"}</Button>
         <Button type="button" variant="ghost" disabled={saving} onClick={() => { setSelected(null); requestId.current=null; }}>Cancelar</Button></div>
     </form>}
-    <div><h2 className="text-lg font-semibold">Consultas y paquetes pendientes</h2>
+    {!soloCita&&<><div><h2 className="text-lg font-semibold">Consultas y paquetes pendientes</h2>
       <p className="text-sm text-slate-600">El rojo indica una cita o compra anterior sin el valor completo registrado en este libro. Comprueba recibos y banco antes de cobrar: el estado heredado no demuestra una deuda.</p></div>
     {loading ? <p role="status">Revisando saldos…</p> : error ? <p role="alert" className="text-red-700">{error}</p> : <>
       <div className="grid gap-3 sm:grid-cols-3">
@@ -196,6 +199,6 @@ export function CobrosServicios({ fecha, revision, onSaved, citaId }: { fecha: s
         <Button type="button" variant="ghost" onClick={() => setRefundId("")}>Cancelar</Button>
         <p className="w-full text-xs text-amber-900">Este registro no envía dinero. Úsalo solamente después de efectuar la devolución en el mismo medio.</p>
       </form>}
-    </div>}
+    </div>}</>}
   </section>;
 }
