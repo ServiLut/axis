@@ -109,7 +109,10 @@ async function processOne(config:AutomationConfig) {
     else if(e.phone===SANDRA_PHONE) {
       if(!e.fromMe){
         if(/^(ESTADO BOT|AYUDA BOT)$|^(PAUSAR|REANUDAR|POLITICA PAGO)\s/i.test(e.text.trim()))await adminMessage(tx,e);
-        else if(row.analysisError)await queuePsychologyMessage(tx,e.id+':ai-error',SANDRA_PHONE,'Sandra, falló la interpretación de este mensaje. '+(row.kind==='audio'?'No pude transcribir el audio. ¿Me lo escribes, por favor?':'Puedes usar ESTADO BOT, PAUSAR o REANUDAR seguido del número mientras se revisa la conexión.'));
+        else if(row.analysisError){
+          await tx.$executeRaw`UPDATE "PsicologiaBotConversation" SET state=state||${JSON.stringify({pendingInterpretationEvent:e.id})}::jsonb WHERE phone=${SANDRA_PHONE}`;
+          await queuePsychologyMessage(tx,e.id+':ai-error',SANDRA_PHONE,row.kind==='audio'&&!row.transcript?'Sandra, no pude escuchar el audio. ¿Puedes enviarlo de nuevo o escribirme lo que necesitas?':'Sandra, recibí tu mensaje, pero tuve un problema al procesarlo. La solicitud quedó pendiente de revisión; no necesitas repetirla.');
+        }
         else await handleChiefUnderstanding(tx,e,understanding,queuePsychologyMessage,adminMessage);
       }
     }

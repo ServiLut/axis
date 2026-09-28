@@ -55,10 +55,13 @@ export async function psychologyAiRequest(body:Record<string,unknown>) {
  const value=await r.json();if(value.error)throw Error('AI_PROVIDER_ERROR');return value;
 }
 export async function understandPsychologyMessage(event:ReceptionEvent,context:Record<string,unknown>):Promise<Understanding>{
- const result=await psychologyAiRequest({action:'understand',instructions:RECEPTION_AI_INSTRUCTIONS,schema:understandingSchema,input:JSON.stringify({...context,actorIsChief:event.phone===SANDRA_PHONE,nowColombia:new Date().toLocaleString('sv-SE',{timeZone:'America/Bogota'}),messageSentAtColombia:new Date(event.at).toLocaleString('sv-SE',{timeZone:'America/Bogota'}),currentMessage:event.text})});
- let value=result.result??result;
- if(typeof value==='string'){try{value=JSON.parse(value.replace(/^```(?:json)?\s*|\s*```$/g,''))}catch{throw Error('AI_BAD_JSON')}}
- return parseUnderstanding(value);
+ const input=JSON.stringify({...context,actorIsChief:event.phone===SANDRA_PHONE,nowColombia:new Date().toLocaleString('sv-SE',{timeZone:'America/Bogota'}),messageSentAtColombia:new Date(event.at).toLocaleString('sv-SE',{timeZone:'America/Bogota'}),currentMessage:event.text});
+ for(let attempt=0;attempt<2;attempt++){
+  const result=await psychologyAiRequest({action:'understand',instructions:RECEPTION_AI_INSTRUCTIONS+(attempt?'\nLa salida anterior no cumplió el esquema. Relee la entrada original. Usa exclusivamente los valores enumerados y todos los campos; no agregues acciones. Una orden aún no implementada es intent admin, adminAction none y una pregunta clara, no inventes una nueva acción.':''),schema:understandingSchema,input});
+  try{let value=result.result??result;if(typeof value==='string'){try{value=JSON.parse(value.replace(/^```(?:json)?\s*|\s*```$/g,''))}catch{throw Error('AI_BAD_JSON')}}return parseUnderstanding(value);}
+  catch(error){if(attempt===1)throw error;}
+ }
+ throw Error('AI_INVALID');
 }
 export async function transcribePsychologyAudio(eventId:string):Promise<string>{
  if(!/^[A-Za-z0-9_:-]{5,160}$/.test(eventId)||!process.env.PSICOLOGOS_EVOLUTION_TOKEN)throw Error('AUDIO_SCOPE');

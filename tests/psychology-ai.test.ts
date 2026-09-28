@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {readFileSync} from 'node:fs';
 import {PGlite} from '@electric-sql/pglite';
-import {parseUnderstanding,understandingSchema,type Understanding} from '../lib/psychology-ai';
+import {parseUnderstanding,understandingSchema,understandPsychologyMessage,type Understanding} from '../lib/psychology-ai';
 import {chiefAction,handleChiefUnderstanding,executeReactivationBatch,runChiefReactivationTask} from '../lib/psychology-chief';
 import {semanticReception} from '../lib/psychology-semantic-reception';
 import {SANDRA_PHONE,type ReceptionEvent} from '../lib/psychology-reception';
@@ -11,6 +11,15 @@ import {campaignFixture} from './psychology-campaign-fixture';
 const base=Object.fromEntries(Object.keys(understandingSchema.properties).map(k=>[k,null]));
 const understanding=(patch:Partial<Understanding>={}):Understanding=>parseUnderstanding({...base,intent:'admin',confidence:0.99,explicitConsent:false,additionalServices:[],...patch});
 const event:ReceptionEvent={id:'verified-source',phone:SANDRA_PHONE,kind:'text',text:'Pausa la atención al 3001112233',fromMe:false,at:new Date().toISOString()};
+
+test('invalid AI classification is retried once without changing the source or inventing defaults',async()=>{
+ const originalFetch=globalThis.fetch,oldUrl=process.env.PSICOLOGOS_AI_URL,oldToken=process.env.PSICOLOGOS_AI_TOKEN;let calls=0,invalidAlways=false;const inputs:string[]=[];
+ process.env.PSICOLOGOS_AI_URL='https://abogadosencolombia.app.n8n.cloud/webhook/fixture';process.env.PSICOLOGOS_AI_TOKEN='fixture';
+ globalThis.fetch=async(_url,options)=>{calls++;const body=JSON.parse(String(options?.body));inputs.push(body.input);return new Response(JSON.stringify({result:calls===1||invalidAlways?{...understanding(),adminAction:'invented_action'}:understanding({adminAction:'learn'})}),{status:200})};
+ try{const result=await understandPsychologyMessage(event,{});assert.equal(result.adminAction,'learn');assert.equal(calls,2);assert.equal(inputs[0],inputs[1]);
+  invalidAlways=true;calls=0;await assert.rejects(()=>understandPsychologyMessage(event,{}),/AI_ENUM_INVALID/);assert.equal(calls,2);
+ }finally{globalThis.fetch=originalFetch;if(oldUrl===undefined)delete process.env.PSICOLOGOS_AI_URL;else process.env.PSICOLOGOS_AI_URL=oldUrl;if(oldToken===undefined)delete process.env.PSICOLOGOS_AI_TOKEN;else process.env.PSICOLOGOS_AI_TOKEN=oldToken;}
+});
 test('chief authority cannot be granted by model, text, contact name or outgoing echo',()=>{
  const u=understanding({adminAction:'pause',targetPhone:'3001112233'});
  assert.deepEqual(chiefAction(event,u),{type:'command',text:'PAUSAR 573001112233'});
