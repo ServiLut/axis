@@ -1195,7 +1195,7 @@ export default function CitasPage() {
                                  </DropdownMenuItem>
                              )}
                              <DropdownMenuItem onClick={() => tenantId === 4 && process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true"
-                               ? router.push("/dashboard/contabilidad/caja") : handleTogglePago(cita.id)} className={cita.estadoPago === EstadoPagoOrden.CONCILIADO ? "text-orange-600" : "text-green-600"}>
+                               ? router.push(`/dashboard/contabilidad/caja?citaId=${cita.id}`) : handleTogglePago(cita.id)} className={cita.estadoPago === EstadoPagoOrden.CONCILIADO ? "text-orange-600" : "text-green-600"}>
                                  <CheckCircle className="mr-2 h-4 w-4" /> 
                                  {tenantId === 4 && process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true" ? "Registrar cobro en caja" :
                                    cita.estadoPago === EstadoPagoOrden.CONCILIADO ? "Marcar como Pendiente" : "Marcar como Conciliado"}

@@ -15,7 +15,7 @@ const currency = (cents: number) => new Intl.NumberFormat("es-CO", { style: "cur
 const emptyForm = { tipo: "EGRESO" as CajaInput["tipo"], metodoPago: "EFECTIVO" as CajaInput["metodoPago"], monto: "", concepto: "", referencia: "" };
 const selectClass = "h-11 w-full rounded-md border border-input bg-white px-3 text-sm";
 
-export function CajaDiaria() {
+export function CajaDiaria({ citaId }: { citaId?: string } = {}) {
   const [fecha, setFecha] = useState(() => bogotaToday());
   const [movements, setMovements] = useState<CajaMovement[]>([]);
   const [form, setForm] = useState(emptyForm);
@@ -95,7 +95,7 @@ export function CajaDiaria() {
         </div>
 
         {process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true" &&
-          <CobrosServicios fecha={fecha} revision={revision} onSaved={() => setRevision((value) => value + 1)} />}
+          <CobrosServicios citaId={citaId} fecha={fecha} revision={revision} onSaved={() => setRevision((value) => value + 1)} />}
 
         {loading ? <p role="status">Cargando movimientos…</p> : error ? (
           <p role="alert" className="text-red-700">{error}</p>

@@ -22,6 +22,44 @@ function fail(error: unknown) {
   return { error: "No se pudo confirmar el recaudo. Revisa el libro antes de reintentar con los mismos datos." };
 }
 
+/** Resolve the canonical balance from the selected appointment, independent of list pagination. Read only. */
+export async function getCobroDesdeCita(token: string, citaId: string): Promise<{ item: OpenItem } | { notice: string } | { error: string }> {
+  try {
+    const user = await requireReceptionUser(token);
+    if (!/^[1-9]\d{0,17}$/.test(citaId)) throw new Error("Identificador de cita inválido.");
+    const rows = await prisma.$queryRaw<OpenItem[]>`
+      SELECT CASE WHEN p.id IS NULL THEN 'CITA' ELSE 'PAQUETE' END AS origen,
+        COALESCE(p.id,c.id)::text AS id,
+        (COALESCE(p."fechaCompra",c."fechaCita") AT TIME ZONE 'America/Bogota')::date::text AS fecha,
+        COALESCE(NULLIF(CONCAT_WS(' ',cl.nombre,cl.apellido),''),CONCAT_WS(' ',u.nombre,u.apellido)) AS persona,
+        COALESCE(p."precioPagado",c.valor)::numeric(12,2)::text AS valor,
+        COALESCE(paid.total,0)::numeric(12,2)::text AS registrado,
+        CASE WHEN p.id IS NULL THEN COALESCE(c."estadoPago"::text,'PENDIENTE') ELSE p.estado::text END AS estado,
+        CASE WHEN p.id IS NOT NULL AND p."fechaCompra" < '2026-09-26T05:00:00Z'::timestamptz THEN 'REVISAR_LEGADO'
+          WHEN p.id IS NULL AND COALESCE(c."estadoPago"::text,'PENDIENTE') <> 'PENDIENTE' THEN
+            CASE WHEN c."fechaCita" < '2026-09-26T05:00:00Z'::timestamptz THEN 'REVISAR_LEGADO' ELSE 'SIN_LIBRO' END
+          ELSE 'PENDIENTE' END AS situacion
+      FROM "CitasPsicologos" c
+      LEFT JOIN "PaqueteAdquirido" p ON p.id=c."paqueteId" AND p."tenantId"=c."tenantId"
+      LEFT JOIN "Cliente" cl ON cl.id=CASE WHEN p.id IS NOT NULL THEN p."clienteId" ELSE c."pacienteId" END AND cl."tenantId"=c."tenantId"
+      LEFT JOIN "Usuario" u ON u.id=CASE WHEN p.id IS NOT NULL THEN p."usuarioId" ELSE c."psicologoId" END AND u."tenantId"=c."tenantId"
+      LEFT JOIN LATERAL (
+        SELECT SUM(x.monto) AS total FROM "PagoServicioPsicologia" x
+        WHERE x."tenantId"=c."tenantId" AND NOT x.reversado
+          AND (p.id IS NOT NULL AND x."paqueteId"=p.id OR p.id IS NULL AND x."citaId"=c.id)
+      ) paid ON true
+      WHERE c.id=${citaId}::bigint AND c."tenantId"=${user.tenantId} AND c."empresaId"=3
+        AND c.realizada IS NOT NULL AND (c."paqueteId" IS NULL OR p.id IS NOT NULL)
+        AND (p.id IS NULL OR p.estado IS DISTINCT FROM 'CANCELADO') LIMIT 1`;
+    const item = rows[0];
+    if (!item) throw new Error("La cita o su paquete no están disponibles en Psicólogos. Revisa si se cancelaron.");
+    if (!item.fecha || !Number.isFinite(Number(item.valor)) || Number(item.valor)<=0) throw new Error("El servicio requiere revisar su fecha o valor antes de registrar el pago.");
+    if (Number(item.registrado)>=Number(item.valor)) return { notice: "Este servicio ya tiene el valor completo registrado en el libro. No registres otro cobro." };
+    if (item.situacion !== 'PENDIENTE') return { notice: "Este servicio tiene un estado de pago anterior. Revisa el soporte histórico antes de registrar otro ingreso." };
+    return { item };
+  } catch (error) { return fail(error); }
+}
+
 export async function getPendientesPsicologia(token: string, fecha: string, offset = 0) {
   try {
     const user = await requireReceptionUser(token);

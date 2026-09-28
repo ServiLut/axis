@@ -28,6 +28,7 @@ async function fixture() {
       (2,4,100,'2026-09-25T14:00:00Z',20000,'CONCILIADO',true,NULL,'EFECTIVO');
     INSERT INTO "PaqueteAdquirido" VALUES(3,4,100,'2026-09-26T15:00:00Z',90000,'ACTIVO');
     ALTER TABLE "CitasPsicologos" ADD "psicologoId" integer;
+    ALTER TABLE "CitasPsicologos" ADD "empresaId" integer DEFAULT 3;
     ALTER TABLE "PaqueteAdquirido" ADD "usuarioId" integer;`);
   await db.exec(readFileSync("docs/sql/2026-09-24-caja-diaria.sql", "utf8"));
   await db.exec(readFileSync("docs/sql/2026-09-25-recepcion.sql", "utf8"));
@@ -103,6 +104,39 @@ test("cobro mixto de cita se escribe una vez en el libro, se reintenta y no supe
     const extra = await f.actions.registrarPagoServicio("valid", { ...input, solicitudId: randomUUID(), lineas: [{ metodoPago: "EFECTIVO", monto: "1", referencia: "" }] });
     assert.ok("error" in extra);
   } finally { await f.db.close(); }
+});
+
+test("acceso desde una cita resuelve su paquete completo y saldo sin crear ingresos", async () => {
+  const f=await fixture();try {
+    await f.db.exec(`INSERT INTO "CitasPsicologos"(id,"tenantId","pacienteId","fechaCita",valor,"estadoPago",realizada,"paqueteId")
+      VALUES (20,4,100,'2026-09-28T14:00:00Z',30000,'PENDIENTE',true,3)`);
+    const first=await f.actions.getCobroDesdeCita("valid","20");assert.ok("item" in first,JSON.stringify(first));
+    if (!("item" in first)) return;
+    assert.equal(first.item.origen,"PAQUETE");assert.equal(first.item.id,"3");assert.equal(first.item.valor,"90000.00");assert.equal(first.item.registrado,"0.00");
+    assert.equal(await f.count("MovimientoCaja"),0);assert.equal(await f.count("PagoServicioPsicologia"),0);
+    const payment=await f.actions.registrarPagoServicio("valid",{origen:"PAQUETE",origenId:"3",fecha:"2026-09-26",solicitudId:randomUUID(),confirmado:true,
+      lineas:[{metodoPago:"EFECTIVO",monto:"30000",referencia:""}]});assert.ok("ids" in payment);
+    const partial=await f.actions.getCobroDesdeCita("valid","20");assert.ok("item" in partial);if("item" in partial)assert.equal(partial.item.registrado,"30000.00");
+    await f.actions.registrarPagoServicio("valid",{origen:"PAQUETE",origenId:"3",fecha:"2026-09-26",solicitudId:randomUUID(),confirmado:true,
+      lineas:[{metodoPago:"TRANSFERENCIA",monto:"60000",referencia:"T-2"}]});
+    const full=await f.actions.getCobroDesdeCita("valid","20");assert.ok("notice" in full);if("notice" in full)assert.match(full.notice,/valor completo/);
+  }finally {await f.db.close();}
+});
+
+test("acceso directo a cobro respeta empresa, sesión, cancelación, legado y vínculo de paquete", async () => {
+  const f=await fixture();try {
+    assert.ok("item" in await f.actions.getCobroDesdeCita("valid","1"));
+    assert.ok("notice" in await f.actions.getCobroDesdeCita("valid","2"));
+    assert.ok("error" in await f.actions.getCobroDesdeCita("invalid","1"));
+    for (const id of ["1 OR 1=1","-1","9999999999999999999999","missing"]) assert.ok("error" in await f.actions.getCobroDesdeCita("valid",id));
+    await f.db.exec('UPDATE "CitasPsicologos" SET "empresaId"=2 WHERE id=1');assert.ok("error" in await f.actions.getCobroDesdeCita("valid","1"));
+    await f.db.exec('UPDATE "CitasPsicologos" SET "empresaId"=3,"tenantId"=9 WHERE id=1');assert.ok("error" in await f.actions.getCobroDesdeCita("valid","1"));
+    await f.db.exec('UPDATE "CitasPsicologos" SET "tenantId"=4,realizada=NULL WHERE id=1');assert.ok("error" in await f.actions.getCobroDesdeCita("valid","1"));
+    await f.db.exec('UPDATE "CitasPsicologos" SET realizada=true,"paqueteId"=999 WHERE id=1');assert.ok("error" in await f.actions.getCobroDesdeCita("valid","1"));
+    await f.db.exec(`UPDATE "CitasPsicologos" SET "paqueteId"=3 WHERE id=1; UPDATE "PaqueteAdquirido" SET estado='CANCELADO' WHERE id=3`);assert.ok("error" in await f.actions.getCobroDesdeCita("valid","1"));
+    await f.db.exec(`UPDATE "PaqueteAdquirido" SET estado='ACTIVO',"fechaCompra"='2026-09-25T15:00:00Z' WHERE id=3`);assert.ok("notice" in await f.actions.getCobroDesdeCita("valid","1"));
+    assert.equal(await f.count("MovimientoCaja"),0);assert.equal(await f.count("PagoServicioPsicologia"),0);
+  }finally{await f.db.close();}
 });
 
 test("no convierte conciliaciones viejas en ingresos y falla en bloque si no hay auditoría", async () => {
