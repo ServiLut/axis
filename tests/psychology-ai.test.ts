@@ -34,6 +34,21 @@ test('chief corrections are acknowledged and other businesses never trigger acti
  await handleChiefUnderstanding({} as never,{...event,text:'Manda a los clientes un mensaje de fumigación'},understanding({adminAction:'reactivate'}),queue,command);
  assert.ok(output[1].includes('no inicié esa tarea'));
 });
+
+test('chief future list announcement is acknowledged without inventing recipients, scope or permission',async()=>{
+ const writes:{sql:string;values:unknown[]}[]=[];const audits:any[]=[];const output:string[]=[];
+ const tx={$executeRaw:async(s:TemplateStringsArray,...v:unknown[])=>{writes.push({sql:s.join('?'),values:v});return 1;},auditoria:{create:async({data}:{data:any})=>{audits.push(data);return {};}}};
+ const e={...event,text:'Te voy a mandar un listadito de psicólogos y un listadito de clientes. Quizás no aparezcan en Axis ni WhatsApp, pero mandémosles un saludito.'};
+ const queue=async(_:unknown,id:string,phone:string,text:string)=>{assert.equal(phone,SANDRA_PHONE);output.push(text)};
+ const command=async()=>{throw Error('No immediate operation')};
+ await handleChiefUnderstanding(tx as never,e,understanding({adminAction:'learn',confidence:0.83}),queue,command);
+ assert.equal(writes.length,1);assert.ok(writes[0].sql.includes('pendingContactList'));assert.ok(!writes[0].sql.includes('reactivationTask'));
+ const task=JSON.parse(String(writes[0].values[0]));assert.equal(task.status,'WAITING_LIST');assert.equal(task.clients,true);assert.equal(task.professionals,true);
+ assert.equal(audits.length,1);assert.equal(output.length,1);assert.ok(output[0].includes('Envíame las listas'));assert.ok(!output[0].includes('Qué debo hacer'));
+ assert.equal(await handleChiefUnderstanding(tx as never,{...e,phone:'573001111111'},understanding({adminAction:'learn'}),queue,command),false);
+ assert.equal(await handleChiefUnderstanding(tx as never,{...e,fromMe:true},understanding({adminAction:'learn'}),queue,command),false);
+ assert.equal(writes.length,1);
+});
 test('incomplete model output cannot invent defaults, roles, prices or booking IDs',()=>{
  assert.throws(()=>parseUnderstanding({intent:'admin'}));
  for(const patch of [{confidence:2},{professionalId:1.5},{date:'mañana'},{start:'25:30'},{serviceId:'-1'},{service:'invented'},{explicitConsent:'true'}])assert.throws(()=>understanding(patch as never));

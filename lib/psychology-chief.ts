@@ -30,6 +30,14 @@ export async function handleChiefUnderstanding(tx:Tx,e:ReceptionEvent,u:Understa
  if(/fumigaci|control de plagas|reparacion de electrodomesticos/.test(normalized)){
   await ack('Sandra, este canal corresponde a *Psicólogos en Colombia*. La instrucción menciona otro negocio, así que no inicié esa tarea. ¿Querías enviarla a otro equipo?');return true;
  }
+ // Announcing a future list is neither an instruction to send now nor marketing consent.
+ if(/(?:voy a|vamos a|te mandare|te enviare|te pasare).*(?:lista|listado|listadito|base de datos)/.test(normalized)&&/clientes|pacientes|psicologos|profesionales/.test(normalized)){
+  const request={sourceEvent:e.id,status:'WAITING_LIST',clients:/clientes|pacientes/.test(normalized),professionals:/psicologos|profesionales/.test(normalized),receivedAt:e.at};
+  await tx.$executeRaw`UPDATE "PsicologiaBotConversation" SET state=jsonb_set(state,'{pendingContactList}',${JSON.stringify(request)}::jsonb,true),"updatedAt"=NOW() WHERE phone=${SANDRA_PHONE}`;
+  await createAuditLog({tenantId:4,accion:'BOT_CONTACT_LIST_EXPECTED',entidad:'WhatsApp',entidadId:e.id,detalles:{...request,contactPermissionGranted:false,recipientsCreated:0},tx});
+  await queue(tx,e.id+':chief-list',SANDRA_PHONE,'Claro, Sandra 😊 Envíame las listas de clientes y psicólogos. Revisaré teléfonos y duplicados; si falta algún dato para contactarles, te lo consultaré.');
+  return true;
+ }
  const stateRows=await tx.$queryRaw<{state:{reactivationTask?:ReactivationTask}}[]>`SELECT state FROM "PsicologiaBotConversation" WHERE phone=${SANDRA_PHONE}`;
  const pending=stateRows[0]?.state.reactivationTask;
  if(/explicate|no entendi|no entiendo (la|tu) pregunta/.test(normalized)){
