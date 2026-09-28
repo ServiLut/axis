@@ -37,6 +37,7 @@ export function CobrosServicios({ fecha, revision, onSaved, citaId, soloCita=fal
   const requestId = useRef<string | null>(null);
   const [targetNotice, setTargetNotice] = useState("");
   const [targetError, setTargetError] = useState("");
+  useEffect(()=>{setHistoricoRevisado(false);},[selected?.id,selected?.origen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -147,7 +148,7 @@ export function CobrosServicios({ fecha, revision, onSaved, citaId, soloCita=fal
         <div><Label htmlFor={`pago-monto-${index}`}>Valor recibido</Label><Input id={`pago-monto-${index}`} type="number" min="0.01" step="0.01" required value={line.monto}
           onChange={(event) => { const copy=[...lines]; copy[index]={...line,monto:event.target.value}; setLines(copy); requestId.current=null; }} /></div>
         <div><Label htmlFor={`pago-referencia-${index}`}>Referencia del pago</Label><Input id={`pago-referencia-${index}`} value={line.referencia} maxLength={120}
-          placeholder={line.metodoPago === "EFECTIVO" ? "Opcional en efectivo" : "Obligatoria"}
+          placeholder={line.metodoPago === "EFECTIVO" && selected.situacion==='PENDIENTE' ? "Opcional en efectivo" : "Obligatoria"}
           onChange={(event) => { const copy=[...lines]; copy[index]={...line,referencia:event.target.value}; setLines(copy); requestId.current=null; }} /></div>
       </div>)}
       {selected.situacion!=='PENDIENTE'&&<label className="flex items-start gap-2 rounded border border-amber-300 bg-amber-50 p-3 text-sm"><input type="checkbox" required checked={historicoRevisado} onChange={e=>{setHistoricoRevisado(e.target.checked);requestId.current=null;}}/>Revisé este pago anterior: comprobé el dinero y que no existe ya en el libro diario. Estoy registrándolo en la fecha real en que se recibió, sin cobrar de nuevo.</label>}
