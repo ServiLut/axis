@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authorizePsychologyIntegration } from '@/lib/psychology-integration-auth';
 import { automationConfig, enqueuePsychologyEvent, drainPsychologyAutomation } from '@/lib/psychology-automation';
 import { validateReceptionEvent, PSYCHOLOGY_INSTANCE, PSYCHOLOGY_PHONE } from '@/lib/psychology-reception';
+import {aiConfigured} from '@/lib/psychology-ai';
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
 export const maxDuration=180;
@@ -17,7 +18,7 @@ export async function POST(request:NextRequest) {
     const body=JSON.parse(text);
     const config=await automationConfig();
     if(body.action==='ignore')return json({accepted:false,reason:'unsupported-event'},202);
-    if(body.action==='status')return json({tenantId:4,companyId:3,enabled:config.enabled,paymentPolicy:config.paymentPolicy,mode:'administrative-reception-with-human-review'});
+    if(body.action==='status')return json({tenantId:4,companyId:3,enabled:config.enabled,paymentPolicy:config.paymentPolicy,mode:'administrative-reception-with-human-review',capabilities:{audioTranscription:aiConfigured(),chiefNaturalLanguage:aiConfigured(),newContacts:true,booking:'confirmed-proposals',payments:'reviewed-evidence'}});
     if(!config.enabled||!config.activatedAt)return json({error:'Recepción pausada'},503);
     if(body.action==='drain')return json(await drainPsychologyAutomation(config));
     if(body.action!=='event'||body.instance!==PSYCHOLOGY_INSTANCE||body.owner!==PSYCHOLOGY_PHONE)return json({error:'Evento fuera del ámbito'},400);

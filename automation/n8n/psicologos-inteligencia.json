@@ -1,0 +1,252 @@
+{
+  "name": "Psicólogos | Comprensión y audios privados",
+  "nodes": [
+    {
+      "id": "Entrada privada",
+      "name": "Entrada privada",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "CONFIGURE_PRIVATE_PATH",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "CONFIGURE_PRIVATE_PATH",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_PRIVATE_HEADER_CREDENTIAL",
+          "name": "Psicólogos - inteligencia privada"
+        }
+      }
+    },
+    {
+      "id": "Validar solicitud",
+      "name": "Validar solicitud",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "jsCode": "\nconst b=$json.body;\nif(!b||!['understand','transcribe'].includes(b.action))throw Error('INVALID_ACTION');\nif(b.action==='understand'){\n if(typeof b.instructions!=='string'||b.instructions.length>14000||typeof b.input!=='string'||b.input.length>50000||!b.schema||JSON.stringify(b.schema).length>16000)throw Error('INVALID_TEXT');\n return [{json:{action:b.action,instructions:b.instructions,input:b.input,schema:b.schema}}];\n}\nif(typeof b.base64!=='string'||b.base64.length<40||b.base64.length>14000000||!(/^[A-Za-z0-9+/=]+$/).test(b.base64)||!['audio/mp4','audio/ogg','audio/mpeg','audio/wav','audio/x-wav','audio/webm'].includes(b.mimeType))throw Error('INVALID_AUDIO');\nconst names={'audio/mp4':'voice.mp4','audio/ogg':'voice.ogg','audio/mpeg':'voice.mp3','audio/wav':'voice.wav','audio/x-wav':'voice.wav','audio/webm':'voice.webm'};\nreturn [{json:{action:b.action},binary:{data:await this.helpers.prepareBinaryData(Buffer.from(b.base64,'base64'),names[b.mimeType],b.mimeType)}}];\n"
+      }
+    },
+    {
+      "id": "Tipo de solicitud",
+      "name": "Tipo de solicitud",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        460,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "text",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "understand",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "Comprender",
+      "name": "Comprender",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        700,
+        -100
+      ],
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-5.4-mini",
+          "mode": "id"
+        },
+        "responses": {
+          "values": [
+            {
+              "type": "text",
+              "role": "system",
+              "content": "={{ $json.instructions + \"\\nResponde JSON estricto conforme a este esquema: \" + JSON.stringify($json.schema) }}"
+            },
+            {
+              "type": "text",
+              "role": "user",
+              "content": "={{ $json.input }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "id": "Transcribir",
+      "name": "Transcribir",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        700,
+        140
+      ],
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "binaryPropertyName": "data",
+        "options": {
+          "language": "es"
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "id": "Normalizar respuesta",
+      "name": "Normalizar respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        930,
+        0
+      ],
+      "parameters": {
+        "jsCode": "if(typeof $json.text==='string')return [{json:{text:$json.text}}]; const text=($json.output||[]).flatMap(o=>o.content||[]).filter(c=>c.type==='output_text').map(c=>c.text).join(''); if(!text)throw Error('EMPTY_MODEL_OUTPUT'); return [{json:{result:JSON.parse(text.replace(/^```(?:json)?\\s*|\\s*```$/g,''))}}];"
+      }
+    },
+    {
+      "id": "Respuesta",
+      "name": "Respuesta",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1150,
+        0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Entrada privada": {
+      "main": [
+        [
+          {
+            "node": "Validar solicitud",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar solicitud": {
+      "main": [
+        [
+          {
+            "node": "Tipo de solicitud",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tipo de solicitud": {
+      "main": [
+        [
+          {
+            "node": "Comprender",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Transcribir",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Comprender": {
+      "main": [
+        [
+          {
+            "node": "Normalizar respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribir": {
+      "main": [
+        [
+          {
+            "node": "Normalizar respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar respuesta": {
+      "main": [
+        [
+          {
+            "node": "Respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Bogota",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false,
+    "saveExecutionProgress": false,
+    "executionTimeout": 100
+  }
+}
