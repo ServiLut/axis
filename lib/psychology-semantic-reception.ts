@@ -8,7 +8,14 @@ export function semanticReception(event:ReceptionEvent,stage:string,state:Recept
  if(u.intent==='urgent')return decideReception({...event,text:'me quiero morir'},stage,state,templates,policy);
  if(stage==='HUMAN')return {stage,state,messages:[]};
  if(u.intent==='stop')return decideReception({...event,text:'no me escriban'},stage,state,templates,policy);
- if(u.confidence<0.85)return {stage,state,messages:['Quiero entenderte bien 😊 ¿Me cuentas un poquito más sobre lo que necesitas?']};
+ if(u.confidence<0.85){
+  const next={...state,clarifications:(state.clarifications||0)+1};
+  if(next.clarifications>=2)return {stage:'HUMAN',state:{...next,reason:'Contexto insuficiente'},messages:['Voy a consultarlo con Sandra para responderte correctamente 😊'],handoff:'No se pudo resolver la duda con el contexto disponible'};
+  return {stage,state:next,messages:['Quiero entenderte bien 😊 ¿Me cuentas un poquito más sobre lo que necesitas?']};
+ }
+ state={...state,clarifications:0};
+ if(u.intent==='courtesy')return {stage,state,messages:['Con gusto 😊 Aquí estamos cuando nos necesites.']};
+ if(u.intent==='appointment')return {stage:'HUMAN',state:{...state,reason:'Revisar cita existente'},messages:['Gracias 😊 Voy a verificarlo con Sandra para darte la información correcta.'],handoff:'Consulta o confirmación de cita existente: verificar agenda y contexto del chat'};
  const accepted=['accept','confirm'].includes(u.intent);
  if(stage==='OFFER'&&accepted&&state.servicesOffered&&state.servicesOffered.length>1){
   if(!u.service||!state.servicesOffered.includes(u.service))return {stage,state,messages:['Claro 😊 ¿Por cuál de los servicios deseas empezar a agendar?']};

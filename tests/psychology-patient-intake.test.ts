@@ -12,6 +12,7 @@ async function fixture(){
  const db=new PGlite();
  await db.exec(`CREATE TABLE "Cliente" (id SERIAL PRIMARY KEY,"tenantId" INT,"empresaId" INT,nombre TEXT,apellido TEXT,"numeroDocumento" TEXT,"tipoDocumento" TEXT,telefono TEXT,telefono2 TEXT,correo TEXT,"deletedAt" TIMESTAMPTZ);
  CREATE TABLE "PsicologiaBotOutbox" (id TEXT,phone TEXT,status TEXT,"createdAt" TIMESTAMPTZ DEFAULT NOW());`);
+ await db.exec('CREATE TABLE "CitasPsicologos" ("pacienteId" INT,"tenantId" INT,"empresaId" INT)');
  const audit:unknown[]=[];let creates=0;let stage='DATA';let state:reception.ReceptionState={service:'individual'};let seq=0;
  const raw=(s:TemplateStringsArray,...v:unknown[])=>db.query(s.reduce((q,p,i)=>q+(i?'$'+i:'')+p,''),v);
  const tx={
@@ -49,11 +50,14 @@ test('changed or undelivered summaries and ambiguous input cannot create a patie
  }finally{await f.db.close()}
 });
 test('an existing matching patient is reused; mismatches and duplicate matches are not overwritten',async()=>{
- for(const mode of ['match','mismatch','duplicate'] as const){
+ for(const mode of ['match','mismatch','duplicate','legacy','unscoped','otherCompany'] as const){
   const f=await fixture();try{
    await f.db.query('INSERT INTO "Cliente" ("tenantId","empresaId",nombre,apellido,"numeroDocumento","tipoDocumento",telefono) VALUES (4,3,$1,$2,$3,$4,$5)',[mode==='mismatch'?'Otro':full.firstName,full.lastName,full.document,full.documentType,'300 111 1111']);
    if(mode==='duplicate')await f.db.exec(`INSERT INTO "Cliente" ("tenantId","empresaId",telefono) VALUES (4,3,'573001111111')`);
-   await f.step(full);const r=await f.step({intent:'confirm',explicitConsent:true},'correcto');assert.equal(f.creates,0);assert.equal(r?.stage,mode==='match'?'PREFERENCES':'HUMAN');
+   if(['legacy','unscoped'].includes(mode))await f.db.exec('UPDATE "Cliente" SET "empresaId"=NULL');
+   if(mode==='otherCompany')await f.db.exec('UPDATE "Cliente" SET "empresaId"=2');
+   if(mode==='legacy')await f.db.exec('INSERT INTO "CitasPsicologos" VALUES (1,4,3)');
+   await f.step(full);const r=await f.step({intent:'confirm',explicitConsent:true},'correcto');assert.equal(f.creates,0);assert.equal(r?.stage,['match','legacy'].includes(mode)?'PREFERENCES':'HUMAN');
   }finally{await f.db.close()}
  }
 });

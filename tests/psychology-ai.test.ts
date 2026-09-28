@@ -7,6 +7,7 @@ import {chiefAction,handleChiefUnderstanding,executeReactivationBatch,runChiefRe
 import {semanticReception} from '../lib/psychology-semantic-reception';
 import {SANDRA_PHONE,type ReceptionEvent} from '../lib/psychology-reception';
 import {aiSanitize,buildPsychologyAi} from '../scripts/build-psychology-ai.mjs';
+import {campaignFixture} from './psychology-campaign-fixture';
 const base=Object.fromEntries(Object.keys(understandingSchema.properties).map(k=>[k,null]));
 const understanding=(patch:Partial<Understanding>={}):Understanding=>parseUnderstanding({...base,intent:'admin',confidence:0.99,explicitConsent:false,additionalServices:[],...patch});
 const event:ReceptionEvent={id:'verified-source',phone:SANDRA_PHONE,kind:'text',text:'Pausa la atención al 3001112233',fromMe:false,at:new Date().toISOString()};
@@ -36,6 +37,14 @@ test('chief corrections are acknowledged and other businesses never trigger acti
 test('incomplete model output cannot invent defaults, roles, prices or booking IDs',()=>{
  assert.throws(()=>parseUnderstanding({intent:'admin'}));
  for(const patch of [{confidence:2},{professionalId:1.5},{date:'mañana'},{start:'25:30'},{serviceId:'-1'},{service:'invented'},{explicitConsent:'true'}])assert.throws(()=>understanding(patch as never));
+});
+
+test('courtesy continues context, appointment questions request actual verification, repeated uncertainty goes to Sandra',()=>{
+ const e={...event,phone:'573001111111',text:'Gracias'};
+ const courtesy=semanticReception(e,'OFFER',{service:'individual'},{},'DEPOSIT_20000',understanding({intent:'courtesy'}));assert.equal(courtesy.stage,'OFFER');assert.equal(courtesy.handoff,undefined);
+ const appointment=semanticReception({...e,text:'Voy a asistir'},'NEW',{},{} as never,'DEPOSIT_20000',understanding({intent:'appointment'}));assert.equal(appointment.stage,'HUMAN');assert.ok(appointment.handoff?.includes('cita existente'));assert.ok(!appointment.messages.join().includes('confirmada'));
+ const first=semanticReception(e,'NEED',{},{} as never,'DEPOSIT_20000',understanding({intent:'unknown',confidence:0.2}));
+ const second=semanticReception(e,first.stage,first.state,{} as never,'DEPOSIT_20000',understanding({intent:'unknown',confidence:0.2}));assert.equal(second.stage,'HUMAN');assert.ok(second.messages[0].includes('Sandra'));
 });
 test('semantic intent retains native pricing and payment order and respects human takeover',()=>{
  const templates={individual:{text:'MENSAJE EXACTO $119.900',approved:true,version:'1'},datos:{text:'DATOS EXACTOS',approved:true,version:'1'}};
@@ -86,6 +95,7 @@ test('reactivation excludes future bookings, opt-outs, recent outreach and unver
   await db.exec(`CREATE TABLE "CitasPsicologos"(id BIGINT PRIMARY KEY,"tenantId" INT,"empresaId" INT,"pacienteId" INT,realizada BOOLEAN,"horaFin" TIMESTAMPTZ,"fechaCita" TIMESTAMPTZ,"horaInicio" TIMESTAMPTZ);
    CREATE TABLE "Cliente"(id INT PRIMARY KEY,"tenantId" INT,"empresaId" INT,telefono TEXT,"deletedAt" TIMESTAMPTZ)`);
   await db.exec(readFileSync('docs/sql/2026-09-28-psychology-automation.sql','utf8'));await db.exec(readFileSync('docs/sql/2026-09-28-psychology-autonomy.sql','utf8'));
+  await campaignFixture(db);
   await db.exec(`INSERT INTO "PsicologiaBotConversation"(phone) VALUES('${SANDRA_PHONE}');INSERT INTO "PsicologiaBotEvent"(id,phone,"eventAt",kind) VALUES('verified-source','${SANDRA_PHONE}',NOW(),'text');
    INSERT INTO "Cliente"(id,"tenantId","empresaId",telefono) SELECT n,4,3,'300111220'||n FROM generate_series(1,5)n;
    INSERT INTO "CitasPsicologos"(id,"tenantId","empresaId","pacienteId",realizada,"fechaCita") SELECT n,4,3,n,true,NOW()-INTERVAL '8 months' FROM generate_series(1,5)n;

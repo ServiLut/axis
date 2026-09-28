@@ -28,7 +28,8 @@ El servidor conserva la lógica y el estado. n8n coordina llamadas y recupera pe
 | Preferencias | Recoge psicólogo/psicóloga/indiferente, modalidad y fecha/hora inequívocas | La propuesta libre y selección de profesional siguen pendientes |
 | Reserva confirmada | Propuesta administrativa; confirmaciones de paciente y profesional; nueva validación transaccional antes de guardar | Falta construir propuestas automáticamente desde preferencias y gestionar alternativas/reprogramación |
 | Comprobantes | Asociación de soporte existente revisado por Sandra; nunca presume ingreso bancario | Pendiente subida automática del archivo y conciliación con fuente independiente accesible |
-| Reactivación | Tarea persistente, lista estable, avances, deduplicación, permisos y horario | Falta aclarar la orden actual: sin cita vs sin conversación; no existe historial completo de WhatsApp importado |
+| Reactivación | Clientes y profesionales compradores, última prestación/compra >6 meses, envíos 08–19 Bogotá, intervalo global mínimo60s, hasta20/día | Requiere autorización de contacto documentada; la orden de Sandra no prueba el permiso del destinatario. No equivale a seis meses sin conversación |
+| Contexto | Últimos30 mensajes disponibles del mismo teléfono/bandeja, incluidos mensajes del personal y audios ya transcritos | Cobertura reciente, no historial completo. No inferir contenido de adjuntos o audios antiguos sin transcripción |
 | Reportes | Automatizaciones separadas de supervisión y apertura/cierre | Su ejecución local depende de equipo y conexiones; verificar cada entrega |
 
 ## Reglas conservadas
@@ -36,6 +37,10 @@ El servidor conserva la lógica y el estado. n8n coordina llamadas y recupera pe
 Sesión suelta: abono de 20.000 COP descontable. Paquete: pago completo una sola vez; sesiones prepagadas no generan nuevo anticipo. Alquiler: profesional registrado, duración, consultorio y horario 07:00–20:00, sin exigir comprobante anticipado. Toda reserva tiene psicólogo asignado y disponibilidad vigente. El comprobante es evidencia, no confirmación bancaria.
 
 Una respuesta humana pausa el chat. Las urgencias clínicas reciben acompañamiento inmediato y aviso a Sandra; nunca se trata la ausencia de una palabra clave como prueba de seguridad. Dudas operativas reales se consultan a la jefe y se conservan con fuente, no se sustituyen por supuestos del modelo.
+
+Orden de Sandra en audio del28/09/2026: la atención entrante continúa24h; solo reactivación se limita08–19. La separación mínima entre envíos se controla en BD aun con trabajadores simultáneos, sin bloquear las respuestas normales. El ritmo no garantiza evitar restricciones de WhatsApp. El bloqueo de un envío incierto evita repetirlo.
+
+Los registros antiguos con empresa nula requieren evidencia de actividad en empresa3 antes de reutilizarlos. No se migra masivamente su empresa ni se crea un duplicado al encontrarlos. Los alquileres consumidos por un profesional se distinguen de su trabajo atendiendo pacientes. Las compras recientes de paquetes y cargos de recepción excluyen inactividad aparente. Todo cambio se prueba antes de publicación; aplicar primero `docs/sql/2026-09-28-psychology-campaign-pacing.sql`.
 
 ## Supervisión temporal
 

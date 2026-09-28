@@ -2,6 +2,7 @@ import type {Prisma} from '@/prisma/generated/prisma/client';
 import {createAuditLog} from './audit';
 import {phoneDigits,SANDRA_PHONE,PSYCHOLOGY_PHONE,type ReceptionEvent} from './psychology-reception';
 import type {Understanding} from './psychology-ai';
+import {campaignCandidates} from './psychology-campaign-candidates';
 type Tx=Prisma.TransactionClient;
 type Queue=(tx:Tx,id:string,phone:string,content:string)=>Promise<void>;
 
@@ -12,7 +13,7 @@ export function chiefAction(event:ReceptionEvent,u:Understanding){
  if(u.adminAction==='status')return {type:'command',text:'ESTADO BOT'} as const;
  if(['pause','resume'].includes(u.adminAction||'')&&phone&&![SANDRA_PHONE,PSYCHOLOGY_PHONE].includes(phone))return {type:'command',text:`${u.adminAction==='pause'?'PAUSAR':'REANUDAR'} ${phone}`} as const;
  const text=event.text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
- if(u.adminAction==='reactivate'||(/(?:seis|6) meses/.test(text)&&/clientes|pacientes/.test(text)&&/escrib|mensaje|reactiva/.test(text)))return {type:'reactivate'} as const;
+ if(u.adminAction==='reactivate'||(/(?:seis|6) meses/.test(text)&&/clientes|pacientes|psicologos/.test(text)&&/escrib|mensaje|reactiva|envi/.test(text)))return {type:'reactivate'} as const;
  if(u.adminAction==='learn'&&u.instruction?.trim())return {type:'learn',instruction:u.instruction.trim()} as const;
  // Do not turn an inferred paraphrase into an outbound message on behalf of the chief.
  if(u.adminAction==='send'&&phone&&phone!==PSYCHOLOGY_PHONE&&u.instruction?.trim()&&event.text.includes(u.instruction.trim()))return {type:'send',phone,text:u.instruction.trim()} as const;
@@ -68,16 +69,16 @@ export async function handleChiefUnderstanding(tx:Tx,e:ReceptionEvent,u:Understa
   await ack('Dejé tu mensaje en la cola de envío a +'+action.phone+'. Si el envío falla, quedará pendiente de revisión.');return true;
  }
  const criterion=/sin (?:hablar|conversar)|sin contacto|sin (?:hablar|contactar) con/.test(normalized)?'contact':'service';
- const task:ReactivationTask={sourceEvent:e.id,criterion,daily:/diari|dia siguiente|cada dia|todos los dias/.test(normalized),status:criterion==='contact'?'NEEDS_CRITERION':'ACTIVE',asOf:new Date().toISOString(),lastRunDate:null,candidateIds:null};
+ const task:ReactivationTask={sourceEvent:e.id,criterion,daily:/diari|dia siguiente|cada dia|todos los dias/.test(normalized),includeProfessionals:/psicologo|profesional/.test(normalized),status:criterion==='contact'?'NEEDS_CRITERION':'ACTIVE',asOf:new Date().toISOString(),lastRunDate:null,candidateIds:null};
  await saveTask(tx,task);
  // A campaign request is an operational task, not a general instruction for every patient.
  await tx.$executeRaw`UPDATE "PsicologiaBotKnowledge" SET active=false WHERE "sourceEvent"=${e.id}`;
  await createAuditLog({tenantId:4,accion:'BOT_CAMPAIGN_REQUEST',entidad:'WhatsApp',entidadId:e.id,detalles:{sourceEvent:e.id,task},tx});
- await queue(tx,e.id+':campaign-request',SANDRA_PHONE,criterion==='contact'?'Entendí la tarea diaria 😊 Antes de empezar: ¿son clientes con seis meses sin cita o sin conversar por WhatsApp? Axis permite comprobar las citas; todavía no tengo todo el historial de WhatsApp.':'Registré la tarea de reactivación 😊 Revisaré clientes con más de seis meses sin cita realizada y te informaré el avance y cualquier dato pendiente.');
+ await queue(tx,e.id+':campaign-request',SANDRA_PHONE,criterion==='contact'?'Entendí la tarea diaria 😊 Antes de empezar: ¿son clientes con seis meses sin cita o sin conversar por WhatsApp? Axis permite comprobar las citas; todavía no tengo todo el historial de WhatsApp.':`Registré la tarea 😊 Revisaré clientes${task.includeProfessionals?' y psicólogos':''} con más de seis meses sin servicio. Los envíos habilitados saldrán de 8 a. m. a 7 p. m., separados por al menos un minuto; la recepción de mensajes sigue las 24 horas.`);
  return true;
 }
 
-type ReactivationTask={sourceEvent:string;criterion:'contact'|'service';daily:boolean;status:'NEEDS_CRITERION'|'NEEDS_HISTORY'|'ACTIVE'|'WAITING_PERMISSION'|'PAUSED'|'QUEUED';asOf:string;lastRunDate:string|null;candidateIds:number[]|null};
+type ReactivationTask={sourceEvent:string;criterion:'contact'|'service';daily:boolean;includeProfessionals?:boolean;status:'NEEDS_CRITERION'|'NEEDS_HISTORY'|'ACTIVE'|'WAITING_PERMISSION'|'PAUSED'|'QUEUED';asOf:string;lastRunDate:string|null;candidateIds:(number|string)[]|null};
 async function saveTask(tx:Tx,task:ReactivationTask){
  await tx.$executeRaw`UPDATE "PsicologiaBotConversation" SET state=jsonb_set(state,'{reactivationTask}',${JSON.stringify(task)}::jsonb,true),"updatedAt"=NOW() WHERE phone=${SANDRA_PHONE}`;
 }
@@ -86,45 +87,36 @@ export async function runChiefReactivationTask(tx:Tx,queue:Queue){
  const task=rows[0]?.state.reactivationTask;if(!task||!['ACTIVE','WAITING_PERMISSION'].includes(task.status)||task.criterion!=='service')return;
  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Bogota',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
  const hour=Number(new Intl.DateTimeFormat('en-GB',{hour:'2-digit',hourCycle:'h23',timeZone:'America/Bogota'}).format(new Date()));
- if(task.lastRunDate===today||hour<7||hour>=20)return;
+ if(task.lastRunDate===today||hour<8||hour>=19)return;
  const source=await tx.$queryRaw<(ReceptionEvent&{eventAt:Date})[]>`SELECT id,phone,text,kind,"fromMe","eventAt" FROM "PsicologiaBotEvent" WHERE id=${task.sourceEvent} AND phone=${SANDRA_PHONE} AND "fromMe"=false`;
  if(!source[0])throw Error('CAMPAIGN_SOURCE_INVALID');
  const e={...source[0],at:source[0].eventAt.toISOString()};
- const result=await executeReactivationBatch(tx,e,queue,task.asOf,task.candidateIds,today);
+ const result=await executeReactivationBatch(tx,e,queue,task.asOf,task.candidateIds,today,task.includeProfessionals??false);
  await saveTask(tx,{...task,candidateIds:task.candidateIds??result.ids,lastRunDate:today,status:result.remaining>0?(task.daily?'ACTIVE':'PAUSED'):result.missingPermission>0?'WAITING_PERMISSION':'QUEUED'});
 }
 
-export async function executeReactivationBatch(tx:Tx,e:ReceptionEvent,queue:Queue,asOf=new Date().toISOString(),candidateIds:number[]|null=null,day='manual'){
+export async function executeReactivationBatch(tx:Tx,e:ReceptionEvent,queue:Queue,asOf=new Date().toISOString(),candidateIds:(number|string)[]|null=null,day='manual',includeProfessionals=false){
  if(e.phone!==SANDRA_PHONE||e.fromMe)throw Error('CAMPAIGN_ACTOR');
  const ack=(message:string)=>queue(tx,e.id+':campaign-progress:'+day,SANDRA_PHONE,message);
  // A past appointment alone does not establish permission for a new marketing message.
- const candidates=await tx.$queryRaw<{id:number;phone:string;lastCompletedAt:Date;marketing:boolean;optedOut:boolean;recent:boolean}[]>`
-  WITH last_visit AS (SELECT "pacienteId",MAX(COALESCE("horaFin","fechaCita")) AS last_seen FROM "CitasPsicologos"
-    WHERE "tenantId"=4 AND "empresaId"=3 AND realizada=true AND COALESCE("horaFin","fechaCita")<=NOW() GROUP BY "pacienteId"),
-  patients AS (SELECT c.id,CASE WHEN length(regexp_replace(c.telefono,'[^0-9]','','g'))=10 THEN '57'||regexp_replace(c.telefono,'[^0-9]','','g') ELSE regexp_replace(c.telefono,'[^0-9]','','g') END AS phone,l.last_seen
-    FROM "Cliente" c JOIN last_visit l ON l."pacienteId"=c.id WHERE c."tenantId"=4 AND c."empresaId"=3 AND c."deletedAt" IS NULL
-    AND l.last_seen < ((${new Date(asOf)}::timestamptz AT TIME ZONE 'America/Bogota')-INTERVAL '6 months') AT TIME ZONE 'America/Bogota'
-    AND NOT EXISTS(SELECT 1 FROM "CitasPsicologos" f WHERE f."pacienteId"=c.id AND f."tenantId"=4 AND f."empresaId"=3 AND f.realizada=false AND COALESCE(f."horaInicio",f."fechaCita")>=NOW()))
-  SELECT p.id,p.phone,p.last_seen AS "lastCompletedAt",COALESCE(k.marketing,false) AS marketing,COALESCE(k."optedOut",false) AS "optedOut",
-    EXISTS(SELECT 1 FROM "PsicologiaBotOutreach" o WHERE o.phone=p.phone AND (o."createdAt">NOW()-INTERVAL '30 days' OR o."sourceEvent"=${e.id})) AS recent
-  FROM patients p LEFT JOIN "PsicologiaBotContactPermission" k ON k.phone=p.phone
-  WHERE p.phone ~ '^[1-9][0-9]{7,14}$' ORDER BY p.last_seen,p.id`;
- const scoped=candidateIds?candidates.filter(c=>candidateIds.includes(c.id)):candidates;
+ const candidates=await campaignCandidates(tx,e.id,asOf,includeProfessionals);
+ const key=(c:typeof candidates[number])=>c.audience+':'+c.id;
+ const scoped=candidateIds?candidates.filter(c=>candidateIds.includes(key(c))||(c.audience==='client'&&candidateIds.includes(c.id))):candidates;
  const hour=Number(new Intl.DateTimeFormat('en-GB',{hour:'2-digit',hourCycle:'h23',timeZone:'America/Bogota'}).format(new Date()));
  const eligible=scoped.filter(c=>c.marketing&&!c.optedOut&&!c.recent&&![SANDRA_PHONE,PSYCHOLOGY_PHONE].includes(c.phone));
  const unique=eligible.filter((c,i,a)=>a.findIndex(p=>p.phone===c.phone)===i);
  const missingPermission=scoped.filter(c=>!c.marketing&&!c.optedOut&&!c.recent).length;
- if(hour<7||hour>=20)return {ids:scoped.map(c=>c.id),remaining:unique.length,missingPermission};
+ if(hour<8||hour>=19)return {ids:scoped.map(key),remaining:unique.length,missingPermission};
  const todayCount=await tx.$queryRaw<{n:bigint}[]>`SELECT COUNT(*) AS n FROM "PsicologiaBotOutreach" WHERE ("createdAt" AT TIME ZONE 'America/Bogota')::date=(NOW() AT TIME ZONE 'America/Bogota')::date`;
  const capacity=Math.max(0,20-Number(todayCount[0].n));
  let queued=0;
  for(const c of unique.slice(0,capacity)){
-  const count=await tx.$executeRaw`INSERT INTO "PsicologiaBotOutreach" (id,phone,"clientId","sourceEvent","lastCompletedAt") VALUES (${e.id+':'+c.id},${c.phone},${c.id},${e.id},${c.lastCompletedAt}) ON CONFLICT DO NOTHING`;
+  const count=await tx.$executeRaw`INSERT INTO "PsicologiaBotOutreach" (id,phone,"clientId","professionalId","sourceEvent","lastCompletedAt") VALUES (${e.id+':'+key(c)},${c.phone},${c.audience==='client'?c.id:null},${c.audience==='professional'?c.id:null},${e.id},${c.lastCompletedAt}) ON CONFLICT DO NOTHING`;
   if(!count)continue;
-  await queue(tx,e.id+':reactivate:'+c.id,c.phone,'Hola 😊 En *Psicólogos en Colombia* esperamos que estés bien. Aquí estamos si deseas agendar un espacio de acompañamiento. ¿Te gustaría conocer la disponibilidad? Si prefieres no recibir estos mensajes, nos dices.');queued++;
+  await queue(tx,e.id+':reactivate:'+key(c),c.phone,c.audience==='professional'?'Hola 😊 En *Psicólogos en Colombia* esperamos que estés bien. Tenemos consultorios de 7 a. m. a 8 p. m. ¿Te compartimos disponibilidad? Si prefieres no recibir estos mensajes, nos dices.':'Hola 😊 En *Psicólogos en Colombia* esperamos que estés bien. Será un gusto recibirte nuevamente. ¿Te compartimos disponibilidad? Si prefieres no recibir estos mensajes, nos dices.');queued++;
  }
  await createAuditLog({tenantId:4,accion:'BOT_REACTIVATION_REQUEST',entidad:'WhatsApp',entidadId:e.id,detalles:{sourceEvent:e.id,candidates:candidates.length,eligible:unique.length,queued,remaining:Math.max(0,unique.length-queued),scope:'tenant4/company3',bankDataAccessed:false},tx});
  if(missingPermission)await queue(tx,e.id+':campaign-permission',SANDRA_PHONE,'Hay '+missingPermission+' registros sin autorización promocional documentada. ¿Dónde podemos verificarla? Esos contactos quedan pendientes.');
- if(queued||day==='manual')await ack(`Sandra, revisé ${scoped.length} registros con más de seis meses sin cita realizada. Dejé ${queued} mensajes en cola.${unique.length>queued?' Quedan '+(unique.length-queued)+' elegibles para otro lote.':''}`);
- return {ids:scoped.map(c=>c.id),remaining:unique.length-queued,missingPermission};
+ if(queued||day==='manual'||candidateIds===null)await ack(`Sandra, identifiqué ${scoped.filter(c=>c.audience==='client').length} clientes y ${scoped.filter(c=>c.audience==='professional').length} psicólogos con más de seis meses sin servicio registrado. Dejé ${queued} mensajes en cola.${unique.length>queued?' Quedan '+(unique.length-queued)+' elegibles para otro lote.':''}`);
+ return {ids:scoped.map(key),remaining:unique.length-queued,missingPermission};
 }

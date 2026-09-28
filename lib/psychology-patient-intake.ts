@@ -46,9 +46,10 @@ export async function handlePatientIntake(tx:Prisma.TransactionClient,event:Rece
   const summary=await tx.$queryRaw<{id:string}[]>`SELECT id FROM "PsicologiaBotOutbox" WHERE id=${intake.summaryEvent+':reply:0'} AND phone=${event.phone} AND status='ACCEPTED' AND "createdAt"<=${new Date(event.at)} LIMIT 1`;
   if(!summary.length)return result('DATA_CONFIRM',['Primero revisa el resumen de tus datos y luego confírmame si está correcto, por favor 😊']);
   // Match both document and phone, including historical formatting, without exposing any record.
-  const existing=await tx.$queryRaw<{id:number;nombre:string|null;apellido:string|null;numeroDocumento:string|null;tipoDocumento:string|null;telefono:string;telefono2:string|null}[]>`
-   SELECT id,nombre,apellido,"numeroDocumento","tipoDocumento",telefono,telefono2 FROM "Cliente"
-   WHERE "tenantId"=4 AND "empresaId"=3 AND "deletedAt" IS NULL AND (
+  const existing=await tx.$queryRaw<{id:number;inScope:boolean;nombre:string|null;apellido:string|null;numeroDocumento:string|null;tipoDocumento:string|null;telefono:string;telefono2:string|null}[]>`
+   SELECT c.id,c.nombre,c.apellido,c."numeroDocumento",c."tipoDocumento",c.telefono,c.telefono2,
+    (c."empresaId"=3 OR (c."empresaId" IS NULL AND EXISTS(SELECT 1 FROM "CitasPsicologos" v WHERE v."pacienteId"=c.id AND v."tenantId"=4 AND v."empresaId"=3))) AS "inScope" FROM "Cliente" c
+   WHERE "tenantId"=4 AND "deletedAt" IS NULL AND (
     upper(regexp_replace(COALESCE("numeroDocumento",''),'[. -]','','g'))=${draft.document}
     OR regexp_replace(telefono,'[^0-9]','','g') IN (${event.phone},${event.phone.startsWith('57')?event.phone.slice(2):event.phone})
     OR regexp_replace(COALESCE(telefono2,''),'[^0-9]','','g') IN (${event.phone},${event.phone.startsWith('57')?event.phone.slice(2):event.phone})) LIMIT 3`;
@@ -56,6 +57,7 @@ export async function handlePatientIntake(tx:Prisma.TransactionClient,event:Rece
   let created=false;
   if(existing[0]){
    const c=existing[0];
+   if(!c.inScope)return review('Registro existente sin empresa de Psicólogos verificada; evitar duplicado');
    if(normalizeText(c.nombre||'')!==normalizeText(draft.firstName)||normalizeText(c.apellido||'')!==normalizeText(draft.lastName)||clean('document',c.numeroDocumento||'')!==draft.document||c.tipoDocumento!==draft.documentType||![phoneDigits(c.telefono),phoneDigits(c.telefono2||'')].includes(event.phone))return review('Documento, titular o teléfono requiere verificar identidad; registro preservado');
    intake.clientId=c.id;
   }else{

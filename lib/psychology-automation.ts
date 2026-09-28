@@ -10,6 +10,7 @@ import {prepareNextPsychologyEvent} from './psychology-ai-preparation';
 import {handleChiefUnderstanding,runChiefReactivationTask} from './psychology-chief';
 import {semanticReception} from './psychology-semantic-reception';
 import {handlePatientIntake} from './psychology-patient-intake';
+import {claimPsychologyOutbox} from './psychology-outbox';
 
 type Tx=Prisma.TransactionClient;
 export type AutomationConfig={ enabled:boolean; activatedAt:Date|null; templates:ReceptionTemplates; paymentPolicy:string };
@@ -144,13 +145,7 @@ export async function drainPsychologyAutomation(config:AutomationConfig) {
   if(Number(pending[0].n)===0)return {enabled:true,processed,accepted};
   await verifyPsychologyChannel();
   for(let i=0;i<8;i++) {
-    const claimed=await prisma.$queryRaw<{id:string;phone:string;content:string}[]>`
-      UPDATE "PsicologiaBotOutbox" SET status='SENDING',"attemptedAt"=NOW()
-      WHERE id=(SELECT o.id FROM "PsicologiaBotOutbox" o WHERE o.status='PENDING'
-        AND (o.id NOT LIKE '%:reactivate:%' OR (EXTRACT(HOUR FROM NOW() AT TIME ZONE 'America/Bogota')>=7 AND EXTRACT(HOUR FROM NOW() AT TIME ZONE 'America/Bogota')<20))
-        AND NOT EXISTS(SELECT 1 FROM "PsicologiaBotOutbox" p WHERE p.phone=o.phone AND p.status IN ('SENDING','UNCERTAIN'))
-        ORDER BY o."createdAt",o.id LIMIT 1 FOR UPDATE SKIP LOCKED) RETURNING id,phone,content`;
-    const item=claimed[0];if(!item)break;
+    const item=await prisma.$transaction(tx=>claimPsychologyOutbox(tx));if(!item)break;
     let sending=false;
     try {
       const conversation=await ensurePsychologyConversation(item.phone);
@@ -158,7 +153,11 @@ export async function drainPsychologyAutomation(config:AutomationConfig) {
       sending=true;
       const msg=await sendPsychologyMessage(conversation.id,item.content);
       if(!Number.isSafeInteger(msg.id))throw new Error('CW_RESPONSE_UNVERIFIED');
-      await prisma.$executeRaw`UPDATE "PsicologiaBotOutbox" SET status='ACCEPTED',"messageId"=${msg.id},"lastError"=NULL WHERE id=${item.id}`;
+      await prisma.$transaction(async tx=>{
+        await tx.$queryRaw`SELECT id FROM "PsicologiaBotConfig" WHERE id=4 FOR UPDATE`;
+        await tx.$executeRaw`UPDATE "PsicologiaBotOutbox" SET status='ACCEPTED',"messageId"=${msg.id},"lastError"=NULL WHERE id=${item.id}`;
+        if(item.id.includes(':reactivate:'))await tx.$executeRaw`UPDATE "PsicologiaBotConfig" SET "marketingNextAt"=clock_timestamp()+INTERVAL '60 seconds' WHERE id=4`;
+      });
       accepted++;
     } catch {
       await prisma.$executeRaw`UPDATE "PsicologiaBotOutbox" SET status='UNCERTAIN',"lastError"=${sending?'DELIVERY_REVIEW':'RECIPIENT_REVIEW'} WHERE id=${item.id}`;

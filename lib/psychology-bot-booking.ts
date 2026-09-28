@@ -26,7 +26,7 @@ export async function handleBookingMessage(tx:Tx,event:ReceptionEvent,queue:Queu
     const roomId=room.toUpperCase()==='VIRTUAL'?null:BigInt(room);
     if(roomId&&!await tx.consultorios.findFirst({where:{id:roomId,tenantId:4,empresaId:3}}))throw Error('Consultorio no verificado.');
     if(rental&&(customerPhone!==professionalPhone||!roomId||start<'07:00'||end>'20:00'))throw Error('Alquiler: profesional registrado, consultorio y horario 07:00–20:00.');
-    const customers=rental?[]:await tx.$queryRaw<{id:number}[]>`SELECT id FROM "Cliente" WHERE "tenantId"=4 AND "empresaId"=3 AND "deletedAt" IS NULL AND
+    const customers=rental?[]:await tx.$queryRaw<{id:number}[]>`SELECT c.id FROM "Cliente" c WHERE c."tenantId"=4 AND (c."empresaId"=3 OR (c."empresaId" IS NULL AND EXISTS(SELECT 1 FROM "CitasPsicologos" v WHERE v."pacienteId"=c.id AND v."tenantId"=4 AND v."empresaId"=3))) AND c."deletedAt" IS NULL AND
       (regexp_replace(telefono,'[^0-9]','','g')=${customerPhone} OR ('57'||regexp_replace(telefono,'[^0-9]','','g'))=${customerPhone}) LIMIT 2`;
     if(!rental&&customers.length!==1)throw Error('Registra o verifica el paciente en Axis; el teléfono no identifica un registro único.');
     const quote=await normalizedRental(tx,4,service.id,when.inicio,when.fin);
