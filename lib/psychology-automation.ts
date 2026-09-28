@@ -10,6 +10,7 @@ import {prepareNextPsychologyEvent} from './psychology-ai-preparation';
 import {handleChiefUnderstanding,runChiefReactivationTask} from './psychology-chief';
 import {semanticReception} from './psychology-semantic-reception';
 import {handlePatientIntake} from './psychology-patient-intake';
+import {handleReturningPatient} from './psychology-returning-patient';
 import {claimPsychologyOutbox} from './psychology-outbox';
 import {reviewCampaignContext} from './psychology-campaign-review';
 
@@ -104,7 +105,7 @@ async function processOne(config:AutomationConfig) {
         let decision=humanLater.length?{stage:'HUMAN',state:{...c.state,reason:'Atención de una persona'},messages:[],handoff:undefined}:semanticReception(e,c.stage,c.state,config.templates,config.paymentPolicy,understanding);
         if(!humanLater.length&&!row.analysisError&&understanding&&decision.handoff!=='Atención humana urgente'){
           await tx.$executeRawUnsafe('SAVEPOINT bot_intake');
-          try{decision=await handlePatientIntake(tx,e,c.stage,c.state,understanding)??decision;}
+          try{decision=await handleReturningPatient(tx,e,c.stage,c.state,understanding)??await handlePatientIntake(tx,e,c.stage,c.state,understanding)??decision;}
           catch{
             await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT bot_intake');
             decision={stage:'HUMAN',state:{...c.state,reason:'Registro pendiente de revisión'},messages:['No pude completar el registro. Voy a pedir apoyo a Sandra para continuar 😊'],handoff:'Revisar registro de paciente; operación revertida'};

@@ -26,7 +26,8 @@ export async function handlePatientIntake(tx:Prisma.TransactionClient,event:Rece
   return intake.clarifications>=2?review('Datos de registro ambiguos tras solicitar aclaración'):result(stage,['Quiero registrar la información correctamente 😊 ¿Me aclaras ese último dato?']);
  }
  intake.clarifications=0;
- if(u.professionalPreference)intake.preference=u.professionalPreference;
+ if(u.professionalPreference){intake.preference=u.professionalPreference;delete intake.professionalId;}
+ if(intake.professionalId&&u.professionalId&&u.professionalId!==intake.professionalId)return review('Cambio del profesional solicitado: verificar preferencia antes de coordinar');
  if(u.date)intake.date=u.date;
  if(u.start)intake.start=u.start;
  if(u.modality)intake.modality=u.modality;
@@ -76,13 +77,13 @@ export async function handlePatientIntake(tx:Prisma.TransactionClient,event:Rece
 
  function preferences():ReceptionResult{
   if(!intake.clientId)return review('Falta identificar el registro antes de agendar');
-  if(!intake.preference)return result('PREFERENCES',['¿Prefieres psicólogo, psicóloga o te es indiferente?']);
+  if(!intake.preference&&!intake.professionalId)return result('PREFERENCES',['¿Prefieres psicólogo, psicóloga o te es indiferente?']);
   if(!intake.modality)return result('PREFERENCES',['¿Prefieres atención presencial o virtual?']);
   if(!intake.date||!intake.start)return result('PREFERENCES',['¿Qué fecha y hora te quedan mejor? Si tienes varias opciones, cuéntame 😊']);
   const time=new Date(intake.date+'T'+intake.start+':00-05:00').getTime();
   if(!Number.isFinite(time)||time<=Date.now()||time>Date.now()+90*86400000){delete intake.date;delete intake.start;return result('PREFERENCES',['Indícame una fecha y hora futura dentro de los próximos 90 días, por favor 😊']);}
   const d=result('HUMAN',['Gracias 😊 Revisaremos ese horario con el profesional antes de confirmar tu cita.']);
-  d.handoff=`Coordinar disponibilidad: cliente Axis ${intake.clientId}, ${intake.date} ${intake.start}, ${intake.modality}, preferencia ${intake.preference==='male'?'psicólogo':intake.preference==='female'?'psicóloga':'indiferente'}. Datos ya registrados`;
+  d.handoff=`Coordinar disponibilidad: cliente Axis ${intake.clientId}, ${intake.date} ${intake.start}, ${intake.modality}, ${intake.professionalId?'profesional solicitado Axis '+intake.professionalId:'preferencia '+(intake.preference==='male'?'psicólogo':intake.preference==='female'?'psicóloga':'indiferente')}. Datos ya registrados${intake.returning?'; revisar continuidad, tarifa y saldo del paquete antes de cobrar; servicio anterior '+intake.priorServiceId:''}`;
   return d;
  }
 }
