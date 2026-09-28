@@ -3,12 +3,12 @@ import {test} from 'node:test';
 import {readFileSync} from 'node:fs';
 import {PGlite} from '@electric-sql/pglite';
 import {parseUnderstanding,understandingSchema,type Understanding} from '../lib/psychology-ai';
-import {chiefAction,handleChiefUnderstanding} from '../lib/psychology-chief';
+import {chiefAction,handleChiefUnderstanding,executeReactivationBatch,runChiefReactivationTask} from '../lib/psychology-chief';
 import {semanticReception} from '../lib/psychology-semantic-reception';
 import {SANDRA_PHONE,type ReceptionEvent} from '../lib/psychology-reception';
 import {aiSanitize,buildPsychologyAi} from '../scripts/build-psychology-ai.mjs';
 const base=Object.fromEntries(Object.keys(understandingSchema.properties).map(k=>[k,null]));
-const understanding=(patch:Partial<Understanding>={}):Understanding=>parseUnderstanding({...base,intent:'admin',confidence:0.99,explicitConsent:false,...patch});
+const understanding=(patch:Partial<Understanding>={}):Understanding=>parseUnderstanding({...base,intent:'admin',confidence:0.99,explicitConsent:false,additionalServices:[],...patch});
 const event:ReceptionEvent={id:'verified-source',phone:SANDRA_PHONE,kind:'text',text:'Pausa la atención al 3001112233',fromMe:false,at:new Date().toISOString()};
 test('chief authority cannot be granted by model, text, contact name or outgoing echo',()=>{
  const u=understanding({adminAction:'pause',targetPhone:'3001112233'});
@@ -23,6 +23,7 @@ test('outbound administrative messages must preserve an actual quoted instructio
  const u=understanding({adminAction:'send',targetPhone:'3001112233',instruction:'Hola, confirmamos tu solicitud.'});
  assert.equal(chiefAction(event,u),null);
  assert.deepEqual(chiefAction({...event,text:'Escribe al 3001112233: Hola, confirmamos tu solicitud.'},u),{type:'send',phone:'573001112233',text:u.instruction});
+ assert.deepEqual(chiefAction({...event,text:'Luisa, busca los clientes de más de seis meses sin hablar y escríbeles a diario'},understanding({adminAction:'learn',instruction:'guardar tarea'})),{type:'reactivate'});
 });
 test('chief corrections are acknowledged and other businesses never trigger actions',async()=>{
  const output:string[]=[];const queue=async(_:unknown,id:string,phone:string,text:string)=>{output.push(text)};
@@ -56,6 +57,16 @@ test('private AI workflow authenticates, strips credentials, validates media and
  await assert.rejects(()=>run({body:{action:'send',input:'hello'}}));
  await assert.rejects(()=>run({body:{action:'transcribe',base64:'x'.repeat(45),mimeType:'text/html'}}));
 });
+test('multiple requested services and follow-up pricing do not cause an unnecessary human handoff',()=>{
+ const templates={infantil:{text:'INFANTIL EXACTO',approved:true,version:'1'},pareja:{text:'PAREJA EXACTO',approved:true,version:'1'}};
+ const multi=semanticReception({...event,phone:'573001112233',text:'Infantil para mi hijo y pareja para nosotros'},'NEW',{},templates,'DEPOSIT_20000',understanding({intent:'service',service:'infantil',additionalServices:['pareja']}));
+ assert.equal(multi.handoff,undefined);assert.ok(multi.messages.includes('INFANTIL EXACTO'));assert.ok(multi.messages.includes('PAREJA EXACTO'));assert.equal(multi.state.service,undefined);
+ const yes=semanticReception({...event,text:'sí'},'OFFER',multi.state,templates,'DEPOSIT_20000',understanding({intent:'accept'}));assert.equal(yes.stage,'OFFER');assert.ok(yes.messages[0].includes('cuál'));
+ const choose=semanticReception({...event,text:'Agendemos pareja'},'OFFER',multi.state,templates,'DEPOSIT_20000',understanding({intent:'accept',service:'pareja'}));assert.equal(choose.stage,'PAYMENT_FORMAT');assert.equal(choose.state.service,'pareja');
+ const other=semanticReception({...event,text:'Y de pareja?'},'OFFER',{service:'infantil'},templates,'DEPOSIT_20000',understanding({intent:'question',service:'pareja'}));assert.equal(other.stage,'OFFER');assert.equal(other.handoff,undefined);assert.equal(other.messages[0],'PAREJA EXACTO');
+ const changed=semanticReception({...event,text:'Mejor agendemos pareja'},'OFFER',{service:'infantil'},templates,'DEPOSIT_20000',understanding({intent:'accept',service:'pareja'}));assert.equal(changed.stage,'OFFER');assert.equal(changed.state.service,'pareja');
+ const purchase=semanticReception({...event,text:'Una sesión'},'PAYMENT_FORMAT',{service:'infantil'},{...templates,reserva_sesion:{text:'ABONO EXACTO',approved:true,version:'1'},datos:{text:'DATOS EXACTOS',approved:true,version:'1'}},'DEPOSIT_20000',understanding({intent:'service',service:'infantil',purchase:'single'}));assert.equal(purchase.stage,'DATA');assert.equal(purchase.messages[0],'ABONO EXACTO');
+});
 test('new storage remains additive, scope locked and re-entrant; expired lease can recover',async()=>{
  const db=new PGlite();try{
   await db.exec('CREATE TABLE "CitasPsicologos" (id BIGINT PRIMARY KEY); CREATE TABLE "Cliente" (id INTEGER PRIMARY KEY)');
@@ -84,8 +95,22 @@ test('reactivation excludes future bookings, opt-outs, recent outreach and unver
   const sql=(strings:TemplateStringsArray,values:unknown[])=>strings.reduce((s,p,i)=>s+(i?'$'+i:'')+p,'');
   const tx={$queryRaw:async(s:TemplateStringsArray,...v:unknown[])=>(await db.query(sql(s,v),v)).rows,$executeRaw:async(s:TemplateStringsArray,...v:unknown[])=>(await db.query(sql(s,v),v)).affectedRows,auditoria:{create:async()=>({})}};
   const sent:{phone:string;text:string}[]=[];
-  await handleChiefUnderstanding(tx as never,event,understanding({adminAction:'reactivate'}),async(_,id,phone,text)=>{sent.push({phone,text})},async()=>{});
+  await handleChiefUnderstanding(tx as never,{...event,text:'Luisa, busca los clientes de más de seis meses sin hablar y escríbeles a diario'},understanding({adminAction:'learn',instruction:'guardar tarea'}),async(_,id,phone,text)=>{sent.push({phone,text})},async()=>{});
+  const stored=(await db.query<{state:any}>('SELECT state FROM "PsicologiaBotConversation"')).rows[0].state;
+  assert.equal(stored.reactivationTask.status,'NEEDS_CRITERION');assert.equal(stored.reactivationTask.daily,true);
+  assert.equal(sent.filter(m=>m.phone!==SANDRA_PHONE).length,0);assert.ok(sent[0].text.includes('sin cita o sin conversar'));
+  sent.length=0;
+  await executeReactivationBatch(tx as never,event,async(_,id,phone,text)=>{sent.push({phone,text})});
   assert.deepEqual(sent.filter(m=>m.phone!==SANDRA_PHONE).map(m=>m.phone),['573001112201']);
   assert.ok(sent.find(m=>m.phone===SANDRA_PHONE)?.text.includes('autorización promocional'));
+  const queue=async(_:unknown,id:string,phone:string,text:string)=>{sent.push({phone,text})};
+  await handleChiefUnderstanding(tx as never,{...event,text:'Según las citas'},understanding({adminAction:'none'}),queue,async()=>{});
+  await runChiefReactivationTask(tx as never,queue);
+  const afterFirst=sent.length;await runChiefReactivationTask(tx as never,queue);assert.equal(sent.length,afterFirst);
+  assert.equal((await db.query<{state:any}>('SELECT state FROM "PsicologiaBotConversation"')).rows[0].state.reactivationTask.status,'WAITING_PERMISSION');
+  await db.exec(`INSERT INTO "PsicologiaBotContactPermission"(phone,marketing,"sourceEvent") VALUES('573001112204',true,'verified-source')`);
+  t.mock.timers.tick(86400000);await runChiefReactivationTask(tx as never,queue);
+  assert.deepEqual(sent.filter(m=>m.phone!==SANDRA_PHONE).map(m=>m.phone),['573001112201','573001112204']);
+  assert.equal((await db.query<{state:any}>('SELECT state FROM "PsicologiaBotConversation"')).rows[0].state.reactivationTask.status,'QUEUED');
  }finally{await db.close();t.mock.timers.reset()}
 });

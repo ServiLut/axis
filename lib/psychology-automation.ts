@@ -7,7 +7,7 @@ import { handleBookingMessage } from './psychology-bot-booking';
 import {randomUUID} from 'node:crypto';
 import {parseUnderstanding,type Understanding} from './psychology-ai';
 import {prepareNextPsychologyEvent} from './psychology-ai-preparation';
-import {handleChiefUnderstanding} from './psychology-chief';
+import {handleChiefUnderstanding,runChiefReactivationTask} from './psychology-chief';
 import {semanticReception} from './psychology-semantic-reception';
 
 type Tx=Prisma.TransactionClient;
@@ -121,7 +121,10 @@ export async function drainPsychologyAutomation(config:AutomationConfig) {
   const lease=await prisma.$executeRaw`UPDATE "PsicologiaBotConfig" SET "aiLeaseToken"=${token},"aiLeaseUntil"=NOW()+INTERVAL '4 minutes' WHERE id=4 AND ("aiLeaseUntil" IS NULL OR "aiLeaseUntil"<NOW())`;
   if(lease){
     const started=Date.now();
-    try{for(let i=0;i<3&&Date.now()-started<20000;i++){await prepareNextPsychologyEvent();if(!await processOne(config))break;processed++;}}
+    try{
+      for(let i=0;i<3&&Date.now()-started<20000;i++){await prepareNextPsychologyEvent();if(!await processOne(config))break;processed++;}
+      await prisma.$transaction(async tx=>{await tx.$queryRaw`SELECT id FROM "PsicologiaBotConfig" WHERE id=4 FOR UPDATE`;await runChiefReactivationTask(tx,queuePsychologyMessage)},{timeout:15000});
+    }
     finally{await prisma.$executeRaw`UPDATE "PsicologiaBotConfig" SET "aiLeaseToken"=NULL,"aiLeaseUntil"=NULL WHERE id=4 AND "aiLeaseToken"=${token}`;}
   }
   const pending=await prisma.$queryRaw<{n:bigint}[]>`SELECT COUNT(*) AS n FROM "PsicologiaBotOutbox" WHERE status='PENDING'`;
@@ -133,6 +136,7 @@ export async function drainPsychologyAutomation(config:AutomationConfig) {
     const claimed=await prisma.$queryRaw<{id:string;phone:string;content:string}[]>`
       UPDATE "PsicologiaBotOutbox" SET status='SENDING',"attemptedAt"=NOW()
       WHERE id=(SELECT o.id FROM "PsicologiaBotOutbox" o WHERE o.status='PENDING'
+        AND (o.id NOT LIKE '%:reactivate:%' OR (EXTRACT(HOUR FROM NOW() AT TIME ZONE 'America/Bogota')>=7 AND EXTRACT(HOUR FROM NOW() AT TIME ZONE 'America/Bogota')<20))
         AND NOT EXISTS(SELECT 1 FROM "PsicologiaBotOutbox" p WHERE p.phone=o.phone AND p.status IN ('SENDING','UNCERTAIN'))
         ORDER BY o."createdAt",o.id LIMIT 1 FOR UPDATE SKIP LOCKED) RETURNING id,phone,content`;
     const item=claimed[0];if(!item)break;

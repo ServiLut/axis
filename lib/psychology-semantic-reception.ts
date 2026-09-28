@@ -9,10 +9,25 @@ export function semanticReception(event:ReceptionEvent,stage:string,state:Recept
  if(stage==='HUMAN')return {stage,state,messages:[]};
  if(u.intent==='stop')return decideReception({...event,text:'no me escriban'},stage,state,templates,policy);
  if(u.confidence<0.85)return {stage,state,messages:['Quiero entenderte bien 😊 ¿Me cuentas un poquito más sobre lo que necesitas?']};
+ const accepted=['accept','confirm'].includes(u.intent);
+ if(stage==='OFFER'&&accepted&&state.servicesOffered&&state.servicesOffered.length>1){
+  if(!u.service||!state.servicesOffered.includes(u.service))return {stage,state,messages:['Claro 😊 ¿Por cuál de los servicios deseas empezar a agendar?']};
+  return decideReception({...event,kind:'text',text:'sí'},stage,{...state,service:u.service,servicesOffered:[u.service]},templates,policy);
+ }
+ const requested=[...new Set([u.service,...(u.additionalServices||[])].filter((s):s is string=>!!s))];
+ const newService=!!u.service&&u.service!==state.service;
+ if(stage==='PAYMENT_FORMAT'&&u.purchase&&!newService)return decideReception({...event,kind:'text',text:{single:'una sesión',package:'paquete',prepaid:'ya tengo paquete'}[u.purchase]},stage,state,templates,policy);
+ if(requested.length&&['NEW','NEED','MENU','OFFER','PAYMENT_FORMAT'].includes(stage)&&!(stage==='OFFER'&&accepted&&!newService)){
+  const offers=requested.map(service=>decideReception({...event,kind:'text',text:service},'NEED',state,templates,policy));
+  const missing=offers.find(d=>d.handoff);if(missing)return missing;
+  const messages=offers.map(d=>d.messages[0]);
+  if(stage==='NEW')messages.unshift('Hola 😊 Hablas con Luisa Fernanda de *Psicólogos en Colombia*. Espero que estés bien.');
+  messages.push(requested.length>1?'¿Por cuál de estos servicios deseas empezar a agendar?':offers[0].messages[1]);
+  return {stage:'OFFER',state:{...state,service:requested.length===1?requested[0]:undefined,servicesOffered:requested,offeredAt:event.id},messages};
+ }
  let text:string|null=null;
  if(u.intent==='greeting'&&stage==='NEW')text='hola';
  if(u.intent==='menu'&&['NEW','NEED','MENU'].includes(stage))text='/servicios';
- if(u.service&&['NEW','NEED','MENU'].includes(stage))text=u.service;
  if(['accept','confirm'].includes(u.intent)&&stage==='OFFER')text='sí';
  if(stage==='PAYMENT_FORMAT'&&u.purchase)text={single:'una sesión',package:'paquete',prepaid:'ya tengo paquete'}[u.purchase];
  if(text){
