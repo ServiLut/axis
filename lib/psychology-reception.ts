@@ -20,7 +20,9 @@ export function validateReceptionEvent(input: unknown, now: number, activatedAt:
   return { id: e.id, phone: e.phone, at: e.at, kind: e.kind as ReceptionEvent['kind'], text: e.text, fromMe: e.fromMe };
 }
 export type ReceptionTemplates = Record<string, { text: string; approved: boolean; version: string }>;
-export type ReceptionState = { service?: string; servicesOffered?:string[]; offeredAt?: string; reason?: string; alerted?: boolean };
+export type PatientDraft={firstName?:string;lastName?:string;documentType?:string;document?:string;email?:string;address?:string};
+export type IntakeState={draft:PatientDraft;summaryEvent?:string;clientId?:number;preference?:'male'|'female'|'either';date?:string;start?:string;modality?:'virtual'|'presencial';clarifications?:number};
+export type ReceptionState = { service?: string; servicesOffered?:string[]; offeredAt?: string; reason?: string; alerted?: boolean; intake?:IntakeState };
 export type ReceptionResult = { stage: string; state: ReceptionState; messages: string[]; handoff?: string };
 const menu: Record<string,string> = { '1':'individual','2':'pareja','3':'infantil','4':'sexologia','5':'familiar','6':'alquiler','7':'certificado','8':'profesional','9':'empresarial' };
 const shortcuts: Record<string,string> = { alquiler:'oficina',individual:'individual',pareja:'pareja',infantil:'infantil',sexologia:'sexologia',familiar:'familiar',neuropsicologia:'neuropsicologia',certificado:'certificado' };

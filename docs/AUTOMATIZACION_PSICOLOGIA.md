@@ -1,5 +1,7 @@
 # Integración de Psicólogos en Colombia
 
+**Actualización del 28/09:** el transporte, recepción, IA de texto y transcripción ya fueron habilitados y comprobados. Este archivo conserva la secuencia histórica, incluidas limitaciones de versiones anteriores. El alcance actual y los pendientes se mantienen en [PSICOLOGOS_AUTONOMIA.md](PSICOLOGOS_AUTONOMIA.md). No interpretar los apartados históricos como el estado más reciente ni una prueba sintética como evidencia de agendamiento real.
+
 ## Recepción duradera — implementación del 28/09/2026
 
 Endpoint separado: `POST /api/integrations/psicologos/automation`. La clave de

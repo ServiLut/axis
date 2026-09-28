@@ -9,6 +9,7 @@ import {parseUnderstanding,type Understanding} from './psychology-ai';
 import {prepareNextPsychologyEvent} from './psychology-ai-preparation';
 import {handleChiefUnderstanding,runChiefReactivationTask} from './psychology-chief';
 import {semanticReception} from './psychology-semantic-reception';
+import {handlePatientIntake} from './psychology-patient-intake';
 
 type Tx=Prisma.TransactionClient;
 export type AutomationConfig={ enabled:boolean; activatedAt:Date|null; templates:ReceptionTemplates; paymentPolicy:string };
@@ -98,7 +99,17 @@ async function processOne(config:AutomationConfig) {
         const c=conversations[0];
         // A human reply received while the model was working takes precedence.
         const humanLater=!e.fromMe?await tx.$queryRaw<{id:string}[]>`SELECT id FROM "PsicologiaBotEvent" h WHERE phone=${e.phone} AND "fromMe"=true AND "receivedAt">(SELECT "receivedAt" FROM "PsicologiaBotEvent" WHERE id=${e.id}) AND NOT EXISTS(SELECT 1 FROM "PsicologiaBotOutbox" o WHERE o.phone=h.phone AND o.content=h.text AND o.status IN ('SENDING','ACCEPTED','UNCERTAIN')) LIMIT 1`:[];
-        const decision=humanLater.length?{stage:'HUMAN',state:{...c.state,reason:'Atención de una persona'},messages:[],handoff:undefined}:semanticReception(e,c.stage,c.state,config.templates,config.paymentPolicy,understanding);
+        let decision=humanLater.length?{stage:'HUMAN',state:{...c.state,reason:'Atención de una persona'},messages:[],handoff:undefined}:semanticReception(e,c.stage,c.state,config.templates,config.paymentPolicy,understanding);
+        if(!humanLater.length&&!row.analysisError&&understanding&&decision.handoff!=='Atención humana urgente'){
+          await tx.$executeRawUnsafe('SAVEPOINT bot_intake');
+          try{decision=await handlePatientIntake(tx,e,c.stage,c.state,understanding)??decision;}
+          catch{
+            await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT bot_intake');
+            decision={stage:'HUMAN',state:{...c.state,reason:'Registro pendiente de revisión'},messages:['No pude completar el registro. Voy a pedir apoyo a Sandra para continuar 😊'],handoff:'Revisar registro de paciente; operación revertida'};
+            await createAuditLog({tenantId:4,accion:'BOT_INTAKE_REVIEW',entidad:'WhatsAppEvento',entidadId:e.id,detalles:{patientChanged:false},tx});
+          }
+          await tx.$executeRawUnsafe('RELEASE SAVEPOINT bot_intake');
+        }
         if(row.analysisError&&c.stage!=='HUMAN'&&!humanLater.length){decision.handoff='No fue posible interpretar el mensaje: '+row.analysisError;decision.stage='HUMAN';decision.messages=[row.kind==='audio'?'No pude escuchar bien tu audio 😊 ¿Me escribes lo que necesitas, por favor?':'Estoy pidiendo apoyo a nuestra coordinadora para responderte bien.'];}
         if(understanding?.intent==='stop'||decision.state.reason==='No contactar')await tx.$executeRaw`INSERT INTO "PsicologiaBotContactPermission" (phone,"optedOut","sourceEvent") VALUES (${e.phone},true,${e.id}) ON CONFLICT(phone) DO UPDATE SET "optedOut"=true,marketing=false,"sourceEvent"=EXCLUDED."sourceEvent","updatedAt"=NOW()`;
         if(e.fromMe||understanding?.intent==='stop'||decision.state.reason==='No contactar')await tx.$executeRaw`UPDATE "PsicologiaBotOutbox" SET status='CANCELLED' WHERE phone=${e.phone} AND status='PENDING'`;
