@@ -91,11 +91,12 @@ export async function runChiefReactivationTask(tx:Tx,queue:Queue){
  const source=await tx.$queryRaw<(ReceptionEvent&{eventAt:Date})[]>`SELECT id,phone,text,kind,"fromMe","eventAt" FROM "PsicologiaBotEvent" WHERE id=${task.sourceEvent} AND phone=${SANDRA_PHONE} AND "fromMe"=false`;
  if(!source[0])throw Error('CAMPAIGN_SOURCE_INVALID');
  const e={...source[0],at:source[0].eventAt.toISOString()};
- const result=await executeReactivationBatch(tx,e,queue,task.asOf,task.candidateIds,today,task.includeProfessionals??false);
- await saveTask(tx,{...task,candidateIds:task.candidateIds??result.ids,lastRunDate:today,status:result.remaining>0?(task.daily?'ACTIVE':'PAUSED'):result.missingPermission>0?'WAITING_PERMISSION':'QUEUED'});
+ const cutoff=task.daily?new Date().toISOString():task.asOf;
+ const result=await executeReactivationBatch(tx,e,queue,cutoff,task.daily?null:task.candidateIds,today,task.includeProfessionals??false,task.lastRunDate===null);
+ await saveTask(tx,{...task,candidateIds:task.daily?result.ids:task.candidateIds??result.ids,lastRunDate:today,status:result.missingPermission>0?'WAITING_PERMISSION':task.daily?'ACTIVE':result.remaining>0?'PAUSED':'QUEUED'});
 }
 
-export async function executeReactivationBatch(tx:Tx,e:ReceptionEvent,queue:Queue,asOf=new Date().toISOString(),candidateIds:(number|string)[]|null=null,day='manual',includeProfessionals=false){
+export async function executeReactivationBatch(tx:Tx,e:ReceptionEvent,queue:Queue,asOf=new Date().toISOString(),candidateIds:(number|string)[]|null=null,day='manual',includeProfessionals=false,reportFirst=true){
  if(e.phone!==SANDRA_PHONE||e.fromMe)throw Error('CAMPAIGN_ACTOR');
  const ack=(message:string)=>queue(tx,e.id+':campaign-progress:'+day,SANDRA_PHONE,message);
  // A past appointment alone does not establish permission for a new marketing message.
@@ -117,6 +118,6 @@ export async function executeReactivationBatch(tx:Tx,e:ReceptionEvent,queue:Queu
  }
  await createAuditLog({tenantId:4,accion:'BOT_REACTIVATION_REQUEST',entidad:'WhatsApp',entidadId:e.id,detalles:{sourceEvent:e.id,candidates:candidates.length,eligible:unique.length,queued,remaining:Math.max(0,unique.length-queued),scope:'tenant4/company3',bankDataAccessed:false},tx});
  if(missingPermission)await queue(tx,e.id+':campaign-permission',SANDRA_PHONE,'Hay '+missingPermission+' registros sin autorización promocional documentada. ¿Dónde podemos verificarla? Esos contactos quedan pendientes.');
- if(queued||day==='manual'||candidateIds===null)await ack(`Sandra, identifiqué ${scoped.filter(c=>c.audience==='client').length} clientes y ${scoped.filter(c=>c.audience==='professional').length} psicólogos con más de seis meses sin servicio registrado. Dejé ${queued} mensajes en cola.${unique.length>queued?' Quedan '+(unique.length-queued)+' elegibles para otro lote.':''}`);
+ if(queued||day==='manual'||reportFirst)await ack(`Sandra, identifiqué ${scoped.filter(c=>c.audience==='client').length} clientes y ${scoped.filter(c=>c.audience==='professional').length} psicólogos con más de seis meses sin servicio registrado. Dejé ${queued} mensajes en cola, sujetos a revisión del contexto antes del envío.${unique.length>queued?' Quedan '+(unique.length-queued)+' elegibles para otro lote.':''}`);
  return {ids:scoped.map(key),remaining:unique.length-queued,missingPermission};
 }

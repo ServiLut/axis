@@ -121,6 +121,6 @@ test('reactivation excludes future bookings, opt-outs, recent outreach and unver
   await db.exec(`INSERT INTO "PsicologiaBotContactPermission"(phone,marketing,"sourceEvent") VALUES('573001112204',true,'verified-source')`);
   t.mock.timers.tick(86400000);await runChiefReactivationTask(tx as never,queue);
   assert.deepEqual(sent.filter(m=>m.phone!==SANDRA_PHONE).map(m=>m.phone),['573001112201','573001112204']);
-  assert.equal((await db.query<{state:any}>('SELECT state FROM "PsicologiaBotConversation"')).rows[0].state.reactivationTask.status,'QUEUED');
+  assert.equal((await db.query<{state:any}>('SELECT state FROM "PsicologiaBotConversation"')).rows[0].state.reactivationTask.status,'ACTIVE');
  }finally{await db.close();t.mock.timers.reset()}
 });

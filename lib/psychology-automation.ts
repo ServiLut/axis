@@ -11,6 +11,7 @@ import {handleChiefUnderstanding,runChiefReactivationTask} from './psychology-ch
 import {semanticReception} from './psychology-semantic-reception';
 import {handlePatientIntake} from './psychology-patient-intake';
 import {claimPsychologyOutbox} from './psychology-outbox';
+import {reviewCampaignContext} from './psychology-campaign-review';
 
 type Tx=Prisma.TransactionClient;
 export type AutomationConfig={ enabled:boolean; activatedAt:Date|null; templates:ReceptionTemplates; paymentPolicy:string };
@@ -148,8 +149,32 @@ export async function drainPsychologyAutomation(config:AutomationConfig) {
     const item=await prisma.$transaction(tx=>claimPsychologyOutbox(tx));if(!item)break;
     let sending=false;
     try {
+      if(item.id.includes(':reactivate:')){
+        try{
+          const review=await reviewCampaignContext(prisma,item);
+          await createAuditLog({tenantId:4,accion:'BOT_CAMPAIGN_CONTEXT_REVIEWED',entidad:'PsicologiaBotOutbox',entidadId:item.id,detalles:review});
+        }catch{
+          await prisma.$transaction(async tx=>{
+            await tx.$executeRaw`UPDATE "PsicologiaBotOutbox" SET status='CANCELLED',"lastError"='CAMPAIGN_CONTEXT_REVIEW' WHERE id=${item.id}`;
+            await queuePsychologyMessage(tx,'campaign-context-review:'+item.id.replace(':reactivate:',':recipient:'),SANDRA_PHONE,`Sandra, dejé pendiente la invitación a +${item.phone}: necesito revisar el contexto anterior o una solicitud sin resolver. No envié la invitación.`);
+            await createAuditLog({tenantId:4,accion:'BOT_CAMPAIGN_CONTEXT_PENDING',entidad:'PsicologiaBotOutbox',entidadId:item.id,detalles:{sent:false,requiresReview:true},tx});
+          });continue;
+        }
+      }
       const conversation=await ensurePsychologyConversation(item.phone);
       await prisma.$executeRaw`UPDATE "PsicologiaBotOutbox" SET "conversationId"=${conversation.id} WHERE id=${item.id}`;
+      if(item.id.includes(':reactivate:')){
+        // Context/media lookups take time. Recheck the clock and stop requests immediately before sending.
+        const gate=await prisma.$queryRaw<{allowed:boolean;inHours:boolean}[]>`
+          SELECT EXISTS(SELECT 1 FROM "PsicologiaBotContactPermission" p WHERE p.phone=${item.phone} AND p.marketing=true AND p."optedOut"=false)
+           AND NOT EXISTS(SELECT 1 FROM "PsicologiaBotConversation" WHERE phone=${item.phone} AND stage='HUMAN')
+           AND EXISTS(SELECT 1 FROM "PsicologiaBotOutbox" WHERE id=${item.id} AND status='SENDING') AS allowed,
+           EXTRACT(HOUR FROM clock_timestamp() AT TIME ZONE 'America/Bogota')>=8 AND EXTRACT(HOUR FROM clock_timestamp() AT TIME ZONE 'America/Bogota')<19 AS "inHours"`;
+        if(!gate[0]?.allowed||!gate[0]?.inHours){
+          await prisma.$executeRaw`UPDATE "PsicologiaBotOutbox" SET status=${gate[0]?.allowed?'PENDING':'CANCELLED'},"lastError"='CAMPAIGN_RECHECK' WHERE id=${item.id} AND status='SENDING'`;
+          continue;
+        }
+      }
       sending=true;
       const msg=await sendPsychologyMessage(conversation.id,item.content);
       if(!Number.isSafeInteger(msg.id))throw new Error('CW_RESPONSE_UNVERIFIED');

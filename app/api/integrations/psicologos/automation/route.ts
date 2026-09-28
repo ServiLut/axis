@@ -18,7 +18,7 @@ export async function POST(request:NextRequest) {
     const body=JSON.parse(text);
     const config=await automationConfig();
     if(body.action==='ignore')return json({accepted:false,reason:'unsupported-event'},202);
-    if(body.action==='status')return json({tenantId:4,companyId:3,enabled:config.enabled,paymentPolicy:config.paymentPolicy,mode:'administrative-reception-with-human-review',capabilities:{audioTranscription:aiConfigured(),chiefNaturalLanguage:aiConfigured(),newContacts:true,patientRegistration:aiConfigured()?'confirmed-data':'human-review',history:'recent-staff-and-bot',campaign:{audiences:['clients','professionals'],hours:'08:00-19:00 America/Bogota',minimumIntervalSeconds:60},booking:'confirmed-proposals',payments:'reviewed-evidence'}});
+    if(body.action==='status')return json({tenantId:4,companyId:3,enabled:config.enabled,paymentPolicy:config.paymentPolicy,mode:'administrative-reception-with-human-review',capabilities:{audioTranscription:aiConfigured(),chiefNaturalLanguage:aiConfigured(),newContacts:true,patientRegistration:aiConfigured()?'confirmed-data':'human-review',history:'recent-staff-and-bot',campaign:{audiences:['clients','professionals'],hours:'08:00-19:00 America/Bogota',minimumIntervalSeconds:60,contextReview:true,dailyRefresh:true},booking:'confirmed-proposals',payments:'reviewed-evidence'}});
     if(!config.enabled||!config.activatedAt)return json({error:'Recepción pausada'},503);
     if(body.action==='drain')return json(await drainPsychologyAutomation(config));
     if(body.action!=='event'||body.instance!==PSYCHOLOGY_INSTANCE||body.owner!==PSYCHOLOGY_PHONE)return json({error:'Evento fuera del ámbito'},400);

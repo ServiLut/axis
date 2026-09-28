@@ -42,6 +42,8 @@ Orden de Sandra en audio del28/09/2026: la atención entrante continúa24h; solo
 
 Los registros antiguos con empresa nula requieren evidencia de actividad en empresa3 antes de reutilizarlos. No se migra masivamente su empresa ni se crea un duplicado al encontrarlos. Los alquileres consumidos por un profesional se distinguen de su trabajo atendiendo pacientes. Las compras recientes de paquetes y cargos de recepción excluyen inactividad aparente. Todo cambio se prueba antes de publicación; aplicar primero `docs/sql/2026-09-28-psychology-campaign-pacing.sql`.
 
+Las tareas diarias vuelven a comprobar elegibilidad cada día; no reiteran una invitación de la misma campaña. Antes de cada envío se consulta el contexto reciente, el número de citas realizadas y el último profesional registrado. Historial no disponible, audio histórico sin transcribir, rechazo, duda o conversación a cargo humano detienen esa invitación y se notifican a Sandra. Se mantiene el texto breve aprobado, sin incluir datos clínicos, precios históricos ni nombres de profesionales. Inmediatamente antes de enviar se vuelven a comprobar horario y autorización de contacto.
+
 ## Supervisión temporal
 
 Automatización `supervisi-n-y-autonom-a-psic-logos`, cada 30 minutos en este chat. Debe revisar salud, mensajes nuevos y bloqueos, continuar correcciones y verificar despliegues. Guardar línea base; no repetir alertas ni tocar conversaciones tomadas por humanos. Mantener silencio si no cambió nada accionable. La ejecución necesita el equipo encendido y Codex disponible; el bot de servidor tiene infraestructura independiente.
