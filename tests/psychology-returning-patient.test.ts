@@ -7,7 +7,7 @@ import {parseUnderstanding,understandingSchema,type Understanding} from '../lib/
 import type * as Intake from '../lib/psychology-patient-intake';
 import type * as Returning from '../lib/psychology-returning-patient';
 const base=Object.fromEntries(Object.keys(understandingSchema.properties).map(k=>[k,null]));
-const understand=(data:Partial<Understanding>={})=>parseUnderstanding({...base,additionalServices:[],confidence:0.99,intent:'accept',explicitConsent:false,...data});
+const understand=(data:Partial<Understanding>={})=>parseUnderstanding({...base,additionalServices:[],rentalRequests:[],confidence:0.99,intent:'accept',explicitConsent:false,...data});
 const event:reception.ReceptionEvent={id:'returning-contract',phone:'34600111222',kind:'text',text:'Me fue muy bien en la primera sesión, por eso decido continuar con la señorita Deicy',fromMe:false,at:new Date().toISOString()};
 async function fixture(){
  const db=new PGlite();await db.exec(`

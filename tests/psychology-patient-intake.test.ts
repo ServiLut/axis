@@ -6,7 +6,7 @@ import * as reception from '../lib/psychology-reception';
 import {parseUnderstanding,understandingSchema,type Understanding} from '../lib/psychology-ai';
 import type * as Intake from '../lib/psychology-patient-intake';
 const base=Object.fromEntries(Object.keys(understandingSchema.properties).map(k=>[k,null]));
-const understand=(data:Partial<Understanding>={})=>parseUnderstanding({...base,additionalServices:[],confidence:0.99,intent:'data',explicitConsent:false,...data});
+const understand=(data:Partial<Understanding>={})=>parseUnderstanding({...base,additionalServices:[],rentalRequests:[],confidence:0.99,intent:'data',explicitConsent:false,...data});
 const full={firstName:'Ana María',lastName:'Pérez López',documentType:'CC',document:'12345678',email:'ana@example.test',address:'Calle 10 # 20-30'};
 async function fixture(){
  const db=new PGlite();

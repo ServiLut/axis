@@ -16,6 +16,10 @@ export async function readReceptionIdentity(tx:Prisma.TransactionClient,phone:st
 export function hasContinuation(text:string){
  return /\b(si lo tienen|lo tienen|quedaron|me iban|estaba hablando|me dijeron|me enviaron|me envias|lo pendiente|el certificado|la certificacion|te habia|ya hablamos)\b/.test(normalizeText(text));
 }
+export function isRentalBookingRequest(event:ReceptionEvent,state:ReceptionState){
+ const t=normalizeText(event.text);
+ return event.kind==='text'&&!event.fromMe&&(!!state.rental||((/consultorio|alquil|espacio/.test(t)||state.service==='alquiler')&&/reserv|agend|separ|lunes|martes|miercoles|jueves|viernes|sabado|domingo|mañana|\d{1,2}\s*(?:am|pm|horas|:)/.test(t)));
+}
 /** Never turn a professional's administrative follow-up into a patient sales intake. */
 export function contextReception(event:ReceptionEvent,stage:string,state:ReceptionState):ReceptionResult|null{
  const c=state.context;if(!c||event.fromMe||stage==='HUMAN')return null;
@@ -25,7 +29,7 @@ export function contextReception(event:ReceptionEvent,stage:string,state:Recepti
  if(c.role==='professional'){
   if(/\b(terapia|consulta|sesion)\b/.test(text)&&/\b(para mi|como paciente|para mi hijo|para mi hija|para mi pareja)\b/.test(text))return null;
   if(/certificad|certificacion|carta laboral/.test(text+' '+normalizeText(c.quotedText||'')))return review('Profesional consulta certificado administrativo pendiente','Gracias por recordárnoslo. Voy a consultar con Sandra cómo va el certificado pendiente.');
-  if(/consultorio|alquiler|reservar (?:un )?espacio/.test(text))return null;
+  if(/consultorio|alquiler|reservar (?:un )?espacio/.test(text)||isRentalBookingRequest(event,state))return null;
   if(/^(hola[!.\s😊]*|buenos dias|buenas tardes|buenas noches|buenas)$/.test(text)&&!c.continuation)return {stage:'PROFESSIONAL',state,messages:['Hola 😊 ¿Cómo estás? ¿En qué podemos ayudarte hoy?']};
   return review('Consulta administrativa de profesional; revisar conversación previa','Gracias por escribirnos. Voy a revisar tu solicitud con Sandra para darte una respuesta correcta.');
  }

@@ -33,11 +33,9 @@ async function assertBookingChatsAvailable(tx:Tx,customerPhone:string,profession
   if(held.length)throw Error('Conversación bajo atención humana: revisar y reanudar antes de confirmar una reserva automática.');
 }
 
-/** Chief's structured request proposes a slot. It does NOT bypass either person's confirmation. */
-export async function handleBookingMessage(tx:Tx,event:ReceptionEvent,queue:Queue):Promise<boolean> {
-  const propose=/^RESERVAR\s+(\+?\d{8,15})\s+(\d+)\s+(\d+)\s+(\d+|VIRTUAL)\s+(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})\s+(\d{2}:\d{2})$/i.exec(event.text.trim());
-  if(propose&&event.phone===SANDRA_PHONE) {
-    const [,rawPhone,serviceId,professionalId,room,date,start,end]=propose;
+export type BookingRequest={rawPhone:string;serviceId:string;professionalId:string;room:string;date:string;start:string;end:string};
+/** Only the chief or the verified professional requesting their own rental can propose. */
+export async function proposeBooking(tx:Tx,event:ReceptionEvent,{rawPhone,serviceId,professionalId,room,date,start,end}:BookingRequest,queue:Queue):Promise<string>{
     const customerPhone=phoneDigits(rawPhone);if(!customerPhone)throw Error('Número inválido');
     const when=bookingTimes(date,start,end);
     if(when.inicio.getTime()<=Date.now()||when.inicio.getTime()>Date.now()+90*86400000)throw Error('La fecha debe estar en los próximos 90 días.');
@@ -46,10 +44,12 @@ export async function handleBookingMessage(tx:Tx,event:ReceptionEvent,queue:Queu
     if(!service||!professional?.telefono)throw Error('Servicio o profesional no verificado en Psicólogos.');
     const professionalPhone=phoneDigits(professional.telefono);if(!professionalPhone)throw Error('Teléfono del profesional inválido.');
     const rental=/alquiler/i.test(service.nombre);
+    if(event.fromMe||(event.phone!==SANDRA_PHONE&&(!rental||customerPhone!==event.phone||professionalPhone!==event.phone)))throw Error('Propuesta fuera de la identidad autorizada.');
     validateBookingSpecialty(service.categoria,professional.id,rental);
     await assertBookingChatsAvailable(tx,customerPhone,professionalPhone);
     const roomId=room.toUpperCase()==='VIRTUAL'?null:BigInt(room);
-    if(roomId&&!await tx.consultorios.findFirst({where:{id:roomId,tenantId:4,empresaId:3}}))throw Error('Consultorio no verificado.');
+    const selectedRoom=roomId?await tx.consultorios.findFirst({where:{id:roomId,tenantId:4,empresaId:3}}):null;
+    if(roomId&&!selectedRoom)throw Error('Consultorio no verificado.');
     if(rental&&(customerPhone!==professionalPhone||!roomId||start<'07:00'||end>'20:00'))throw Error('Alquiler: profesional registrado, consultorio y horario 07:00–20:00.');
     const customer=rental?null:await findBookingCustomer(tx,customerPhone);
     if(!rental&&!customer)throw Error('Registra o verifica el paciente en Axis; el teléfono no identifica un registro único.');
@@ -63,12 +63,21 @@ export async function handleBookingMessage(tx:Tx,event:ReceptionEvent,queue:Queu
     const code=createHash('sha256').update(event.id).digest('hex').slice(0,12).toUpperCase();
     const expiresAt=new Date(Math.min(when.inicio.getTime(),Date.now()+24*3600000));
     await tx.$executeRaw`INSERT INTO "PsicologiaBotProposal" (code,"customerPhone","professionalPhone",details,"expiresAt") VALUES (${code},${customerPhone},${professionalPhone},${JSON.stringify(details)}::jsonb,${expiresAt}) ON CONFLICT DO NOTHING`;
-    const slot=`${date}, ${start}–${finalEnd} (Colombia), ${roomId?'consultorio '+roomId:'virtual'}`;
+    const slot=`${date}, ${start}–${finalEnd} (Colombia), ${selectedRoom?.nombre|| (roomId?'consultorio '+roomId:'virtual')}`;
     const amount=new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(Number(details.amount));
     await queue(tx,event.id+':proposal-customer',customerPhone,`Tenemos esta propuesta: ${slot}. ${service.nombre}: ${amount}${service.cantidadSesiones>1?' por el paquete; se verificará el saldo existente':''}. Aún no está reservada.\nSi estás de acuerdo, responde CONFIRMAR ${code}.`);
     if(customerPhone!==professionalPhone)await queue(tx,event.id+':proposal-professional',professionalPhone,`¿Tienes disponibilidad para ${service.nombre} el ${slot}?\nPara aceptar responde CONFIRMAR ${code}. Si no puedes, envíanos otra disponibilidad.`);
-    await queue(tx,event.id+':proposal-chief',SANDRA_PHONE,`Propuesta ${code} enviada. Se registrará solo con las confirmaciones exactas, disponibilidad vigente y soporte revisado cuando sea paciente.`);
+    if(event.phone===SANDRA_PHONE)await queue(tx,event.id+':proposal-chief',SANDRA_PHONE,`Propuesta ${code} enviada. Se registrará solo con las confirmaciones exactas, disponibilidad vigente y soporte revisado cuando sea paciente.`);
     await createAuditLog({tenantId:4,accion:'BOT_PROPOSAL',entidad:'CitaPropuesta',entidadId:code,detalles:{sourceEvent:event.id,details},tx});
+    return code;
+}
+
+/** Chief's structured request proposes a slot. It does NOT bypass either person's confirmation. */
+export async function handleBookingMessage(tx:Tx,event:ReceptionEvent,queue:Queue):Promise<boolean> {
+  const propose=/^RESERVAR\s+(\+?\d{8,15})\s+(\d+)\s+(\d+)\s+(\d+|VIRTUAL)\s+(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})\s+(\d{2}:\d{2})$/i.exec(event.text.trim());
+  if(propose&&event.phone===SANDRA_PHONE) {
+    const [,rawPhone,serviceId,professionalId,room,date,start,end]=propose;
+    await proposeBooking(tx,event,{rawPhone,serviceId,professionalId,room,date,start,end},queue);
     return true;
   }
   const confirm=/^CONFIRMAR\s+([A-F0-9]{12})$/i.exec(event.text.trim());

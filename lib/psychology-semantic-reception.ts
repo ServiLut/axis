@@ -1,6 +1,6 @@
 import {decideReception,type ReceptionEvent,type ReceptionState,type ReceptionTemplates,type ReceptionResult} from './psychology-reception';
 import type {Understanding} from './psychology-ai';
-import {contextReception} from './psychology-reception-context';
+import {contextReception,isRentalBookingRequest} from './psychology-reception-context';
 
 /** AI chooses intent; approved templates and persisted state control prices and actions. */
 export function semanticReception(event:ReceptionEvent,stage:string,state:ReceptionState,templates:ReceptionTemplates,policy:string,u:Understanding|null):ReceptionResult{
@@ -8,11 +8,13 @@ export function semanticReception(event:ReceptionEvent,stage:string,state:Recept
  if(event.fromMe||baseline.handoff==='Atención humana urgente')return baseline;
  if(u?.intent==='urgent')return decideReception({...event,text:'me quiero morir'},stage,state,templates,policy);
  if(stage==='HUMAN')return {stage,state,messages:[]};
+ if(u?.intent==='stop'||baseline.state.reason==='No contactar')return decideReception({...event,text:'no me escriban'},stage,state,templates,policy);
  const contextual=contextReception(event,stage,state);if(contextual)return contextual;
+ // Booking details take precedence over a generic service offer, even if the model misses dates.
+ if(isRentalBookingRequest(event,state)&&(!u?.service||u.service==='alquiler')&&!['courtesy','reject'].includes(u?.intent||''))return {stage:'RENTAL_DETAILS',state:{...state,service:'alquiler'},messages:['Claro 😊 Revisaré el horario que solicitas.']};
  if(!u)return baseline;
  if(u.intent==='greeting'&&stage==='NEW'&&state.context?.hasHistory)return {stage:'NEED',state,messages:['Hola 😊 ¿En qué podemos ayudarte con lo que venían conversando?']};
  if(state.resumedFrom&&u.intent==='greeting'&&stage==='NEED')return {stage,state,messages:['Hola 😊 Estoy aquí para continuar contigo. ¿Qué necesitas completar?']};
- if(u.intent==='stop')return decideReception({...event,text:'no me escriban'},stage,state,templates,policy);
  if(u.confidence<0.85){
   const next={...state,clarifications:(state.clarifications||0)+1};
   if(next.clarifications>=2)return {stage:'HUMAN',state:{...next,reason:'Contexto insuficiente'},messages:['Voy a consultarlo con Sandra para responderte correctamente 😊'],handoff:'No se pudo resolver la duda con el contexto disponible'};

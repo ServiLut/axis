@@ -16,6 +16,7 @@ import {reviewCampaignContext} from './psychology-campaign-review';
 import {enqueueIdleChatResumes,idleChatSources,idleResumeDecision,idleReplyStillCurrent} from './psychology-handover';
 import {chiefHelpMessage,chiefBookingProblem} from './psychology-chief-messages';
 import {contextReception} from './psychology-reception-context';
+import {handleRentalIntake} from './psychology-rental-intake';
 
 type Tx=Prisma.TransactionClient;
 export type AutomationConfig={ enabled:boolean; activatedAt:Date|null; templates:ReceptionTemplates; paymentPolicy:string;staffIdleMinutes?:number };
@@ -126,7 +127,7 @@ async function processOne(config:AutomationConfig) {
         let decision=humanLater.length?pauseForStaff(c.stage,c.state,e.at):semanticReception(e,c.stage,c.state,config.templates,config.paymentPolicy,understanding);
         if(!humanLater.length&&!row.analysisError&&understanding&&decision.handoff!=='Atención humana urgente'&&!contextReception(e,c.stage,c.state)){
           await tx.$executeRawUnsafe('SAVEPOINT bot_intake');
-          try{decision=await handleReturningPatient(tx,e,c.stage,c.state,understanding)??await handlePatientIntake(tx,e,c.stage,c.state,understanding)??decision;}
+          try{decision=await handleRentalIntake(tx,e,c.stage,c.state,understanding)??await handleReturningPatient(tx,e,c.stage,c.state,understanding)??await handlePatientIntake(tx,e,c.stage,c.state,understanding)??decision;}
           catch{
             await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT bot_intake');
             decision={stage:'HUMAN',state:{...c.state,reason:'Registro pendiente de revisión'},messages:['No pude completar el registro. Voy a pedir apoyo a Sandra para continuar 😊'],handoff:'Revisar registro de paciente; operación revertida'};

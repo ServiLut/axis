@@ -36,8 +36,19 @@ async function fixture(rental=false) {
   './audit':{createAuditLog:async()=>{state.audits++}},'./package-payment':{getPackagePaymentState:async()=>null},
  });
  const message=async(phone:string,text='CONFIRMAR ABCD1234ABCD')=>{await db.query('UPDATE "Usuario" SET activo=$1 WHERE id=29',[state.active]);return api.handleBookingMessage(tx as never,{id:'event-'+Date.now(),phone,text,fromMe:false,kind:'text',at:new Date().toISOString()},async(_t,_id,p,text)=>{sent.push({phone:p,text})});};
- return {db,state,sent,message};
+ const proposeOwnRental=(phone:string)=>api.proposeBooking(tx as never,{id:'synthetic-own-rental-'+phone,phone,kind:'text',text:'Reservar consultorio 10',fromMe:false,at:new Date().toISOString()},{rawPhone:'573002222222',serviceId:'49',professionalId:'29',room:'1',date,start:'10:00',end:'11:00'},async(_tx,_id,p,text)=>{sent.push({phone:p,text})});
+ return {db,state,sent,message,proposeOwnRental};
 }
+
+test('own rental proposal uses verified professional identity and waits for exact confirmation',async()=>{
+ const f=await fixture(true);try{
+  await f.db.exec('DELETE FROM "PsicologiaBotProposal"');
+  await assert.rejects(()=>f.proposeOwnRental('573009999999'),/identidad autorizada/);assert.equal(f.sent.length,0);
+  const code=await f.proposeOwnRental('573002222222');assert.equal(f.state.writes,0);assert.equal(f.sent.length,1);assert.equal(f.sent[0].phone,'573002222222');
+  await f.message('573002222222','CONFIRMAR '+code);assert.equal(f.state.writes,1);
+  await f.message('573002222222','CONFIRMAR '+code);assert.equal(f.state.writes,1);
+ }finally{await f.db.close()}
+});
 test('both exact confirmed senders are required; a payment image cannot create a booking',async()=>{
  const f=await fixture();try {
   await f.message('573009999999');assert.equal(f.state.writes,0);
