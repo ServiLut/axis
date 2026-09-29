@@ -12,6 +12,8 @@ En modo de observación de atención humana, el servidor descarta los campos de 
 
 La toma humana incluye el chat compartido con Sandra: un mensaje o archivo enviado por el personal lo deja en observación. Los mensajes posteriores no ejecutan instrucciones ni generan preguntas automáticas hasta devolución expresa. Sandra puede escribir «Luisa, retoma este chat»; debe ser un mensaje posterior a la intervención del personal. Las devoluciones ambiguas o solo transcritas de audio permanecen con el personal. El informe nocturno independiente y las alertas procedentes de otros chats conservan su envío; las respuestas a mensajes del chat tomado se cancelan.
 
+Instrucción directa de la usuaria del29/09: Sandra debe dirigirse claramente a Luisa Fernanda o al bot para recibir respuesta. El número autorizado por sí solo no basta; una conversación con el personal, una mención en tercera persona o un destinatario dudoso se observa en silencio, sin ejecutar ni aprender órdenes. En audio se comprueba el texto transcrito; si no puede comprenderse el destinatario, no se pregunta automáticamente. Esto no revoca el informe nocturno ni las alertas independientes autorizadas. La dirección explícita tampoco levanta por sí sola una toma humana: se mantiene la devolución expresa del chat.
+
 ## Alcance e identidad
 
 - Empresa 3, tenant 4, sistema PSICOLOGOS.

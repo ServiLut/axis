@@ -3,7 +3,7 @@ import {test} from 'node:test';
 import {PGlite} from '@electric-sql/pglite';
 import {readFileSync} from 'node:fs';
 import {idleChatSources,enqueueIdleChatResumes,idleResumeDecision,idleReplyStillCurrent} from '../lib/psychology-handover';
-import {recordPsychologyStaffTakeover,psychologyStaffSendAllowed,isPsychologyBotEcho,chiefStaffDecision} from '../lib/psychology-staff-ownership';
+import {recordPsychologyStaffTakeover,psychologyStaffSendAllowed,isPsychologyBotEcho,chiefStaffDecision,chiefAddressesBot} from '../lib/psychology-staff-ownership';
 import {classifyReceptionHistory,staffObservation} from '../lib/psychology-staff-observation';
 import {resumeReception,type ReceptionEvent} from '../lib/psychology-reception';
 import {sqlTx} from './psychology-campaign-fixture';
@@ -91,8 +91,11 @@ test('staff also owns the chief conversation; conversational replies stop while 
   await db.exec(readFileSync('docs/sql/2026-09-28-psychology-automation.sql','utf8'));
   const tx=sqlTx(db) as never,chief='573016803926';
   await db.query('INSERT INTO "PsicologiaBotConversation"(phone) VALUES($1),($2)',[chief,phone]);
-  await db.query('INSERT INTO "PsicologiaBotEvent"(id,phone,"eventAt",kind,text) VALUES(\'chief-source\',$1,NOW(),\'text\',\'Mensaje al personal\'),(\'client-source\',$2,NOW(),\'text\',\'Ayuda\')',[chief,phone]);
+  await db.query('INSERT INTO "PsicologiaBotEvent"(id,phone,"eventAt",kind,text) VALUES(\'chief-source\',$1,NOW(),\'text\',\'Luisa, ayúdame\'),(\'client-source\',$2,NOW(),\'text\',\'Ayuda\'),(\'chief-unaddressed\',$1,NOW(),\'text\',\'Mensaje al personal\')',[chief,phone]);
   await db.query('INSERT INTO "PsicologiaBotOutbox"(id,phone,content,status) VALUES(\'chief-source:chief-result\',$1,\'Pregunta inoportuna\',\'PENDING\'),(\'chief-source:status\',$1,\'Respuesta reclamada\',\'SENDING\'),(\'night:20260929\',$1,\'Informe nocturno\',\'PENDING\'),(\'client-source:handoff\',$1,\'Alerta\',\'SENDING\')',[chief]);
+  await db.query('INSERT INTO "PsicologiaBotOutbox"(id,phone,content,status) VALUES(\'chief-unaddressed:chief-result\',$1,\'No responder\',\'SENDING\')',[chief]);
+  assert.equal(await psychologyStaffSendAllowed(tx,'chief-source:status',chief),true);
+  assert.equal(await psychologyStaffSendAllowed(tx,'chief-unaddressed:chief-result',chief),false);
   assert.equal(await recordPsychologyStaffTakeover(tx,event({phone:chief,kind:'attachment',text:''})),true);
   assert.equal(await recordPsychologyStaffTakeover(tx,event({id:'delayed-old-staff',phone:chief,kind:'attachment',text:'',at:new Date(Date.now()-60000).toISOString()})),false);
   const owner=(await db.query<{state:{staffMessage:{id:string}}}>('SELECT state FROM "PsicologiaBotConversation" WHERE phone=$1',[chief])).rows[0];
@@ -122,5 +125,17 @@ test('the chief explicitly returns her own chat; ambiguous, stale, quoted or oth
  assert.equal(chiefStaffDecision({...chief,phone},'HUMAN',state),null);
  assert.equal(chiefStaffDecision({...chief,fromMe:true},'HUMAN',state),null);
  assert.equal(chiefStaffDecision(chief,'NEW',{}),null);
- assert.equal(chiefStaffDecision({...chief,text:'REANUDAR 573016803926'},'HUMAN',state)?.action,'release');
+ assert.equal(chiefStaffDecision({...chief,text:'REANUDAR 573016803926'},'HUMAN',state)?.action,'observe');
+});
+
+test('Sandra must directly address Luisa or the bot; ordinary staff talk and mentions do not activate it',()=>{
+ const chief=event({phone:'573016803926',fromMe:false});
+ for(const text of ['Luisa, revisa la agenda','Hola, Luisa Fernanda, necesito tu ayuda','Luisa necesito que me ayudes','Bot, retoma este chat','Luisa, retoma este chat','ESTADO BOT'])assert.equal(chiefAddressesBot({...chief,text}),true,text);
+ for(const text of ['Mi amor, necesito sacar la plata','Te ayude a sacar la plata mirar si hay','Sí','Gracias','Dile a Luisa que revise','Luisa no respondió hoy','Sandra dijo: Luisa, revisa','"Luisa, revisa la agenda"'])assert.equal(chiefAddressesBot({...chief,text}),false,text);
+ assert.equal(chiefAddressesBot({...chief,text:'Sí',quotedText:'Luisa, revisa la agenda'}),false);
+ assert.equal(chiefAddressesBot({...chief,phone,text:'Luisa, revisa'}),false);
+ assert.equal(chiefAddressesBot({...chief,fromMe:true,text:'Luisa, revisa'}),false);
+ assert.equal(chiefAddressesBot({...chief,kind:'audio',text:''}),false);
+ // Preparation transcribes first. Only the resulting direct address may be interpreted.
+ assert.equal(chiefAddressesBot({...chief,kind:'text',text:'Luisa, revisa la agenda'}),true);
 });

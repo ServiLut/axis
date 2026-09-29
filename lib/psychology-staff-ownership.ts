@@ -3,13 +3,23 @@ import {pauseForStaff,resumeReception,SANDRA_PHONE,type ReceptionEvent,type Rece
 
 type Tx=Prisma.TransactionClient;
 
+/** A shared staff/chief chat is not automatically addressed to the assistant. */
+export function chiefAddressesBot(event:ReceptionEvent){
+ if(event.fromMe||event.phone!==SANDRA_PHONE||event.kind!=='text')return false;
+ const text=event.text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
+ if(/^(estado bot|ayuda bot)$/.test(text))return true;
+ const greeting='(?:(?:hola|buenos dias|buenas tardes|buenas noches|buen dia|oye|disculpa)[,!: ]+)?';
+ const name='(?:luisa(?: fernanda)?|bot)';
+ // A vocative or a direct request, not a third-person mention or a quoted example.
+ return new RegExp('^'+greeting+name+'(?:$|[,!:;¿?])').test(text)
+  ||new RegExp('^'+greeting+name+' +(?:por favor|me ayudas|te pido|tu puedes|necesito|quiero|puedes|podrias|revisa|mira|dime|ayudame|confirma|cuentame|recuerda|guarda|ten en cuenta|retoma|reanuda|vuelve a atender)(?: |$)').test(text);
+}
+
 /** Only an explicit direct instruction releases the chief's own shared-account chat. */
 export function chiefStaffDecision(event:ReceptionEvent,stage:string,state:ReceptionState){
  if(event.fromMe||event.phone!==SANDRA_PHONE||stage!=='HUMAN')return null;
  const text=event.text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[¿?¡!,.;:]/g,' ').replace(/\s+/g,' ').trim();
- const explicit=event.kind==='text'&&(
-  /^(?:luisa(?: fernanda)?|bot) (?:por favor )?(?:retoma|reanuda|vuelve a atender) (?:tu )?(?:este chat|nuestro chat|la atencion de este chat)(?: por favor)?$/.test(text)
-  ||new RegExp('^reanudar \\+?'+SANDRA_PHONE+'$').test(text));
+ const explicit=event.kind==='text'&&/^(?:luisa(?: fernanda)?|bot) (?:por favor )?(?:retoma|reanuda|vuelve a atender) (?:tu )?(?:este chat|nuestro chat|la atencion de este chat)(?: por favor)?$/.test(text);
  const staffAt=state.staffMessage?.at||state.humanHold?.since;
  if(!explicit||(staffAt&&Date.parse(event.at)<=Date.parse(staffAt)))return {action:'observe' as const};
  const next=resumeReception(state);
@@ -45,6 +55,12 @@ export async function recordPsychologyStaffTakeover(tx:Tx,event:ReceptionEvent){
 
 /** Gate conversational output to every contact, including the chief; preserve independent alerts/reports. */
 export async function psychologyStaffSendAllowed(tx:Tx,id:string,phone:string){
+ if(phone===SANDRA_PHONE){
+  const source=(await tx.$queryRaw<(ReceptionEvent&{eventAt:Date;transcribed:boolean})[]>`SELECT e.id,e.phone,e.kind,e."fromMe",e."eventAt",COALESCE(NULLIF(to_jsonb(e)->>'transcript',''),e.text) AS text,(NULLIF(to_jsonb(e)->>'transcript','') IS NOT NULL) AS transcribed
+   FROM "PsicologiaBotEvent" e JOIN "PsicologiaBotOutbox" o ON left(o.id,length(e.id)+1)=e.id||':'
+   WHERE o.id=${id} AND o.phone=${phone} AND o."tenantId"=4 AND e."tenantId"=4 AND e.phone=${SANDRA_PHONE} AND e."fromMe"=false ORDER BY length(e.id) DESC LIMIT 1`)[0];
+  if(source&&!chiefAddressesBot({...source,at:source.eventAt.toISOString(),kind:source.kind==='audio'&&source.transcribed?'text':source.kind}))return false;
+ }
  const rows=await tx.$queryRaw<{allowed:boolean}[]>`SELECT EXISTS(
   SELECT 1 FROM "PsicologiaBotOutbox" o WHERE o.id=${id} AND o.phone=${phone} AND o."tenantId"=4 AND o.status='SENDING'
    AND ((${phone}=${SANDRA_PHONE} AND NOT EXISTS(SELECT 1 FROM "PsicologiaBotEvent" e WHERE e."tenantId"=4 AND e.phone=${SANDRA_PHONE} AND e."fromMe"=false AND left(o.id,length(e.id)+1)=e.id||':')) OR (
