@@ -76,9 +76,10 @@ async function processOne(config:AutomationConfig) {
   return prisma.$transaction(async tx=>{
     // All workers lock in the same order. Serialize state transitions, including sender echoes.
     await tx.$queryRaw`SELECT id FROM "PsicologiaBotConfig" WHERE id=4 FOR UPDATE`;
-    const rows=await tx.$queryRaw<(ReceptionEvent&{eventAt:Date;analysis:unknown;transcript:string|null;analysisError:string|null;resumeOf:string|null})[]>`SELECT id,phone,"eventAt",kind,text,"fromMe",analysis,transcript,"analysisError","resumeOf" FROM "PsicologiaBotEvent" WHERE status='PENDING' ORDER BY "receivedAt",id LIMIT 1 FOR UPDATE SKIP LOCKED`;
+    const rows=await tx.$queryRaw<(ReceptionEvent&{eventAt:Date;analysis:unknown;transcript:string|null;analysisError:string|null;resumeOf:string|null})[]>`SELECT id,phone,"eventAt",kind,text,"fromMe","quotedText",analysis,transcript,"analysisError","resumeOf" FROM "PsicologiaBotEvent" WHERE status='PENDING' ORDER BY "receivedAt",id LIMIT 1 FOR UPDATE SKIP LOCKED`;
     const row=rows[0];if(!row)return false;
     const e:ReceptionEvent={...row,at:row.eventAt.toISOString(),...(row.kind==='audio'&&row.transcript?{kind:'text',text:row.transcript}:{})};
+    const chiefContext={kind:e.kind,text:e.text,quotedText:e.quotedText};
     let understanding:Understanding|null=null;
     if(row.analysis){try{understanding=parseUnderstanding(row.analysis)}catch{ /* Invalid model output has no authority. */ }}
     if(e.fromMe){
@@ -117,7 +118,7 @@ async function processOne(config:AutomationConfig) {
       catch (error) {
         await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT bot_booking');
         bookingHandled=true;
-        await queuePsychologyMessage(tx,e.id+':booking-review',SANDRA_PHONE,chiefBookingProblem(e.phone,error));
+        await queuePsychologyMessage(tx,e.id+':booking-review',SANDRA_PHONE,chiefBookingProblem(e.phone,error,chiefContext));
         await createAuditLog({tenantId:4,accion:'BOT_BOOKING_REVIEW',entidad:'WhatsAppEvento',entidadId:e.id,detalles:{requiresReview:true,appointmentConfirmed:false},tx});
       }
       await tx.$executeRawUnsafe('RELEASE SAVEPOINT bot_booking');
@@ -157,7 +158,7 @@ async function processOne(config:AutomationConfig) {
         if(e.fromMe||understanding?.intent==='stop'||decision.state.reason==='No contactar')await tx.$executeRaw`UPDATE "PsicologiaBotOutbox" SET status='CANCELLED' WHERE phone=${e.phone} AND status='PENDING'`;
         for(const [i,content] of decision.messages.entries())await queuePsychologyMessage(tx,e.id+':reply:'+i,e.phone,content);
         if(decision.handoff&&(!c.state.alerted||decision.handoff==='Atención humana urgente')) {
-          await queuePsychologyMessage(tx,e.id+':handoff',SANDRA_PHONE,chiefHelpMessage(e.phone,decision.handoff));
+          await queuePsychologyMessage(tx,e.id+':handoff',SANDRA_PHONE,chiefHelpMessage(e.phone,decision.handoff,chiefContext));
           decision.state.alerted=true;
         }
         await tx.$executeRaw`UPDATE "PsicologiaBotConversation" SET stage=${decision.stage},state=${JSON.stringify(decision.state)}::jsonb,"updatedAt"=NOW() WHERE phone=${e.phone}`;

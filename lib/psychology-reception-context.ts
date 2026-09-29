@@ -29,6 +29,7 @@ export function contextReception(event:ReceptionEvent,stage:string,state:Recepti
  if(c.role==='professional'){
   if(/\b(terapia|consulta|sesion)\b/.test(text)&&/\b(para mi|como paciente|para mi hijo|para mi hija|para mi pareja)\b/.test(text))return null;
   if(/certificad|certificacion|carta laboral/.test(text+' '+normalizeText(c.quotedText||'')))return review('Profesional consulta certificado administrativo pendiente','Gracias por recordárnoslo. Voy a consultar con Sandra cómo va el certificado pendiente.');
+  if(/confirm|asisti/.test(text)&&/\b(sesion|cita|paciente|asistencia)\b/.test(text)&&!/\b(reservar|agendar|separar|alquilar)\b/.test(text))return review('Profesional pide confirmar asistencia a una sesión',/desplazar|salir|viaj|irme/.test(text)?'Voy a consultar si la sesión está confirmada antes de que te desplaces.':'Voy a consultar si la persona confirmó su asistencia a la sesión.');
   if(/consultorio|alquiler|reservar (?:un )?espacio/.test(text)||isRentalBookingRequest(event,state))return null;
   if(/^(hola[!.\s😊]*|buenos dias|buenas tardes|buenas noches|buenas)$/.test(text)&&!c.continuation)return {stage:'PROFESSIONAL',state,messages:['Hola 😊 ¿Cómo estás? ¿En qué podemos ayudarte hoy?']};
   return review('Consulta administrativa de profesional; revisar conversación previa','Gracias por escribirnos 😊 Permíteme consultarlo con Sandra.');
