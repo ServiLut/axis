@@ -57,6 +57,27 @@ test('failed knowledge storage does not acknowledge learning or execution',async
  await assert.rejects(()=>handleChiefUnderstanding(tx as never,{...event,text:'Ten en cuenta los gastos del cierre'},understanding({intent:'question',adminAction:'learn',instruction:'Revisar gastos documentados'}),async()=>{messages++},async()=>{}),/STORAGE_FAILED/);
  assert.equal(messages,0);
 });
+
+test('an unresolved instruction fragment blocks high-confidence learning and all action shortcuts',async()=>{
+ const unclear=understanding({adminAction:'learn',instruction:'No hacerlos conscientes',instructionUncertainty:'no hacerlos conscientes',confidence:0.99,question:'Sandra, ¿qué quisiste decir con hacerlos conscientes?'});
+ for(const adminAction of ['learn','send','pause','resume','reactivate','status'] as const)assert.equal(chiefAction(event,{...unclear,adminAction}),null);
+ const sent:string[]=[];
+ const tx={$queryRaw:async()=>{throw Error('No state-dependent action')},$executeRaw:async()=>{throw Error('No writes')}};
+ for(const text of ['No entiendo; no hacerlos conscientes','Pausa la campaña','Te voy a mandar una lista de clientes']){
+  await handleChiefUnderstanding(tx as never,{...event,text},unclear,async(_,id,phone,message)=>{assert.equal(phone,SANDRA_PHONE);sent.push(message)},async()=>{throw Error('No command')});
+ }
+ assert.equal(sent.length,3);assert.ok(sent.every(m=>m===unclear.question));
+ assert.equal(await handleChiefUnderstanding(tx as never,{...event,phone:'573001112233'},unclear,async()=>{throw Error('No message')},async()=>{}),false);
+});
+
+test('uncertain learning asks about the interpreted detail without writing knowledge or demanding a number',async()=>{
+ const sent:string[]=[];const tx={$queryRaw:async()=>[{state:{pendingContactList:{status:'WAITING_LIST'},reactivationTask:{status:'WAITING_PERMISSION'}}}],$executeRaw:async()=>{throw Error('No learning')}};
+ await handleChiefUnderstanding(tx as never,{...event,text:'Si llega un paciente, verifica la hora en cámaras'},understanding({confidence:0.86,adminAction:'learn',instruction:'Recepción verifica la hora de llegada antes de revisar el cobro.',question:null}),async(_,id,phone,message)=>{sent.push(message)},async()=>{throw Error('No action')});
+ assert.equal(sent.length,1);assert.match(sent[0],/Recepción verifica la hora de llegada/);assert.match(sent[0],/¿Es correcto\?/);assert.doesNotMatch(sent[0],/número|Qué debo hacer|Dejé anotada/);
+ const legacy={...understanding()};delete legacy.instructionUncertainty;
+ assert.equal(parseUnderstanding(legacy).instructionUncertainty,null);
+ assert.throws(()=>parseUnderstanding({...legacy,instructionUncertainty:true}),/AI_FIELD_INVALID/);
+});
 test('chief corrections are acknowledged and other businesses never trigger actions',async()=>{
  const output:string[]=[];const queue=async(_:unknown,id:string,phone:string,text:string)=>{output.push(text)};
  const command=async()=>{throw Error('Must not execute')};

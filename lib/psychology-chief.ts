@@ -8,7 +8,7 @@ type Queue=(tx:Tx,id:string,phone:string,content:string)=>Promise<void>;
 
 /** Interpretation proposes an action. Identity and permitted operations are enforced here. */
 export function chiefAction(event:ReceptionEvent,u:Understanding){
- if(event.fromMe||event.phone!==SANDRA_PHONE||u.confidence<0.9)return null;
+ if(event.fromMe||event.phone!==SANDRA_PHONE||u.confidence<0.9||u.instructionUncertainty?.trim())return null;
  // A direct instruction may be phrased as a concern or question. Only remembering
  // that instruction tolerates this intent mismatch; sends and commands still require admin.
  if(u.intent!=='admin'&&!(u.intent==='question'&&u.adminAction==='learn'&&u.instruction?.trim()))return null;
@@ -24,6 +24,17 @@ export function chiefAction(event:ReceptionEvent,u:Understanding){
  return null;
 }
 
+function chiefClarification(u:Understanding|null){
+ const question=u?.question?.trim();
+ if(question&&!/qu[eé] debo hacer exactamente|aclares la acci[oó]n|si aplica.{0,20}n[uú]mero|quieres.{0,24}(?:guarde|guardar)|confirmas.{0,24}(?:guarde|guardar)/i.test(question))return question.slice(0,400);
+ const uncertain=u?.instructionUncertainty?.trim();
+ if(uncertain)return `Sandra, no me quedó clara esta parte: «${uncertain.slice(0,180)}». ¿Me la aclaras?`;
+ if(u?.adminAction==='learn'&&u.instruction?.trim())return `Sandra, entendí: «${u.instruction.trim().slice(0,220)}». ¿Es correcto?`;
+ if(u?.adminAction==='send')return 'Sandra, ¿a qué número y con qué texto quieres que envíe el mensaje?';
+ if(u?.adminAction==='pause'||u?.adminAction==='resume')return 'Sandra, ¿cuál es el número del chat al que te refieres?';
+ return 'Sandra, esta parte no me quedó clara. ¿Me la puedes explicar con otras palabras?';
+}
+
 export async function handleChiefUnderstanding(tx:Tx,e:ReceptionEvent,u:Understanding|null,queue:Queue,command:(tx:Tx,e:ReceptionEvent)=>Promise<void>){
  if(e.fromMe||e.phone!==SANDRA_PHONE)return false;
  const ack=(message:string)=>queue(tx,e.id+':chief-result',SANDRA_PHONE,message);
@@ -34,6 +45,9 @@ export async function handleChiefUnderstanding(tx:Tx,e:ReceptionEvent,u:Understa
  if(/fumigaci|control de plagas|reparacion de electrodomesticos/.test(normalized)){
   await ack('Sandra, este canal corresponde a *Psicólogos en Colombia*. La instrucción menciona otro negocio, así que no inicié esa tarea. ¿Querías enviarla a otro equipo?');return true;
  }
+ // An unresolved fragment blocks every interpretation-driven action, including
+ // the clarification and campaign shortcuts below. Preserve the source for review.
+ if(u?.instructionUncertainty?.trim()){await ack(chiefClarification(u));return true;}
  // Announcing a future list is neither an instruction to send now nor marketing consent.
  if(/(?:voy a|vamos a|te mandare|te enviare|te pasare).*(?:lista|listado|listadito|base de datos)/.test(normalized)&&/clientes|pacientes|psicologos|profesionales/.test(normalized)){
   const request={sourceEvent:e.id,status:'WAITING_LIST',clients:/clientes|pacientes/.test(normalized),professionals:/psicologos|profesionales/.test(normalized),receivedAt:e.at};
@@ -75,7 +89,7 @@ export async function handleChiefUnderstanding(tx:Tx,e:ReceptionEvent,u:Understa
   }
  }
  const action=u?chiefAction(e,u):null;
- if(!action){await ack(u?.question?.slice(0,400)||'Sandra, necesito que me aclares la acción y, si aplica, el número de la persona. ¿Qué debo hacer exactamente?');return true;}
+ if(!action){await ack(chiefClarification(u));return true;}
  if(action.type==='command'){await command(tx,{...e,text:action.text});return true;}
  if(action.type==='learn'){
   await tx.$executeRaw`INSERT INTO "PsicologiaBotKnowledge" (id,instruction,"sourceEvent","approvedBy") VALUES (${e.id+':knowledge'},${action.instruction},${e.id},${SANDRA_PHONE}) ON CONFLICT DO NOTHING`;
