@@ -35,6 +35,28 @@ test('outbound administrative messages must preserve an actual quoted instructio
  assert.deepEqual(chiefAction({...event,text:'Escribe al 3001112233: Hola, confirmamos tu solicitud.'},u),{type:'send',phone:'573001112233',text:u.instruction});
  assert.deepEqual(chiefAction({...event,text:'Luisa, busca los clientes de más de seis meses sin hablar y escríbeles a diario'},understanding({adminAction:'learn',instruction:'guardar tarea'})),{type:'reactivate'});
 });
+
+test('a chief instruction phrased as a question is remembered without authorizing other operations',async()=>{
+ const e={...event,text:'Me preocupa el resultado. Quisiera que tengas en cuenta todos los gastos reales al revisar el cierre.'};
+ const u=understanding({intent:'question',adminAction:'learn',instruction:'Revisar gastos reales en el cierre; importes y periodos pendientes de soporte.',question:'¿Confirmas que guarde esto?'});
+ assert.deepEqual(chiefAction(e,u),{type:'learn',instruction:u.instruction});
+ for(const patch of [{adminAction:'send',targetPhone:'3001112233'},{adminAction:'pause',targetPhone:'3001112233'},{adminAction:'reactivate'},{adminAction:'status'},{adminAction:null},{instruction:' '},{confidence:0.89}])assert.equal(chiefAction(e,{...u,...patch} as Understanding),null);
+ assert.equal(chiefAction({...e,fromMe:true},u),null);
+ assert.equal(chiefAction({...e,phone:'573001112233'},u),null);
+ const writes:{sql:string;values:unknown[]}[]=[],audits:any[]=[],messages:string[]=[];
+ const tx={$queryRaw:async()=>[{state:{reactivationTask:{status:'WAITING_PERMISSION'},pendingContactList:{status:'WAITING_LIST'}}}],$executeRaw:async(s:TemplateStringsArray,...v:unknown[])=>{writes.push({sql:s.join('?'),values:v});return 1;},auditoria:{create:async({data}:{data:any})=>{audits.push(data);return {};}}};
+ await handleChiefUnderstanding(tx as never,e,u,async(_,id,phone,text)=>{assert.equal(id,e.id+':chief-result');assert.equal(phone,SANDRA_PHONE);assert.equal(writes.length,1);messages.push(text)},async()=>{throw Error('Unexpected command')});
+ assert.equal(writes.length,1);assert.match(writes[0].sql,/INSERT INTO "PsicologiaBotKnowledge"/);assert.deepEqual(writes[0].values,[e.id+':knowledge',u.instruction,e.id,SANDRA_PHONE]);
+ assert.equal(audits[0].accion,'BOT_CHIEF_INSTRUCTION');assert.equal(audits[0].detalles.sourceEvent,e.id);
+ assert.equal(messages.length,1);assert.match(messages[0],/Dejé anotada tu indicación/);assert.ok(!messages[0].includes('?'));assert.ok(!messages[0].includes('gastos registrados'));
+});
+
+test('failed knowledge storage does not acknowledge learning or execution',async()=>{
+ const tx={$queryRaw:async()=>[{state:{}}],$executeRaw:async()=>{throw Error('STORAGE_FAILED')}};
+ let messages=0;
+ await assert.rejects(()=>handleChiefUnderstanding(tx as never,{...event,text:'Ten en cuenta los gastos del cierre'},understanding({intent:'question',adminAction:'learn',instruction:'Revisar gastos documentados'}),async()=>{messages++},async()=>{}),/STORAGE_FAILED/);
+ assert.equal(messages,0);
+});
 test('chief corrections are acknowledged and other businesses never trigger actions',async()=>{
  const output:string[]=[];const queue=async(_:unknown,id:string,phone:string,text:string)=>{output.push(text)};
  const command=async()=>{throw Error('Must not execute')};

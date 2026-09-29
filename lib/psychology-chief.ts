@@ -8,7 +8,11 @@ type Queue=(tx:Tx,id:string,phone:string,content:string)=>Promise<void>;
 
 /** Interpretation proposes an action. Identity and permitted operations are enforced here. */
 export function chiefAction(event:ReceptionEvent,u:Understanding){
- if(event.fromMe||event.phone!==SANDRA_PHONE||u.intent!=='admin'||u.confidence<0.9)return null;
+ if(event.fromMe||event.phone!==SANDRA_PHONE||u.confidence<0.9)return null;
+ // A direct instruction may be phrased as a concern or question. Only remembering
+ // that instruction tolerates this intent mismatch; sends and commands still require admin.
+ if(u.intent!=='admin'&&!(u.intent==='question'&&u.adminAction==='learn'&&u.instruction?.trim()))return null;
+ if(u.intent==='question')return {type:'learn',instruction:u.instruction!.trim()} as const;
  const phone=u.targetPhone?phoneDigits(u.targetPhone):null;
  if(u.adminAction==='status')return {type:'command',text:'ESTADO BOT'} as const;
  if(['pause','resume'].includes(u.adminAction||'')&&phone&&![SANDRA_PHONE,PSYCHOLOGY_PHONE].includes(phone))return {type:'command',text:`${u.adminAction==='pause'?'PAUSAR':'REANUDAR'} ${phone}`} as const;
@@ -76,7 +80,7 @@ export async function handleChiefUnderstanding(tx:Tx,e:ReceptionEvent,u:Understa
  if(action.type==='learn'){
   await tx.$executeRaw`INSERT INTO "PsicologiaBotKnowledge" (id,instruction,"sourceEvent","approvedBy") VALUES (${e.id+':knowledge'},${action.instruction},${e.id},${SANDRA_PHONE}) ON CONFLICT DO NOTHING`;
   await createAuditLog({tenantId:4,accion:'BOT_CHIEF_INSTRUCTION',entidad:'PsicologiaBotKnowledge',entidadId:e.id,detalles:{sourceEvent:e.id,actorPhone:SANDRA_PHONE,instruction:action.instruction},tx});
-  await ack('Entendido, Sandra 😊 Lo tendré en cuenta en las próximas conversaciones. Si surge alguna duda, te consultaré.');return true;
+  await ack('Gracias por explicármelo, Sandra 😊 Dejé anotada tu indicación. Si para aplicarla falta algún dato, te lo consultaré.');return true;
  }
  if(action.type==='send'){
   await queue(tx,e.id+':chief-send',action.phone,action.text);
