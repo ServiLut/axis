@@ -12,6 +12,7 @@ import { bookingTimes } from "@/lib/booking";
 import { lockAndValidateBooking, normalizedRental } from "@/lib/booking-server";
 import { cajaAmountInCents } from "@/lib/caja";
 import { getPackagePaymentState } from "@/lib/package-payment";
+import { deletePsychologyAppointment } from "@/lib/psychology-appointment-delete";
 
 // Helper to serialize BigInt and Decimal
 const serializeBigInt = (obj: unknown): unknown => {
@@ -757,45 +758,35 @@ export async function getCitasStats(token: string) {
 }
 
 export async function deleteCita(token: string, id: number) {
-  const payload = await verifyToken(token);
-  if (!payload) return { error: "No autorizado" };
-
   try {
-     const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
-      select: { tenantId: true },
-    });
-
-    const cita = await prisma.citasPsicologos.findFirst({
-        where: { id: BigInt(id), tenantId: usuario?.tenantId }
-    });
-
-    if (cita) {
-        await prisma.citasPsicologos.deleteMany({
-          where: {
-            id: BigInt(id),
-            tenantId: usuario?.tenantId
-          }
-        });
-
+    const usuario = await requireFinanceUser(token);
+    if (!Number.isSafeInteger(id) || id <= 0) throw new Error("Cita no válida.");
+    const result = await prisma.$transaction(async (tx) => {
+      const deletion = await deletePsychologyAppointment(tx, usuario.tenantId, BigInt(id));
+      if (deletion.deleted) {
         await createAuditLog({
-            tenantId: usuario?.tenantId || 0, // Fallback if tenantId is missing, though unlikely
-            usuarioId: payload.userId,
+            tenantId: usuario.tenantId,
+            usuarioId: usuario.id,
             accion: "DELETE",
             entidad: "Cita",
             entidadId: id,
             detalles: {
                 descripcion: "Cita eliminada",
-                antes: serializeBigInt(cita),
+                antes: deletion.before,
+                paqueteRestituido: deletion.restoredPackage,
             },
+            tx,
+            required: true,
         });
-    }
-
+      }
+      return deletion;
+    });
     revalidatePath("/dashboard/citas");
-    return { success: true, message: "Cita eliminada" };
+    revalidatePath("/dashboard/citas/programacion");
+    return { success: true, message: result.deleted ? "Cita eliminada" : "La cita ya no está disponible" };
   } catch (error) {
     console.error("Error deleting cita:", error);
-    return { error: "Error al eliminar la cita" };
+    return { error: error instanceof Error && error.name === "Error" ? error.message : "No se pudo eliminar la cita. Revisa sus pagos y registros vinculados." };
   }
 }
 

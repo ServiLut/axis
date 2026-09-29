@@ -1234,7 +1234,7 @@ export default function CitasPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Eliminar Cita</DialogTitle>
-            <DialogDescription>¿Estás seguro de eliminar esta cita? Esta acción no se puede deshacer.</DialogDescription>
+            <DialogDescription>¿Eliminar esta cita? Si está programada, la sesión vuelve al saldo de su paquete. Las citas realizadas o con pagos, comprobantes o registros vinculados se conservan para revisión. Esta acción no se puede deshacer.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDeleteModalOpen(false)}>Cancelar</Button>
