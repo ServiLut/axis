@@ -30,6 +30,26 @@ test('chief authority cannot be granted by model, text, contact name or outgoing
  assert.equal(chiefAction(event,{...u,targetPhone:SANDRA_PHONE}),null);
  assert.equal(chiefAction(event,{...u,targetPhone:'573016818845'}),null);
 });
+
+test('observation discards model reply drafts while preserving urgent classification and normal reception',async()=>{
+ const originalFetch=globalThis.fetch,oldUrl=process.env.PSICOLOGOS_AI_URL,oldToken=process.env.PSICOLOGOS_AI_TOKEN;
+ process.env.PSICOLOGOS_AI_URL='https://abogadosencolombia.app.n8n.cloud/webhook/fixture';process.env.PSICOLOGOS_AI_TOKEN='fixture';
+ let modelOutput=understanding({intent:'question',adminAction:null,reply:'Respuesta que el modelo no debió proponer',question:'Pregunta repetida'});
+ globalThis.fetch=async()=>new Response(JSON.stringify({result:modelOutput}),{status:200});
+ try{
+  const customer={...event,phone:'573001112233',text:'Tengo una duda'};
+  for(const context of [{stage:'HUMAN'},{stage:'NEED',staffObservation:{mode:'observe_without_reply'}}]){
+   const result=await understandPsychologyMessage(customer,context);
+   assert.equal(result.reply,null);assert.equal(result.question,null);assert.equal(result.intent,'question');
+   assert.equal(modelOutput.reply,'Respuesta que el modelo no debió proponer');
+  }
+  modelOutput={...modelOutput,intent:'urgent'};
+  const urgent=await understandPsychologyMessage(customer,{stage:'HUMAN'});
+  assert.equal(urgent.intent,'urgent');assert.equal(urgent.reply,null);assert.equal(urgent.question,null);
+  const normal=await understandPsychologyMessage(customer,{stage:'NEED',staffObservation:{mode:'use_reviewed_tone'}});
+  assert.equal(normal.reply,modelOutput.reply);assert.equal(normal.question,modelOutput.question);
+ }finally{globalThis.fetch=originalFetch;if(oldUrl===undefined)delete process.env.PSICOLOGOS_AI_URL;else process.env.PSICOLOGOS_AI_URL=oldUrl;if(oldToken===undefined)delete process.env.PSICOLOGOS_AI_TOKEN;else process.env.PSICOLOGOS_AI_TOKEN=oldToken;}
+});
 test('outbound administrative messages must preserve an actual quoted instruction',()=>{
  const u=understanding({adminAction:'send',targetPhone:'3001112233',instruction:'Hola, confirmamos tu solicitud.'});
  assert.equal(chiefAction(event,u),null);

@@ -83,7 +83,15 @@ export async function understandPsychologyMessage(event:ReceptionEvent,context:R
  const input=JSON.stringify({...context,actorIsChief:event.phone===SANDRA_PHONE,nowColombia:new Date().toLocaleString('sv-SE',{timeZone:'America/Bogota'}),messageSentAtColombia:new Date(event.at).toLocaleString('sv-SE',{timeZone:'America/Bogota'}),currentMessage:event.text});
  for(let attempt=0;attempt<2;attempt++){
   const result=await psychologyAiRequest({action:'understand',instructions:RECEPTION_AI_INSTRUCTIONS+(attempt?'\nLa salida anterior no cumplió el esquema. Relee la entrada original. Usa exclusivamente los valores enumerados y todos los campos; no agregues acciones. Una orden aún no implementada es intent admin, adminAction none y una pregunta clara, no inventes una nueva acción.':''),schema:understandingSchema,input});
-  try{let value=result.result??result;if(typeof value==='string'){try{value=JSON.parse(value.replace(/^```(?:json)?\s*|\s*```$/g,''))}catch{throw Error('AI_BAD_JSON')}}return parseUnderstanding(value);}
+  try{
+   let value=result.result??result;
+   if(typeof value==='string'){try{value=JSON.parse(value.replace(/^```(?:json)?\s*|\s*```$/g,''))}catch{throw Error('AI_BAD_JSON')}}
+   const understanding=parseUnderstanding(value);
+   const observation=context.staffObservation as {mode?:string}|undefined;
+   // The model may ignore observation instructions. Never retain its reply draft in this mode.
+   if(context.stage==='HUMAN'||observation?.mode==='observe_without_reply')return {...understanding,reply:null,question:null};
+   return understanding;
+  }
   catch(error){if(attempt===1)throw error;}
  }
  throw Error('AI_INVALID');
