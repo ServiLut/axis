@@ -94,6 +94,9 @@ test('staff also owns the chief conversation; conversational replies stop while 
   await db.query('INSERT INTO "PsicologiaBotEvent"(id,phone,"eventAt",kind,text) VALUES(\'chief-source\',$1,NOW(),\'text\',\'Mensaje al personal\'),(\'client-source\',$2,NOW(),\'text\',\'Ayuda\')',[chief,phone]);
   await db.query('INSERT INTO "PsicologiaBotOutbox"(id,phone,content,status) VALUES(\'chief-source:chief-result\',$1,\'Pregunta inoportuna\',\'PENDING\'),(\'chief-source:status\',$1,\'Respuesta reclamada\',\'SENDING\'),(\'night:20260929\',$1,\'Informe nocturno\',\'PENDING\'),(\'client-source:handoff\',$1,\'Alerta\',\'SENDING\')',[chief]);
   assert.equal(await recordPsychologyStaffTakeover(tx,event({phone:chief,kind:'attachment',text:''})),true);
+  assert.equal(await recordPsychologyStaffTakeover(tx,event({id:'delayed-old-staff',phone:chief,kind:'attachment',text:'',at:new Date(Date.now()-60000).toISOString()})),false);
+  const owner=(await db.query<{state:{staffMessage:{id:string}}}>('SELECT state FROM "PsicologiaBotConversation" WHERE phone=$1',[chief])).rows[0];
+  assert.equal(owner.state.staffMessage.id,'staff-1');
   const statuses=(await db.query<{id:string;status:string}>('SELECT id,status FROM "PsicologiaBotOutbox"')).rows;
   assert.equal(statuses.find(x=>x.id==='chief-source:chief-result')?.status,'CANCELLED');
   assert.equal(statuses.find(x=>x.id==='night:20260929')?.status,'PENDING');

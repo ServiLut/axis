@@ -33,6 +33,7 @@ export async function recordPsychologyStaffTakeover(tx:Tx,event:ReceptionEvent){
  const c=(await tx.$queryRaw<{stage:string;state:ReceptionState}[]>`SELECT stage,state FROM "PsicologiaBotConversation" WHERE "tenantId"=4 AND phone=${event.phone} FOR UPDATE`)[0];
  if(!c)return false;
  if(c.state.staffReleasedAt&&Date.parse(c.state.staffReleasedAt)>=Date.parse(event.at))return false;
+ if(c.state.staffMessage&&Date.parse(c.state.staffMessage.at)>Date.parse(event.at))return false;
  const next=pauseForStaff(c.stage,c.state,event.at);
  next.state.staffMessage={id:event.id,at:event.at};
  await tx.$executeRaw`UPDATE "PsicologiaBotConversation" SET stage=${next.stage},state=${JSON.stringify(next.state)}::jsonb,"updatedAt"=NOW() WHERE "tenantId"=4 AND phone=${event.phone}`;
