@@ -23,7 +23,7 @@ export function validateReceptionEvent(input: unknown, now: number, activatedAt:
 export type ReceptionTemplates = Record<string, { text: string; approved: boolean; version: string }>;
 export type PatientDraft={firstName?:string;lastName?:string;documentType?:string;document?:string;email?:string;address?:string};
 export type IntakeState={draft:PatientDraft;summaryEvent?:string;clientId?:number;preference?:'male'|'female'|'either';professionalId?:number;returning?:boolean;priorAppointmentId?:string;priorServiceId?:string;date?:string;start?:string;modality?:'virtual'|'presencial';clarifications?:number};
-export type ReceptionState = { roomPreferences?:import('./psychology-room-preferences').RoomPreferences; rental?:import('./psychology-rental-intake').RentalDraft; context?:import('./psychology-reception-context').ReceptionContext; service?: string; servicesOffered?:string[]; offeredAt?: string; reason?: string; alerted?: boolean; clarifications?:number; intake?:IntakeState; humanHold?:{kind:'staff'|'manual'|'review'|'urgent'|'optout';resumeStage?:string;since?:string}; resumedFrom?:string };
+export type ReceptionState = { staffMessage?:{id:string;at:string};staffReleasedAt?:string; roomPreferences?:import('./psychology-room-preferences').RoomPreferences; rental?:import('./psychology-rental-intake').RentalDraft; context?:import('./psychology-reception-context').ReceptionContext; service?: string; servicesOffered?:string[]; offeredAt?: string; reason?: string; alerted?: boolean; clarifications?:number; intake?:IntakeState; humanHold?:{kind:'staff'|'manual'|'review'|'urgent'|'optout';resumeStage?:string;since?:string}; resumedFrom?:string };
 export type ReceptionResult = { stage: string; state: ReceptionState; messages: string[]; handoff?: string };
 export function pauseForStaff(stage:string,state:ReceptionState,at:string):ReceptionResult{
   if(state.humanHold&&state.humanHold.kind!=='staff')return {stage:'HUMAN',state,messages:[]};
@@ -33,7 +33,7 @@ export function pauseForStaff(stage:string,state:ReceptionState,at:string):Recep
 export function resumeReception(state:ReceptionState):{stage:string;state:ReceptionState}{
   const previous=state.humanHold?.resumeStage;
   const stage=previous&&['NEED','MENU','OFFER','PAYMENT_FORMAT','DATA','PREFERENCES','DETAILS','RENTAL_DETAILS'].includes(previous)?previous:previous==='DATA_CONFIRM'?'DATA':'NEED';
-  const next={...state};delete next.humanHold;delete next.reason;delete next.alerted;delete next.clarifications;
+  const next={...state};delete next.humanHold;delete next.reason;delete next.alerted;delete next.clarifications;delete next.staffMessage;
   return {stage,state:next};
 }
 export function isFastGreeting(event:ReceptionEvent,stage:string):boolean{

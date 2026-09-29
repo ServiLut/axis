@@ -18,6 +18,7 @@ import {chiefHelpMessage,chiefBookingProblem} from './psychology-chief-messages'
 import {contextReception} from './psychology-reception-context';
 import {handleRentalIntake} from './psychology-rental-intake';
 import {naturalBookingConfirmation,type ConfirmableProposal} from './psychology-booking-messages';
+import {recordPsychologyStaffTakeover,psychologyStaffSendAllowed} from './psychology-staff-ownership';
 
 type Tx=Prisma.TransactionClient;
 export type AutomationConfig={ enabled:boolean; activatedAt:Date|null; templates:ReceptionTemplates; paymentPolicy:string;staffIdleMinutes?:number };
@@ -30,9 +31,11 @@ export async function automationConfig():Promise<AutomationConfig> {
 }
 export async function enqueuePsychologyEvent(event:ReceptionEvent) {
   return prisma.$transaction(async tx=>{
+    await tx.$queryRaw`SELECT id FROM "PsicologiaBotConfig" WHERE id=4 FOR UPDATE`;
     await tx.$executeRaw`INSERT INTO "PsicologiaBotConversation" (phone) VALUES (${event.phone}) ON CONFLICT DO NOTHING`;
     const count=await tx.$executeRaw`INSERT INTO "PsicologiaBotEvent" (id,phone,"eventAt",kind,text,"fromMe","quotedText")
       VALUES (${event.id},${event.phone},${new Date(event.at)},${event.kind},${event.text},${event.fromMe},${event.quotedText||null}) ON CONFLICT DO NOTHING`;
+    if(count)await recordPsychologyStaffTakeover(tx,event);
     return {accepted:true,duplicate:count===0};
   });
 }
@@ -54,7 +57,7 @@ async function adminMessage(tx:Tx,e:ReceptionEvent) {
     const previous=(await tx.$queryRaw<{stage:string;state:ReceptionState}[]>`SELECT stage,state FROM "PsicologiaBotConversation" WHERE phone=${phone} FOR UPDATE`)[0];
     const pause=command[1].toUpperCase()==='PAUSAR';
     const next=pause?{stage:'HUMAN',state:{...previous?.state,reason:'Pausa solicitada por Sandra',humanHold:{kind:'manual' as const,resumeStage:previous?.state.humanHold?.resumeStage||previous?.stage||'NEED',since:e.at}}}:{...resumeReception(previous?.state||{})};
-    if(!pause)next.state.resumedFrom=e.id;
+    if(!pause){next.state.resumedFrom=e.id;next.state.staffReleasedAt=e.at;}
     const {stage,state}=next;
     await tx.$executeRaw`INSERT INTO "PsicologiaBotConversation" (phone,stage,state) VALUES (${phone},${stage},${JSON.stringify(state)}::jsonb)
       ON CONFLICT (phone) DO UPDATE SET stage=EXCLUDED.stage,state=EXCLUDED.state,"updatedAt"=NOW()`;
@@ -78,6 +81,12 @@ async function processOne(config:AutomationConfig) {
     const e:ReceptionEvent={...row,at:row.eventAt.toISOString(),...(row.kind==='audio'&&row.transcript?{kind:'text',text:row.transcript}:{})};
     let understanding:Understanding|null=null;
     if(row.analysis){try{understanding=parseUnderstanding(row.analysis)}catch{ /* Invalid model output has no authority. */ }}
+    if(e.fromMe){
+      // Also catches pre-deployment queued staff messages. Echoes do not take ownership.
+      await recordPsychologyStaffTakeover(tx,e);
+      await tx.$executeRaw`UPDATE "PsicologiaBotEvent" SET status='DONE',"processedAt"=NOW() WHERE id=${e.id}`;
+      return true;
+    }
     if(row.resumeOf){
       const candidate=(await idleChatSources(tx,config.staffIdleMinutes??15,row.resumeOf))[0];
       const resumed=!row.analysisError&&candidate?idleResumeDecision(candidate.state,understanding,row.resumeOf):null;
@@ -209,6 +218,10 @@ export async function drainPsychologyAutomation(config:AutomationConfig) {
       }
       if(!await idleReplyStillCurrent(prisma,item.id,item.phone)){
         await prisma.$executeRaw`UPDATE "PsicologiaBotOutbox" SET status='CANCELLED',"lastError"='IDLE_CONTEXT_CHANGED' WHERE id=${item.id} AND status='SENDING'`;
+        continue;
+      }
+      if(!await psychologyStaffSendAllowed(prisma,item.id,item.phone)){
+        await prisma.$executeRaw`UPDATE "PsicologiaBotOutbox" SET status='CANCELLED',"lastError"='STAFF_TAKEOVER' WHERE id=${item.id} AND status='SENDING'`;
         continue;
       }
       sending=true;

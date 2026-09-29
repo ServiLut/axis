@@ -3,7 +3,7 @@ export const aiSanitize=String.raw`
 const b=$json.body;
 if(!b||!['understand','transcribe'].includes(b.action))throw Error('INVALID_ACTION');
 if(b.action==='understand'){
- if(typeof b.instructions!=='string'||b.instructions.length>14000||typeof b.input!=='string'||b.input.length>50000||!b.schema||JSON.stringify(b.schema).length>16000)throw Error('INVALID_TEXT');
+ if(typeof b.instructions!=='string'||b.instructions.length>18000||typeof b.input!=='string'||b.input.length>50000||!b.schema||JSON.stringify(b.schema).length>16000)throw Error('INVALID_TEXT');
  return [{json:{action:b.action,instructions:b.instructions,input:b.input,schema:b.schema}}];
 }
 if(typeof b.base64!=='string'||b.base64.length<40||b.base64.length>14000000||!(/^[A-Za-z0-9+/=]+$/).test(b.base64)||!['audio/mp4','audio/ogg','audio/mpeg','audio/wav','audio/x-wav','audio/webm'].includes(b.mimeType))throw Error('INVALID_AUDIO');

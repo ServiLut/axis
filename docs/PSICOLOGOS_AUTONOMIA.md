@@ -1,6 +1,6 @@
 # Autonomía administrativa de Psicólogos en Colombia
 
-Actualización: 28 de septiembre de 2026. Este documento describe capacidades y criterios de aceptación; no certifica autonomía total ni sustituye una prueba real de cada recorrido. Para la evidencia de despliegue y mensajes, consultar la continuidad privada `.tmp/PSICOLOGOS_AI_2026-09-28.md` y los identificadores de auditoría. Nunca subir esas evidencias privadas ni archivos `.env` a Git.
+Actualización: 29 de septiembre de 2026. Este documento describe capacidades y criterios de aceptación; no certifica autonomía total ni sustituye una prueba real de cada recorrido. Para la evidencia de despliegue y mensajes, consultar la continuidad privada `.tmp/PSICOLOGOS_AI_2026-09-28.md` y los identificadores de auditoría. Nunca subir esas evidencias privadas ni archivos `.env` a Git.
 
 ## Arquitectura
 
@@ -38,7 +38,9 @@ El servidor conserva la lógica y el estado. n8n coordina llamadas y recupera pe
 
 Sesión suelta: abono de 20.000 COP descontable. Paquete: pago completo una sola vez; sesiones prepagadas no generan nuevo anticipo. Alquiler: profesional registrado, duración, consultorio y horario 07:00–20:00, sin exigir comprobante anticipado. Toda reserva tiene psicólogo asignado y disponibilidad vigente. El comprobante es evidencia, no confirmación bancaria.
 
-Una respuesta humana pausa el chat. Si queda un mensaje del cliente sin atender durante 15 minutos, el bot puede retomar tras revisar nuevamente el contexto. No retoma pausas expresas de Sandra, urgencias, dudas pendientes de revisión ni rechazos de contacto. La comprobación corre cada minuto; no implica respuesta exactamente al segundo 900. Las urgencias clínicas reciben acompañamiento inmediato y aviso a Sandra. Las dudas operativas se consultan con una explicación breve y una pregunta concreta en lenguaje cotidiano.
+Una respuesta del personal pausa el chat desde la recepción del evento, antes de interpretar otros mensajes. Por instrucción de la usuaria del29/09, se elimina la reanudación automática tras15minutos: Sandra debe devolver explícitamente la conversación al bot. Se cancelan respuestas pendientes y continuaciones antiguas; cada salida vuelve a comprobar la toma humana justo antes de enviarse. Una petición ya transmitida al proveedor no puede retirarse; se conserva evidencia de esa limitación y del retraso posible de webhooks. Las urgencias siguen generando aviso a Sandra; una conversación tomada por personal no recibe una segunda respuesta automática. Las dudas operativas se consultan con una explicación breve y una pregunta concreta.
+
+El intérprete observa los mensajes recientes del personal de la misma conversación, distinguiéndolos de los propios mensajes mediante referencias de salida y correlación temporal limitada. En HUMAN analiza sin proponer respuesta externa ni reanudar. Los ejemplos enseñan tono, continuidad y preguntas pertinentes; no autorizan nuevas tarifas, cobros, reservas, permisos, identidades o reglas. Las pautas de tono revisadas se conservan separadas de datos particulares. No se afirma entrenamiento de un modelo ni identidad individual de quien usa la cuenta compartida. Las respuestas rápidas aprobadas siguen siendo la fuente de servicios y precios.
 
 Orden de Sandra en audio del28/09/2026: la atención entrante continúa24h; solo reactivación se limita08–19. La separación mínima entre envíos se controla en BD aun con trabajadores simultáneos, sin bloquear las respuestas normales. El ritmo no garantiza evitar restricciones de WhatsApp. El bloqueo de un envío incierto evita repetirlo.
 
@@ -64,7 +66,7 @@ Un pedido concreto de reserva tiene prioridad sobre el texto de oferta del servi
 
 Antes de presentar una cita anterior como alquiler existente, se verifica su catálogo y empresa, consultorio y horario completos. Si el consultorio o la duración solicitados difieren de lo guardado, se conserva el registro y se pide aclaración a Sandra explicando ambas opciones. Una cita donde el profesional atiende a un paciente no prueba que tenga un alquiler. Una solicitud de 55 minutos se compara con la hora completa que incluye los cinco minutos de cortesía.
 
-Migración previa al despliegue: `docs/sql/2026-09-28-psychology-handover.sql`. Las continuaciones por inactividad tienen un evento único que referencia al original, sin reescribirlo. Se vuelve a comprobar la atención humana antes de enviar.
+La migración histórica `docs/sql/2026-09-28-psychology-handover.sql` conserva las referencias de continuaciones antiguas para auditoría. Desde el29/09 no se crean ni se envían continuaciones por inactividad. Una devolución expresa de Sandra limpia la pausa, pero no habilita respuestas preparadas antes de esa devolución; se espera el siguiente mensaje para responder con contexto actual.
 
 Axis ofrece «Conciliar pago / comprobante» desde la cita, con formulario de dinero recibido y soporte independiente. Al completar el valor, actualiza CONCILIADO y libro diario; abonos quedan pendientes. Los pagos de paquetes se registran una vez. Los pagos anteriores requieren revisión expresa, referencia y fecha real; consultar o subir un comprobante no fabrica ingresos. PDF/JPG/PNG/WEBP hasta 8 MB; los errores de carga ya no muestran éxito.
 

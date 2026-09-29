@@ -61,7 +61,7 @@ export async function readPsychologyHistory(phone:string,before:Date,currentEven
  if(!exact.length)return {coverage:'no_chatwoot_contact',messages:[]};
  const conversations=await chatwootRequest(account+`/contacts/${exact[0].id}/conversations`);
  const selected=(conversations.payload??[]).filter((c:{inbox_id:number})=>c.inbox_id===10).sort((a:{id:number},b:{id:number})=>b.id-a.id).slice(0,2);
- const messages:{direction:string;text:string;at:string;source:string}[]=[];
+ const messages:{direction:string;text:string;at:string;source:string;messageId?:number}[]=[];
  for(const c of selected){
   if(!Number.isSafeInteger(c.id))throw Error('CW_HISTORY_SCOPE');
   const detail=await chatwootRequest(account+`/conversations/${c.id}`);
@@ -73,7 +73,7 @@ export async function readPsychologyHistory(phone:string,before:Date,currentEven
    if(m.private||![0,1].includes(m.message_type)||!Number.isFinite(at.getTime())||at>=before||source===currentEventId)continue;
    if(m.inbox_id!==undefined&&m.inbox_id!==10)continue;
    const text=typeof m.content==='string'&&m.content.trim()?m.content:'[Archivo o audio previo sin transcripción disponible; no inferir su contenido]';
-   messages.push({direction:m.message_type===0?'inbound':'outbound_staff_or_bot',text:text.slice(0,1800),at:at.toISOString(),source:source||'cw:'+m.id});
+   messages.push({direction:m.message_type===0?'inbound':'outbound_staff_or_bot',text:text.slice(0,1800),at:at.toISOString(),source:source||'cw:'+m.id,messageId:Number.isSafeInteger(m.id)?m.id:undefined});
   }
  }
  return {coverage:'recent_only_not_complete_history',messages:messages.sort((a,b)=>a.at.localeCompare(b.at)).slice(-30)};

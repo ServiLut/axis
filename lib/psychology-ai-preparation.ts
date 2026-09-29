@@ -4,6 +4,7 @@ import {isFastGreeting,type ReceptionEvent,type ReceptionState} from './psycholo
 import {readReceptionIdentity,hasContinuation} from './psychology-reception-context';
 import {readPsychologyHistory} from './psychology-chatwoot';
 import {readChiefKnowledge} from './psychology-knowledge';
+import {classifyReceptionHistory,staffObservation,type BotHistoryReference} from './psychology-staff-observation';
 
 /** No network call while a database transaction or row lock is held. */
 export async function prepareNextPsychologyEvent(){
@@ -31,7 +32,8 @@ export async function prepareNextPsychologyEvent(){
    ) context ORDER BY at DESC LIMIT 20`;
   const remote=await readPsychologyHistory(row.phone,contextAt,sourceId);
   if(row.resumeOf&&(remote.coverage==='no_chatwoot_contact'||remote.messages.some(h=>Date.parse(h.at)>row.eventAt.getTime())))throw Error('AI_RESUME_CONTEXT_CHANGED');
-  const context=[...remote.messages,...history.map(h=>({...h,at:h.at.toISOString(),text:h.text.slice(0,1800)}))]
+  const sent=await prisma.$queryRaw<BotHistoryReference[]>`SELECT id,content,"messageId"::text AS "messageId","attemptedAt" FROM "PsicologiaBotOutbox" WHERE "tenantId"=4 AND phone=${row.phone} AND status IN ('SENDING','ACCEPTED','UNCERTAIN') ORDER BY "createdAt" DESC LIMIT 80`;
+  const context=classifyReceptionHistory([...history.map(h=>({...h,at:h.at.toISOString(),text:h.text.slice(0,1800)})),...remote.messages],sent)
    .sort((a,b)=>a.at.localeCompare(b.at))
    .filter((h,i,a)=>!a.slice(i+1).some(other=>other.source===h.source||(other.text===h.text&&other.direction.startsWith('outbound')===h.direction.startsWith('outbound')&&Math.abs(Date.parse(other.at)-Date.parse(h.at))<60000)))
    .slice(-30);
@@ -42,7 +44,7 @@ export async function prepareNextPsychologyEvent(){
   if(!row.resumeOf&&identity.role==='unknown'&&!receptionContext.hasHistory&&!receptionContext.continuation&&isFastGreeting(event,conversations[0]?.stage))return;
   if(!aiConfigured())throw Error('AI_UNAVAILABLE');
   const catalog=await prisma.terapiasPsicologos.findMany({where:{tenantId:4,empresaId:3,activo:true},select:{id:true,nombre:true,cantidadSesiones:true,precioBase:true}});
-  const result=await understandPsychologyMessage(event,{...conversations[0],verifiedContact:receptionContext,quotedMessage:row.quotedText||null,resumingAfterStaffIdle:!!row.resumeOf,history:context,historyCoverage:remote.coverage,chiefInstructions:knowledge.map(k=>k.instruction),chiefKnowledgeSources:knowledge.map(k=>({id:k.id,sourceEvent:k.sourceEvent,approvedAt:k.createdAt.toISOString()})),catalog:catalog.map(s=>({...s,id:String(s.id),precioBase:String(s.precioBase)}))});
+  const result=await understandPsychologyMessage(event,{...conversations[0],verifiedContact:receptionContext,quotedMessage:row.quotedText||null,resumingAfterStaffIdle:!!row.resumeOf,history:context,staffObservation:staffObservation(context,conversations[0]?.stage),historyCoverage:remote.coverage,chiefInstructions:knowledge.map(k=>k.instruction),chiefKnowledgeSources:knowledge.map(k=>({id:k.id,sourceEvent:k.sourceEvent,approvedAt:k.createdAt.toISOString()})),catalog:catalog.map(s=>({...s,id:String(s.id),precioBase:String(s.precioBase)}))});
   await prisma.$executeRaw`UPDATE "PsicologiaBotEvent" SET analysis=${JSON.stringify(result)}::jsonb WHERE id=${row.id} AND status='PENDING'`;
  }catch(error){
   const code=error instanceof Error&&/^(AI|AUDIO)_[A-Z0-9_]+$/.test(error.message)?error.message:'AI_UNAVAILABLE';

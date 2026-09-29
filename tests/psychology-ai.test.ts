@@ -15,7 +15,8 @@ const event:ReceptionEvent={id:'verified-source',phone:SANDRA_PHONE,kind:'text',
 test('invalid AI classification is retried once without changing the source or inventing defaults',async()=>{
  const originalFetch=globalThis.fetch,oldUrl=process.env.PSICOLOGOS_AI_URL,oldToken=process.env.PSICOLOGOS_AI_TOKEN;let calls=0,invalidAlways=false;const inputs:string[]=[];
  process.env.PSICOLOGOS_AI_URL='https://abogadosencolombia.app.n8n.cloud/webhook/fixture';process.env.PSICOLOGOS_AI_TOKEN='fixture';
- globalThis.fetch=async(_url,options)=>{calls++;const body=JSON.parse(String(options?.body));inputs.push(body.input);return new Response(JSON.stringify({result:calls===1||invalidAlways?{...understanding(),adminAction:'invented_action'}:understanding({adminAction:'learn'})}),{status:200})};
+ const validateWorkflowInput=new Function('$json',`return (async()=>{${aiSanitize}})()`);
+ globalThis.fetch=async(_url,options)=>{calls++;const body=JSON.parse(String(options?.body));await validateWorkflowInput({body});inputs.push(body.input);return new Response(JSON.stringify({result:calls===1||invalidAlways?{...understanding(),adminAction:'invented_action'}:understanding({adminAction:'learn'})}),{status:200})};
  try{const result=await understandPsychologyMessage(event,{});assert.equal(result.adminAction,'learn');assert.equal(calls,2);assert.equal(inputs[0],inputs[1]);
   invalidAlways=true;calls=0;await assert.rejects(()=>understandPsychologyMessage(event,{}),/AI_ENUM_INVALID/);assert.equal(calls,2);
  }finally{globalThis.fetch=originalFetch;if(oldUrl===undefined)delete process.env.PSICOLOGOS_AI_URL;else process.env.PSICOLOGOS_AI_URL=oldUrl;if(oldToken===undefined)delete process.env.PSICOLOGOS_AI_TOKEN;else process.env.PSICOLOGOS_AI_TOKEN=oldToken;}
@@ -136,6 +137,7 @@ test('private AI workflow authenticates, strips credentials, validates media and
  const run=new Function('$json',`return (async()=>{${aiSanitize}})()`);
  const output=await run({headers:{secret:'private'},body:{action:'understand',instructions:'system',input:'hello',schema:{type:'object'},apikey:'secret'}});
  assert.ok(!JSON.stringify(output).includes('secret'));
+ await assert.rejects(()=>run({body:{action:'understand',instructions:'x'.repeat(18001),input:'hello',schema:{type:'object'}}}),/INVALID_TEXT/);
  await assert.rejects(()=>run({body:{action:'send',input:'hello'}}));
  await assert.rejects(()=>run({body:{action:'transcribe',base64:'x'.repeat(45),mimeType:'text/html'}}));
 });
