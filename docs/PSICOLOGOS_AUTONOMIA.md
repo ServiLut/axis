@@ -10,6 +10,8 @@ El servidor conserva la lógica y el estado. n8n coordina llamadas y recupera pe
 
 En modo de observación de atención humana, el servidor descarta los campos de respuesta y pregunta aunque el modelo los genere. Conserva la clasificación de urgencia para los controles existentes. Esta protección se aplica al contexto de interpretación; el control previo al envío vuelve a comprobar las tomas humanas posteriores. Las pruebas de este filtro no sustituyen una devolución real del chat por Sandra.
 
+La toma humana incluye el chat compartido con Sandra: un mensaje o archivo enviado por el personal lo deja en observación. Los mensajes posteriores no ejecutan instrucciones ni generan preguntas automáticas hasta devolución expresa. Sandra puede escribir «Luisa, retoma este chat»; debe ser un mensaje posterior a la intervención del personal. Las devoluciones ambiguas o solo transcritas de audio permanecen con el personal. El informe nocturno independiente y las alertas procedentes de otros chats conservan su envío; las respuestas a mensajes del chat tomado se cancelan.
+
 ## Alcance e identidad
 
 - Empresa 3, tenant 4, sistema PSICOLOGOS.

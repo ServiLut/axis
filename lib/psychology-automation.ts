@@ -18,7 +18,7 @@ import {chiefHelpMessage,chiefBookingProblem} from './psychology-chief-messages'
 import {contextReception} from './psychology-reception-context';
 import {handleRentalIntake} from './psychology-rental-intake';
 import {naturalBookingConfirmation,type ConfirmableProposal} from './psychology-booking-messages';
-import {recordPsychologyStaffTakeover,psychologyStaffSendAllowed} from './psychology-staff-ownership';
+import {recordPsychologyStaffTakeover,psychologyStaffSendAllowed,chiefStaffDecision} from './psychology-staff-ownership';
 
 type Tx=Prisma.TransactionClient;
 export type AutomationConfig={ enabled:boolean; activatedAt:Date|null; templates:ReceptionTemplates; paymentPolicy:string;staffIdleMinutes?:number };
@@ -87,6 +87,20 @@ async function processOne(config:AutomationConfig) {
       await recordPsychologyStaffTakeover(tx,e);
       await tx.$executeRaw`UPDATE "PsicologiaBotEvent" SET status='DONE',"processedAt"=NOW() WHERE id=${e.id}`;
       return true;
+    }
+    if(e.phone===SANDRA_PHONE){
+      const chief=(await tx.$queryRaw<{stage:string;state:ReceptionState}[]>`SELECT stage,state FROM "PsicologiaBotConversation" WHERE "tenantId"=4 AND phone=${SANDRA_PHONE} FOR UPDATE`)[0];
+      // Ordinary messages to the staff must not become bot instructions or extra questions.
+      const ownership=chief&&chiefStaffDecision({...e,kind:row.kind},chief.stage,chief.state);
+      if(ownership){
+        if(ownership.action==='release'){
+          await tx.$executeRaw`UPDATE "PsicologiaBotConversation" SET stage=${ownership.stage},state=${JSON.stringify(ownership.state)}::jsonb,"updatedAt"=NOW() WHERE "tenantId"=4 AND phone=${SANDRA_PHONE}`;
+          await queuePsychologyMessage(tx,e.id+':chief-resume',SANDRA_PHONE,'Claro, Sandra. Retomo este chat desde tu próximo mensaje.');
+        }
+        await createAuditLog({tenantId:4,accion:ownership.action==='release'?'BOT_CHIEF_CHAT_RELEASED':'BOT_CHIEF_STAFF_OBSERVED',entidad:'WhatsAppEvento',entidadId:e.id,detalles:{sourceEvent:e.id,released:ownership.action==='release',instructionsExecuted:false},tx});
+        await tx.$executeRaw`UPDATE "PsicologiaBotEvent" SET status='DONE',"processedAt"=NOW() WHERE id=${e.id}`;
+        return true;
+      }
     }
     if(row.resumeOf){
       const candidate=(await idleChatSources(tx,config.staffIdleMinutes??15,row.resumeOf))[0];

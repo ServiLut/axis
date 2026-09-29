@@ -3,7 +3,7 @@ import {test} from 'node:test';
 import {PGlite} from '@electric-sql/pglite';
 import {readFileSync} from 'node:fs';
 import {idleChatSources,enqueueIdleChatResumes,idleResumeDecision,idleReplyStillCurrent} from '../lib/psychology-handover';
-import {recordPsychologyStaffTakeover,psychologyStaffSendAllowed,isPsychologyBotEcho} from '../lib/psychology-staff-ownership';
+import {recordPsychologyStaffTakeover,psychologyStaffSendAllowed,isPsychologyBotEcho,chiefStaffDecision} from '../lib/psychology-staff-ownership';
 import {classifyReceptionHistory,staffObservation} from '../lib/psychology-staff-observation';
 import {resumeReception,type ReceptionEvent} from '../lib/psychology-reception';
 import {sqlTx} from './psychology-campaign-fixture';
@@ -83,4 +83,41 @@ test('observation excludes known bot messages even with truncated text and uses 
  const observed=staffObservation(history,'HUMAN');assert.equal(observed.mode,'observe_without_reply');
  assert.deepEqual(observed.examples.map(x=>x.source),['wa-staff']);
  assert.equal(staffObservation(history,'NEED').mode,'use_reviewed_tone');
+});
+
+test('staff also owns the chief conversation; conversational replies stop while independent reports and other-chat alerts remain deliverable',async()=>{
+ const db=new PGlite();try{
+  await db.exec('CREATE TABLE "CitasPsicologos"(id BIGINT PRIMARY KEY)');
+  await db.exec(readFileSync('docs/sql/2026-09-28-psychology-automation.sql','utf8'));
+  const tx=sqlTx(db) as never,chief='573016803926';
+  await db.query('INSERT INTO "PsicologiaBotConversation"(phone) VALUES($1),($2)',[chief,phone]);
+  await db.query('INSERT INTO "PsicologiaBotEvent"(id,phone,"eventAt",kind,text) VALUES(\'chief-source\',$1,NOW(),\'text\',\'Mensaje al personal\'),(\'client-source\',$2,NOW(),\'text\',\'Ayuda\')',[chief,phone]);
+  await db.query('INSERT INTO "PsicologiaBotOutbox"(id,phone,content,status) VALUES(\'chief-source:chief-result\',$1,\'Pregunta inoportuna\',\'PENDING\'),(\'chief-source:status\',$1,\'Respuesta reclamada\',\'SENDING\'),(\'night:20260929\',$1,\'Informe nocturno\',\'PENDING\'),(\'client-source:handoff\',$1,\'Alerta\',\'SENDING\')',[chief]);
+  assert.equal(await recordPsychologyStaffTakeover(tx,event({phone:chief,kind:'attachment',text:''})),true);
+  const statuses=(await db.query<{id:string;status:string}>('SELECT id,status FROM "PsicologiaBotOutbox"')).rows;
+  assert.equal(statuses.find(x=>x.id==='chief-source:chief-result')?.status,'CANCELLED');
+  assert.equal(statuses.find(x=>x.id==='night:20260929')?.status,'PENDING');
+  assert.equal(await psychologyStaffSendAllowed(tx,'chief-source:status',chief),false);
+  assert.equal(await psychologyStaffSendAllowed(tx,'client-source:handoff',chief),true);
+  await db.exec('UPDATE "PsicologiaBotOutbox" SET status=\'SENDING\' WHERE id=\'night:20260929\'');
+  assert.equal(await psychologyStaffSendAllowed(tx,'night:20260929',chief),true);
+  assert.equal(await psychologyStaffSendAllowed(tx,'night:20260929',phone),false);
+ }finally{await db.close()}
+});
+
+test('the chief explicitly returns her own chat; ambiguous, stale, quoted or other-sender requests cannot release it',()=>{
+ const staffAt='2026-09-29T16:25:00Z';
+ const state={humanHold:{kind:'staff' as const,resumeStage:'NEW',since:staffAt},staffMessage:{id:'staff',at:staffAt}};
+ const chief=event({phone:'573016803926',fromMe:false,at:'2026-09-29T16:30:00Z',text:'Luisa, retoma este chat, por favor.'});
+ const released=chiefStaffDecision(chief,'HUMAN',state);
+ assert.equal(released?.action,'release');
+ if(released?.action!=='release')throw Error('Expected release');
+ assert.equal(released.state.staffReleasedAt,chief.at);assert.equal(released.state.staffMessage,undefined);assert.equal(released.state.humanHold,undefined);
+ for(const text of ['Gracias','Sí','Te ayude a sacar la plata mirar si hay','No, Luisa, retoma este chat','Sandra dijo: Luisa, retoma este chat'])assert.equal(chiefStaffDecision({...chief,text},'HUMAN',state)?.action,'observe');
+ assert.equal(chiefStaffDecision({...chief,kind:'audio'},'HUMAN',state)?.action,'observe');
+ assert.equal(chiefStaffDecision({...chief,at:staffAt},'HUMAN',state)?.action,'observe');
+ assert.equal(chiefStaffDecision({...chief,phone},'HUMAN',state),null);
+ assert.equal(chiefStaffDecision({...chief,fromMe:true},'HUMAN',state),null);
+ assert.equal(chiefStaffDecision(chief,'NEW',{}),null);
+ assert.equal(chiefStaffDecision({...chief,text:'REANUDAR 573016803926'},'HUMAN',state)?.action,'release');
 });
