@@ -1,5 +1,5 @@
 import { bogotaToday, getBogotaDayRange } from "./bogota-date";
-import { CAJA_METHODS, cajaAmountInCents, type CajaMethod } from "./caja";
+import { CAJA_METHODS, paymentInputInCents, type CajaMethod } from "./caja";
 
 export type PagoServicioInput = {
   origen: "CITA" | "PAQUETE";
@@ -23,7 +23,7 @@ export function validatePagoServicio(input: PagoServicioInput, today = bogotaTod
     throw new Error("Indica entre uno y cuatro medios de pago.");
   const lineas = input.lineas.map((linea) => {
     if (!CAJA_METHODS.includes(linea.metodoPago)) throw new Error("Medio de pago inválido.");
-    const montoCentavos = cajaAmountInCents(linea.monto);
+    const montoCentavos = paymentInputInCents(linea.monto);
     const referencia = linea.referencia.trim();
     if (referencia.length > 120) throw new Error("Referencia demasiado larga.");
     return { metodoPago: linea.metodoPago, monto: (montoCentavos / 100).toFixed(2), montoCentavos, referencia };
@@ -31,4 +31,12 @@ export function validatePagoServicio(input: PagoServicioInput, today = bogotaTod
   const totalCentavos = lineas.reduce((sum, line) => sum + line.montoCentavos, 0);
   if (!Number.isSafeInteger(totalCentavos)) throw new Error("El total es demasiado alto.");
   return { ...input, lineas, totalCentavos };
+}
+
+export function paymentBalanceError(receivedCents: number, remainingCents: number): string {
+  const format = (cents: number) => new Intl.NumberFormat("es-CO", {
+    style: "currency", currency: "COP", minimumFractionDigits: 0, maximumFractionDigits: 2,
+  }).format(cents / 100);
+  return `Ingresaste ${format(receivedCents)}, pero el saldo por registrar es ${format(remainingCents)}. ` +
+    `La diferencia es ${format(receivedCents - remainingCents)}. Comprueba el valor del servicio y los pagos ya registrados antes de guardar.`;
 }

@@ -20,3 +20,19 @@ test("un cobro dividido conserva los centavos y admite referencia opcional", () 
   assert.throws(() => validatePagoServicio({ ...base, fecha: "2026-09-27" }, "2026-09-26"));
   assert.throws(() => validatePagoServicio({ ...base, confirmado: false }, "2026-09-26"));
 });
+
+test("el pago interpreta miles colombianos y conserva decimales sin cambiar su escala", () => {
+  for (const [entered, saved] of [
+    ["28.400", "28400.00"], ["28400", "28400.00"], [" 28.400 ", "28400.00"],
+    ["28.400,50", "28400.50"], ["28400,5", "28400.50"], ["28400.50", "28400.50"],
+    ["1.000.000", "1000000.00"], ["999.999.999,99", "999999999.99"],
+    ["0,01", "0.01"], ["0.10", "0.10"], ["28.40", "28.40"],
+  ]) {
+    const result = validatePagoServicio({ ...base, lineas: [{ metodoPago: "TRANSFERENCIA", monto: entered, referencia: "3192463011" }] }, "2026-09-26");
+    assert.equal(result.lineas[0].monto, saved, entered);
+    assert.equal(result.lineas[0].referencia, "3192463011");
+  }
+  for (const monto of ["", "0", "-28.400", "28.40.0", "28,400", "28.400,501", "1.2345", "0.100", "1,000.00", "1e3", "$28.400", "1.000.000.000", "28 400"]) {
+    assert.throws(() => validatePagoServicio({ ...base, lineas: [{ ...base.lineas[0], monto }] }, "2026-09-26"), monto);
+  }
+});

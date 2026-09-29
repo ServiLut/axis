@@ -28,6 +28,20 @@ export function cajaAmountInCents(value: string): number {
   return cents;
 }
 
+/** Human-entered COP amounts. Keep the persisted-value parser above strict. */
+export function paymentInputInCents(value: string): number {
+  const entered = value.trim();
+  const colombian = /^(?:\d{1,9}|[1-9]\d{0,2}(?:\.\d{3}){1,2})(?:,\d{1,2})?$/;
+  const canonical = /^\d{1,9}(?:\.\d{1,2})?$/;
+  const normalized = colombian.test(entered)
+    ? entered.replaceAll(".", "").replace(",", ".")
+    : entered;
+  if (!canonical.test(normalized)) {
+    throw new Error("Escribe el valor como 28.400 o 28400. Si incluye centavos, usa 28.400,50 (máximo dos decimales).");
+  }
+  return cajaAmountInCents(normalized);
+}
+
 export function validateCajaInput(input: CajaInput, today = bogotaToday()): CajaInput {
   getBogotaDayRange(input.fecha);
   if (input.fecha > today) throw new Error("El movimiento no puede tener una fecha futura.");

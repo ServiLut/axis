@@ -106,6 +106,32 @@ test("cobro mixto de cita se escribe una vez en el libro, se reintenta y no supe
   } finally { await f.db.close(); }
 });
 
+test("transferencia 28.400 guarda 28400.00 una vez y explica una diferencia real de saldo", async () => {
+  const f = await fixture();
+  try {
+    await f.db.exec(`UPDATE "CitasPsicologos" SET valor=28350 WHERE id=1`);
+    const input = { origen: "CITA" as const, origenId: "1", fecha: "2026-09-26", solicitudId: randomUUID(), confirmado: true,
+      lineas: [{ metodoPago: "TRANSFERENCIA" as const, monto: "28.400", referencia: "3192463011" }] };
+    for (const monto of ["28.400", "28400"]) {
+      const over = await f.actions.registrarPagoServicio("valid", { ...input, lineas: [{ ...input.lineas[0], monto }] });
+      assert.ok("error" in over);
+      if ("error" in over) {
+        assert.match(over.error!, /28\.400/); assert.match(over.error!, /28\.350/); assert.match(over.error!, /diferencia es.*50/);
+      }
+    }
+    assert.equal(await f.count("MovimientoCaja"), 0);
+    await f.db.exec(`UPDATE "CitasPsicologos" SET valor=28400 WHERE id=1`);
+    const first = await f.actions.registrarPagoServicio("valid", input);
+    assert.ok("ids" in first, JSON.stringify(first));
+    const retry = await f.actions.registrarPagoServicio("valid", { ...input, lineas: [{ ...input.lineas[0], monto: "28400" }] });
+    assert.equal(JSON.stringify(retry), JSON.stringify(first));
+    assert.equal(await f.count("MovimientoCaja"), 1); assert.equal(await f.count("PagoServicioPsicologia"), 1);
+    const saved = await f.db.query(`SELECT monto::text,"metodoPago",referencia FROM "PagoServicioPsicologia"`);
+    assert.deepEqual(saved.rows, [{ monto: "28400.00", metodoPago: "TRANSFERENCIA", referencia: "3192463011" }]);
+    assert.equal((await f.db.query<{ estadoPago: string }>(`SELECT "estadoPago" FROM "CitasPsicologos" WHERE id=1`)).rows[0].estadoPago, "CONCILIADO");
+  } finally { await f.db.close(); }
+});
+
 test("acceso desde una cita resuelve su paquete completo y saldo sin crear ingresos", async () => {
   const f=await fixture();try {
     await f.db.exec(`INSERT INTO "CitasPsicologos"(id,"tenantId","pacienteId","fechaCita",valor,"estadoPago",realizada,"paqueteId")

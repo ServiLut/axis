@@ -2,7 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { requireReceptionUser } from "@/lib/psychology-access";
-import { validatePagoServicio, type PagoServicioInput } from "@/lib/pago-servicio";
+import { paymentBalanceError, validatePagoServicio, type PagoServicioInput } from "@/lib/pago-servicio";
 import { createAuditLog } from "@/lib/audit";
 import { bogotaToday, getBogotaDayRange } from "@/lib/bogota-date";
 import { revalidatePath } from "next/cache";
@@ -159,8 +159,9 @@ export async function registrarPagoServicio(token: string, input: PagoServicioIn
         FROM "PagoServicioPsicologia" WHERE "tenantId"=${user.tenantId} AND NOT "reversado"
         AND (${data.origen === "CITA"} AND "citaId"=${data.origenId}::bigint OR ${data.origen === "PAQUETE"} AND "paqueteId"=${data.origenId}::bigint)`;
       const already = Math.round(Number(previous[0].total) * 100);
-      if (!Number.isSafeInteger(already) || already + data.totalCentavos > Math.round(valor * 100))
-        throw new Error("El cobro excede el valor pendiente. Consulta los pagos existentes.");
+      if (!Number.isSafeInteger(already)) throw new Error("No pudimos calcular el saldo. Vuelve a consultar los pagos registrados.");
+      if (already + data.totalCentavos > Math.round(valor * 100))
+        throw new Error(paymentBalanceError(data.totalCentavos, Math.round(valor * 100) - already));
       const ids: string[] = [];
       for (const [index, line] of data.lineas.entries()) {
         if (line.referencia) {

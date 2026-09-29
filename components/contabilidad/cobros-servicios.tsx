@@ -4,8 +4,8 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CAJA_METHODS, type CajaMethod } from "@/lib/caja";
-import { validatePagoServicio, type PagoServicioInput } from "@/lib/pago-servicio";
+import { CAJA_METHODS, paymentInputInCents, type CajaMethod } from "@/lib/caja";
+import { paymentBalanceError, validatePagoServicio, type PagoServicioInput } from "@/lib/pago-servicio";
 import { devolverPagoServicio, getCobroDesdeCita, getPagosServicioDelDia, getPendientesPsicologia, registrarPagoServicio } from "@/app/(protected)/dashboard/contabilidad/caja/pagos-actions";
 import { toast } from "sonner";
 import { bogotaToday } from "@/lib/bogota-date";
@@ -15,8 +15,13 @@ type Item = { origen: "CITA" | "PAQUETE"; id: string; fecha: string; persona: st
   registrado: string; estado: string; situacion: "PENDIENTE" | "SIN_LIBRO" | "REVISAR_LEGADO" };
 type Paid = { id: string; origen: string; origenId: string; monto: string; metodoPago: string; referencia: string; reversado: boolean };
 const labels: Record<CajaMethod,string> = { EFECTIVO: "Efectivo", TRANSFERENCIA: "Transferencia", TARJETA: "Tarjeta", OTRO: "Otro" };
-const format = (value: number) => new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(value);
+const format = (value: number) => new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(value);
 const newLine = () => ({ metodoPago: "EFECTIVO" as CajaMethod, monto: "", referencia: "" });
+
+function amountPreview(value: string): string {
+  try { return `Valor a registrar: ${format(paymentInputInCents(value) / 100)}`; }
+  catch { return "Ej.: 28.400 o 28400. Con centavos: 28.400,50."; }
+}
 
 export function CobrosServicios({ fecha, revision, onSaved, citaId, soloCita=false, onCancel, onSavingChange }: {
   fecha: string; revision: number; onSaved: () => void; citaId?: string; soloCita?:boolean;
@@ -122,7 +127,7 @@ export function CobrosServicios({ fecha, revision, onSaved, citaId, soloCita=fal
         solicitudId: requestId.current, confirmado: confirmed, lineas: lines, historicoRevisado };
       const validated = validatePagoServicio(input);
       const remaining = Math.round((Number(selected.valor) - Number(selected.registrado)) * 100);
-      if (validated.totalCentavos > remaining) throw new Error("La suma supera el saldo mostrado. Actualiza el libro.");
+      if (validated.totalCentavos > remaining) throw new Error(paymentBalanceError(validated.totalCentavos, remaining));
       const result = await registrarPagoServicio(token, input);
       if ("error" in result) throw new Error(result.error);
       const notice=validated.totalCentavos===remaining ? "Pago guardado. El valor completo quedó registrado en el libro." : "Abono guardado. Ya actualizamos el saldo que falta registrar.";
@@ -164,8 +169,10 @@ export function CobrosServicios({ fecha, revision, onSaved, citaId, soloCita=fal
         <div><Label htmlFor={`pago-metodo-${index}`}>Medio {index + 1}</Label><select id={`pago-metodo-${index}`} className="h-10 w-full rounded-md border bg-white px-2"
           value={line.metodoPago} onChange={(event) => { const copy=[...lines]; copy[index]={...line,metodoPago:event.target.value as CajaMethod}; setLines(copy); requestId.current=null; }}>
           {CAJA_METHODS.map((method) => <option key={method} value={method}>{labels[method]}</option>)}</select></div>
-        <div><Label htmlFor={`pago-monto-${index}`}>Valor recibido</Label><Input id={`pago-monto-${index}`} type="number" min="0.01" step="0.01" required placeholder="Ej. 18900" value={line.monto}
-          onChange={(event) => { const copy=[...lines]; copy[index]={...line,monto:event.target.value}; setLines(copy); requestId.current=null; }} /></div>
+        <div><Label htmlFor={`pago-monto-${index}`}>Valor recibido</Label><Input id={`pago-monto-${index}`} type="text" inputMode="decimal" maxLength={32} required placeholder="Ej. 28.400" value={line.monto}
+          aria-describedby={`pago-monto-ayuda-${index}`}
+          onChange={(event) => { const copy=[...lines]; copy[index]={...line,monto:event.target.value}; setLines(copy); requestId.current=null; }} />
+          <p id={`pago-monto-ayuda-${index}`} className="mt-1 text-xs text-teal-800">{amountPreview(line.monto)}</p></div>
         <div><Label htmlFor={`pago-referencia-${index}`}>Referencia (opcional)</Label><Input id={`pago-referencia-${index}`} value={line.referencia} maxLength={120}
           placeholder="N.º de transacción o recibo" aria-describedby="pago-referencia-ayuda"
           onChange={(event) => { const copy=[...lines]; copy[index]={...line,referencia:event.target.value}; setLines(copy); requestId.current=null; }} /></div>
