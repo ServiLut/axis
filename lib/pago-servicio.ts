@@ -14,7 +14,7 @@ export type PagoServicioInput = {
 export function validatePagoServicio(input: PagoServicioInput, today = bogotaToday()) {
   if (input.origen !== "CITA" && input.origen !== "PAQUETE") throw new Error("Tipo de servicio inválido.");
   if (!/^[1-9]\d{0,17}$/.test(input.origenId)) throw new Error("Selecciona una cita o un paquete válido.");
-  if (input.confirmado !== true) throw new Error("Confirma que recibiste este dinero y que no corresponde a un cobro anterior.");
+  if (input.confirmado !== true) throw new Error("Marca la confirmación de dinero recibido y verifica que este pago no esté registrado antes.");
   getBogotaDayRange(input.fecha);
   if (input.fecha > today) throw new Error("La fecha de cobro no puede ser futura.");
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.solicitudId))
@@ -25,9 +25,7 @@ export function validatePagoServicio(input: PagoServicioInput, today = bogotaTod
     if (!CAJA_METHODS.includes(linea.metodoPago)) throw new Error("Medio de pago inválido.");
     const montoCentavos = cajaAmountInCents(linea.monto);
     const referencia = linea.referencia.trim();
-    if(input.historicoRevisado===true&&!referencia)throw new Error('Indica la referencia del soporte del pago anterior, también si fue en efectivo.');
     if (referencia.length > 120) throw new Error("Referencia demasiado larga.");
-    if (linea.metodoPago !== "EFECTIVO" && !referencia) throw new Error("Indica la referencia o comprobante del pago no efectivo.");
     return { metodoPago: linea.metodoPago, monto: (montoCentavos / 100).toFixed(2), montoCentavos, referencia };
   });
   const totalCentavos = lineas.reduce((sum, line) => sum + line.montoCentavos, 0);

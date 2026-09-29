@@ -8,11 +8,14 @@ const base: PagoServicioInput = { origen: "CITA", origenId: "1", fecha: "2026-09
     { metodoPago: "TRANSFERENCIA", monto: "30000.50", referencia: "Banco 123" },
   ] };
 
-test("un cobro dividido conserva los centavos y exige referencia bancaria", () => {
+test("un cobro dividido conserva los centavos y admite referencia opcional", () => {
   const result = validatePagoServicio(base, "2026-09-26");
   assert.equal(result.totalCentavos, 5000050);
   assert.deepEqual(result.lineas.map((line) => line.monto), ["20000.00", "30000.50"]);
-  assert.throws(() => validatePagoServicio({ ...base, lineas: [{ ...base.lineas[1], referencia: " " }] }, "2026-09-26"));
+  for(const metodoPago of ["EFECTIVO","TRANSFERENCIA","TARJETA","OTRO"] as const) {
+    const empty=validatePagoServicio({ ...base, historicoRevisado:true, lineas: [{ ...base.lineas[1],metodoPago,referencia: " " }] }, "2026-09-26");
+    assert.equal(empty.lineas[0].referencia, "");assert.equal(empty.totalCentavos,3000050);
+  }
   assert.throws(() => validatePagoServicio({ ...base, lineas: [{ ...base.lineas[0], monto: "-20" }] }, "2026-09-26"));
   assert.throws(() => validatePagoServicio({ ...base, fecha: "2026-09-27" }, "2026-09-26"));
   assert.throws(() => validatePagoServicio({ ...base, confirmado: false }, "2026-09-26"));

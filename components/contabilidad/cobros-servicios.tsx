@@ -116,6 +116,7 @@ export function CobrosServicios({ fecha, revision, onSaved, citaId, soloCita=fal
     try {
       const token = localStorage.getItem("token");
       if (!token) throw new Error("Inicia sesión para registrar pagos.");
+      if (selected.situacion!=='PENDIENTE' && !historicoRevisado) throw new Error("Marca la revisión del pago anterior y confirma la fecha en que recibiste el dinero.");
       requestId.current ||= crypto.randomUUID();
       const input: PagoServicioInput = { origen: selected.origen, origenId: selected.id, fecha,
         solicitudId: requestId.current, confirmado: confirmed, lineas: lines, historicoRevisado };
@@ -165,14 +166,16 @@ export function CobrosServicios({ fecha, revision, onSaved, citaId, soloCita=fal
           {CAJA_METHODS.map((method) => <option key={method} value={method}>{labels[method]}</option>)}</select></div>
         <div><Label htmlFor={`pago-monto-${index}`}>Valor recibido</Label><Input id={`pago-monto-${index}`} type="number" min="0.01" step="0.01" required placeholder="Ej. 18900" value={line.monto}
           onChange={(event) => { const copy=[...lines]; copy[index]={...line,monto:event.target.value}; setLines(copy); requestId.current=null; }} /></div>
-        <div><Label htmlFor={`pago-referencia-${index}`}>Referencia del pago</Label><Input id={`pago-referencia-${index}`} value={line.referencia} maxLength={120}
-          placeholder={line.metodoPago === "EFECTIVO" && selected.situacion==='PENDIENTE' ? "Opcional en efectivo" : "Obligatoria"}
+        <div><Label htmlFor={`pago-referencia-${index}`}>Referencia (opcional)</Label><Input id={`pago-referencia-${index}`} value={line.referencia} maxLength={120}
+          placeholder="N.º de transacción o recibo" aria-describedby="pago-referencia-ayuda"
           onChange={(event) => { const copy=[...lines]; copy[index]={...line,referencia:event.target.value}; setLines(copy); requestId.current=null; }} /></div>
       </div>)}
-      {selected.situacion!=='PENDIENTE'&&<label className="flex items-start gap-2 rounded border border-amber-300 bg-amber-50 p-3 text-sm"><input type="checkbox" required checked={historicoRevisado} onChange={e=>{setHistoricoRevisado(e.target.checked);requestId.current=null;}}/>Revisé este pago anterior: comprobé el dinero y que no existe ya en el libro diario. Estoy registrándolo en la fecha real en que se recibió, sin cobrar de nuevo.</label>}
-      <label className="flex items-start gap-3 rounded-xl border border-teal-100 bg-teal-50/50 p-3 text-sm leading-relaxed text-slate-700"><input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-teal-700" required checked={confirmed}
+      <p id="pago-referencia-ayuda" className="text-xs text-slate-500">La referencia es el número de la transacción o del recibo, no la cuenta de origen. Puedes dejarla vacía.</p>
+      <p className="text-sm font-medium text-slate-800">Antes de guardar</p>
+      {selected.situacion!=='PENDIENTE'&&<label className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-relaxed"><input className="mt-1 h-4 w-4 shrink-0 accent-teal-700" type="checkbox" checked={historicoRevisado} onChange={e=>{setHistoricoRevisado(e.target.checked);requestId.current=null;}}/>Revisé este pago anterior y la fecha real en que se recibió. Lo estoy registrando, sin cobrarlo de nuevo.</label>}
+      <label className="flex items-start gap-3 rounded-xl border border-teal-100 bg-teal-50/50 p-3 text-sm leading-relaxed text-slate-700"><input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-teal-700" checked={confirmed}
         onChange={(event) => { setConfirmed(event.target.checked); requestId.current=null; }} />
-        Confirmo que recibí este dinero y revisé recibos, caja y banco para evitar registrar de nuevo un pago anterior.</label>
+        Comprobé que el dinero se recibió y que este pago no está registrado antes.</label>
       <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={lines.length >= 4 || saving} onClick={() => {setLines([...lines,newLine()]);requestId.current=null;}}>+ Otro medio de pago</Button>
         {lines.length > 1 && <Button type="button" variant="outline" disabled={saving} onClick={() => {setLines(lines.slice(0,-1));requestId.current=null;}}>Quitar último</Button>}
       </div>

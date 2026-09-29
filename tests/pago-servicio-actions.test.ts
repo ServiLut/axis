@@ -231,14 +231,28 @@ test("alquiler identifica al profesional, conserva legado y excluye paquetes can
   } finally { await f.db.close(); }
 });
 
-test('conciliación histórica requiere revisión y referencia; reintento no duplica el libro',async()=>{
+test('conciliación histórica exige revisión y permite referencia vacía sin duplicar reintentos',async()=>{
  const f=await fixture();try{
   const input={origen:'CITA' as const,origenId:'2',fecha:'2026-09-25',solicitudId:randomUUID(),confirmado:true,historicoRevisado:true,lineas:[{metodoPago:'EFECTIVO' as const,monto:'20000',referencia:''}]};
-  assert.ok('error' in await f.actions.registrarPagoServicio('valid',input));input.lineas[0].referencia='RECIBO-ANTERIOR-1';
+  assert.ok('error' in await f.actions.registrarPagoServicio('valid',{...input,historicoRevisado:false}));
   assert.ok('ids' in await f.actions.registrarPagoServicio('valid',input));assert.ok('ids' in await f.actions.registrarPagoServicio('valid',input));assert.equal(await f.count('MovimientoCaja'),1);
   const rows=await f.db.query<{fecha:string}>(`SELECT fecha::text FROM "MovimientoCaja"`);assert.equal(rows.rows[0].fecha,'2026-09-25');
   assert.ok('error' in await f.actions.registrarPagoServicio('valid',{...input,solicitudId:randomUUID()}));
  }finally{await f.db.close()}
+});
+
+test('transferencia sin referencia guarda, concilia y reintenta una sola vez; referencia repetida sigue bloqueada',async()=>{
+ const f=await fixture();try{
+  const input={origen:'CITA' as const,origenId:'1',fecha:'2026-09-26',solicitudId:randomUUID(),confirmado:true,lineas:[{metodoPago:'TRANSFERENCIA' as const,monto:'50000',referencia:''}]};
+  assert.ok('ids' in await f.actions.registrarPagoServicio('valid',input));
+  assert.ok('ids' in await f.actions.registrarPagoServicio('valid',input));
+  assert.equal(await f.count('MovimientoCaja'),1);assert.equal(await f.count('PagoServicioPsicologia'),1);
+  assert.equal((await f.db.query<{estadoPago:string}>(`SELECT "estadoPago" FROM "CitasPsicologos" WHERE id=1`)).rows[0].estadoPago,'CONCILIADO');
+  const p={...input,origen:'PAQUETE' as const,origenId:'3',solicitudId:randomUUID(),lineas:[{metodoPago:'TRANSFERENCIA' as const,monto:'20000',referencia:'TX-UNICA'}]};
+  assert.ok('ids' in await f.actions.registrarPagoServicio('valid',p));
+  assert.ok('error' in await f.actions.registrarPagoServicio('valid',{...p,solicitudId:randomUUID()}));
+  assert.equal(await f.count('MovimientoCaja'),2);
+ }finally{await f.db.close();}
 });
 
 test("gasto de internet y cobro de cita comparten libro sin duplicar el ingreso", async () => {
