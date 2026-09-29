@@ -1134,7 +1134,7 @@ export default function CitasPage() {
                            <div 
                              className="flex flex-col gap-1 cursor-pointer hover:bg-slate-100 p-1 rounded transition-colors group relative"
                              onClick={() => handleEditPayment(cita)}
-                             title={tenantId === 4 ? "Abrir caja para registrar el dinero recibido" : "Editar estado de pago"}
+                             title={tenantId === 4 ? "Conciliar pago y adjuntar comprobante" : "Editar estado de pago"}
                            >
                                <div className="flex items-center justify-between">
                                  <span className="text-xs text-slate-600">{cita.metodoPago || 'No especificado'}</span>
@@ -1440,15 +1440,15 @@ export default function CitasPage() {
 
       {/* Payment Modal */}
       <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
-        <DialogContent className="sm:max-w-[760px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{tenantId===4&&process.env.NEXT_PUBLIC_RECEPCION_ENABLED==='true'?'Conciliar pago y comprobante':'Editar Pago'}</DialogTitle>
+        <DialogContent className="max-h-[90vh] w-[calc(100%-2rem)] overflow-y-auto border-slate-200 bg-[#fdfcf9] sm:max-w-[760px] sm:rounded-2xl">
+          <DialogHeader className="border-b border-teal-100 pb-4 text-left">
+            <DialogTitle className="text-xl text-teal-950">{tenantId===4&&process.env.NEXT_PUBLIC_RECEPCION_ENABLED==='true'?'Conciliar pago y comprobante':'Editar Pago'}</DialogTitle>
             <DialogDescription>
-              Revisa el pago de la cita seleccionada y conserva su soporte.
+              Todo en orden, paso a paso. Revisa el saldo, registra el dinero recibido y conserva su soporte.
             </DialogDescription>
           </DialogHeader>
           {tenantId===4&&process.env.NEXT_PUBLIC_RECEPCION_ENABLED==='true'&&paymentCita?
-           <ConciliarCita key={paymentCita.id} citaId={paymentCita.id} comprobante={paymentCita.comprobantePath} onSaved={()=>{fetchCitasData();fetchAux();}}/>:
+           <ConciliarCita key={paymentCita.id} citaId={paymentCita.id} comprobante={paymentCita.comprobantePath} onCancel={()=>setIsPaymentModalOpen(false)} onSaved={()=>{fetchCitasData();fetchAux();}}/>:
           <><div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label htmlFor="metodo-pago">Método de Pago</Label>
