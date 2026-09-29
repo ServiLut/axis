@@ -34,6 +34,24 @@ test('unavailable audio and urgent context never invent transcripts or forward c
  const urgent=chiefHelpMessage(event.phone,'Atención humana urgente',{kind:'text',text:'PRIVATE CLINICAL TEXT'});
  assert.doesNotMatch(urgent,/PRIVATE CLINICAL/);assert.match(urgent,/contactarle ahora/);
 });
+test('an unread file does not become a payment receipt or an appointment request',()=>{
+ const attachment={...event,kind:'attachment' as const,text:''};
+ const result=semanticReception(attachment,'NEW',{}, {},'DEPOSIT_20000',null);
+ assert.equal(result.stage,'HUMAN');
+ const notice=chiefHelpMessage(event.phone,result.handoff!,attachment);
+ assert.match(notice,/contenido no está confirmado/);
+ assert.match(notice,/qué contiene el archivo ni qué gestión necesita/);
+ assert.match(notice,/¿Qué información debemos pedirle para aclarar su solicitud\?/);
+ assert.doesNotMatch(notice,/cita|paquete|pago|ingreso|soporte|revisar (el|otra)/i);
+ const held=semanticReception(attachment,'HUMAN',{humanHold:{kind:'staff'}},{},'DEPOSIT_20000',null);
+ assert.deepEqual(held.messages,[]);assert.equal(held.handoff,undefined);
+});
+test('an explicit reported receipt remains unverified and may belong to a package',()=>{
+ const notice=chiefHelpMessage(event.phone,'Comprobante pendiente de verificación',{kind:'text',text:'Envío el comprobante del paquete'});
+ assert.match(notice,/Su mensaje: «Envío el comprobante del paquete»/);
+ assert.match(notice,/sigue sin verificar y no confirma un ingreso/);
+ assert.match(notice,/cita o paquete/);
+});
 test('booking failure explains the concrete problem and original request, never raw diagnostics',()=>{
  const notice=chiefBookingProblem(event.phone,new Error('ya tiene una reserva'),{kind:'text',text:'Reserva para el martes de 2 a 3'});
  assert.match(notice,/martes de 2 a 3/);assert.match(notice,/ocupado a esa hora/);assert.match(notice,/¿Qué otra opción/);

@@ -27,7 +27,9 @@ export function chiefHelpMessage(phone:string,reason:string,context?:HelpContext
   return prefix+`Quiere una cita${mode}${when}. ¿Qué profesional puede atenderle y hay un consultorio disponible si lo necesita?`;
  }
  if(/paquete pagado|saldo del paquete/i.test(reason))return prefix+'Dice que ya pagó un paquete. ¿Cuántas sesiones le quedan disponibles? Así evitamos pedirle otro anticipo.';
- if(/comprobante|archivo/i.test(reason))return prefix+'No pude asociar el archivo a una cita ni verificar un ingreso. ¿A qué cita corresponde este soporte?';
+ // An unread attachment is not evidence that the sender is reporting a payment.
+ if(/archivo/i.test(reason))return prefix+'No pude confirmar qué contiene el archivo ni qué gestión necesita. ¿Qué información debemos pedirle para aclarar su solicitud?';
+ if(/comprobante/i.test(reason))return prefix+'El posible comprobante sigue sin verificar y no confirma un ingreso. ¿A qué cita o paquete corresponde el pago que reporta?';
  if(/Audio|interpretar|Contexto|duda/i.test(reason))return prefix+'No pude determinar con seguridad qué necesita. ¿Qué información debemos pedirle para aclarar la solicitud?';
  if(/Respuesta rápida|respuesta rápida|tarifa/i.test(reason))return prefix+'Me falta información aprobada de ese servicio. ¿Qué precio y condiciones debo comunicarle?';
  if(/registro|datos|duplicad|identidad/i.test(reason))return prefix+'Los datos del paciente necesitan revisión. ¿Puedes confirmar a quién debemos registrar para evitar crear una ficha equivocada?';

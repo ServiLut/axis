@@ -90,6 +90,8 @@ Sandra indicó directamente el 29/09/2026 a las 10:31, evento `3AEF06952898296AD
 
 Las consultas a Sandra deben incluir el hecho o solicitud disponible, indicar qué falta confirmar y formular la pregunta concreta. No se le pide revisar otra conversación. Los avisos del bot conservan un extracto atribuido del mensaje y del antecedente citado cuando existe, con longitud limitada; no convierten lo dicho por un contacto en un hecho verificado. Ante urgencia se avisa del riesgo sin reproducir la narrativa clínica. La pregunta de un profesional por la confirmación de asistencia de su paciente requiere esa confirmación, no una nueva venta de alquiler de consultorio. Los chats HUMAN continúan en silencio.
 
+Un archivo cuyo contenido no se ha podido leer no se presenta como comprobante ni se presupone que corresponda a una cita. La consulta explica esa limitación y pide qué información falta para aclarar la solicitud. Cuando existe una solicitud expresa sobre un comprobante, se conserva como pago reportado sin verificar y se distingue cita de paquete; nunca acredita por sí sola un ingreso.
+
 Automatización `supervisi-n-y-autonom-a-psic-logos`, cada 30 minutos en este chat. Debe revisar salud, mensajes nuevos y bloqueos, continuar correcciones y verificar despliegues. Guardar línea base; no repetir alertas ni tocar conversaciones tomadas por humanos. Mantener silencio si no cambió nada accionable. La ejecución necesita el equipo encendido y Codex disponible; el bot de servidor tiene infraestructura independiente.
 
 No declarar el objetivo completo hasta verificar:
