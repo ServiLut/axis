@@ -1,6 +1,7 @@
 /** Messages to the chief explain the decision needed, never database/provider diagnostics. */
 export function chiefHelpMessage(phone:string,reason:string){
  const prefix=`Sandra, necesito tu ayuda con +${phone}. `;
+ if(reason.startsWith('Diferencia en reserva existente: '))return prefix+reason.slice('Diferencia en reserva existente: '.length);
  if(/alquiler|consultorios/.test(reason))return prefix+'Está solicitando reservar un consultorio. Necesito aclarar los datos o una reserva anterior antes de continuar; no la he confirmado. ¿Puedes revisar su último pedido y decirme qué horario y consultorio corresponden?';
  if(/certificado administrativo/.test(reason))return prefix+'Es un profesional que está esperando un certificado. ¿Qué certificado podemos entregarle y cuándo estará listo?';
  if(/administrativa de profesional/.test(reason))return prefix+'Es un profesional que nos consulta por un asunto pendiente. ¿Puedes revisar su último mensaje y aclararme qué debemos responder?';

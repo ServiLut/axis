@@ -90,12 +90,27 @@ export async function handleRentalIntake(tx:Tx,event:ReceptionEvent,stage:string
   // Check an existing booking even when the person omitted duration. Never turn a status question into a duplicate.
   if(slot.date&&slot.start){
    const at=new Date(`${slot.date}T${slot.start}:00-05:00`);
-   const existing=await tx.citasPsicologos.findMany({where:{tenantId:4,empresaId:3,psicologoId:identity.professionalId,realizada:{not:null},horaInicio:at},select:{id:true,consultorioId:true,horaFin:true}});
+   const existing=await tx.citasPsicologos.findMany({where:{tenantId:4,empresaId:3,psicologoId:identity.professionalId,realizada:{not:null},horaInicio:at},select:{id:true,consultorioId:true,horaFin:true,PaqueteAdquirido:{select:{tenantId:true,TerapiasPsicologos:{select:{tenantId:true,empresaId:true,nombre:true}}}}}});
    if(existing.length>1)return review('Reservas de alquiler duplicadas; revisar antes de confirmar');
    if(existing.length===1){
-    const room=rooms.find(r=>r.id===existing[0].consultorioId);
-    slot.existingCitaId=String(existing[0].id);
-    messages.push(`Sí 😊 Ya tienes tu reserva para ${slotLabel(slot)} a las ${friendlyTime(slot.start)}${room?', en el '+room.nombre.toLowerCase():''}.`);
+    const appointment=existing[0],pkg=appointment.PaqueteAdquirido,catalog=pkg?.TerapiasPsicologos;
+    // The professional may be attending a patient at this time. That is not their room rental.
+    if(pkg?.tenantId!==4||catalog?.tenantId!==4||catalog.empresaId!==3||!/alquiler/i.test(catalog.nombre))return review('Coincide una cita anterior, pero falta verificar que sea un alquiler del profesional');
+    const room=rooms.find(r=>r.id===appointment.consultorioId);
+    if(!room||!appointment.horaFin||appointment.horaFin.getTime()<=at.getTime())return review('La reserva anterior tiene consultorio u horario incompleto; verificar antes de confirmarla');
+    const actualEnd=new Date(appointment.horaFin.getTime()-5*3600000).toISOString().slice(11,16);
+    const requestedRoom=matchRentalRoom(rooms,slot.roomLabel);
+    let requestedEnd:Date|null=null;
+    if(slot.end){
+     try{const when=bookingTimes(slot.date,slot.start,slot.end);const quote=rentalQuote((when.fin.getTime()-at.getTime())/60000,String(services[0].precioBase));requestedEnd=new Date(at.getTime()+quote.minutes*60000);}
+     catch{return review('Duración solicitada para la reserva anterior necesita aclaración');}
+    }
+    if((slot.roomLabel&&requestedRoom?.id!==room.id)||(requestedEnd&&requestedEnd.getTime()!==appointment.horaFin.getTime())){
+     const requested=`Pidió ${slotLabel(slot)}, desde las ${friendlyTime(slot.start)}${slot.end?' hasta las '+friendlyTime(slot.end):''}${slot.roomLabel?', '+slot.roomLabel:''}.`;
+     return review(`Diferencia en reserva existente: ${requested} Ya tiene una reserva de ${friendlyTime(slot.start)} a ${friendlyTime(actualEnd)}, en el ${room.nombre.toLowerCase()}. ¿Conservamos esa reserva o necesita un cambio?`);
+    }
+    slot.existingCitaId=String(appointment.id);
+    messages.push(`Sí 😊 Ya tienes tu reserva para ${slotLabel(slot)}, de ${friendlyTime(slot.start)} a ${friendlyTime(actualEnd)}, en el ${room.nombre.toLowerCase()}.`);
     continue;
    }
   }

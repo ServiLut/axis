@@ -8,6 +8,7 @@ import {isRentalBookingRequest} from '../lib/psychology-reception-context';
 import {parseUnderstanding,type Understanding} from '../lib/psychology-ai';
 import * as bookingMessages from '../lib/psychology-booking-messages';
 import * as roomPreferences from '../lib/psychology-room-preferences';
+import {chiefHelpMessage} from '../lib/psychology-chief-messages';
 const date=new Date(Date.now()+2*86400000).toISOString().slice(0,10),later=new Date(Date.now()+5*86400000).toISOString().slice(0,10);
 const e:ReceptionEvent={id:'synthetic-rental-context',phone:'573001234567',at:new Date().toISOString(),kind:'text',fromMe:false,text:'Hola, reserva consultorio 10 el miércoles de 5 a 7 pm y sábado a las 10 am'};
 const state:ReceptionState={context:{role:'professional',professionalId:83,hasHistory:false,continuation:false,coverage:'recent'}};
@@ -15,14 +16,15 @@ const u={intent:'preferences',confidence:.96,service:'alquiler',rentalRequests:[
 function fixture(){
  const flags={role:'professional',occupied:false,professionalBusy:false,incomplete:false,alreadyProposed:false,existingBooking:false};const proposed:Record<string,unknown>[]=[];
  const rooms=[{id:1n,nombre:'Consultorio 10'},{id:10n,nombre:'Consultorio 20'},{id:9n,nombre:'Consultorio 1 (VIRTUAL)'}];
+ const existingRecord={id:123n,consultorioId:1n,horaFin:new Date(date+'T19:00:00-05:00') as Date|null,PaqueteAdquirido:{tenantId:4,TerapiasPsicologos:{tenantId:4,empresaId:3,nombre:'Alquiler de Consultorio'}}};
  const api=loadServerModule<typeof Rental>('lib/psychology-rental-intake.ts',{
   './psychology-booking-messages':bookingMessages,
   './psychology-room-preferences':roomPreferences,
   './psychology-reception':{normalizeText},'./psychology-reception-context':{isRentalBookingRequest,readReceptionIdentity:async()=>({role:flags.role,professionalId:83})},
   './psychology-bot-booking':{proposeBooking:async(_tx:unknown,event:ReceptionEvent,input:Record<string,unknown>,queue:Function)=>{proposed.push(input);await queue(null,event.id,e.phone,`Propuesta ${input.date} ${input.start}–${input.end}; CONFIRMAR ABCDEF123456`);return 'ABCDEF123456';}},
  });
- const tx={terapiasPsicologos:{findMany:async()=>[{id:49n,precioBase:'18900.00'}]},consultorios:{findMany:async()=>rooms},citasPsicologos:{count:async()=>flags.incomplete?1:0,findMany:async({where}:{where:{horaInicio:unknown}})=>where.horaInicio instanceof Date?(flags.existingBooking?[{id:123n,consultorioId:1n,horaFin:null}]:[]):flags.occupied?[{psicologoId:flags.professionalBusy?83:7,consultorioId:1n}]:[]},$queryRaw:async()=>flags.alreadyProposed?[{code:'ABCDEF123456'}]:[]};
- return {api,tx,flags,proposed,rooms};
+ const tx={terapiasPsicologos:{findMany:async()=>[{id:49n,precioBase:'18900.00'}]},consultorios:{findMany:async()=>rooms},citasPsicologos:{count:async()=>flags.incomplete?1:0,findMany:async({where}:{where:{horaInicio:unknown}})=>where.horaInicio instanceof Date?(flags.existingBooking?[existingRecord]:[]):flags.occupied?[{psicologoId:flags.professionalBusy?83:7,consultorioId:1n}]:[]},$queryRaw:async()=>flags.alreadyProposed?[{code:'ABCDEF123456'}]:[]};
+ return {api,tx,flags,proposed,rooms,existingRecord};
 }
 test('specific rental request outranks service sales even with missing AI dates or greeting intent',()=>{
  for(const intent of ['preferences','service','greeting'] as const){
@@ -63,6 +65,41 @@ test('existing appointment is checked before asking duration or proposing a seco
  const d=await f.api.handleRentalIntake(f.tx as never,{...e,text:'No estoy segura si tengo reserva mañana en consultorio 10'},'NEW',state,{...u,rentalRequests:[{requestIndex:null,date,start:'18:00',end:null,roomLabel:'10'}]});
  assert.equal(f.proposed.length,0);assert.match(d!.messages.join(' '),/Ya tienes tu reserva/);assert.doesNotMatch(d!.messages.join(' '),/hasta qué hora|anticipo|precios|Axis|No crearé/);
  assert.equal(d!.state.rental!.requests[0].existingCitaId,'123');
+});
+
+test('a different room or duration in an existing rental requires clarification instead of claiming success',async()=>{
+ for(const change of ['room','duration'] as const){
+  const f=fixture();f.flags.existingBooking=true;
+  if(change==='room')f.existingRecord.consultorioId=10n;
+  else f.existingRecord.horaFin=new Date(date+'T18:00:00-05:00');
+  const d=await f.api.handleRentalIntake(f.tx as never,e,'NEW',state,{...u,rentalRequests:[u.rentalRequests![0]]});
+  assert.equal(d!.stage,'HUMAN');assert.equal(f.proposed.length,0);assert.equal(d!.state.rental?.requests[0]?.existingCitaId,undefined);
+  assert.doesNotMatch(d!.messages.join(' '),/Ya tienes|quedó|confirmada/);
+  assert.match(d!.handoff!,/^Diferencia en reserva existente:/);
+  const chief=chiefHelpMessage(e.phone,d!.handoff!);assert.match(chief,/Pidió.*Ya tiene.*Conservamos/s);
+  assert.doesNotMatch(chief,/Axis|CITA-|CONFIRMAR|Diferencia en reserva existente/);
+ }
+});
+
+test('patient appointments, unverified service scope and incomplete reservations cannot be called room rentals',async()=>{
+ for(const change of ['therapy','company','catalogTenant','packageTenant','room','end'] as const){
+  const f=fixture();f.flags.existingBooking=true;const catalog=f.existingRecord.PaqueteAdquirido.TerapiasPsicologos;
+  if(change==='therapy')catalog.nombre='Individual';
+  if(change==='company')catalog.empresaId=9;
+  if(change==='catalogTenant')catalog.tenantId=9;
+  if(change==='packageTenant')f.existingRecord.PaqueteAdquirido.tenantId=9;
+  if(change==='room')f.existingRecord.consultorioId=999n;
+  if(change==='end')f.existingRecord.horaFin=null;
+  const d=await f.api.handleRentalIntake(f.tx as never,e,'NEW',state,{...u,rentalRequests:[u.rentalRequests![0]]});
+  assert.equal(d!.stage,'HUMAN');assert.equal(f.proposed.length,0);assert.doesNotMatch(d!.messages.join(' '),/Ya tienes|quedó/);
+ }
+});
+
+test('an existing one-hour rental matches a 55-minute request including the five minutes of courtesy',async()=>{
+ const f=fixture();f.flags.existingBooking=true;
+ const d=await f.api.handleRentalIntake(f.tx as never,e,'NEW',state,{...u,rentalRequests:[{requestIndex:null,date,start:'18:00',end:'18:55',roomLabel:'10'}]});
+ assert.equal(d!.stage,'RENTAL_DETAILS');assert.equal(f.proposed.length,0);assert.equal(d!.state.rental!.requests[0].existingCitaId,'123');
+ assert.match(d!.messages[0],/de 6 p\. m\. a 7 p\. m\., en el consultorio 10/);
 });
 test('read-only availability computes 2-hour quote, blocks overlap and invalid duration',async()=>{
  const f=fixture(),slot=mergeRentalRequests([],u.rentalRequests!,e.id)[0];
