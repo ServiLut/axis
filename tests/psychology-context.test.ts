@@ -37,3 +37,41 @@ test('professional identity uses tenant and company evidence, never display name
  assert.deepEqual(await readReceptionIdentity(tx as never,e.phone),{role:'professional',professionalId:25});assert.match(sql,/tenantId"=4/);assert.match(sql,/empresaId"=3/);assert.match(sql,/TECNICO/);
  rows=[{id:25},{id:26}];assert.equal((await readReceptionIdentity(tx as never,e.phone)).role,'ambiguous');
 });
+
+test('standalone social questions and thanks do not ask Sandra or reset reception progress',()=>{
+ const social:ReceptionState={context:{...state.context!,continuation:false,quotedText:undefined},service:'alquiler',rental:{requests:[]},clarifications:1};
+ for(const text of ['Con cómo estás ?','¿Cómo estás?','Hola, ¿cómo vas?','Bien, gracias. ¿Y tú?','Muchas gracias','Listo, gracias']){
+  for(const stage of ['PROFESSIONAL','OFFER','RENTAL_DETAILS','DATA','PREFERENCES']){
+   const d=semanticReception({...e,text},stage,social,{},'DEPOSIT_20000',{intent:'question',confidence:.99} as never);
+   assert.equal(d.stage,stage);assert.equal(d.handoff,undefined);assert.deepEqual(d.state,social);
+   assert.equal(d.messages.length,1);assert.doesNotMatch(d.messages[0],/Sandra|consultarlo|revisar|\?/);
+  }
+ }
+ for(const context of [undefined,{role:'unknown' as const,hasHistory:true,coverage:'recent_only',continuation:false}]){
+  const d=semanticReception({...e,text:'¿Cómo estás?'},'NEED',{context},{},'DEPOSIT_20000',null);
+  assert.equal(d.stage,'NEED');assert.equal(d.handoff,undefined);assert.match(d.messages[0],/Gracias por preguntar/);
+ }
+});
+
+test('courtesy recognition preserves human attention, urgency, quotes and administrative questions',()=>{
+ const social:ReceptionState={context:{...state.context!,continuation:false,quotedText:undefined}};
+ const question={intent:'question',confidence:.99} as never;
+ for(const kind of ['staff','manual','review','urgent','optout'] as const){
+  const held={...social,humanHold:{kind,since:e.at}};
+  const d=semanticReception({...e,text:'Con cómo estás ?'},'HUMAN',held,{},'DEPOSIT_20000',question);
+  assert.deepEqual(d.messages,[]);assert.equal(d.handoff,undefined);assert.deepEqual(d.state,held);
+ }
+ assert.equal(semanticReception({...e,text:'¿Cómo estás?',fromMe:true},'NEED',social,{},'DEPOSIT_20000',question).stage,'HUMAN');
+ for(const text of ['¿Cómo estás? Me quiero morir','¿Cómo estás? ¿Ya está el certificado?','¿Cómo estás? Necesito confirmar si asistió a la sesión','¿Cómo estás? ¿Cuánto debo?']){
+  assert.equal(semanticReception({...e,text},'PROFESSIONAL',social,{},'DEPOSIT_20000',question).stage,'HUMAN');
+ }
+ assert.equal(semanticReception({...e,text:'¿Cómo estás?'},'PROFESSIONAL',social,{},'DEPOSIT_20000',{intent:'urgent',confidence:1} as never).handoff,'Atención humana urgente');
+ assert.match(semanticReception({...e,text:'¿Cómo estás?'},'PROFESSIONAL',state,{},'DEPOSIT_20000',question).handoff!,/certificado/);
+ for(const text of ['¿Cómo estás?','Gracias']){
+  assert.equal(semanticReception({...e,text,quotedText:'¿Confirmas la cita?'},'PROFESSIONAL',social,{},'DEPOSIT_20000',question).stage,'HUMAN');
+  assert.equal(semanticReception({...e,text},'NEW',{context:{...social.context!,role:'ambiguous'}},{},'DEPOSIT_20000',question).stage,'HUMAN');
+ }
+ assert.equal(semanticReception({...e,text:'¿Cómo estás?',kind:'audio'},'PROFESSIONAL',social,{},'DEPOSIT_20000',question).stage,'HUMAN');
+ const request=semanticReception({...e,text:'¿Cómo estás? Necesito alquilar consultorio'},'NEED',social,{oficina:{approved:true,version:'synthetic',text:'Información aprobada de alquiler'}},'DEPOSIT_20000',{intent:'service',confidence:.99,service:'alquiler'} as never);
+ assert.equal(request.stage,'OFFER');assert.match(request.messages[0],/Información aprobada/);
+});
