@@ -25,6 +25,12 @@ test('quote survives n8n minimization as text, without credentials or quoted med
  const out=new Function('$json',sanitizeCode)({body:{instance:'psicologos-en-colombia',event:'messages.upsert',sender:'573016818845@s.whatsapp.net',data:{key:{id:e.id,remoteJid:e.phone+'@s.whatsapp.net',fromMe:false},messageTimestamp:Date.parse(e.at)/1000,message}}})[0].json;
  assert.equal(out.event.quotedText,'En la tarde te envío el certificado');assert.doesNotMatch(JSON.stringify(out),/private-media|private-key|other-person/);
 });
+test('Evolution conversation messages keep root-level reply context and discard transport secrets',()=>{
+ const data={key:{id:e.id,remoteJid:'123456789012345@lid',remoteJidAlt:e.phone+'@s.whatsapp.net',fromMe:false},messageTimestamp:Date.parse(e.at)/1000,message:{conversation:'Recuerda que...',messageContextInfo:{messageSecret:'SECRET'}},contextInfo:{stanzaId:'quoted-id',participant:'internal-id',quotedMessage:{conversation:'Pregunta verificable del bot'}}};
+ const out=new Function('$json',sanitizeCode)({body:{instance:'psicologos-en-colombia',event:'messages.upsert',sender:'573016818845@s.whatsapp.net',data}})[0].json;
+ assert.equal(out.event.quotedText,'Pregunta verificable del bot');assert.equal(out.event.phone,e.phone);assert.doesNotMatch(JSON.stringify(out),/SECRET|internal-id|messageSecret/);
+});
+
 test('staff hold preserves progress; manual/clinical pauses remain protected',()=>{
  const old:ReceptionState={service:'individual',intake:{draft:{firstName:'Prueba'},clientId:1}};
  const paused=pauseForStaff('PREFERENCES',old,e.at);assert.equal(paused.state.humanHold?.resumeStage,'PREFERENCES');

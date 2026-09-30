@@ -22,7 +22,7 @@ let seconds=Number(d.messageTimestamp?.low??d.messageTimestamp);
 if(!Number.isFinite(seconds)||seconds<0||seconds>100000000000)return ignore();
 const kind=m.audioMessage?'audio':(m.conversation!==undefined||m.extendedTextMessage?'text':'attachment');
 // Preserve only the quoted plain text as untrusted context, never credentials or media.
-const q=(m.extendedTextMessage||m.imageMessage||m.documentMessage||m.audioMessage)?.contextInfo?.quotedMessage;
+const q=(m.extendedTextMessage||m.imageMessage||m.documentMessage||m.audioMessage)?.contextInfo?.quotedMessage??d.contextInfo?.quotedMessage;
 const quoted=q?.conversation??q?.extendedTextMessage?.text??q?.imageMessage?.caption??q?.documentMessage?.caption;
 const quotedText=typeof quoted==='string'?quoted.slice(0,1800):'';
 return [{json:{action:'event',instance:b.instance,owner,event:{id:k.id,phone,fromMe:k.fromMe,at:new Date(seconds*1000).toISOString(),kind,text:text.slice(0,8000),...(quotedText?{quotedText}:{})}}}];
