@@ -5,7 +5,7 @@ import {readReceptionIdentity,hasContinuation} from './psychology-reception-cont
 import {readPsychologyHistory} from './psychology-chatwoot';
 import {readChiefKnowledge} from './psychology-knowledge';
 import {classifyReceptionHistory,staffObservation,type BotHistoryReference} from './psychology-staff-observation';
-import {chiefMessageAddressesBot} from './psychology-staff-ownership';
+import {chiefMessageAddressesBot,chiefPresenceQuestion} from './psychology-staff-ownership';
 import {SANDRA_PHONE} from './psychology-reception';
 
 /** No network call while a database transaction or row lock is held. */
@@ -28,6 +28,7 @@ export async function prepareNextPsychologyEvent(){
   }
   const chiefDirectedTurn=row.phone===SANDRA_PHONE&&await chiefMessageAddressesBot(prisma,event);
   if(row.phone===SANDRA_PHONE&&!chiefDirectedTurn)return row.id;
+  if(chiefPresenceQuestion(event))return row.id;
   const contextAt=row.resumeOf?new Date():row.eventAt;
   const sourceId=row.resumeOf||row.id;
   const history=await prisma.$queryRaw<{direction:string;text:string;at:Date;source:string}[]>`

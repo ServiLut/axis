@@ -11,17 +11,30 @@ export async function chatwootRequest(path: string, method='GET', body?: unknown
   if(!res.ok) throw new Error(`CW_HTTP_${res.status}`);
   return res.json();
 }
+export async function psychologyChannelHealth() {
+  const result={checkedAt:new Date().toISOString(),ready:false,whatsapp:'unknown',chatwoot:'not-checked'};
+  try {
+    if(!process.env.PSICOLOGOS_EVOLUTION_TOKEN)return {...result,whatsapp:'unavailable'};
+    const res=await fetch(`https://evolutionapi.servilutioncrm.cloud/instance/fetchInstances?instanceName=${PSYCHOLOGY_INSTANCE}`,{
+      headers:{apikey:process.env.PSICOLOGOS_EVOLUTION_TOKEN},signal:AbortSignal.timeout(10000),cache:'no-store'});
+    if(!res.ok)return {...result,whatsapp:'unavailable'};
+    const instances=await res.json();
+    const own=Array.isArray(instances)?instances.filter(x=>x.name===PSYCHOLOGY_INSTANCE):[];
+    if(own.length!==1||own[0]?.ownerJid?.split('@')[0]?.split(':')[0]!==PSYCHOLOGY_PHONE)return {...result,whatsapp:'unverified-owner'};
+    const state=own[0].connectionStatus;
+    if(state!=='open')return {...result,whatsapp:state==='close'?'disconnected':state==='connecting'?'connecting':'unknown'};
+    result.whatsapp='connected';
+    try {
+      const inboxes=await chatwootRequest(account+'/inboxes');
+      const inbox=inboxes.payload?.find((x:{id:number})=>x.id===10);
+      if(inbox?.name!=='WhatsApp Psicólogos 3016818845'||inbox?.channel_type!=='Channel::Api')return {...result,chatwoot:'unverified-inbox'};
+      return {...result,ready:true,chatwoot:'verified'};
+    } catch {return {...result,chatwoot:'unavailable'};}
+  } catch {return {...result,whatsapp:'unavailable'};}
+}
 export async function verifyPsychologyChannel() {
-  if(!process.env.PSICOLOGOS_EVOLUTION_TOKEN) throw new Error('WA_CREDENTIAL_MISSING');
-  const res=await fetch(`https://evolutionapi.servilutioncrm.cloud/instance/fetchInstances?instanceName=${PSYCHOLOGY_INSTANCE}`,{
-    headers:{apikey:process.env.PSICOLOGOS_EVOLUTION_TOKEN},signal:AbortSignal.timeout(10000),cache:'no-store'});
-  if(!res.ok) throw new Error('WA_UNVERIFIED');
-  const instances=await res.json();
-  const own=Array.isArray(instances)?instances.find(x=>x.name===PSYCHOLOGY_INSTANCE):null;
-  if(own?.connectionStatus!=='open'||own?.ownerJid?.split('@')[0]?.split(':')[0]!==PSYCHOLOGY_PHONE) throw new Error('WA_UNVERIFIED');
-  const inboxes=await chatwootRequest(account+'/inboxes');
-  const inbox=inboxes.payload?.find((x:{id:number})=>x.id===10);
-  if(inbox?.name!=='WhatsApp Psicólogos 3016818845'||inbox?.channel_type!=='Channel::Api') throw new Error('CW_SCOPE');
+  const health=await psychologyChannelHealth();
+  if(!health.ready)throw new Error(health.whatsapp==='connected'?'CW_SCOPE':'WA_UNVERIFIED');
 }
 export async function ensurePsychologyConversation(phone: string) {
   if(phoneDigits(phone)!==phone) throw new Error('PHONE_INVALID');

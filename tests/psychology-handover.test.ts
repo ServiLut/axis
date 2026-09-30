@@ -3,13 +3,21 @@ import {test} from 'node:test';
 import {PGlite} from '@electric-sql/pglite';
 import {readFileSync} from 'node:fs';
 import {idleChatSources,enqueueIdleChatResumes,idleResumeDecision,idleReplyStillCurrent} from '../lib/psychology-handover';
-import {recordPsychologyStaffTakeover,psychologyStaffSendAllowed,isPsychologyBotEcho,chiefStaffDecision,chiefAddressesBot} from '../lib/psychology-staff-ownership';
+import {recordPsychologyStaffTakeover,psychologyStaffSendAllowed,isPsychologyBotEcho,chiefStaffDecision,chiefAddressesBot,chiefPresenceQuestion} from '../lib/psychology-staff-ownership';
 import {classifyReceptionHistory,staffObservation} from '../lib/psychology-staff-observation';
 import {resumeReception,type ReceptionEvent} from '../lib/psychology-reception';
 import {sqlTx} from './psychology-campaign-fixture';
 
 const phone='573000000010';
 const event=(patch:Partial<ReceptionEvent>={}):ReceptionEvent=>({id:'staff-1',phone,at:new Date().toISOString(),kind:'text',text:'Con mucho gusto',fromMe:true,...patch});
+
+test('direct presence questions without punctuation do not become silent third-person observations',()=>{
+ for(const text of ['Luisa estan funcionando?','Luisa estás funcionando?','Hola Luisa me escuchas','Luisa, ¿estás activa?']){
+  const e=event({phone:'573016803926',fromMe:false,text});assert.equal(chiefAddressesBot(e),true,text);assert.equal(chiefPresenceQuestion(e),true,text);
+ }
+ for(const text of ['Luisa está trabajando','Dile a Luisa que responda','Luisa no respondió hoy','"Luisa estás funcionando?"','Luisa estas funcionando? revisa un pago'])assert.equal(chiefPresenceQuestion(event({phone:'573016803926',fromMe:false,text})),false,text);
+ assert.equal(chiefPresenceQuestion(event({text:'Luisa estas funcionando?'})),false);
+});
 
 test('staff holds and already queued idle continuations never expire or resume on a timer',async()=>{
  const tx={$queryRaw:()=>{throw Error('no background release expected')}} as never;

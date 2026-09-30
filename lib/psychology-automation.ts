@@ -18,7 +18,7 @@ import {chiefHelpMessage,chiefBookingProblem} from './psychology-chief-messages'
 import {contextReception} from './psychology-reception-context';
 import {handleRentalIntake} from './psychology-rental-intake';
 import {naturalBookingConfirmation,type ConfirmableProposal} from './psychology-booking-messages';
-import {recordPsychologyStaffTakeover,psychologyStaffSendAllowed,chiefStaffDecision,chiefMessageAddressesBot} from './psychology-staff-ownership';
+import {recordPsychologyStaffTakeover,psychologyStaffSendAllowed,chiefStaffDecision,chiefMessageAddressesBot,chiefPresenceQuestion} from './psychology-staff-ownership';
 import {psychologyCommunicationIssue} from './psychology-communication';
 
 type Tx=Prisma.TransactionClient;
@@ -110,6 +110,11 @@ async function processOne(config:AutomationConfig,preparedEventId:string) {
       // A directly addressed request (or verified reply to our question) authorizes this turn only.
       // Keep shared-chat ownership intact; fresh staff messages still cancel/gate its output.
       if(ownership)await createAuditLog({tenantId:4,accion:'BOT_CHIEF_DIRECTED_TURN',entidad:'WhatsAppEvento',entidadId:e.id,detalles:{sourceEvent:e.id,chatReleased:false},tx});
+      if(chiefPresenceQuestion(e)){
+        await queuePsychologyMessage(tx,e.id+':chief-presence',SANDRA_PHONE,'Hola, Sandra. Sí, recibí tu mensaje y puedo responderte. ¿Qué necesitas revisar?');
+        await tx.$executeRaw`UPDATE "PsicologiaBotEvent" SET status='DONE',"processedAt"=NOW() WHERE id=${e.id}`;
+        return true;
+      }
     }
     if(row.resumeOf){
       const candidate=(await idleChatSources(tx,config.staffIdleMinutes??15,row.resumeOf))[0];

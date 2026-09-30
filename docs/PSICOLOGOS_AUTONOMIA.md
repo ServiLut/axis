@@ -139,3 +139,9 @@ Al completar lo anterior, informar capacidades y excepciones humanas que se cons
 ### Importes recibidos y horarios exactos — 30/09/2026
 
 Se permite registrar un importe recibido mayor al saldo, manteniendo el precio original del servicio y auditando el adicional recibido. Un importe menor requiere confirmarlo expresamente como abono y conserva el saldo pendiente. Un servicio ya pagado rechaza otro registro. La confirmación de dinero recibido, la revisión de pagos anteriores, el ámbito de empresa y la deduplicación siguen siendo obligatorios. La pantalla no constituye prueba de ingreso bancario.
+
+### Conexión y preguntas directas — 30/09/2026
+
+El estado `enabled` solo indica habilitación. Consultar la acción autenticada `channel-health` para comprobar la conexión efectiva, el número propietario y la bandeja de Psicólogos. `ready: true` acredita esas comprobaciones en la fecha indicada; la recepción, interpretación y entrega requieren eventos reales. Un error de red queda como disponibilidad desconocida, nunca como conectado.
+
+Las preguntas dirigidas sin coma, por ejemplo «Luisa estás funcionando?» y el caso real «Luisa estan funcionando?», autorizan ese turno verificado de Sandra. La respuesta de presencia usa el mensaje recibido, sin inferir que todas las funciones estén listas y sin liberar globalmente un chat en atención humana. Una mención en tercera persona sigue sin conferir autoridad.

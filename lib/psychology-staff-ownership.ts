@@ -12,7 +12,14 @@ export function chiefAddressesBot(event:ReceptionEvent){
  const name='(?:luisa(?: fernanda)?|bot)';
  // A vocative or a direct request, not a third-person mention or a quoted example.
  return new RegExp('^'+greeting+name+'(?:$|[,!:;¿?])').test(text)
-  ||new RegExp('^'+greeting+name+' +(?:por favor|me ayudas|te pido|tu puedes|necesito|quiero|puedes|podrias|revisa|mira|dime|ayudame|confirma|cuentame|recuerda|guarda|ten en cuenta|retoma|reanuda|vuelve a atender)(?: |$)').test(text);
+  ||new RegExp('^'+greeting+name+' +(?:por favor|me ayudas|te pido|tu puedes|necesito|quiero|puedes|podrias|revisa|mira|dime|ayudame|confirma|cuentame|recuerda|guarda|ten en cuenta|retoma|reanuda|vuelve a atender|estas|estan funcionando|sigues|me escuchas|me lees|que puedes hacer|con que me puedes ayudar|explicame)(?:[ ?!]|$)').test(text);
+}
+
+/** A presence question needs no model inference and makes no claim about other functions. */
+export function chiefPresenceQuestion(event:ReceptionEvent){
+ if(!chiefAddressesBot(event))return false;
+ const s=event.text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[¿?¡!,.;:]/g,' ').replace(/\s+/g,' ').trim();
+ return /^(?:(?:hola|buenos dias|buenas tardes|buenas noches|buen dia|oye|disculpa) )?(?:luisa(?: fernanda)?|bot) (?:(?:estas|estan|sigues) (?:funcionando|activa|activo|ahi|conectada|conectado)|me escuchas|me lees)$/.test(s);
 }
 
 /** The chief may answer a question from a recorded bot message without repeating its name. */
