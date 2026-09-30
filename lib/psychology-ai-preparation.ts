@@ -5,7 +5,7 @@ import {readReceptionIdentity,hasContinuation} from './psychology-reception-cont
 import {readPsychologyHistory} from './psychology-chatwoot';
 import {readChiefKnowledge} from './psychology-knowledge';
 import {classifyReceptionHistory,staffObservation,type BotHistoryReference} from './psychology-staff-observation';
-import {chiefAddressesBot} from './psychology-staff-ownership';
+import {chiefMessageAddressesBot} from './psychology-staff-ownership';
 import {SANDRA_PHONE} from './psychology-reception';
 
 /** No network call while a database transaction or row lock is held. */
@@ -25,7 +25,7 @@ export async function prepareNextPsychologyEvent(){
    await prisma.$executeRaw`UPDATE "PsicologiaBotEvent" SET transcript=${event.text} WHERE id=${row.id} AND status='PENDING'`;
    event.kind='text';
   }
-  if(row.phone===SANDRA_PHONE&&!chiefAddressesBot(event))return;
+  if(row.phone===SANDRA_PHONE&&!await chiefMessageAddressesBot(prisma,event))return;
   const contextAt=row.resumeOf?new Date():row.eventAt;
   const sourceId=row.resumeOf||row.id;
   const history=await prisma.$queryRaw<{direction:string;text:string;at:Date;source:string}[]>`

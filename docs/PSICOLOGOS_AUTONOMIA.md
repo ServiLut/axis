@@ -8,6 +8,8 @@ La respuesta 202 indica registro en la cola; `ACCEPTED` significa aceptación po
 
 La devolución expresa de Sandra puede procesarse desde texto o una transcripción persistida. Se aceptan saludos antes de «Luisa, retoma este chat». Un sí, mención en tercera persona, audio sin transcribir o el paso del tiempo no libera la atención humana. Esta corrección no libera retrospectivamente chats ni convierte reportes antiguos en mensajes humanos o automáticos sin verificar su origen.
 
+La aclaración directa de la usuaria del 30/09 permite atender un turno dirigido a Luisa o una respuesta de Sandra a una pregunta verificada del bot, aunque el chat compartido siga en atención humana. La cita se contrasta contra una única salida registrada y aceptada, al mismo destinatario y anterior al mensaje. No basta citar texto desconocido. Este permiso es solo para ese turno; no libera el chat globalmente. Una intervención posterior del personal cancela la respuesta pendiente. Los demás contactos conservan la devolución expresa.
+
 Actualización: 29 de septiembre de 2026. Este documento describe capacidades y criterios de aceptación; no certifica autonomía total ni sustituye una prueba real de cada recorrido. Para la evidencia de despliegue y mensajes, consultar la continuidad privada `.tmp/PSICOLOGOS_AI_2026-09-28.md` y los identificadores de auditoría. Nunca subir esas evidencias privadas ni archivos `.env` a Git.
 
 ## Arquitectura

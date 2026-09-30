@@ -15,6 +15,20 @@ export function chiefAddressesBot(event:ReceptionEvent){
   ||new RegExp('^'+greeting+name+' +(?:por favor|me ayudas|te pido|tu puedes|necesito|quiero|puedes|podrias|revisa|mira|dime|ayudame|confirma|cuentame|recuerda|guarda|ten en cuenta|retoma|reanuda|vuelve a atender)(?: |$)').test(text);
 }
 
+/** The chief may answer a question from a recorded bot message without repeating its name. */
+export async function chiefMessageAddressesBot(tx:Tx,event:ReceptionEvent){
+ if(chiefAddressesBot(event))return true;
+ if(event.fromMe||event.phone!==SANDRA_PHONE||event.kind!=='text'||!event.quotedText?.trim())return false;
+ const quote=event.quotedText.trim();
+ // The inbound transport limits quotes to 1,800 chars. Short fragments are ambiguous.
+ if(quote.length<40)return false;
+ const matches=await tx.$queryRaw<{id:string}[]>`SELECT id FROM "PsicologiaBotOutbox"
+  WHERE "tenantId"=4 AND phone=${SANDRA_PHONE} AND status='ACCEPTED'
+   AND "attemptedAt"<=${new Date(event.at)}
+   AND (content=${quote} OR (length(${quote})>=1700 AND left(content,length(${quote}))=${quote})) LIMIT 2`;
+ return matches.length===1;
+}
+
 /** Only an explicit direct instruction releases the chief's own shared-account chat. */
 export function chiefStaffDecision(event:ReceptionEvent,stage:string,state:ReceptionState){
  if(event.fromMe||event.phone!==SANDRA_PHONE||stage!=='HUMAN')return null;
@@ -55,19 +69,25 @@ export async function recordPsychologyStaffTakeover(tx:Tx,event:ReceptionEvent){
 
 /** Gate conversational output to every contact, including the chief; preserve independent alerts/reports. */
 export async function psychologyStaffSendAllowed(tx:Tx,id:string,phone:string){
+ let directedAt:Date|null=null;
  if(phone===SANDRA_PHONE){
-  const source=(await tx.$queryRaw<(ReceptionEvent&{eventAt:Date;transcribed:boolean})[]>`SELECT e.id,e.phone,e.kind,e."fromMe",e."eventAt",COALESCE(NULLIF(to_jsonb(e)->>'transcript',''),e.text) AS text,(NULLIF(to_jsonb(e)->>'transcript','') IS NOT NULL) AS transcribed
+  const source=(await tx.$queryRaw<(ReceptionEvent&{eventAt:Date;transcribed:boolean})[]>`SELECT e.id,e.phone,e.kind,e."fromMe",e."eventAt",to_jsonb(e)->>'quotedText' AS "quotedText",COALESCE(NULLIF(to_jsonb(e)->>'transcript',''),e.text) AS text,(NULLIF(to_jsonb(e)->>'transcript','') IS NOT NULL) AS transcribed
    FROM "PsicologiaBotEvent" e JOIN "PsicologiaBotOutbox" o ON left(o.id,length(e.id)+1)=e.id||':'
    WHERE o.id=${id} AND o.phone=${phone} AND o."tenantId"=4 AND e."tenantId"=4 AND e.phone=${SANDRA_PHONE} AND e."fromMe"=false ORDER BY length(e.id) DESC LIMIT 1`)[0];
-  if(source&&!chiefAddressesBot({...source,at:source.eventAt.toISOString(),kind:source.kind==='audio'&&source.transcribed?'text':source.kind}))return false;
+  if(source){
+   if(!await chiefMessageAddressesBot(tx,{...source,at:source.eventAt.toISOString(),kind:source.kind==='audio'&&source.transcribed?'text':source.kind}))return false;
+   directedAt=source.eventAt;
+  }
  }
  const rows=await tx.$queryRaw<{allowed:boolean}[]>`SELECT EXISTS(
   SELECT 1 FROM "PsicologiaBotOutbox" o WHERE o.id=${id} AND o.phone=${phone} AND o."tenantId"=4 AND o.status='SENDING'
    AND ((${phone}=${SANDRA_PHONE} AND NOT EXISTS(SELECT 1 FROM "PsicologiaBotEvent" e WHERE e."tenantId"=4 AND e.phone=${SANDRA_PHONE} AND e."fromMe"=false AND left(o.id,length(e.id)+1)=e.id||':')) OR (
-    NOT EXISTS(SELECT 1 FROM "PsicologiaBotConversation" c WHERE c.phone=o.phone AND c."tenantId"=4
+    (${directedAt}::timestamptz IS NOT NULL AND NOT EXISTS(SELECT 1 FROM "PsicologiaBotConversation" c WHERE c.phone=o.phone AND c."tenantId"=4
+       AND COALESCE(NULLIF(c.state->'staffMessage'->>'at','')::timestamptz,NULLIF(c.state->'humanHold'->>'since','')::timestamptz)>=${directedAt})
+     OR ${directedAt}::timestamptz IS NULL AND NOT EXISTS(SELECT 1 FROM "PsicologiaBotConversation" c WHERE c.phone=o.phone AND c."tenantId"=4
       AND (c.state->'staffMessage' IS NOT NULL OR c.state->'humanHold'->>'kind' IN ('staff','manual')
        OR (c.stage='HUMAN' AND c.state->>'reason'='Atención de una persona')
-       OR o."createdAt"<=NULLIF(c.state->>'staffReleasedAt','')::timestamptz))
+       OR o."createdAt"<=NULLIF(c.state->>'staffReleasedAt','')::timestamptz)))
     AND NOT EXISTS(SELECT 1 FROM "PsicologiaBotEvent" h WHERE h.phone=o.phone AND h."tenantId"=4 AND h."fromMe"=true
       AND h."receivedAt">=o."createdAt"
       AND NOT EXISTS(SELECT 1 FROM "PsicologiaBotOutbox" b WHERE b.phone=h.phone AND b."tenantId"=4
