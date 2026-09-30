@@ -45,6 +45,15 @@ test('two requested dates survive; only missing Saturday duration and room are a
  assert.match(d.messages.at(-1)!,/cuántas horas/);assert.doesNotMatch(d.messages.join(' '),/precios|Luisa|Qué día|anticipo|comprobante|Axis|código/);
  assert.equal(d.state.rental?.requests[1].end,null);assert.equal(d.state.rental?.requests[1].roomLabel,null);
 });
+
+test('Friday 4 pm request asks only for missing duration; complete interval consults availability and quotes before choice',async()=>{
+ const f=fixture();const incoming={...e,text:'Para separar porfa un espacio para el viernes a las 4 pm'};
+ const first=await f.api.handleRentalIntake(f.tx as never,incoming,'PROFESSIONAL',state,{...u,rentalRequests:[{requestIndex:null,date,start:'16:00',end:null,roomLabel:null}]});
+ assert.equal(first!.handoff,undefined);assert.match(first!.messages[0],/cuántas horas/);assert.equal(f.proposed.length,0);
+ const next=await f.api.handleRentalIntake(f.tx as never,{...incoming,id:'duration',text:'Dos horas'},'RENTAL_DETAILS',first!.state,{...u,rentalRequests:[{requestIndex:0,date:null,start:null,end:'18:00',roomLabel:null}]});
+ assert.equal(next!.handoff,undefined);assert.match(next!.messages.join(' '),/37[.,]800/);assert.match(next!.messages.join(' '),/consultorio 10.*consultorio 20/i);assert.equal(f.proposed.length,0);
+ assert.doesNotMatch(next!.messages.join(' '),/Ya tienes|quedó|confirmada/);
+});
 test('occupancy, incomplete agenda and unknown identity never create a proposal or promise a reservation',async()=>{
  for(const kind of ['occupied','incomplete','unknown','duplicate'] as const){const f=fixture();
   if(kind==='unknown')f.flags.role='unknown';else if(kind==='duplicate')f.flags.alreadyProposed=true;else f.flags[kind]=true;

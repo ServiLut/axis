@@ -11,6 +11,11 @@ export async function readReceptionIdentity(tx:Prisma.TransactionClient,phone:st
   AND regexp_replace(COALESCE(u.telefono,''),'[^0-9]','','g') IN (${phone},${local}) LIMIT 2`;
  if(matches.length>1)return {role:'ambiguous' as const};
  if(matches.length===1)return {role:'professional' as const,professionalId:matches[0].id};
+ const patients=await tx.$queryRaw<{id:number}[]>`SELECT c.id FROM "Cliente" c WHERE c."tenantId"=4 AND c."deletedAt" IS NULL
+  AND (c."empresaId"=3 OR (c."empresaId" IS NULL AND EXISTS(SELECT 1 FROM "CitasPsicologos" a WHERE a."tenantId"=4 AND a."empresaId"=3 AND a."pacienteId"=c.id)))
+  AND regexp_replace(COALESCE(c.telefono,''),'[^0-9]','','g') IN (${phone},${local}) LIMIT 2`;
+ if(patients.length>1)return {role:'ambiguous' as const};
+ if(patients.length===1)return {role:'patient' as const};
  return {role:'unknown' as const};
 }
 export function hasContinuation(text:string){
@@ -24,7 +29,11 @@ export function isRentalBookingRequest(event:ReceptionEvent,state:ReceptionState
 function socialCourtesy(event:ReceptionEvent):string|null{
  if(event.kind!=='text')return null;
  const text=normalizeText(event.text).replace(/[¿?¡!.,]/g,' ').replace(/\s+/g,' ').trim();
- if(/^(?:(?:hola|buenos dias|buenas tardes|buenas noches) )?(?:con )?(?:como estas|como estan|como vas|como te va|que tal|todo bien)(?: y tu)?$/.test(text)||/^(?:muy )?bien(?: gracias)? y tu$/.test(text))return 'Gracias por preguntar 😊 Estoy aquí para ayudarte.';
+ const greeting=/^(?:(?:hola|holi|buen dia|buenos dias|buenas tardes|buenas noches|buenas|muy buenos dias|muy buenas tardes|muy buenas noches)(?: |$))+/;
+ const prefix=text.match(greeting)?.[0]||'';
+ const remaining=text.slice(prefix.length).trim();
+ if(prefix&&!remaining)return 'Hola 😊 ¿En qué podemos ayudarte hoy?';
+ if(/^(?:con )?(?:como estas|como estan|como vas|como te va|que tal|todo bien)(?: y tu)?$/.test(remaining)||/^(?:muy )?bien(?: gracias)? y tu$/.test(text))return (prefix?'Hola 😊 Gracias por preguntar.':'Gracias por preguntar 😊')+' Estoy aquí para ayudarte.';
  if(/^(?:muchas gracias|muchisimas gracias|gracias|gracias por todo|ok gracias|listo gracias)$/.test(text))return 'Con mucho gusto 😊';
  return null;
 }
@@ -34,7 +43,7 @@ export function contextReception(event:ReceptionEvent,stage:string,state:Recepti
  const text=normalizeText(event.text);
  const review=(reason:string,message:string):ReceptionResult=>({stage:'HUMAN',state:{...state,reason},messages:[message],handoff:reason});
  const courtesy=!c?.continuation&&!c?.quotedText&&!event.quotedText?socialCourtesy(event):null;
- const answerCourtesy=():ReceptionResult=>({stage:stage==='NEW'?(c?.role==='professional'?'PROFESSIONAL':'NEED'):stage,state,messages:[courtesy!]});
+ const answerCourtesy=():ReceptionResult=>({stage:stage==='NEW'?(c?.role==='professional'?'PROFESSIONAL':'NEED'):stage,state,messages:[stage==='NEW'&&(!c||c.role==='unknown')&&!c?.hasHistory&&courtesy==='Hola 😊 ¿En qué podemos ayudarte hoy?'?'Hola 😊 Soy Luisa Fernanda de *Psicólogos en Colombia*. ¿En qué podemos ayudarte hoy?':courtesy!]});
  if(c?.role==='ambiguous')return review('Identidad ambigua del contacto','Tu solicitud está pendiente de confirmación. Gracias por tu paciencia.');
  if(c?.role==='professional'){
   if(/\b(terapia|consulta|sesion)\b/.test(text)&&/\b(para mi|como paciente|para mi hijo|para mi hija|para mi pareja)\b/.test(text))return null;

@@ -36,6 +36,7 @@ export function mergeRentalRequests(previous:RentalSlot[],updates:RentalRequestI
  return slots;
 }
 const slotLabel=(s:RentalSlot)=>s.date?`el ${friendlyDay(s.date)}`:'tu reserva';
+const rentalMoney=(value:number)=>new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(value);
 
 /** Read-only availability; proposal creation and final confirmation repeat all checks transactionally. */
 export async function inspectRentalSlot(tx:Tx,professionalId:number,slot:RentalSlot,rooms:Room[],hourlyPrice:string){
@@ -125,6 +126,7 @@ export async function handleRentalIntake(tx:Tx,event:ReceptionEvent,stage:string
   else if(checked.kind==='incomplete-agenda')return review('Agenda de consultorios con horas incompletas; verificar antes de reservar');
   else if(checked.kind==='professional-busy')question??=`Ese horario coincide con otra reserva tuya ${label}. ¿Prefieres que revisemos otro horario?`;
   else if(!checked.selected||!checked.free.some(r=>r.id===checked.selected!.id)){
+   if(checked.free.length)messages.push(`Para ${label}, de ${friendlyTime(slot.start!)} a ${friendlyTime(slot.end!)}, el alquiler cuesta ${rentalMoney(checked.quote.amount)}.`);
    const prefix=checked.selected?`El ${checked.selected.nombre.toLowerCase()} está ocupado ${label}, de ${friendlyTime(slot.start!)} a ${friendlyTime(slot.end!)}. `:'';
    question??=checked.free.length?`${prefix}${roomChoice(checked.free,state.roomPreferences,identity.professionalId)}`:`Para ${label}, de ${friendlyTime(slot.start!)} a ${friendlyTime(slot.end!)}, no tenemos consultorios libres. ¿Qué otro horario te sirve?`;
   }else{

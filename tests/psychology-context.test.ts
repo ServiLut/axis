@@ -18,7 +18,7 @@ test('prior conversation and unresolved follow-up never restart sales; genuinely
   const d=semanticReception({...e,text:'hola'},'NEW',{context:known},{},'DEPOSIT_20000',{intent:'greeting',confidence:1} as never);
   assert.ok(!d.messages.join(' ').includes('Luisa Fernanda'));assert.ok(!d.messages.join(' ').includes('acompañamiento'));
  }
- assert.match(semanticReception({...e,text:'hola'},'NEW',{}, {},'DEPOSIT_20000',null).messages[0],/Soy Luisa Fernanda.*en qué podemos ayudarte hoy/);
+ assert.match(semanticReception({...e,text:'hola'},'NEW',{}, {},'DEPOSIT_20000',null).messages[0],/Soy Luisa Fernanda.*[Ee]n qué podemos ayudarte hoy/);
 });
 test('quote survives n8n minimization as text, without credentials or quoted media',()=>{
  const message={extendedTextMessage:{text:e.text,contextInfo:{quotedMessage:{conversation:'En la tarde te envío el certificado',imageMessage:{url:'private-media'}},participant:'other-person',secret:'private-key'}}};
@@ -42,6 +42,25 @@ test('professional identity uses tenant and company evidence, never display name
  const tx={$queryRaw:async(strings:TemplateStringsArray)=>{sql=strings.join('?');return rows;}};
  assert.deepEqual(await readReceptionIdentity(tx as never,e.phone),{role:'professional',professionalId:25});assert.match(sql,/tenantId"=4/);assert.match(sql,/empresaId"=3/);assert.match(sql,/TECNICO/);
  rows=[{id:25},{id:26}];assert.equal((await readReceptionIdentity(tx as never,e.phone)).role,'ambiguous');
+});
+
+test('compound greeting from a verified professional is answered without a false administrative handoff',()=>{
+ const ready={context:{...state.context!,continuation:false,quotedText:undefined}};
+ for(const text of ['Hola muy buenos días cómo estás?','Hola, buenos días, ¿cómo estás?','Muy buenas tardes','Hola buenos días']){
+  const d=semanticReception({...e,text},'NEW',ready,{},'REVIEW',{intent:'greeting',confidence:1} as never);
+  assert.equal(d.stage,'PROFESSIONAL');assert.equal(d.handoff,undefined);assert.match(d.messages[0],/^Hola/);
+  assert.doesNotMatch(d.messages[0],/pendiente|confirmación|Sandra/);
+ }
+ const rental=semanticReception({...e,text:'Hola muy buenos días, para separar un espacio para el viernes a las 4 pm'},'NEW',ready,{},'REVIEW',{intent:'preferences',confidence:.99,service:'alquiler'} as never);
+ assert.equal(rental.stage,'RENTAL_DETAILS');assert.equal(rental.handoff,undefined);
+});
+
+test('patient identity is resolved from a unique active company record without disclosing personal details',async()=>{
+ const queries:string[]=[];let patients=[{id:1}];
+ const tx={$queryRaw:async(s:TemplateStringsArray)=>{const sql=s.join('?');queries.push(sql);return sql.includes('FROM "Usuario"')?[]:patients;}};
+ assert.deepEqual(await readReceptionIdentity(tx as never,e.phone),{role:'patient'});
+ assert.match(queries[1],/deletedAt.*IS NULL/s);assert.match(queries[1],/empresaId"=3/);assert.match(queries[1],/pacienteId/);
+ patients=[{id:1},{id:2}];assert.equal((await readReceptionIdentity(tx as never,e.phone)).role,'ambiguous');
 });
 
 test('standalone social questions and thanks do not ask Sandra or reset reception progress',()=>{
