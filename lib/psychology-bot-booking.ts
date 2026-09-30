@@ -68,7 +68,7 @@ export async function proposeBooking(tx:Tx,event:ReceptionEvent,{rawPhone,servic
     await tx.$executeRaw`INSERT INTO "PsicologiaBotProposal" (code,"customerPhone","professionalPhone",details,"expiresAt") VALUES (${code},${customerPhone},${professionalPhone},${JSON.stringify(details)}::jsonb,${expiresAt}) ON CONFLICT DO NOTHING`;
     await queue(tx,event.id+':proposal-customer',customerPhone,prompts.customer);
     if(customerPhone!==professionalPhone)await queue(tx,event.id+':proposal-professional',professionalPhone,prompts.professional);
-    if(event.phone===SANDRA_PHONE)await queue(tx,event.id+':proposal-chief',SANDRA_PHONE,'Ya compartí el horario para que lo confirmen 😊 Te aviso cuando la reserva quede lista.');
+    if(event.phone===SANDRA_PHONE)await queue(tx,event.id+':proposal-chief',SANDRA_PHONE,'El horario quedó pendiente de confirmación.');
     await createAuditLog({tenantId:4,accion:'BOT_PROPOSAL',entidad:'CitaPropuesta',entidadId:code,detalles:{sourceEvent:event.id,details},tx});
     return code;
 }
@@ -149,5 +149,5 @@ async function finalizeBooking(tx:Tx,p:Proposal,event:ReceptionEvent,queue:Queue
   const content=bookedMessage(d);
   await queue(tx,'proposal:'+p.code+':booked-customer',p.customerPhone,content);
   if(p.customerPhone!==p.professionalPhone)await queue(tx,'proposal:'+p.code+':booked-professional',p.professionalPhone,bookedMessage(d));
-  await queue(tx,'proposal:'+p.code+':booked-chief',SANDRA_PHONE,`Axis registró CITA-${cita.id}, ${d.date} ${d.start}. No se registró un abono bancario por esta acción.`);
+  // Ordinary agenda changes are available in the nightly report; no extra chief notification.
 }

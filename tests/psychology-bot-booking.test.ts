@@ -37,7 +37,7 @@ async function fixture(rental=false) {
   './booking-server':{normalizedRental:async(_tx:unknown,_tenant:number,_service:bigint,inicio:Date)=>rental?{valor:18900,fin:new Date(inicio.getTime()+3600000)}:null,lockAndValidateBooking:async()=>{if(state.occupied)throw Error('Occupied')}},
   './audit':{createAuditLog:async()=>{state.audits++}},'./package-payment':{getPackagePaymentState:async()=>null},
  });
- const message=async(phone:string,text='CONFIRMAR ABCD1234ABCD')=>{await db.query('UPDATE "Usuario" SET activo=$1 WHERE id=29',[state.active]);return api.handleBookingMessage(tx as never,{id:'event-'+Date.now(),phone,text,fromMe:false,kind:'text',at:new Date().toISOString()},async(_t,_id,p,text)=>{sent.push({phone:p,text})});};
+ const message=async(phone:string,text='CONFIRMAR ABCD1234ABCD')=>{await db.query('UPDATE "Usuario" SET activo=$1 WHERE id=29',[state.active]);return api.handleBookingMessage(tx as never,{id:'event-'+Date.now(),phone,text,fromMe:false,kind:'text',at:new Date().toISOString()},async(_t,_id,p,text)=>{if(/quedó para/.test(text)){assert.equal((await db.query('SELECT id FROM "CitasPsicologos" WHERE id=100')).rows.length,1);assert.equal((await db.query<{status:string}>('SELECT status FROM "PsicologiaBotProposal" WHERE "citaId"=100')).rows[0]?.status,'BOOKED');}sent.push({phone:p,text})});};
  const proposeOwnRental=(phone:string)=>api.proposeBooking(tx as never,{id:'synthetic-own-rental-'+phone,phone,kind:'text',text:'Reservar consultorio 10',fromMe:false,at:new Date().toISOString()},{rawPhone:'573002222222',serviceId:'49',professionalId:'29',room:'1',date,start:'10:00',end:'11:00'},async(_tx,_id,p,text)=>{sent.push({phone:p,text})});
  return {db,state,sent,message,proposeOwnRental};
 }
@@ -63,8 +63,8 @@ test('both exact confirmed senders are required; a payment image cannot create a
   assert.equal(f.state.audits,1);
  }finally{await f.db.close()}
 });
-test('registered rental professional can confirm their own reservation without proof',async()=>{
- const f=await fixture(true);try{await f.message('573002222222');assert.equal(f.state.writes,1);await f.message('573002222222');assert.equal(f.state.writes,1);}finally{await f.db.close()}
+test('registered rental professional receives a confirmation only after saving once, without an ordinary chief alert',async()=>{
+ const f=await fixture(true);try{await f.message('573002222222');assert.equal(f.state.writes,1);await f.message('573002222222');assert.equal(f.state.writes,1);assert.equal(f.sent.filter(m=>/quedó para/.test(m.text)).length,1);assert.equal(f.sent.some(m=>m.phone===SANDRA_PHONE),false);}finally{await f.db.close()}
 });
 test('changed availability, incomplete agenda and suspended professional block finalization',async()=>{
  for(const flag of ['occupied','active','missing'] as const){const f=await fixture(true);try {
