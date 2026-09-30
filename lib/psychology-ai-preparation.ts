@@ -25,7 +25,8 @@ export async function prepareNextPsychologyEvent(){
    await prisma.$executeRaw`UPDATE "PsicologiaBotEvent" SET transcript=${event.text} WHERE id=${row.id} AND status='PENDING'`;
    event.kind='text';
   }
-  if(row.phone===SANDRA_PHONE&&!await chiefMessageAddressesBot(prisma,event))return;
+  const chiefDirectedTurn=row.phone===SANDRA_PHONE&&await chiefMessageAddressesBot(prisma,event);
+  if(row.phone===SANDRA_PHONE&&!chiefDirectedTurn)return;
   const contextAt=row.resumeOf?new Date():row.eventAt;
   const sourceId=row.resumeOf||row.id;
   const history=await prisma.$queryRaw<{direction:string;text:string;at:Date;source:string}[]>`
@@ -47,7 +48,7 @@ export async function prepareNextPsychologyEvent(){
   if(!row.resumeOf&&identity.role==='unknown'&&!receptionContext.hasHistory&&!receptionContext.continuation&&isFastGreeting(event,conversations[0]?.stage))return;
   if(!aiConfigured())throw Error('AI_UNAVAILABLE');
   const catalog=await prisma.terapiasPsicologos.findMany({where:{tenantId:4,empresaId:3,activo:true},select:{id:true,nombre:true,cantidadSesiones:true,precioBase:true}});
-  const result=await understandPsychologyMessage(event,{...conversations[0],verifiedContact:receptionContext,quotedMessage:row.quotedText||null,resumingAfterStaffIdle:!!row.resumeOf,history:context,staffObservation:staffObservation(context,conversations[0]?.stage),historyCoverage:remote.coverage,chiefInstructions:knowledge.map(k=>k.instruction),chiefKnowledgeSources:knowledge.map(k=>({id:k.id,sourceEvent:k.sourceEvent,approvedAt:k.createdAt.toISOString()})),catalog:catalog.map(s=>({...s,id:String(s.id),precioBase:String(s.precioBase)}))});
+  const result=await understandPsychologyMessage(event,{...conversations[0],chiefDirectedTurn,verifiedContact:receptionContext,quotedMessage:row.quotedText||null,resumingAfterStaffIdle:!!row.resumeOf,history:context,staffObservation:staffObservation(context,conversations[0]?.stage),historyCoverage:remote.coverage,chiefInstructions:knowledge.map(k=>k.instruction),chiefKnowledgeSources:knowledge.map(k=>({id:k.id,sourceEvent:k.sourceEvent,approvedAt:k.createdAt.toISOString()})),catalog:catalog.map(s=>({...s,id:String(s.id),precioBase:String(s.precioBase)}))});
   await prisma.$executeRaw`UPDATE "PsicologiaBotEvent" SET analysis=${JSON.stringify(result)}::jsonb WHERE id=${row.id} AND status='PENDING'`;
  }catch(error){
   const code=error instanceof Error&&/^(AI|AUDIO)_[A-Z0-9_]+$/.test(error.message)?error.message:'AI_UNAVAILABLE';

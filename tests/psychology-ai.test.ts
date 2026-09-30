@@ -21,6 +21,20 @@ test('invalid AI classification is retried once without changing the source or i
   invalidAlways=true;calls=0;await assert.rejects(()=>understandPsychologyMessage(event,{}),/AI_ENUM_INVALID/);assert.equal(calls,2);
  }finally{globalThis.fetch=originalFetch;if(oldUrl===undefined)delete process.env.PSICOLOGOS_AI_URL;else process.env.PSICOLOGOS_AI_URL=oldUrl;if(oldToken===undefined)delete process.env.PSICOLOGOS_AI_TOKEN;else process.env.PSICOLOGOS_AI_TOKEN=oldToken;}
 });
+test('verified directed chief turn is interpreted during human ownership without granting this to customers or raw audio',async()=>{
+ const originalFetch=globalThis.fetch,oldUrl=process.env.PSICOLOGOS_AI_URL,oldToken=process.env.PSICOLOGOS_AI_TOKEN;
+ process.env.PSICOLOGOS_AI_URL='https://abogadosencolombia.app.n8n.cloud/webhook/fixture';process.env.PSICOLOGOS_AI_TOKEN='fixture';
+ const quoted='Pregunta anterior del bot sobre el redondeo del alquiler';
+ globalThis.fetch=async(_url,options)=>{const body=JSON.parse(String(options?.body));const input=JSON.parse(body.input);assert.equal(input.quotedMessage,quoted);assert.ok(body.instructions.includes('chiefDirectedTurn=true'));return new Response(JSON.stringify({result:understanding({adminAction:'learn',instruction:'Conservar alcance particular',reply:'Gracias por aclararlo',question:'¿Qué dato falta?'})}),{status:200})};
+ const context={stage:'HUMAN',staffObservation:{mode:'observe_without_reply'},chiefDirectedTurn:true,quotedMessage:quoted};
+ try{
+  const directed=await understandPsychologyMessage(event,context);assert.equal(directed.reply,'Gracias por aclararlo');assert.equal(directed.question,'¿Qué dato falta?');
+  for(const e of [{...event,phone:'573001111111'},{...event,fromMe:true},{...event,kind:'audio' as const}]){const blocked=await understandPsychologyMessage(e,context);assert.equal(blocked.reply,null);assert.equal(blocked.question,null);}
+  assert.equal((await understandPsychologyMessage(event,{...context,chiefDirectedTurn:false})).reply,null);
+  assert.equal(context.stage,'HUMAN');
+ }finally{globalThis.fetch=originalFetch;if(oldUrl===undefined)delete process.env.PSICOLOGOS_AI_URL;else process.env.PSICOLOGOS_AI_URL=oldUrl;if(oldToken===undefined)delete process.env.PSICOLOGOS_AI_TOKEN;else process.env.PSICOLOGOS_AI_TOKEN=oldToken;}
+});
+
 test('chief authority cannot be granted by model, text, contact name or outgoing echo',()=>{
  const u=understanding({adminAction:'pause',targetPhone:'3001112233'});
  assert.deepEqual(chiefAction(event,u),{type:'command',text:'PAUSAR 573001112233'});
@@ -137,8 +151,10 @@ test('courtesy continues context, appointment questions request actual verificat
  const e={...event,phone:'573001111111',text:'Gracias'};
  const courtesy=semanticReception(e,'OFFER',{service:'individual'},{},'DEPOSIT_20000',understanding({intent:'courtesy'}));assert.equal(courtesy.stage,'OFFER');assert.equal(courtesy.handoff,undefined);
  const appointment=semanticReception({...e,text:'Voy a asistir'},'NEW',{},{} as never,'DEPOSIT_20000',understanding({intent:'appointment'}));assert.equal(appointment.stage,'HUMAN');assert.ok(appointment.handoff?.includes('cita existente'));assert.ok(!appointment.messages.join().includes('confirmada'));
- const first=semanticReception(e,'NEED',{},{} as never,'DEPOSIT_20000',understanding({intent:'unknown',confidence:0.2}));
- const second=semanticReception(e,first.stage,first.state,{} as never,'DEPOSIT_20000',understanding({intent:'unknown',confidence:0.2}));assert.equal(second.stage,'HUMAN');assert.ok(second.messages[0].includes('Sandra'));
+ // A standalone thanks is handled by the deterministic courtesy guard. Use an actual unresolved message here.
+ const unclear={...e,text:'Lo del asunto que mencioné antes'};
+ const first=semanticReception(unclear,'NEED',{},{} as never,'DEPOSIT_20000',understanding({intent:'unknown',confidence:0.2}));
+ const second=semanticReception(unclear,first.stage,first.state,{} as never,'DEPOSIT_20000',understanding({intent:'unknown',confidence:0.2}));assert.equal(second.stage,'HUMAN');assert.ok(second.messages[0].includes('Sandra'));
 });
 test('semantic intent retains native pricing and payment order and respects human takeover',()=>{
  const templates={individual:{text:'MENSAJE EXACTO $119.900',approved:true,version:'1'},datos:{text:'DATOS EXACTOS',approved:true,version:'1'}};
