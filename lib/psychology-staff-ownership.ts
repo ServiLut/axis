@@ -25,15 +25,20 @@ export function chiefPresenceQuestion(event:ReceptionEvent){
 /** The chief may answer a question from a recorded bot message without repeating its name. */
 export async function chiefMessageAddressesBot(tx:Tx,event:ReceptionEvent){
  if(chiefAddressesBot(event))return true;
- if(event.fromMe||event.phone!==SANDRA_PHONE||event.kind!=='text'||!event.quotedText?.trim())return false;
+ return !!await verifiedChiefQuestion(tx,event);
+}
+
+/** Keep the exact verified question available to interpretation, not just its authorization. */
+export async function verifiedChiefQuestion(tx:Tx,event:ReceptionEvent){
+ if(event.fromMe||event.phone!==SANDRA_PHONE||event.kind!=='text'||!event.quotedText?.trim())return null;
  const quote=event.quotedText.trim();
  // The inbound transport limits quotes to 1,800 chars. Short fragments are ambiguous.
- if(quote.length<40)return false;
- const matches=await tx.$queryRaw<{id:string}[]>`SELECT id FROM "PsicologiaBotOutbox"
+ if(quote.length<40)return null;
+ const matches=await tx.$queryRaw<{id:string;content:string}[]>`SELECT id,content FROM "PsicologiaBotOutbox"
   WHERE "tenantId"=4 AND phone=${SANDRA_PHONE} AND status='ACCEPTED'
    AND "attemptedAt"<=${new Date(event.at)}
    AND (content=${quote} OR (length(${quote})>=1700 AND left(content,length(${quote}))=${quote})) LIMIT 2`;
- return matches.length===1;
+ return matches.length===1?matches[0]:null;
 }
 
 /** Only an explicit direct instruction releases the chief's own shared-account chat. */

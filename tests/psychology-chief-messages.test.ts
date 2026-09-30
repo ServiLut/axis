@@ -10,7 +10,7 @@ test('professional attendance question keeps its meaning even if AI treats it as
  for(const intent of ['question','greeting','preferences']){
   const result=semanticReception(event,'NEW',state,{},'DEPOSIT_20000',{intent,confidence:.96,service:'alquiler'} as never);
   assert.equal(result.stage,'HUMAN');assert.match(result.handoff!,/confirmar asistencia/);
-  assert.match(result.messages[0],/antes de que te desplaces/);assert.doesNotMatch(result.messages[0],/qué consultorio|precios|confirmada[.!]$/);
+  assert.match(result.messages[0],/espera la confirmación antes de desplazarte/);assert.doesNotMatch(result.messages[0],/qué consultorio|precios|confirmada[.!]$/);
   const notice=chiefHelpMessage(event.phone,result.handoff!,event);
   assert.ok(notice.includes(event.text));assert.match(notice,/No tengo esa confirmación verificada/);
   assert.match(notice,/¿La persona confirmó que asistirá a esa sesión\?/);

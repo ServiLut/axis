@@ -81,11 +81,33 @@ export async function psychologyAiRequest(body:Record<string,unknown>) {
  if(!r.ok)throw Error('AI_UNAVAILABLE_'+r.status);
  const value=await r.json();if(value.error)throw Error('AI_PROVIDER_ERROR');return value;
 }
+export const CHIEF_ANSWER_INSTRUCTIONS=`verifiedChiefQuestion es la pregunta real del bot que Sandra contesta. Interpreta su respuesta como aclaración del caso: si da un criterio claro, intent admin, adminAction learn, instruction con alcance exacto y question null. No le ofrezcas a Sandra el servicio pedido por el cliente ni preguntes de nuevo lo resuelto. Caso particular no es regla general. Solo una ambigüedad real requiere instructionUncertainty y una pregunta puntual. No afirmes operaciones ejecutadas.
+priorChiefCaseAnswers son respuestas verificadas de Sandra sobre ESTE contacto. Reutiliza el antecedente aplicable antes de preguntar; conserva caso, fuente y fecha. No prueban disponibilidad, pago, identidad, consentimiento ni reserva guardada. No copies datos internos al cliente. chiefInstructions contiene reglas activas; recordar no implementa capacidades ni elimina controles.`;
+
+/** Preserve complete recent sources and the current request within the private gateway limit. */
+export function psychologyAiInput(context:Record<string,unknown>):string{
+ const c={...context};
+ for(const key of ['history','chiefInstructions','chiefKnowledgeSources','priorChiefCaseAnswers'])if(Array.isArray(c[key]))c[key]=[...c[key] as unknown[]];
+ const omitted:Record<string,number>={};
+ let input=JSON.stringify(c);
+ for(const key of ['history','priorChiefCaseAnswers','chiefInstructions']){
+  const list=c[key];if(!Array.isArray(list))continue;
+  while(input.length>49000&&list.length>1){
+   if(key==='history')list.shift();else list.pop();
+   if(key==='chiefInstructions'&&Array.isArray(c.chiefKnowledgeSources))c.chiefKnowledgeSources.pop();
+   omitted[key]=(omitted[key]||0)+1;c.omittedContext=omitted;
+   input=JSON.stringify(c);
+  }
+ }
+ if(input.length>50000)throw Error('AI_CONTEXT_TOO_LONG');
+ return input;
+}
+
 export async function understandPsychologyMessage(event:ReceptionEvent,context:Record<string,unknown>):Promise<Understanding>{
  const chiefDirectedTurn=event.phone===SANDRA_PHONE&&!event.fromMe&&event.kind==='text'&&context.chiefDirectedTurn===true;
- const input=JSON.stringify({...context,chiefDirectedTurn,actorIsChief:event.phone===SANDRA_PHONE,nowColombia:new Date().toLocaleString('sv-SE',{timeZone:'America/Bogota'}),messageSentAtColombia:new Date(event.at).toLocaleString('sv-SE',{timeZone:'America/Bogota'}),currentMessage:event.text});
+ const input=psychologyAiInput({...context,chiefDirectedTurn,actorIsChief:event.phone===SANDRA_PHONE,nowColombia:new Date().toLocaleString('sv-SE',{timeZone:'America/Bogota'}),messageSentAtColombia:new Date(event.at).toLocaleString('sv-SE',{timeZone:'America/Bogota'}),currentMessage:event.text});
  for(let attempt=0;attempt<2;attempt++){
-  const result=await psychologyAiRequest({action:'understand',instructions:RECEPTION_AI_INSTRUCTIONS+(attempt?'\nLa salida anterior no cumplió el esquema. Relee la entrada original. Usa exclusivamente los valores enumerados y todos los campos; no agregues acciones. Una orden aún no implementada es intent admin, adminAction none y una pregunta clara, no inventes una nueva acción.':''),schema:understandingSchema,input});
+  const result=await psychologyAiRequest({action:'understand',instructions:RECEPTION_AI_INSTRUCTIONS+'\n'+CHIEF_ANSWER_INSTRUCTIONS+(attempt?'\nLa salida anterior no cumplió el esquema. Relee la entrada original. Usa exclusivamente los valores enumerados y todos los campos; no agregues acciones. Una orden aún no implementada es intent admin, adminAction none y una pregunta clara, no inventes una nueva acción.':''),schema:understandingSchema,input});
   try{
    let value=result.result??result;
    if(typeof value==='string'){try{value=JSON.parse(value.replace(/^```(?:json)?\s*|\s*```$/g,''))}catch{throw Error('AI_BAD_JSON')}}

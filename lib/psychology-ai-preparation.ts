@@ -3,9 +3,9 @@ import {aiConfigured,transcribePsychologyAudio,understandPsychologyMessage} from
 import {isFastGreeting,type ReceptionEvent,type ReceptionState} from './psychology-reception';
 import {readReceptionIdentity,hasContinuation} from './psychology-reception-context';
 import {readPsychologyHistory} from './psychology-chatwoot';
-import {readChiefKnowledge} from './psychology-knowledge';
+import {readChiefKnowledge,readChiefCaseAnswers} from './psychology-knowledge';
 import {classifyReceptionHistory,staffObservation,type BotHistoryReference} from './psychology-staff-observation';
-import {chiefMessageAddressesBot,chiefPresenceQuestion} from './psychology-staff-ownership';
+import {chiefMessageAddressesBot,chiefPresenceQuestion,verifiedChiefQuestion} from './psychology-staff-ownership';
 import {SANDRA_PHONE} from './psychology-reception';
 
 /** No network call while a database transaction or row lock is held. */
@@ -45,12 +45,14 @@ export async function prepareNextPsychologyEvent(){
    .slice(-30);
   if(row.resumeOf&&(!context.length||context.some(h=>h.text.startsWith('[Archivo o audio previo sin transcripción'))))throw Error('AI_RESUME_CONTEXT_REQUIRED');
   const knowledge=await readChiefKnowledge(prisma,event.text+' '+(conversations[0]?.state.service||''));
+  const answeredQuestion=chiefDirectedTurn?await verifiedChiefQuestion(prisma,event):null;
+  const priorChiefAnswers=row.phone===SANDRA_PHONE?[]:await readChiefCaseAnswers(prisma,row.phone,contextAt);
   const receptionContext={...identity,hasHistory:context.length>0,coverage:remote.coverage,continuation:hasContinuation(event.text)||(!!row.quotedText&&conversations[0]?.stage==='NEW'),quotedText:row.quotedText||undefined};
   await prisma.$executeRaw`UPDATE "PsicologiaBotConversation" SET state=state||${JSON.stringify({context:receptionContext})}::jsonb WHERE phone=${row.phone}`;
   if(!row.resumeOf&&identity.role==='unknown'&&!receptionContext.hasHistory&&!receptionContext.continuation&&isFastGreeting(event,conversations[0]?.stage))return row.id;
   if(!aiConfigured())throw Error('AI_UNAVAILABLE');
   const catalog=await prisma.terapiasPsicologos.findMany({where:{tenantId:4,empresaId:3,activo:true},select:{id:true,nombre:true,cantidadSesiones:true,precioBase:true}});
-  const result=await understandPsychologyMessage(event,{...conversations[0],chiefDirectedTurn,verifiedContact:receptionContext,quotedMessage:row.quotedText||null,resumingAfterStaffIdle:!!row.resumeOf,history:context,staffObservation:staffObservation(context,conversations[0]?.stage),historyCoverage:remote.coverage,chiefInstructions:knowledge.map(k=>k.instruction),chiefKnowledgeSources:knowledge.map(k=>({id:k.id,sourceEvent:k.sourceEvent,approvedAt:k.createdAt.toISOString()})),catalog:catalog.map(s=>({...s,id:String(s.id),precioBase:String(s.precioBase)}))});
+  const result=await understandPsychologyMessage(event,{...conversations[0],chiefDirectedTurn,verifiedChiefQuestion:answeredQuestion,priorChiefCaseAnswers:priorChiefAnswers.map(a=>({...a,question:a.question.slice(0,1200),answer:a.answer.slice(0,1600),answeredAt:a.answeredAt.toISOString(),scope:'this-contact-case-only'})),verifiedContact:receptionContext,quotedMessage:row.quotedText||null,resumingAfterStaffIdle:!!row.resumeOf,history:context,staffObservation:staffObservation(context,conversations[0]?.stage),historyCoverage:remote.coverage,chiefInstructions:knowledge.map(k=>k.instruction),chiefKnowledgeSources:knowledge.map(k=>({id:k.id,sourceEvent:k.sourceEvent,approvedAt:k.createdAt.toISOString()})),catalog:catalog.map(s=>({...s,id:String(s.id),precioBase:String(s.precioBase)}))});
   await prisma.$executeRaw`UPDATE "PsicologiaBotEvent" SET analysis=${JSON.stringify(result)}::jsonb WHERE id=${row.id} AND status='PENDING'`;
  }catch(error){
   const code=error instanceof Error&&/^(AI|AUDIO)_[A-Z0-9_]+$/.test(error.message)?error.message:'AI_UNAVAILABLE';

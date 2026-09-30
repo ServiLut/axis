@@ -47,6 +47,12 @@ export function contextReception(event:ReceptionEvent,stage:string,state:Recepti
  const courtesy=!c?.continuation&&!c?.quotedText&&!event.quotedText?socialCourtesy(event):null;
  const answerCourtesy=():ReceptionResult=>({stage:stage==='NEW'?(c?.role==='professional'?'PROFESSIONAL':'NEED'):stage,state,messages:[stage==='NEW'&&(!c||c.role==='unknown')&&!c?.hasHistory&&courtesy==='Hola 😊 ¿En qué podemos ayudarte hoy?'?'Hola 😊 Soy Luisa Fernanda de *Psicólogos en Colombia*. ¿En qué podemos ayudarte hoy?':courtesy!]});
  if(c?.role==='ambiguous')return review('Identidad ambigua del contacto','Tu solicitud está pendiente de confirmación. Gracias por tu paciencia.');
+ // Recognize only a direct report, not a question, negation, quote or a bare file.
+ // Reporting a receipt never verifies the deposit or creates a financial record.
+ const receiptText=text.replace(/[¡!.,]/g,' ').replace(/\s+/g,' ').trim();
+ if(event.kind==='text'&&!event.quotedText&&!c?.quotedText&&/^(?:(?:hola|buenos dias|buenas tardes|buenas noches) )?(?:(?:te |les )?(?:envio|adjunto|comparto|mando)|aqui (?:esta|va)) (?:el |mi |un )?(?:comprobante|soporte|recibo)(?: (?:del? |de la |de mi )?(?:pago|transferencia|consignacion|paquete|alquiler|consulta|sesion))?$/.test(receiptText)){
+  return review('Comprobante de pago reportado: verificar ingreso y asociación',(receiptText.startsWith('hola ')?'Hola. ':'')+'Gracias por avisarnos. El pago sigue pendiente de verificación.');
+ }
  if(c?.role==='professional'){
   if(/\b(terapia|consulta|sesion)\b/.test(text)&&/\b(para mi|como paciente|para mi hijo|para mi hija|para mi pareja)\b/.test(text))return null;
   if(/certificad|certificacion|carta laboral/.test(text+' '+normalizeText(c.quotedText||'')))return review('Profesional consulta certificado administrativo pendiente','Gracias por recordárnoslo. Aún no tengo confirmación de que el certificado esté listo.');
