@@ -562,6 +562,7 @@ export async function createCita(token: string, formData: FormData) {
     const horaFinStr = formData.get("horaFin") as string;
     const observacion = formData.get("observacion") as string;
     let valor = formData.get("valorCotizado") ? Number(formData.get("valorCotizado")) : null;
+    const rentalAdditional = formData.get("rentalAdicional")?.toString().trim() || null;
     const metodoPago = formData.get("metodoPago") ? formData.get("metodoPago")?.toString() : null;
     const consultorioRaw = formData.get("consultorio");
     const consultorioId = consultorioRaw ? BigInt(consultorioRaw.toString()) : null;
@@ -607,7 +608,7 @@ export async function createCita(token: string, formData: FormData) {
     await prisma.$transaction(async (tx) => {
         const schedule = bookingTimes(fechaCitaStr, horaInicioStr, horaFinStr);
         fechaCita = schedule.fecha; horaInicio = schedule.inicio; horaFin = schedule.fin;
-        const rental = await normalizedRental(tx, usuario.tenantId, terapiaId, horaInicio, horaFin);
+        const rental = await normalizedRental(tx, usuario.tenantId, terapiaId, horaInicio, horaFin, rentalAdditional);
         if (rental) { valor = rental.valor; horaFin = rental.fin; if (!consultorioId) throw new Error("El alquiler requiere consultorio."); }
         if (valor !== null && valor !== 0) valor = cajaAmountInCents(String(valor)) / 100;
         await lockAndValidateBooking(tx, { tenantId: usuario.tenantId, psicologoId, consultorioId, inicio: horaInicio, fin: horaFin });
@@ -673,6 +674,7 @@ export async function createCita(token: string, formData: FormData) {
       entidadId: created.id.toString(),
       detalles: {
         descripcion: "Cita creada",
+        ...(rental && rentalAdditional !== null ? { adicionalAlquiler: rentalAdditional, minutosAdicionales: (schedule.fin.getTime() - schedule.inicio.getTime()) / 60000 % 60 } : {}),
         despues: serializeBigInt(created),
       },
           tx,
@@ -1467,6 +1469,7 @@ export async function updateCita(token: string, id: number, formData: FormData) 
     const horaFinStr = formData.get("horaFin") as string;
     const observacion = formData.get("observacion") as string;
     let valor = formData.get("valorCotizado") ? Number(formData.get("valorCotizado")) : null;
+    const rentalAdditional = formData.get("rentalAdicional")?.toString().trim() || null;
     const metodoPago = formData.get("metodoPago") ? formData.get("metodoPago")?.toString() : null;
     const consultorioIdRaw = formData.get("consultorioId");
     const consultorioId = consultorioIdRaw ? BigInt(consultorioIdRaw.toString()) : null;
@@ -1538,10 +1541,10 @@ export async function updateCita(token: string, id: number, formData: FormData) 
             const rental = /alquiler/i.test(oldTherapy?.nombre || "");
             if (rental) {
               if (!consultorioId) throw new Error("El alquiler requiere consultorio.");
-              if (!durationChanged && !therapyChanged) valor = Number(currentCita.valor || 0);
+              if (!durationChanged && !therapyChanged && rentalAdditional === null) valor = Number(currentCita.valor || 0);
               else {
                 if (currentCita.estadoPago !== "PENDIENTE" || currentCita.realizada !== false) throw new Error("La reserva tiene pago o ya finalizó. Registra el exceso en Recepción; no reemplaces su precio histórico.");
-                const quote = await normalizedRental(tx, usuario.tenantId, catalogId, horaInicio, horaFin);
+                const quote = await normalizedRental(tx, usuario.tenantId, catalogId, horaInicio, horaFin, rentalAdditional);
                 if (quote) { valor = quote.valor; horaFin = quote.fin; }
                 if (!therapyChanged && currentCita.paqueteId) {
                   const count = await tx.citasPsicologos.count({ where: { paqueteId: currentCita.paqueteId } });
@@ -1606,6 +1609,7 @@ export async function updateCita(token: string, id: number, formData: FormData) 
             entidadId: id,
             detalles: {
                 descripcion: "Cita actualizada",
+                ...(rentalAdditional !== null ? { adicionalAlquiler: rentalAdditional, minutosAdicionales: (schedule.fin.getTime() - schedule.inicio.getTime()) / 60000 % 60 } : {}),
                 antes: citaPrevia,
                 despues: serializeBigInt(citaActualizada),
             },

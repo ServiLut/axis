@@ -36,10 +36,10 @@ test("payment allocations add exactly and reject duplicate charges, invalid date
   assert.throws(() => validateReceptionPayment({ ...payment, fecha: "2026-09-26" }, input.fecha));
   assert.deepEqual(receptionSummary([]), { ventas: 0, aplicado: 0, pendiente: 0 });
 });
-test("rental booking reserves the courtesy period and uses the catalog rate", () => {
-  assert.deepEqual(rentalQuote(55, "18900.00"), { hours: 1, minutes: 60, amount: 18900 });
+test("rental booking preserves exact minutes and requires an entered additional price", () => {
+  assert.deepEqual(rentalQuote(55, "18900.00", "18000"), { hours: 0, minutes: 55, amount: 18000 });
   assert.equal(rentalQuote(60, "20000.00").amount, 20000);
-  assert.equal(rentalQuote(115, "18900.00").amount, 37800);
+  assert.equal(rentalQuote(115, "18900.00", "5000").amount, 23900);
   assert.equal(rentalQuote(120, "18900.00").amount, 37800);
   for (const minutes of [0, -5, 30, 61, 75, 90]) assert.throws(() => rentalQuote(minutes, "18900.00"));
   assert.equal(bookingTimes("2026-09-25", "10:00", "11:00").inicio.toISOString(), "2026-09-25T15:00:00.000Z");

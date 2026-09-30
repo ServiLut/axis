@@ -31,7 +31,9 @@ function socialCourtesy(event:ReceptionEvent):string|null{
  const text=normalizeText(event.text).replace(/[¿?¡!.,]/g,' ').replace(/\s+/g,' ').trim();
  const greeting=/^(?:(?:hola|holi|buen dia|buenos dias|buenas tardes|buenas noches|buenas|muy buenos dias|muy buenas tardes|muy buenas noches)(?: |$))+/;
  const prefix=text.match(greeting)?.[0]||'';
- const remaining=text.slice(prefix.length).trim();
+ // Only a whole courtesy may omit a known reception name. This does not
+ // impersonate staff, infer the sender's role, or handle requests to that person.
+ const remaining=text.slice(prefix.length).trim().replace(prefix?/^(?:valentina|luisa(?: fernanda)?)(?:\s+|$)/:/^$/,'');
  if(prefix&&!remaining)return 'Hola 😊 ¿En qué podemos ayudarte hoy?';
  if(/^(?:con )?(?:como estas|como estan|como vas|como te va|que tal|todo bien)(?: y tu)?$/.test(remaining)||/^(?:muy )?bien(?: gracias)? y tu$/.test(text))return (prefix?'Hola 😊 Gracias por preguntar.':'Gracias por preguntar 😊')+' Estoy aquí para ayudarte.';
  if(/^(?:muchas gracias|muchisimas gracias|gracias|gracias por todo|ok gracias|listo gracias)$/.test(text))return 'Con mucho gusto 😊';

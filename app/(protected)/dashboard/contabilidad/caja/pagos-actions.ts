@@ -2,7 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { requireReceptionUser } from "@/lib/psychology-access";
-import { paymentBalanceError, validatePagoServicio, type PagoServicioInput } from "@/lib/pago-servicio";
+import { validatePaymentBalance, validatePagoServicio, type PagoServicioInput } from "@/lib/pago-servicio";
 import { createAuditLog } from "@/lib/audit";
 import { bogotaToday, getBogotaDayRange } from "@/lib/bogota-date";
 import { revalidatePath } from "next/cache";
@@ -160,8 +160,7 @@ export async function registrarPagoServicio(token: string, input: PagoServicioIn
         AND (${data.origen === "CITA"} AND "citaId"=${data.origenId}::bigint OR ${data.origen === "PAQUETE"} AND "paqueteId"=${data.origenId}::bigint)`;
       const already = Math.round(Number(previous[0].total) * 100);
       if (!Number.isSafeInteger(already)) throw new Error("No pudimos calcular el saldo. Vuelve a consultar los pagos registrados.");
-      if (already + data.totalCentavos > Math.round(valor * 100))
-        throw new Error(paymentBalanceError(data.totalCentavos, Math.round(valor * 100) - already));
+      const balance = validatePaymentBalance(data.totalCentavos, Math.round(valor * 100) - already, data.abonoConfirmado === true);
       const ids: string[] = [];
       for (const [index, line] of data.lineas.entries()) {
         if (line.referencia) {
@@ -190,12 +189,14 @@ export async function registrarPagoServicio(token: string, input: PagoServicioIn
           THEN 'MIXTO' ELSE MIN("metodoPago") END AS "metodo" FROM "PagoServicioPsicologia"
           WHERE "tenantId"=${user.tenantId} AND "citaId"=${data.origenId}::bigint AND NOT "reversado"`;
         await tx.citasPsicologos.update({ where: { id: BigInt(data.origenId) },
-          data: { estadoPago: already + data.totalCentavos === Math.round(valor * 100) ? "CONCILIADO" : "PENDIENTE",
+          data: { estadoPago: balance.saldoCentavos === 0 ? "CONCILIADO" : "PENDIENTE",
             metodoPago: methods[0].metodo } });
       }
       if (paquete) await syncPackagePaymentState(tx, user.tenantId, BigInt(data.origenId));
       await createAuditLog({ tenantId: user.tenantId, usuarioId: user.id, accion: "CREATE", entidad: "PagoServicioPsicologia",
         entidadId: ids.join(","), detalles: { origen: data.origen, origenId: data.origenId, fecha: data.fecha, historicoRevisado:data.historicoRevisado===true,
+          abonoConfirmado: data.abonoConfirmado === true, valorServicio: valor, registradoAntes: already / 100,
+          recibido: data.totalCentavos / 100, adicionalRecibido: balance.adicionalCentavos / 100, saldoPendiente: balance.saldoCentavos / 100,
           lineas: data.lineas.map((line) => ({ metodoPago: line.metodoPago, monto: line.monto, referencia: line.referencia })) }, tx });
       return ids;
     });
@@ -244,7 +245,14 @@ export async function devolverPagoServicio(token: string, id: string, fecha: str
           ${`Devolución pago ${id}: ${reason}`},${`DEV-${id}`},${solicitudId}::uuid) RETURNING "id"::text`;
       await tx.$executeRaw`UPDATE "PagoServicioPsicologia" SET "reversado"=TRUE,
         "reversoMovimientoId"=${movement[0].id}::bigint WHERE "tenantId"=${user.tenantId} AND "id"=${id}::bigint`;
-      if (pago.citaId) await tx.citasPsicologos.update({ where: { id: BigInt(pago.citaId) }, data: { estadoPago: "PENDIENTE" } });
+      if (pago.citaId) {
+        const balance = await tx.$queryRaw<{ completo: boolean }[]>`SELECT c.valor>0 AND
+          COALESCE((SELECT SUM(p.monto) FROM "PagoServicioPsicologia" p WHERE p."tenantId"=c."tenantId"
+            AND p."citaId"=c.id AND NOT p.reversado),0)>=c.valor AS completo
+          FROM "CitasPsicologos" c WHERE c.id=${pago.citaId}::bigint AND c."tenantId"=${user.tenantId}`;
+        await tx.citasPsicologos.update({ where: { id: BigInt(pago.citaId) },
+          data: { estadoPago: balance[0]?.completo ? "CONCILIADO" : "PENDIENTE" } });
+      }
       if (pago.paqueteId) await syncPackagePaymentState(tx, user.tenantId, BigInt(pago.paqueteId));
       await createAuditLog({ tenantId: user.tenantId, usuarioId: user.id, accion: "REFUND", entidad: "PagoServicioPsicologia",
         entidadId: id, detalles: { fecha, motivo: reason, movimientoId: movement[0].id }, tx });

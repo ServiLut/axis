@@ -43,8 +43,9 @@ export async function inspectRentalSlot(tx:Tx,professionalId:number,slot:RentalS
  if(!slot.date||!slot.start||!slot.end)return {kind:'incomplete' as const};
  const when=bookingTimes(slot.date,slot.start,slot.end);
  if(when.inicio.getTime()<=Date.now()||when.inicio.getTime()>Date.now()+90*86400000||slot.start<'07:00'||slot.end>'20:00')return {kind:'invalid' as const};
- const quote=rentalQuote((when.fin.getTime()-when.inicio.getTime())/60000,hourlyPrice);
- const end=new Date(when.inicio.getTime()+quote.minutes*60000);
+ const minutes=(when.fin.getTime()-when.inicio.getTime())/60000;
+ const quote=minutes%60===0?rentalQuote(minutes,hourlyPrice):null;
+ const end=when.fin;
  if(end.getTime()>new Date(slot.date+'T20:00:00-05:00').getTime())return {kind:'invalid' as const};
  const selected=matchRentalRoom(rooms,slot.roomLabel);
  if(slot.roomLabel&&!selected)return {kind:'unknown-room' as const};
@@ -61,7 +62,7 @@ export async function handleRentalIntake(tx:Tx,event:ReceptionEvent,stage:string
  if(u.service&&u.service!=='alquiler')return null;
  if(!isRentalBookingRequest(event,state)&&!(u.service==='alquiler'&&u.rentalRequests?.length)&&!u.roomPreferenceChanges?.length)return null;
  const result=(rental:RentalDraft,messages:string[]):ReceptionResult=>({stage:'RENTAL_DETAILS',state:{...state,service:'alquiler',rental},messages});
- const review=(reason:string):ReceptionResult=>({stage:'HUMAN',state:{...state,reason},messages:['Tu solicitud está pendiente de confirmación. Gracias por tu paciencia.'],handoff:reason});
+ const review=(reason:string,message='Tu solicitud está pendiente de confirmación. Gracias por tu paciencia.'):ReceptionResult=>({stage:'HUMAN',state:{...state,reason},messages:[message],handoff:reason});
  if(u.intent==='reject')return review('Cambio o rechazo de alquiler; aclarar cuál horario desea modificar');
  if(u.confidence<.85)return review('Datos de reserva de consultorio ambiguos');
  const identity=await readReceptionIdentity(tx,event.phone);
@@ -103,7 +104,7 @@ export async function handleRentalIntake(tx:Tx,event:ReceptionEvent,stage:string
     const requestedRoom=matchRentalRoom(rooms,slot.roomLabel);
     let requestedEnd:Date|null=null;
     if(slot.end){
-     try{const when=bookingTimes(slot.date,slot.start,slot.end);const quote=rentalQuote((when.fin.getTime()-at.getTime())/60000,String(services[0].precioBase));requestedEnd=new Date(at.getTime()+quote.minutes*60000);}
+     try{requestedEnd=bookingTimes(slot.date,slot.start,slot.end).fin;}
      catch{return review('Duración solicitada para la reserva anterior necesita aclaración');}
     }
     if((slot.roomLabel&&requestedRoom?.id!==room.id)||(requestedEnd&&requestedEnd.getTime()!==appointment.horaFin.getTime())){
@@ -120,16 +121,17 @@ export async function handleRentalIntake(tx:Tx,event:ReceptionEvent,stage:string
   catch{return review('Horario o duración del alquiler necesita aclaración');}
   const label=slotLabel(slot);
   if(checked.kind==='incomplete'){
-   question??=!slot.date?'Claro 😊 ¿Para qué día necesitas el consultorio?':!slot.start?`¿A qué hora te gustaría reservar ${label}?`:`Para ${label} a las ${friendlyTime(slot.start)}, ¿cuántas horas necesitas?`;
-  }else if(checked.kind==='invalid')question??=`¿Puedes confirmar la fecha y duración de ${label}? Reservamos de 7 a. m. a 8 p. m., por horas.`;
+   question??=!slot.date?'Claro 😊 ¿Para qué día necesitas el consultorio?':!slot.start?`¿A qué hora te gustaría reservar ${label}?`:`Para ${label} a las ${friendlyTime(slot.start)}, ¿hasta qué hora necesitas el consultorio?`;
+  }else if(checked.kind==='invalid')question??=`¿Puedes confirmar la fecha y las horas de inicio y fin de ${label}? Reservamos de 7 a. m. a 8 p. m.`;
   else if(checked.kind==='unknown-room')question??=`¿Cuál consultorio deseas para ${label}? Tenemos ${rooms.map(r=>r.nombre).join(', ')}.`;
   else if(checked.kind==='incomplete-agenda')return review('Agenda de consultorios con horas incompletas; verificar antes de reservar');
   else if(checked.kind==='professional-busy')question??=`Ese horario coincide con otra reserva tuya ${label}. ¿Prefieres que revisemos otro horario?`;
   else if(!checked.selected||!checked.free.some(r=>r.id===checked.selected!.id)){
-   if(checked.free.length)messages.push(`Para ${label}, de ${friendlyTime(slot.start!)} a ${friendlyTime(slot.end!)}, el alquiler cuesta ${rentalMoney(checked.quote.amount)}.`);
+   if(checked.free.length)messages.push(checked.quote?`Para ${label}, de ${friendlyTime(slot.start!)} a ${friendlyTime(slot.end!)}, el alquiler cuesta ${rentalMoney(checked.quote.amount)}.`:`Hay disponibilidad para ${label}, de ${friendlyTime(slot.start!)} a ${friendlyTime(slot.end!)}. El valor del tiempo adicional está por confirmar.`);
    const prefix=checked.selected?`El ${checked.selected.nombre.toLowerCase()} está ocupado ${label}, de ${friendlyTime(slot.start!)} a ${friendlyTime(slot.end!)}. `:'';
    question??=checked.free.length?`${prefix}${roomChoice(checked.free,state.roomPreferences,identity.professionalId)}`:`Para ${label}, de ${friendlyTime(slot.start!)} a ${friendlyTime(slot.end!)}, no tenemos consultorios libres. ¿Qué otro horario te sirve?`;
   }else{
+   if(!checked.quote)return review(`Alquiler ${label}, de ${friendlyTime(slot.start!)} a ${friendlyTime(slot.end!)}, ${checked.selected.nombre}. Hay disponibilidad consultada, sin reserva creada. Falta indicar el valor de los minutos adicionales antes de cotizar y confirmar.`, 'Hay disponibilidad en ese horario. El valor del tiempo adicional está por confirmar; todavía no queda reservado.');
    // Avoid a second independent proposal if the same professional already has one outstanding.
    const existing=await tx.$queryRaw<{code:string}[]>`SELECT code FROM "PsicologiaBotProposal" WHERE "customerPhone"=${event.phone} AND status='PENDING' AND "expiresAt">NOW() AND details->>'date'=${slot.date} AND details->>'start'=${slot.start} LIMIT 1`;
    if(existing.length)return review('Existe una propuesta de alquiler pendiente; revisar antes de duplicarla');

@@ -1,4 +1,4 @@
-import {decideReception,type ReceptionEvent,type ReceptionState,type ReceptionTemplates,type ReceptionResult} from './psychology-reception';
+import {decideReception,normalizeText,type ReceptionEvent,type ReceptionState,type ReceptionTemplates,type ReceptionResult} from './psychology-reception';
 import type {Understanding} from './psychology-ai';
 import {contextReception,isRentalBookingRequest} from './psychology-reception-context';
 
@@ -11,6 +11,14 @@ export function semanticReception(event:ReceptionEvent,stage:string,state:Recept
  if(u?.intent==='stop'||baseline.state.reason==='No contactar')return decideReception({...event,text:'no me escriban'},stage,state,templates,policy);
  if(u?.intent==='abusive'&&u.confidence>=0.9)return {stage:'HUMAN',state:{...state,reason:'Atención respetuosa ante insultos'},messages:['Podemos continuar con respeto. Cuéntame qué necesitas resolver.'],handoff:'Insultos dirigidos a la atención; definir respuesta humana sin confrontación'};
  const contextual=contextReception(event,stage,state);if(contextual)return contextual;
+ // A plain request for therapy does not identify a specialty or justify a
+ // referral. Preserve history, prior choices and the approved menu verbatim.
+ const plainTherapy=/^(?:para tomar|quiero(?: tomar)?|quisiera(?: tomar)?|necesito|busco) (?:una )?terapia$/.test(normalizeText(event.text).replace(/[¿?¡!.,]/g,'').trim());
+ if(event.kind==='text'&&plainTherapy&&['NEW','NEED','MENU'].includes(stage)&&!event.quotedText&&!state.context?.quotedText&&!state.context?.continuation&&!state.service&&!state.intake&&!state.rental){
+  if(stage==='MENU')return {stage,state,messages:['¿Cuál de las terapias que te compartí te interesa?']};
+  if(state.context?.hasHistory||state.context?.role==='patient')return {stage:'NEED',state,messages:['Claro 😊 ¿Qué terapia te gustaría tomar?']};
+  return decideReception({...event,text:'/servicios'},stage,state,templates,policy);
+ }
  // Booking details take precedence over a generic service offer, even if the model misses dates.
  if(isRentalBookingRequest(event,state)&&(!u?.service||u.service==='alquiler')&&!['courtesy','reject'].includes(u?.intent||''))return {stage:'RENTAL_DETAILS',state:{...state,service:'alquiler'},messages:['Claro 😊 Revisaré el horario que solicitas.']};
  if(!u)return baseline;

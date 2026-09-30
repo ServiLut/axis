@@ -68,15 +68,20 @@ export default function NuevoCitaPage() {
   const [selectedPaqueteId, setSelectedPaqueteId] = useState<string>("");
   const [selectedTerapiaId, setSelectedTerapiaId] = useState<string>("");
   const [valorCita, setValorCita] = useState<string>("");
+  const [additionalInput, setAdditionalInput] = useState({ key: "", value: "" });
   const [horaInicio, setHoraInicio] = useState<string>("");
   const [horaFin, setHoraFin] = useState<string>("");
 
+  const rentalKey = horaInicio + "|" + horaFin + "|" + selectedTerapiaId;
+  const rentalAdditional = additionalInput.key === rentalKey ? additionalInput.value : "";
+  const rentalMinutes = horaInicio && horaFin ? (Number(horaFin.slice(0,2))*60 + Number(horaFin.slice(3))) - (Number(horaInicio.slice(0,2))*60 + Number(horaInicio.slice(3))) : 0;
+  const rentalExtraMinutes = rentalMinutes > 0 ? rentalMinutes % 60 : 0;
   const rentalServices = terapias.filter((t) => /alquiler/i.test(t.nombre) && t.cantidadSesiones === 1);
   const rentalService = rentalServices.length === 1 ? rentalServices[0] : undefined;
   const rentalPrice = rentalService ? Number(rentalService.precioBase).toFixed(2) : "";
-  const [prevCalcData, setPrevCalcData] = useState({ mode, horaInicio, horaFin, rentalPrice });
-  if (prevCalcData.mode !== mode || prevCalcData.horaInicio !== horaInicio || prevCalcData.horaFin !== horaFin || prevCalcData.rentalPrice !== rentalPrice) {
-    setPrevCalcData({ mode, horaInicio, horaFin, rentalPrice });
+  const [prevCalcData, setPrevCalcData] = useState({ mode, horaInicio, horaFin, rentalPrice, rentalAdditional });
+  if (prevCalcData.mode !== mode || prevCalcData.horaInicio !== horaInicio || prevCalcData.horaFin !== horaFin || prevCalcData.rentalPrice !== rentalPrice || prevCalcData.rentalAdditional !== rentalAdditional) {
+    setPrevCalcData({ mode, horaInicio, horaFin, rentalPrice, rentalAdditional });
     if (mode === "ALQUILER" && horaInicio && horaFin) {
       const [hStart, mStart] = horaInicio.split(":").map(Number);
       const [hEnd, mEnd] = horaFin.split(":").map(Number);
@@ -88,7 +93,7 @@ export default function NuevoCitaPage() {
         const startTotalMinutes = hStart * 60 + mStart;
         const endTotalMinutes = hEnd * 60 + mEnd;
         const diff = endTotalMinutes - startTotalMinutes;
-        try { setValorCita(rentalQuote(diff, rentalPrice).amount.toString()); }
+        try { setValorCita(rentalQuote(diff, rentalPrice, rentalAdditional).amount.toString()); }
         catch { setValorCita(""); }
       }
     }
@@ -718,6 +723,7 @@ export default function NuevoCitaPage() {
                   id="horaInicio"
                   name="horaInicio"
                   type="time"
+                  step={60}
                   className="h-11"
                   required
                   value={horaInicio}
@@ -736,6 +742,7 @@ export default function NuevoCitaPage() {
                   id="horaFin"
                   name="horaFin"
                   type="time"
+                  step={60}
                   className="h-11"
                   required
                   value={horaFin}
@@ -762,6 +769,14 @@ export default function NuevoCitaPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {(mode === "ALQUILER") && rentalExtraMinutes > 0 && <div className="space-y-2">
+                <Label htmlFor="rentalAdicional">Valor de {rentalExtraMinutes} minutos adicionales</Label>
+                <Input id="rentalAdicional" name="rentalAdicional" type="number" min="0" max="999999999.99" step="0.01" value={rentalAdditional}
+                  onChange={(e) => setAdditionalInput({ key: rentalKey, value: e.target.value })} placeholder="Indica el valor acordado" required />
+                <p className="text-sm text-slate-600">Escribe cuánto se cobrará por el tiempo adicional. Usa 0 solo si no se cobra. El total suma las horas completas del catálogo y este valor.</p>
+              </div>}
+              {(mode === "ALQUILER") && <p className="text-sm text-slate-600">Puedes indicar cualquier hora y minuto, como 4:30, 5:45 o 5:50. Se conserva el intervalo elegido, sin redondearlo a otra hora.</p>}
+
               <div className="space-y-2">
                 <Label
                   htmlFor="valorCotizado"
@@ -776,6 +791,7 @@ export default function NuevoCitaPage() {
                   step="0.01"
                   placeholder="0.00"
                   className="h-11"
+                  readOnly={mode === "ALQUILER"}
                   value={valorCita}
                   onChange={(e) => setValorCita(e.target.value)}
                 />

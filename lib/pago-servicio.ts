@@ -8,6 +8,7 @@ export type PagoServicioInput = {
   solicitudId: string;
   confirmado: boolean;
   historicoRevisado?: boolean;
+  abonoConfirmado?: boolean;
   lineas: { metodoPago: CajaMethod; monto: string; referencia: string }[];
 };
 
@@ -33,10 +34,20 @@ export function validatePagoServicio(input: PagoServicioInput, today = bogotaTod
   return { ...input, lineas, totalCentavos };
 }
 
+export function validatePaymentBalance(receivedCents: number, remainingCents: number, partialConfirmed = false) {
+  if (!Number.isSafeInteger(receivedCents) || receivedCents <= 0 || !Number.isSafeInteger(remainingCents))
+    throw new Error("No pudimos calcular el pago y su saldo. Revisa los valores ingresados.");
+  if (remainingCents <= 0) throw new Error("Este servicio ya tiene el valor completo registrado. No registres otro pago.");
+  if (receivedCents < remainingCents && !partialConfirmed)
+    throw new Error(paymentBalanceError(receivedCents, remainingCents));
+  return { saldoCentavos: Math.max(0, remainingCents - receivedCents),
+    adicionalCentavos: Math.max(0, receivedCents - remainingCents) };
+}
+
 export function paymentBalanceError(receivedCents: number, remainingCents: number): string {
   const format = (cents: number) => new Intl.NumberFormat("es-CO", {
     style: "currency", currency: "COP", minimumFractionDigits: 0, maximumFractionDigits: 2,
   }).format(cents / 100);
-  return `Ingresaste ${format(receivedCents)}, pero el saldo por registrar es ${format(remainingCents)}. ` +
-    `La diferencia es ${format(receivedCents - remainingCents)}. Comprueba el valor del servicio y los pagos ya registrados antes de guardar.`;
+  return `Ingresaste ${format(receivedCents)} y faltan ${format(remainingCents - receivedCents)} para completar el saldo. ` +
+    `Corrige el valor o confirma que estás registrando un abono. El servicio seguirá pendiente de pago.`;
 }

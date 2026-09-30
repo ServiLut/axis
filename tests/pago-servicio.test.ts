@@ -1,12 +1,22 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { validatePagoServicio, type PagoServicioInput } from "../lib/pago-servicio";
+import { validatePaymentBalance, validatePagoServicio, type PagoServicioInput } from "../lib/pago-servicio";
 
 const base: PagoServicioInput = { origen: "CITA", origenId: "1", fecha: "2026-09-25",
   solicitudId: "12345678-1234-4234-8234-123456789abc", confirmado: true, lineas: [
     { metodoPago: "EFECTIVO", monto: "20000", referencia: "" },
     { metodoPago: "TRANSFERENCIA", monto: "30000.50", referencia: "Banco 123" },
   ] };
+
+test("valores mayores cubren el saldo y valores menores requieren reconocer el abono", () => {
+  assert.deepEqual(validatePaymentBalance(3780000, 1890000), { saldoCentavos: 0, adicionalCentavos: 1890000 });
+  assert.deepEqual(validatePaymentBalance(2840000, 2835000), { saldoCentavos: 0, adicionalCentavos: 5000 });
+  assert.deepEqual(validatePaymentBalance(1890000, 1890000), { saldoCentavos: 0, adicionalCentavos: 0 });
+  assert.throws(() => validatePaymentBalance(1889900, 1890000), /abono/);
+  assert.deepEqual(validatePaymentBalance(1889900, 1890000, true), { saldoCentavos: 100, adicionalCentavos: 0 });
+  assert.throws(() => validatePaymentBalance(100, 0, true), /ya tiene/);
+  assert.throws(() => validatePaymentBalance(100, -100, true), /ya tiene/);
+});
 
 test("un cobro dividido conserva los centavos y admite referencia opcional", () => {
   const result = validatePagoServicio(base, "2026-09-26");

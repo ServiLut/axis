@@ -90,7 +90,7 @@ Una pregunta social aislada («¿cómo estás?») o un agradecimiento breve reci
 
 Un pedido concreto de reserva tiene prioridad sobre el texto de oferta del servicio. El mensaje actual puede contener contexto suficiente aunque falte el historial antiguo. «Consultorio 10» se busca por su nombre y no por el identificador interno 10. Las solicitudes para dos días se mantienen separadas; duración y consultorio de la primera no se atribuyen a la segunda. La propuesta muestra fecha, horas y valor actuales y no confirma ocupación hasta la aceptación y nueva validación. Si ya existe una cita a esa hora para el profesional, se informa su existencia sin volver a crearla. No se vuelve a preguntar si desea agendar a quien ya lo pidió.
 
-Antes de presentar una cita anterior como alquiler existente, se verifica su catálogo y empresa, consultorio y horario completos. Si el consultorio o la duración solicitados difieren de lo guardado, se conserva el registro y se pide aclaración a Sandra explicando ambas opciones. Una cita donde el profesional atiende a un paciente no prueba que tenga un alquiler. Una solicitud de 55 minutos se compara con la hora completa que incluye los cinco minutos de cortesía.
+Antes de presentar una cita anterior como alquiler existente, se verifica su catálogo y empresa, consultorio y horario completos. Si el consultorio o la duración solicitados difieren de lo guardado, se conserva el registro y se pide aclaración a Sandra explicando ambas opciones. Una cita donde el profesional atiende a un paciente no prueba que tenga un alquiler. La duración solicitada se conserva en minutos exactos. La usuaria aclaró el 30/09 que el operador introduce el valor del adicional por minutos, incluso cero; no se redondea a horas completas ni se inventa una tarifa proporcional. Si falta ese valor, el bot consulta internamente antes de cotizar o reservar.
 
 La migración histórica `docs/sql/2026-09-28-psychology-handover.sql` conserva las referencias de continuaciones antiguas para auditoría. Desde el29/09 no se crean ni se envían continuaciones por inactividad. Una devolución expresa de Sandra limpia la pausa, pero no habilita respuestas preparadas antes de esa devolución; se espera el siguiente mensaje para responder con contexto actual.
 
@@ -135,3 +135,7 @@ No declarar el objetivo completo hasta verificar:
 6. Validación real controlada de cada flujo, registro de fallos y límites. Las pruebas sintéticas no demuestran una cita ni un cobro real.
 
 Al completar lo anterior, informar capacidades y excepciones humanas que se conservan y retirar solo la supervisión temporal; mantener bot y reportes diarios. No comprar créditos ni activar recarga automática sin autorización específica.
+
+### Importes recibidos y horarios exactos — 30/09/2026
+
+Se permite registrar un importe recibido mayor al saldo, manteniendo el precio original del servicio y auditando el adicional recibido. Un importe menor requiere confirmarlo expresamente como abono y conserva el saldo pendiente. Un servicio ya pagado rechaza otro registro. La confirmación de dinero recibido, la revisión de pagos anteriores, el ámbito de empresa y la deduplicación siguen siendo obligatorios. La pantalla no constituye prueba de ingreso bancario.

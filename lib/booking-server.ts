@@ -17,12 +17,12 @@ export async function lockAndValidateBooking(tx: Prisma.TransactionClient, input
   if (occupied) throw new Error(`El profesional o consultorio ya tiene una reserva en ese horario (CITA-${occupied.id}).`);
 }
 
-export async function normalizedRental(tx: Prisma.TransactionClient, tenantId: number, terapiaId: bigint | null, inicio: Date, fin: Date) {
+export async function normalizedRental(tx: Prisma.TransactionClient, tenantId: number, terapiaId: bigint | null, inicio: Date, fin: Date, additionalAmount?: string | null) {
   if (!terapiaId) return null;
   const therapy = await tx.terapiasPsicologos.findFirst({ where: { id: terapiaId, tenantId, activo: true } });
   if (!therapy) throw new Error("El servicio no está activo en este sistema.");
   if (!/alquiler/i.test(therapy.nombre)) return null;
   if (therapy.cantidadSesiones !== 1) throw new Error("Revisa el contrato del paquete de alquiler antes de cambiar su duración.");
-  const quote = rentalQuote((fin.getTime() - inicio.getTime()) / 60000, Number(therapy.precioBase).toFixed(2));
+  const quote = rentalQuote((fin.getTime() - inicio.getTime()) / 60000, Number(therapy.precioBase).toFixed(2), additionalAmount);
   return { valor: quote.amount, fin: new Date(inicio.getTime() + quote.minutes * 60000) };
 }

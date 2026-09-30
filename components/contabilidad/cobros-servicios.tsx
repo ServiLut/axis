@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CAJA_METHODS, paymentInputInCents, type CajaMethod } from "@/lib/caja";
-import { paymentBalanceError, validatePagoServicio, type PagoServicioInput } from "@/lib/pago-servicio";
+import { validatePaymentBalance, validatePagoServicio, type PagoServicioInput } from "@/lib/pago-servicio";
 import { devolverPagoServicio, getCobroDesdeCita, getPagosServicioDelDia, getPendientesPsicologia, registrarPagoServicio } from "@/app/(protected)/dashboard/contabilidad/caja/pagos-actions";
 import { toast } from "sonner";
 import { bogotaToday } from "@/lib/bogota-date";
@@ -42,6 +42,14 @@ export function CobrosServicios({ fecha, revision, onSaved, citaId, soloCita=fal
   const [lines, setLines] = useState([newLine()]);
   const [confirmed, setConfirmed] = useState(false);
   const [historicoRevisado,setHistoricoRevisado]=useState(false);
+  const [partialKey, setPartialKey] = useState("");
+  const balanceKey = JSON.stringify([selected?.origen, selected?.id, selected?.valor, selected?.registrado, lines]);
+  const abonoConfirmado = partialKey === balanceKey;
+  let amountDifference: number | null = null;
+  if (selected) {
+    try { amountDifference = lines.reduce((sum, line) => sum + paymentInputInCents(line.monto), 0)
+      - Math.round((Number(selected.valor) - Number(selected.registrado)) * 100); } catch { /* Incomplete amount. */ }
+  }
   const [saving, setSaving] = useState(false);
   const requestId = useRef<string | null>(null);
   const [targetNotice, setTargetNotice] = useState("");
@@ -124,15 +132,17 @@ export function CobrosServicios({ fecha, revision, onSaved, citaId, soloCita=fal
       if (selected.situacion!=='PENDIENTE' && !historicoRevisado) throw new Error("Marca la revisión del pago anterior y confirma la fecha en que recibiste el dinero.");
       requestId.current ||= crypto.randomUUID();
       const input: PagoServicioInput = { origen: selected.origen, origenId: selected.id, fecha,
-        solicitudId: requestId.current, confirmado: confirmed, lineas: lines, historicoRevisado };
+        solicitudId: requestId.current, confirmado: confirmed, lineas: lines, historicoRevisado, abonoConfirmado };
       const validated = validatePagoServicio(input);
       const remaining = Math.round((Number(selected.valor) - Number(selected.registrado)) * 100);
-      if (validated.totalCentavos > remaining) throw new Error(paymentBalanceError(validated.totalCentavos, remaining));
+      const balance = validatePaymentBalance(validated.totalCentavos, remaining, abonoConfirmado);
       const result = await registrarPagoServicio(token, input);
       if ("error" in result) throw new Error(result.error);
-      const notice=validated.totalCentavos===remaining ? "Pago guardado. El valor completo quedó registrado en el libro." : "Abono guardado. Ya actualizamos el saldo que falta registrar.";
+      const notice = balance.adicionalCentavos > 0
+        ? `Pago guardado por ${format(validated.totalCentavos / 100)}, incluidos ${format(balance.adicionalCentavos / 100)} adicionales. El saldo quedó cubierto.`
+        : balance.saldoCentavos === 0 ? "Pago guardado. El valor completo quedó registrado en el libro." : "Abono guardado. Ya actualizamos el saldo que falta registrar.";
       toast.success(notice); setSavedNotice(notice);
-      requestId.current = null; setSelected(null); setLines([newLine()]); setConfirmed(false); onSaved();
+      requestId.current = null; setPartialKey(""); setSelected(null); setLines([newLine()]); setConfirmed(false); onSaved();
     } catch (cause) { setSaveError(cause instanceof Error ? cause.message : "No pudimos confirmar el guardado. Conservamos los datos: reintenta con el mismo pago."); }
     finally { submitting.current=false; setSaving(false); onSavingChange?.(false); }
   }
@@ -178,6 +188,12 @@ export function CobrosServicios({ fecha, revision, onSaved, citaId, soloCita=fal
           onChange={(event) => { const copy=[...lines]; copy[index]={...line,referencia:event.target.value}; setLines(copy); requestId.current=null; }} /></div>
       </div>)}
       <p id="pago-referencia-ayuda" className="text-xs text-slate-500">La referencia es el número de la transacción o del recibo, no la cuenta de origen. Puedes dejarla vacía.</p>
+      {amountDifference !== null && amountDifference > 0 && <p role="status" className="rounded-xl border border-teal-200 bg-teal-50 p-3 text-sm text-teal-900">Se registrará todo el dinero recibido, incluidos {format(amountDifference / 100)} adicionales al saldo. El precio del servicio se conserva.</p>}
+      {amountDifference !== null && amountDifference < 0 && <div role="status" className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+        <p>El valor es menor al saldo: faltan {format(-amountDifference / 100)}. Corrige el valor si recibiste el pago completo.</p>
+        <label className="flex items-start gap-3"><input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-teal-700" checked={abonoConfirmado}
+          onChange={event => setPartialKey(event.target.checked ? balanceKey : "")} />Es un abono. Confirmo que el saldo restante seguirá pendiente.</label>
+      </div>}
       <p className="text-sm font-medium text-slate-800">Antes de guardar</p>
       {selected.situacion!=='PENDIENTE'&&<label className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-relaxed"><input className="mt-1 h-4 w-4 shrink-0 accent-teal-700" type="checkbox" checked={historicoRevisado} onChange={e=>{setHistoricoRevisado(e.target.checked);requestId.current=null;}}/>Revisé este pago anterior y la fecha real en que se recibió. Lo estoy registrando, sin cobrarlo de nuevo.</label>}
       <label className="flex items-start gap-3 rounded-xl border border-teal-100 bg-teal-50/50 p-3 text-sm leading-relaxed text-slate-700"><input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-teal-700" checked={confirmed}

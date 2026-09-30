@@ -42,14 +42,14 @@ test('two requested dates survive; only missing Saturday duration and room are a
  const f=fixture();const d=await f.api.handleRentalIntake(f.tx as never,e,'NEW',state,u);
  assert.equal(d?.stage,'RENTAL_DETAILS');assert.equal(d.state.rental?.requests.length,2);assert.equal(f.proposed.length,1);
  assert.equal(f.proposed[0].room,'1');assert.equal(f.proposed[0].start,'17:00');assert.equal(f.proposed[0].end,'19:00');
- assert.match(d.messages.at(-1)!,/cuántas horas/);assert.doesNotMatch(d.messages.join(' '),/precios|Luisa|Qué día|anticipo|comprobante|Axis|código/);
+ assert.match(d.messages.at(-1)!,/hasta qué hora/);assert.doesNotMatch(d.messages.join(' '),/precios|Luisa|Qué día|anticipo|comprobante|Axis|código/);
  assert.equal(d.state.rental?.requests[1].end,null);assert.equal(d.state.rental?.requests[1].roomLabel,null);
 });
 
 test('Friday 4 pm request asks only for missing duration; complete interval consults availability and quotes before choice',async()=>{
  const f=fixture();const incoming={...e,text:'Para separar porfa un espacio para el viernes a las 4 pm'};
  const first=await f.api.handleRentalIntake(f.tx as never,incoming,'PROFESSIONAL',state,{...u,rentalRequests:[{requestIndex:null,date,start:'16:00',end:null,roomLabel:null}]});
- assert.equal(first!.handoff,undefined);assert.match(first!.messages[0],/cuántas horas/);assert.equal(f.proposed.length,0);
+ assert.equal(first!.handoff,undefined);assert.match(first!.messages[0],/hasta qué hora/);assert.equal(f.proposed.length,0);
  const next=await f.api.handleRentalIntake(f.tx as never,{...incoming,id:'duration',text:'Dos horas'},'RENTAL_DETAILS',first!.state,{...u,rentalRequests:[{requestIndex:0,date:null,start:null,end:'18:00',roomLabel:null}]});
  assert.equal(next!.handoff,undefined);assert.match(next!.messages.join(' '),/37[.,]800/);assert.match(next!.messages.join(' '),/consultorio 10.*consultorio 20/i);assert.equal(f.proposed.length,0);
  assert.doesNotMatch(next!.messages.join(' '),/Ya tienes|quedó|confirmada/);
@@ -104,18 +104,20 @@ test('patient appointments, unverified service scope and incomplete reservations
  }
 });
 
-test('an existing one-hour rental matches a 55-minute request including the five minutes of courtesy',async()=>{
+test('a 55-minute request is not silently rounded to an existing one-hour booking',async()=>{
  const f=fixture();f.flags.existingBooking=true;
  const d=await f.api.handleRentalIntake(f.tx as never,e,'NEW',state,{...u,rentalRequests:[{requestIndex:null,date,start:'18:00',end:'18:55',roomLabel:'10'}]});
- assert.equal(d!.stage,'RENTAL_DETAILS');assert.equal(f.proposed.length,0);assert.equal(d!.state.rental!.requests[0].existingCitaId,'123');
- assert.match(d!.messages[0],/de 6 p\. m\. a 7 p\. m\., en el consultorio 10/);
+ assert.equal(d!.stage,'HUMAN');assert.equal(f.proposed.length,0);
+ assert.match(d!.handoff!,/Diferencia en reserva existente/);
 });
 test('read-only availability computes 2-hour quote, blocks overlap and invalid duration',async()=>{
  const f=fixture(),slot=mergeRentalRequests([],u.rentalRequests!,e.id)[0];
- const r=await f.api.inspectRentalSlot(f.tx as never,83,slot,f.rooms,'18900.00');assert.equal(r.kind,'checked');if(r.kind==='checked')assert.equal(r.quote.amount,37800);
+ const r=await f.api.inspectRentalSlot(f.tx as never,83,slot,f.rooms,'18900.00');assert.equal(r.kind,'checked');if(r.kind==='checked')assert.equal(r.quote?.amount,37800);
  f.flags.occupied=true;f.flags.professionalBusy=true;assert.equal((await f.api.inspectRentalSlot(f.tx as never,83,slot,f.rooms,'18900.00')).kind,'professional-busy');
  assert.equal((await f.api.inspectRentalSlot(f.tx as never,83,{...slot,end:'21:00'},f.rooms,'18900.00')).kind,'invalid');
- await assert.rejects(()=>f.api.inspectRentalSlot(f.tx as never,83,{...slot,end:'18:17'},f.rooms,'18900.00'));
+ f.flags.occupied=false;f.flags.professionalBusy=false;
+ const fractional=await f.api.inspectRentalSlot(f.tx as never,83,{...slot,end:'18:17'},f.rooms,'18900.00');
+ assert.equal(fractional.kind,'checked');if(fractional.kind==='checked')assert.equal(fractional.quote,null);
  assert.equal(f.proposed.length,0);
 });
 test('rental structured extraction rejects invalid slots and accepts previous event format',()=>{

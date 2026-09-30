@@ -33,7 +33,7 @@ async function fixture() {
   await db.exec(readFileSync("docs/sql/2026-09-24-caja-diaria.sql", "utf8"));
   await db.exec(readFileSync("docs/sql/2026-09-25-recepcion.sql", "utf8"));
   await db.exec(readFileSync("docs/sql/2026-09-26-pagos-servicios.sql", "utf8"));
-  const state = { auditFail: false, tenantId: 4 };
+  const state = { auditFail: false, tenantId: 4, audits: [] as Record<string, unknown>[] };
   const raw = (driver: PGlite | Transaction) => {
     const execute = async (strings: TemplateStringsArray, ...params: unknown[]) => driver.query(
       strings.reduce((sql, part, index) => sql + (index ? `$${index}` : "") + part, ""),
@@ -66,9 +66,10 @@ async function fixture() {
   const actions = loadServerModule<typeof Actions>("app/(protected)/dashboard/contabilidad/caja/pagos-actions.ts", {
     "@/lib/prisma": prisma, "./prisma": prisma,
     "./auth": { verifyToken: (token: string) => token === "valid" ? { userId: 10 } : null },
-    "@/lib/audit": { createAuditLog: async (p: { tenantId: number; accion: string; tx: ReturnType<typeof raw> }) => {
+    "@/lib/audit": { createAuditLog: async (p: { tenantId: number; accion: string; detalles: Record<string, unknown>; tx: ReturnType<typeof raw> }) => {
       if (state.auditFail) throw new Error("Audit unavailable");
       await p.tx.$executeRaw`INSERT INTO "Auditoria"("tenantId","accion") VALUES(${p.tenantId},${p.accion})`;
+      state.audits.push(p.detalles);
     } },
     "next/cache": { revalidatePath() {} },
     "node:crypto": { randomUUID },
@@ -87,7 +88,7 @@ async function fixture() {
     packageState: () => packagePayment.getPackagePaymentState(prisma as unknown as Prisma.TransactionClient,4,3n) };
 }
 
-test("cobro mixto de cita se escribe una vez en el libro, se reintenta y no supera el saldo", async () => {
+test("cobro mixto se escribe una vez y bloquea otro pago cuando ya se cubrió el saldo", async () => {
   const f = await fixture();
   try {
     const input = { origen: "CITA" as const, origenId: "1", fecha: "2026-09-26", solicitudId: randomUUID(), confirmado: true,
@@ -106,21 +107,12 @@ test("cobro mixto de cita se escribe una vez en el libro, se reintenta y no supe
   } finally { await f.db.close(); }
 });
 
-test("transferencia 28.400 guarda 28400.00 una vez y explica una diferencia real de saldo", async () => {
+test("transferencia superior al saldo guarda todo el dinero una vez sin cambiar el precio", async () => {
   const f = await fixture();
   try {
     await f.db.exec(`UPDATE "CitasPsicologos" SET valor=28350 WHERE id=1`);
     const input = { origen: "CITA" as const, origenId: "1", fecha: "2026-09-26", solicitudId: randomUUID(), confirmado: true,
       lineas: [{ metodoPago: "TRANSFERENCIA" as const, monto: "28.400", referencia: "3192463011" }] };
-    for (const monto of ["28.400", "28400"]) {
-      const over = await f.actions.registrarPagoServicio("valid", { ...input, lineas: [{ ...input.lineas[0], monto }] });
-      assert.ok("error" in over);
-      if ("error" in over) {
-        assert.match(over.error!, /28\.400/); assert.match(over.error!, /28\.350/); assert.match(over.error!, /diferencia es.*50/);
-      }
-    }
-    assert.equal(await f.count("MovimientoCaja"), 0);
-    await f.db.exec(`UPDATE "CitasPsicologos" SET valor=28400 WHERE id=1`);
     const first = await f.actions.registrarPagoServicio("valid", input);
     assert.ok("ids" in first, JSON.stringify(first));
     const retry = await f.actions.registrarPagoServicio("valid", { ...input, lineas: [{ ...input.lineas[0], monto: "28400" }] });
@@ -128,6 +120,9 @@ test("transferencia 28.400 guarda 28400.00 una vez y explica una diferencia real
     assert.equal(await f.count("MovimientoCaja"), 1); assert.equal(await f.count("PagoServicioPsicologia"), 1);
     const saved = await f.db.query(`SELECT monto::text,"metodoPago",referencia FROM "PagoServicioPsicologia"`);
     assert.deepEqual(saved.rows, [{ monto: "28400.00", metodoPago: "TRANSFERENCIA", referencia: "3192463011" }]);
+    assert.equal(f.state.audits[0].adicionalRecibido, 50);
+    assert.equal(f.state.audits[0].saldoPendiente, 0);
+    assert.equal((await f.db.query<{valor:string}>(`SELECT valor::text FROM "CitasPsicologos" WHERE id=1`)).rows[0].valor,"28350.00");
     assert.equal((await f.db.query<{ estadoPago: string }>(`SELECT "estadoPago" FROM "CitasPsicologos" WHERE id=1`)).rows[0].estadoPago, "CONCILIADO");
   } finally { await f.db.close(); }
 });
@@ -140,13 +135,64 @@ test("acceso desde una cita resuelve su paquete completo y saldo sin crear ingre
     if (!("item" in first)) return;
     assert.equal(first.item.origen,"PAQUETE");assert.equal(first.item.id,"3");assert.equal(first.item.valor,"90000.00");assert.equal(first.item.registrado,"0.00");
     assert.equal(await f.count("MovimientoCaja"),0);assert.equal(await f.count("PagoServicioPsicologia"),0);
-    const payment=await f.actions.registrarPagoServicio("valid",{origen:"PAQUETE",origenId:"3",fecha:"2026-09-26",solicitudId:randomUUID(),confirmado:true,
+    const payment=await f.actions.registrarPagoServicio("valid",{origen:"PAQUETE",origenId:"3",fecha:"2026-09-26",solicitudId:randomUUID(),confirmado:true,abonoConfirmado:true,
       lineas:[{metodoPago:"EFECTIVO",monto:"30000",referencia:""}]});assert.ok("ids" in payment);
     const partial=await f.actions.getCobroDesdeCita("valid","20");assert.ok("item" in partial);if("item" in partial)assert.equal(partial.item.registrado,"30000.00");
     await f.actions.registrarPagoServicio("valid",{origen:"PAQUETE",origenId:"3",fecha:"2026-09-26",solicitudId:randomUUID(),confirmado:true,
       lineas:[{metodoPago:"TRANSFERENCIA",monto:"60000",referencia:"T-2"}]});
     const full=await f.actions.getCobroDesdeCita("valid","20");assert.ok("notice" in full);if("notice" in full)assert.match(full.notice,/valor completo/);
   }finally {await f.db.close();}
+});
+
+test("paquete de 18.900 admite 37.800 mixtos, registra diferencia y no duplica sesiones ni ingreso", async () => {
+  const f=await fixture(); try {
+    await f.db.exec(`UPDATE "PaqueteAdquirido" SET "precioPagado"=18900 WHERE id=3;
+      INSERT INTO "CitasPsicologos"(id,"tenantId","paqueteId",realizada,"estadoPago") VALUES(10,4,3,false,'PENDIENTE')`);
+    const input={origen:'PAQUETE' as const,origenId:'3',fecha:'2026-09-26',solicitudId:randomUUID(),confirmado:true,
+      lineas:[{metodoPago:'EFECTIVO' as const,monto:'18.900',referencia:''},{metodoPago:'TRANSFERENCIA' as const,monto:'18.900',referencia:'REDONDEO-1'}]};
+    const saved=await f.actions.registrarPagoServicio('valid',input); assert.ok('ids' in saved,JSON.stringify(saved));
+    assert.equal(JSON.stringify(await f.actions.registrarPagoServicio('valid',input)),JSON.stringify(saved));
+    assert.equal(await f.count('MovimientoCaja'),2); assert.equal(await f.count('PagoServicioPsicologia'),2);
+    assert.equal((await f.db.query<{total:string}>(`SELECT SUM(monto)::text AS total FROM "MovimientoCaja"`)).rows[0].total,'37800.00');
+    assert.equal((await f.db.query<{precio:string}>(`SELECT "precioPagado"::text AS precio FROM "PaqueteAdquirido" WHERE id=3`)).rows[0].precio,'18900.00');
+    assert.equal(f.state.audits[0].adicionalRecibido,18900); assert.equal(f.state.audits[0].saldoPendiente,0);
+    assert.equal((await f.packageState())?.estadoPago,'CONCILIADO');
+    assert.ok('notice' in await f.actions.getCobroDesdeCita('valid','10'));
+    assert.ok('error' in await f.actions.registrarPagoServicio('valid',{...input,solicitudId:randomUUID()}));
+    assert.equal(await f.count('MovimientoCaja'),2);
+  } finally { await f.db.close(); }
+});
+
+test("un importe menor requiere abono explícito y una devolución recalcula el saldo real", async () => {
+  const f=await fixture(); try {
+    const input={origen:'CITA' as const,origenId:'1',fecha:'2026-09-26',solicitudId:randomUUID(),confirmado:true,
+      lineas:[{metodoPago:'EFECTIVO' as const,monto:'20000',referencia:''}]};
+    const rejected=await f.actions.registrarPagoServicio('valid',input);
+    assert.ok('error' in rejected); if('error' in rejected) assert.match(rejected.error!,/abono/);
+    assert.equal(await f.count('MovimientoCaja'),0);
+    const partial=await f.actions.registrarPagoServicio('valid',{...input,abonoConfirmado:true});
+    assert.ok('ids' in partial,JSON.stringify(partial)); if(!('ids' in partial))return;
+    assert.equal((await f.db.query<{estadoPago:string}>(`SELECT "estadoPago" FROM "CitasPsicologos" WHERE id=1`)).rows[0].estadoPago,'PENDIENTE');
+    const full=await f.actions.registrarPagoServicio('valid',{...input,solicitudId:randomUUID(),lineas:[{...input.lineas[0],monto:'60000'}]});
+    assert.ok('ids' in full,JSON.stringify(full)); if(!('ids' in full))return;
+    assert.ok('success' in await f.actions.devolverPagoServicio('valid',partial.ids[0],'2026-09-26','Devolución registrada',randomUUID()));
+    assert.equal((await f.db.query<{estadoPago:string}>(`SELECT "estadoPago" FROM "CitasPsicologos" WHERE id=1`)).rows[0].estadoPago,'CONCILIADO');
+    assert.ok('success' in await f.actions.devolverPagoServicio('valid',full.ids[0],'2026-09-26','Devolución registrada',randomUUID()));
+    assert.equal((await f.db.query<{estadoPago:string}>(`SELECT "estadoPago" FROM "CitasPsicologos" WHERE id=1`)).rows[0].estadoPago,'PENDIENTE');
+  } finally { await f.db.close(); }
+});
+
+test("un importe adicional conserva autorización, confirmación y reversión si falla auditoría", async () => {
+  const f=await fixture(); try {
+    const input={origen:'CITA' as const,origenId:'1',fecha:'2026-09-26',solicitudId:randomUUID(),confirmado:true,
+      lineas:[{metodoPago:'EFECTIVO' as const,monto:'60000',referencia:''}]};
+    assert.ok('error' in await f.actions.registrarPagoServicio('invalid',input));
+    assert.ok('error' in await f.actions.registrarPagoServicio('valid',{...input,confirmado:false}));
+    f.state.tenantId=9; assert.ok('error' in await f.actions.registrarPagoServicio('valid',input)); f.state.tenantId=4;
+    f.state.auditFail=true; assert.ok('error' in await f.actions.registrarPagoServicio('valid',input));
+    assert.equal(await f.count('MovimientoCaja'),0); assert.equal(await f.count('PagoServicioPsicologia'),0);
+    assert.equal((await f.db.query<{estadoPago:string}>(`SELECT "estadoPago" FROM "CitasPsicologos" WHERE id=1`)).rows[0].estadoPago,'PENDIENTE');
+  } finally { await f.db.close(); }
 });
 
 test("acceso directo a cobro respeta empresa, sesión, cancelación, legado y vínculo de paquete", async () => {
@@ -175,7 +221,7 @@ test("no convierte conciliaciones viejas en ingresos y falla en bloque si no hay
     assert.ok("items" in pending, JSON.stringify(pending));
     if ("items" in pending) assert.equal(pending.items.find((item) => item.origen === "CITA" && item.id === "2")?.situacion,"REVISAR_LEGADO");
     f.state.auditFail = true;
-    const noAudit = await f.actions.registrarPagoServicio("valid", { origen: "CITA", origenId: "1", fecha: "2026-09-26", solicitudId: randomUUID(), confirmado: true,
+    const noAudit = await f.actions.registrarPagoServicio("valid", { origen: "CITA", origenId: "1", fecha: "2026-09-26", solicitudId: randomUUID(), confirmado: true, abonoConfirmado: true,
       lineas: [{ metodoPago: "EFECTIVO", monto: "10000", referencia: "" }] });
     assert.ok("error" in noAudit);
     assert.equal(await f.count("MovimientoCaja"),0);
@@ -220,7 +266,7 @@ test("abonos sucesivos de paquete conservan saldo y propagan el medio mixto sin 
   try {
     await f.db.exec(`INSERT INTO "CitasPsicologos"("id","tenantId","paqueteId","realizada","estadoPago")
       VALUES(10,4,3,false,'PENDIENTE');`);
-    const base = {origen:"PAQUETE" as const,origenId:"3",fecha:"2026-09-26",confirmado:true};
+    const base = {origen:"PAQUETE" as const,origenId:"3",fecha:"2026-09-26",confirmado:true,abonoConfirmado:true};
     assert.ok("ids" in await f.actions.registrarPagoServicio("valid",{...base,solicitudId:randomUUID(),
       lineas:[{metodoPago:"EFECTIVO",monto:"30000",referencia:""}]}));
     assert.equal((await f.packageState())?.estadoPago,"PENDIENTE");
@@ -274,7 +320,7 @@ test('transferencia sin referencia guarda, concilia y reintenta una sola vez; re
   assert.ok('ids' in await f.actions.registrarPagoServicio('valid',input));
   assert.equal(await f.count('MovimientoCaja'),1);assert.equal(await f.count('PagoServicioPsicologia'),1);
   assert.equal((await f.db.query<{estadoPago:string}>(`SELECT "estadoPago" FROM "CitasPsicologos" WHERE id=1`)).rows[0].estadoPago,'CONCILIADO');
-  const p={...input,origen:'PAQUETE' as const,origenId:'3',solicitudId:randomUUID(),lineas:[{metodoPago:'TRANSFERENCIA' as const,monto:'20000',referencia:'TX-UNICA'}]};
+  const p={...input,origen:'PAQUETE' as const,origenId:'3',solicitudId:randomUUID(),abonoConfirmado:true,lineas:[{metodoPago:'TRANSFERENCIA' as const,monto:'20000',referencia:'TX-UNICA'}]};
   assert.ok('ids' in await f.actions.registrarPagoServicio('valid',p));
   assert.ok('error' in await f.actions.registrarPagoServicio('valid',{...p,solicitudId:randomUUID()}));
   assert.equal(await f.count('MovimientoCaja'),2);

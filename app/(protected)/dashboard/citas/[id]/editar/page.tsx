@@ -75,14 +75,19 @@ export default function EditarCitaPage() {
   const [horaInicio, setHoraInicio] = useState<string>("");
   const [horaFin, setHoraFin] = useState<string>("");
   const [valorCita, setValorCita] = useState<string>("");
+  const [additionalInput, setAdditionalInput] = useState({ key: "", value: "" });
   const [selectedMetodoPago, setSelectedMetodoPago] = useState<string>("");
   const [observacion, setObservacion] = useState<string>("");
 
+  const rentalKey = horaInicio + "|" + horaFin + "|" + selectedTerapiaId;
+  const rentalAdditional = additionalInput.key === rentalKey ? additionalInput.value : "";
+  const rentalMinutes = horaInicio && horaFin ? (Number(horaFin.slice(0,2))*60 + Number(horaFin.slice(3))) - (Number(horaInicio.slice(0,2))*60 + Number(horaInicio.slice(3))) : 0;
+  const rentalExtraMinutes = rentalMinutes > 0 ? rentalMinutes % 60 : 0;
   // Preserve the historical quote while loading; recalculate only a changed duration.
   const [prevCalcData, setPrevCalcData] = useState({ 
     isRental: false, 
     horaInicio: "", 
-    horaFin: "" 
+    horaFin: "", rentalAdditional: ""
   });
   
   const currentIsRental = !!cita?.servicio?.nombre?.toLowerCase().includes("alquiler") || !!terapias.find((t) => t.id.toString() === selectedTerapiaId)?.nombre.toLowerCase().includes("alquiler");
@@ -90,12 +95,12 @@ export default function EditarCitaPage() {
   if (
     prevCalcData.isRental !== currentIsRental || 
     prevCalcData.horaInicio !== horaInicio || 
-    prevCalcData.horaFin !== horaFin
+    prevCalcData.horaFin !== horaFin || prevCalcData.rentalAdditional !== rentalAdditional
   ) {
-    setPrevCalcData({ isRental: currentIsRental, horaInicio, horaFin });
+    setPrevCalcData({ isRental: currentIsRental, horaInicio, horaFin, rentalAdditional });
     const originalStart = cita?.horaInicio ? format(toZonedTime(new Date(cita.horaInicio), TIMEZONE), "HH:mm") : "";
     const originalEnd = cita?.horaFin ? format(toZonedTime(new Date(cita.horaFin), TIMEZONE), "HH:mm") : "";
-    if (currentIsRental && horaInicio && horaFin && horaInicio === originalStart && horaFin === originalEnd) {
+    if (currentIsRental && horaInicio && horaFin && horaInicio === originalStart && horaFin === originalEnd && !rentalAdditional) {
       setValorCita(String(cita?.valorCotizado || 0));
     } else if (currentIsRental && horaInicio && horaFin) {
       const [hStart, mStart] = horaInicio.split(":").map(Number);
@@ -110,8 +115,8 @@ export default function EditarCitaPage() {
         const diff = endTotalMinutes - startTotalMinutes;
         const rentals = terapias.filter((t) => /alquiler/i.test(t.nombre) && t.cantidadSesiones === 1);
         const originalMinutes = cita?.horaFin && cita.horaInicio ? (new Date(cita.horaFin).getTime() - new Date(cita.horaInicio).getTime()) / 60000 : 0;
-        if (diff === originalMinutes) setValorCita(String(cita?.valorCotizado || 0));
-        else try { setValorCita(rentalQuote(diff, rentals.length === 1 ? Number(rentals[0].precioBase).toFixed(2) : "").amount.toString()); }
+        if (diff === originalMinutes && !rentalAdditional) setValorCita(String(cita?.valorCotizado || 0));
+        else try { setValorCita(rentalQuote(diff, rentals.length === 1 ? Number(rentals[0].precioBase).toFixed(2) : "", rentalAdditional).amount.toString()); }
         catch { setValorCita(""); }
       }
     }
@@ -233,6 +238,7 @@ export default function EditarCitaPage() {
     formData.set("horaInicio", horaInicio);
     formData.set("horaFin", horaFin);
     formData.set("valorCotizado", valorCita);
+    formData.set("rentalAdicional", rentalExtraMinutes ? rentalAdditional : "");
     if (selectedMetodoPago) formData.set("metodoPago", selectedMetodoPago);
     formData.set("observacion", observacion);
 
@@ -460,6 +466,7 @@ export default function EditarCitaPage() {
                 <Input
                   id="horaInicio"
                   type="time"
+                  step={60}
                   className="h-11"
                   required
                   value={horaInicio}
@@ -477,6 +484,7 @@ export default function EditarCitaPage() {
                 <Input
                   id="horaFin"
                   type="time"
+                  step={60}
                   className="h-11"
                   required
                   value={horaFin}
@@ -500,6 +508,14 @@ export default function EditarCitaPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {(currentIsRental) && rentalExtraMinutes > 0 && <div className="space-y-2">
+                <Label htmlFor="rentalAdicional">Valor de {rentalExtraMinutes} minutos adicionales</Label>
+                <Input id="rentalAdicional" name="rentalAdicional" type="number" min="0" max="999999999.99" step="0.01" value={rentalAdditional}
+                  onChange={(e) => setAdditionalInput({ key: rentalKey, value: e.target.value })} placeholder="Indica el valor acordado"  />
+                <p className="text-sm text-slate-600">Escribe cuánto se cobrará por el tiempo adicional. Usa 0 solo si no se cobra. El total suma las horas completas del catálogo y este valor. Si conservas el horario, dejarlo vacío mantiene el precio guardado.</p>
+              </div>}
+              {(currentIsRental) && <p className="text-sm text-slate-600">Puedes indicar cualquier hora y minuto, como 4:30, 5:45 o 5:50. Se conserva el intervalo elegido, sin redondearlo a otra hora.</p>}
+
               <div className="space-y-2">
                 <Label
                   htmlFor="valorCotizado"
@@ -513,6 +529,7 @@ export default function EditarCitaPage() {
                   step="0.01"
                   placeholder="0.00"
                   className="h-11"
+                  readOnly={currentIsRental}
                   value={valorCita}
                   onChange={(e) => setValorCita(e.target.value)}
                 />

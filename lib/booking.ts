@@ -8,12 +8,18 @@ export function bookingTimes(date: string, start: string, end: string) {
   if (fin <= inicio) throw new Error("La hora de fin debe ser posterior al inicio, dentro del mismo día.");
   return { fecha: day.start, inicio, fin };
 }
-export function rentalQuote(minutes: number, hourlyPrice: string) {
+export function rentalQuote(minutes: number, hourlyPrice: string, additionalAmount?: string | null) {
   if (!Number.isInteger(minutes) || minutes <= 0 || minutes > 24 * 60) throw new Error("Duración de reserva inválida.");
-  // A 55-minute session still reserves the 5-minute courtesy period.
-  if (minutes % 60 !== 0 && minutes % 60 !== 55) throw new Error("Reserva horas completas (55 minutos y 5 de cortesía). Registra el exceso real en Recepción, como adicional.");
-  const hours = Math.ceil(minutes / 60);
-  const cents = cajaAmountInCents(hourlyPrice) * hours;
+  const hours = Math.floor(minutes / 60), remainder = minutes % 60;
+  let extra = 0;
+  if (remainder) {
+    if (additionalAmount == null || additionalAmount.trim() === "") throw new Error("Indica el valor del tiempo adicional antes de confirmar el alquiler.");
+    const entered = additionalAmount.trim();
+    extra = /^0(?:\.0{1,2})?$/.test(entered) ? 0 : cajaAmountInCents(entered);
+  } else if (additionalAmount != null && additionalAmount.trim() !== "" && !/^0(?:\.0{1,2})?$/.test(additionalAmount.trim())) {
+    throw new Error("El horario no contiene minutos adicionales; revisa el valor ingresado.");
+  }
+  const cents = cajaAmountInCents(hourlyPrice) * hours + extra;
   if (!Number.isSafeInteger(cents) || cents > 99999999999) throw new Error("El valor supera el máximo permitido.");
-  return { hours, minutes: hours * 60, amount: cents / 100 };
+  return { hours, minutes, amount: cents / 100 };
 }
