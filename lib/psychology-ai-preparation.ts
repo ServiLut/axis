@@ -12,9 +12,10 @@ import {SANDRA_PHONE} from './psychology-reception';
 export async function prepareNextPsychologyEvent(){
  const rows=await prisma.$queryRaw<(ReceptionEvent&{eventAt:Date;analysis:unknown;transcript:string|null;analysisError:string|null;resumeOf:string|null})[]>`
   SELECT id,phone,"eventAt",kind,text,"fromMe",analysis,transcript,"analysisError","resumeOf","quotedText" FROM "PsicologiaBotEvent" WHERE status='PENDING' ORDER BY "receivedAt",id LIMIT 1`;
- const row=rows[0];if(!row||row.fromMe||row.analysis||row.analysisError||row.kind==='attachment')return;
- if(row.kind==='text'&&/^(RESERVAR|CONFIRMAR|SOPORTE|PAUSAR|REANUDAR|POLITICA PAGO)\s|^(ESTADO BOT|AYUDA BOT)$/i.test(row.text.trim()))return;
- if(row.kind==='text'&&/suicid|matarme|quitarme la vida|me quiero morir|me corte|me estoy cortando|sobredosis|no quiero vivir/i.test(row.text.normalize('NFD').replace(/[\u0300-\u036f]/g,'')))return;
+ const row=rows[0];if(!row)return null;
+ if(row.fromMe||row.analysis||row.analysisError||row.kind==='attachment')return row.id;
+ if(row.kind==='text'&&/^(RESERVAR|CONFIRMAR|SOPORTE|PAUSAR|REANUDAR|POLITICA PAGO)\s|^(ESTADO BOT|AYUDA BOT)$/i.test(row.text.trim()))return row.id;
+ if(row.kind==='text'&&/suicid|matarme|quitarme la vida|me quiero morir|me corte|me estoy cortando|sobredosis|no quiero vivir/i.test(row.text.normalize('NFD').replace(/[\u0300-\u036f]/g,'')))return row.id;
  const event={...row,at:row.eventAt.toISOString()};
  try{
   const conversations=await prisma.$queryRaw<{stage:string;state:ReceptionState}[]>`SELECT stage,state FROM "PsicologiaBotConversation" WHERE phone=${row.phone}`;
@@ -26,7 +27,7 @@ export async function prepareNextPsychologyEvent(){
    event.kind='text';
   }
   const chiefDirectedTurn=row.phone===SANDRA_PHONE&&await chiefMessageAddressesBot(prisma,event);
-  if(row.phone===SANDRA_PHONE&&!chiefDirectedTurn)return;
+  if(row.phone===SANDRA_PHONE&&!chiefDirectedTurn)return row.id;
   const contextAt=row.resumeOf?new Date():row.eventAt;
   const sourceId=row.resumeOf||row.id;
   const history=await prisma.$queryRaw<{direction:string;text:string;at:Date;source:string}[]>`
@@ -45,7 +46,7 @@ export async function prepareNextPsychologyEvent(){
   const knowledge=await readChiefKnowledge(prisma,event.text+' '+(conversations[0]?.state.service||''));
   const receptionContext={...identity,hasHistory:context.length>0,coverage:remote.coverage,continuation:hasContinuation(event.text)||(!!row.quotedText&&conversations[0]?.stage==='NEW'),quotedText:row.quotedText||undefined};
   await prisma.$executeRaw`UPDATE "PsicologiaBotConversation" SET state=state||${JSON.stringify({context:receptionContext})}::jsonb WHERE phone=${row.phone}`;
-  if(!row.resumeOf&&identity.role==='unknown'&&!receptionContext.hasHistory&&!receptionContext.continuation&&isFastGreeting(event,conversations[0]?.stage))return;
+  if(!row.resumeOf&&identity.role==='unknown'&&!receptionContext.hasHistory&&!receptionContext.continuation&&isFastGreeting(event,conversations[0]?.stage))return row.id;
   if(!aiConfigured())throw Error('AI_UNAVAILABLE');
   const catalog=await prisma.terapiasPsicologos.findMany({where:{tenantId:4,empresaId:3,activo:true},select:{id:true,nombre:true,cantidadSesiones:true,precioBase:true}});
   const result=await understandPsychologyMessage(event,{...conversations[0],chiefDirectedTurn,verifiedContact:receptionContext,quotedMessage:row.quotedText||null,resumingAfterStaffIdle:!!row.resumeOf,history:context,staffObservation:staffObservation(context,conversations[0]?.stage),historyCoverage:remote.coverage,chiefInstructions:knowledge.map(k=>k.instruction),chiefKnowledgeSources:knowledge.map(k=>({id:k.id,sourceEvent:k.sourceEvent,approvedAt:k.createdAt.toISOString()})),catalog:catalog.map(s=>({...s,id:String(s.id),precioBase:String(s.precioBase)}))});
@@ -54,4 +55,5 @@ export async function prepareNextPsychologyEvent(){
   const code=error instanceof Error&&/^(AI|AUDIO)_[A-Z0-9_]+$/.test(error.message)?error.message:'AI_UNAVAILABLE';
   await prisma.$executeRaw`UPDATE "PsicologiaBotEvent" SET "analysisError"=${code} WHERE id=${row.id} AND status='PENDING'`;
  }
+ return row.id;
 }

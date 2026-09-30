@@ -37,6 +37,8 @@ function chiefClarification(u:Understanding|null){
 
 export async function handleChiefUnderstanding(tx:Tx,e:ReceptionEvent,u:Understanding|null,queue:Queue,command:(tx:Tx,e:ReceptionEvent)=>Promise<void>){
  if(e.fromMe||e.phone!==SANDRA_PHONE)return false;
+ // An absent analysis cannot establish that the sender's explanation was unclear.
+ if(!u)return false;
  const ack=(message:string)=>queue(tx,e.id+':chief-result',SANDRA_PHONE,message);
  const normalized=e.text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
  if((!u?.adminAction||u.adminAction==='none')&&/era para otra persona|mensaje equivocado|me confundi/.test(normalized)){

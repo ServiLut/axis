@@ -73,11 +73,12 @@ async function adminMessage(tx:Tx,e:ReceptionEvent) {
     await queuePsychologyMessage(tx,e.id+':status',SANDRA_PHONE,`Estado de recepción: ${rows[0].pending} eventos pendientes, ${rows[0].review} conversaciones con atención humana y ${rows[0].uncertain} envíos por verificar.\nPara tomar un chat: PAUSAR seguido del número. Para devolverlo al bot: REANUDAR seguido del número.`);
   }
 }
-async function processOne(config:AutomationConfig) {
+async function processOne(config:AutomationConfig,preparedEventId:string) {
   return prisma.$transaction(async tx=>{
     // All workers lock in the same order. Serialize state transitions, including sender echoes.
     await tx.$queryRaw`SELECT id FROM "PsicologiaBotConfig" WHERE id=4 FOR UPDATE`;
-    const rows=await tx.$queryRaw<(ReceptionEvent&{eventAt:Date;analysis:unknown;transcript:string|null;analysisError:string|null;resumeOf:string|null})[]>`SELECT id,phone,"eventAt",kind,text,"fromMe","quotedText",analysis,transcript,"analysisError","resumeOf" FROM "PsicologiaBotEvent" WHERE status='PENDING' ORDER BY "receivedAt",id LIMIT 1 FOR UPDATE SKIP LOCKED`;
+    // Process exactly the event whose context was prepared, even if new events arrive meanwhile.
+    const rows=await tx.$queryRaw<(ReceptionEvent&{eventAt:Date;analysis:unknown;transcript:string|null;analysisError:string|null;resumeOf:string|null})[]>`SELECT id,phone,"eventAt",kind,text,"fromMe","quotedText",analysis,transcript,"analysisError","resumeOf" FROM "PsicologiaBotEvent" WHERE status='PENDING' AND id=${preparedEventId} FOR UPDATE SKIP LOCKED`;
     const row=rows[0];if(!row)return false;
     const e:ReceptionEvent={...row,at:row.eventAt.toISOString(),...(row.kind==='audio'&&row.transcript?{kind:'text',text:row.transcript}:{})};
     const chiefContext={kind:e.kind,text:e.text,quotedText:e.quotedText};
@@ -153,6 +154,11 @@ async function processOne(config:AutomationConfig) {
           await tx.$executeRaw`UPDATE "PsicologiaBotConversation" SET state=state||${JSON.stringify({pendingInterpretationEvent:e.id})}::jsonb WHERE phone=${SANDRA_PHONE}`;
           await queuePsychologyMessage(tx,e.id+':ai-error',SANDRA_PHONE,row.kind==='audio'&&!row.transcript?'Sandra, no pude escuchar el audio. ¿Puedes enviarlo de nuevo o escribirme lo que necesitas?':'Sandra, recibí tu mensaje, pero tuve un problema al procesarlo. La solicitud quedó pendiente de revisión; no necesitas repetirla.');
         }
+        else if(!understanding){
+          // Missing analysis is an internal pending task, not an unclear instruction from Sandra.
+          await tx.$executeRaw`UPDATE "PsicologiaBotConversation" SET state=state||${JSON.stringify({pendingInterpretationEvent:e.id})}::jsonb WHERE phone=${SANDRA_PHONE}`;
+          await createAuditLog({tenantId:4,accion:'BOT_CHIEF_INTERPRETATION_PENDING',entidad:'WhatsAppEvento',entidadId:e.id,detalles:{replySent:false,sourceEvent:e.id},tx});
+        }
         else await handleChiefUnderstanding(tx,e,understanding,queuePsychologyMessage,adminMessage);
       }
     }
@@ -169,12 +175,12 @@ async function processOne(config:AutomationConfig) {
           try{decision=await handleRentalIntake(tx,e,c.stage,c.state,understanding)??await handleReturningPatient(tx,e,c.stage,c.state,understanding)??await handlePatientIntake(tx,e,c.stage,c.state,understanding)??decision;}
           catch{
             await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT bot_intake');
-            decision={stage:'HUMAN',state:{...c.state,reason:'Registro pendiente de revisión'},messages:['No pude completar el registro. Voy a pedir apoyo a Sandra para continuar 😊'],handoff:'Revisar registro de paciente; operación revertida'};
+            decision={stage:'HUMAN',state:{...c.state,reason:'Registro pendiente de revisión'},messages:['Tu registro sigue pendiente de confirmación.'],handoff:'Revisar registro de paciente; operación revertida'};
             await createAuditLog({tenantId:4,accion:'BOT_INTAKE_REVIEW',entidad:'WhatsAppEvento',entidadId:e.id,detalles:{patientChanged:false},tx});
           }
           await tx.$executeRawUnsafe('RELEASE SAVEPOINT bot_intake');
         }
-        if(row.analysisError&&c.stage!=='HUMAN'&&!humanLater.length){decision.handoff='No fue posible interpretar el mensaje: '+row.analysisError;decision.stage='HUMAN';decision.messages=[row.kind==='audio'?'No pude escuchar bien tu audio 😊 ¿Me escribes lo que necesitas, por favor?':'Estoy pidiendo apoyo a nuestra coordinadora para responderte bien.'];}
+        if(row.analysisError&&c.stage!=='HUMAN'&&!humanLater.length){decision.handoff='No fue posible interpretar el mensaje: '+row.analysisError;decision.stage='HUMAN';decision.messages=[row.kind==='audio'?'No pude escuchar bien tu audio. ¿Me escribes lo que necesitas, por favor?':'Recibí tu mensaje. Tu solicitud sigue pendiente de confirmación.'];}
         if(decision.handoff)decision.state.humanHold={kind:decision.handoff==='Atención humana urgente'?'urgent':'review',resumeStage:c.stage,since:e.at};
         if(understanding?.intent==='stop'||decision.state.reason==='No contactar')await tx.$executeRaw`INSERT INTO "PsicologiaBotContactPermission" (phone,"optedOut","sourceEvent") VALUES (${e.phone},true,${e.id}) ON CONFLICT(phone) DO UPDATE SET "optedOut"=true,marketing=false,"sourceEvent"=EXCLUDED."sourceEvent","updatedAt"=NOW()`;
         if(e.fromMe||understanding?.intent==='stop'||decision.state.reason==='No contactar')await tx.$executeRaw`UPDATE "PsicologiaBotOutbox" SET status='CANCELLED' WHERE phone=${e.phone} AND status='PENDING'`;
@@ -199,7 +205,7 @@ export async function drainPsychologyAutomation(config:AutomationConfig) {
     const started=Date.now();
     try{
       await prisma.$transaction(async tx=>{await tx.$queryRaw`SELECT id FROM "PsicologiaBotConfig" WHERE id=4 FOR UPDATE`;await enqueueIdleChatResumes(tx,config.staffIdleMinutes??15)},{timeout:15000});
-      for(let i=0;i<3&&Date.now()-started<20000;i++){await prepareNextPsychologyEvent();if(!await processOne(config))break;processed++;}
+      for(let i=0;i<3&&Date.now()-started<20000;i++){const preparedEventId=await prepareNextPsychologyEvent();if(!preparedEventId||!await processOne(config,preparedEventId))break;processed++;}
       await prisma.$transaction(async tx=>{await tx.$queryRaw`SELECT id FROM "PsicologiaBotConfig" WHERE id=4 FOR UPDATE`;await runChiefReactivationTask(tx,queuePsychologyMessage)},{timeout:15000});
     }
     finally{await prisma.$executeRaw`UPDATE "PsicologiaBotConfig" SET "aiLeaseToken"=NULL,"aiLeaseUntil"=NULL WHERE id=4 AND "aiLeaseToken"=${token}`;}
@@ -217,7 +223,7 @@ export async function drainPsychologyAutomation(config:AutomationConfig) {
       if(communicationIssue){
         await prisma.$transaction(async tx=>{
           await tx.$executeRaw`UPDATE "PsicologiaBotOutbox" SET status='CANCELLED',"lastError"=${communicationIssue} WHERE id=${item.id} AND status='SENDING'`;
-          await queuePsychologyMessage(tx,'communication-review:'+item.id,SANDRA_PHONE,`Sandra, quedó pendiente una respuesta a +${item.phone} porque mencionaba información interna. No se envió. ¿Qué respuesta breve prefieres que reciba esa persona?`);
+          await queuePsychologyMessage(tx,'communication-review:'+item.id,SANDRA_PHONE,`Sandra, quedó pendiente una respuesta a +${item.phone} porque mencionaba información interna. No se envió. Se requiere revisar la solicitud original antes de responder.`);
           await createAuditLog({tenantId:4,accion:'BOT_COMMUNICATION_BLOCKED',entidad:'PsicologiaBotOutbox',entidadId:item.id,detalles:{reason:communicationIssue,sent:false},tx});
         });continue;
       }

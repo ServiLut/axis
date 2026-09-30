@@ -12,6 +12,11 @@ const base=Object.fromEntries(Object.keys(understandingSchema.properties).map(k=
 const understanding=(patch:Partial<Understanding>={}):Understanding=>parseUnderstanding({...base,intent:'admin',confidence:0.99,explicitConsent:false,additionalServices:[],rentalRequests:[],roomPreferenceChanges:[],...patch});
 const event:ReceptionEvent={id:'verified-source',phone:SANDRA_PHONE,kind:'text',text:'Pausa la atención al 3001112233',fromMe:false,at:new Date().toISOString()};
 
+test('missing analysis never asks the chief to repeat a clear explanation',async()=>{
+ const result=await handleChiefUnderstanding({} as never,{...event,text:'Luisa Fernanda, el profesional redondeó voluntariamente el pago.'},null,async()=>{throw Error('Unexpected message')},async()=>{throw Error('Unexpected action')});
+ assert.equal(result,false);
+});
+
 test('invalid AI classification is retried once without changing the source or inventing defaults',async()=>{
  const originalFetch=globalThis.fetch,oldUrl=process.env.PSICOLOGOS_AI_URL,oldToken=process.env.PSICOLOGOS_AI_TOKEN;let calls=0,invalidAlways=false;const inputs:string[]=[];
  process.env.PSICOLOGOS_AI_URL='https://abogadosencolombia.app.n8n.cloud/webhook/fixture';process.env.PSICOLOGOS_AI_TOKEN='fixture';
