@@ -20,7 +20,7 @@ export async function handlePatientIntake(tx:Prisma.TransactionClient,event:Rece
  if(event.fromMe||[SANDRA_PHONE,PSYCHOLOGY_PHONE].includes(event.phone)||phoneDigits(event.phone)!==event.phone||event.kind!=='text'||!['DATA','DATA_CONFIRM','PREFERENCES'].includes(stage)||state.service==='alquiler'||['urgent','stop'].includes(u.intent))return null;
  const intake:IntakeState={...state.intake,draft:{...state.intake?.draft}};
  const result=(next:string,messages:string[]):ReceptionResult=>({stage:next,state:{...state,intake},messages});
- const review=(reason:string):ReceptionResult=>({...result('HUMAN',['Voy a pedir apoyo a Sandra para verificar tus datos y continuar con cuidado 😊']),handoff:reason});
+ const review=(reason:string):ReceptionResult=>({...result('HUMAN',['Aún no puedo confirmar el registro. Gracias por tu paciencia.']),handoff:reason});
  if(u.confidence<0.9){
   intake.clarifications=(intake.clarifications||0)+1;
   return intake.clarifications>=2?review('Datos de registro ambiguos tras solicitar aclaración'):result(stage,['Quiero registrar la información correctamente 😊 ¿Me aclaras ese último dato?']);
@@ -82,7 +82,7 @@ export async function handlePatientIntake(tx:Prisma.TransactionClient,event:Rece
   if(!intake.date||!intake.start)return result('PREFERENCES',['¿Qué fecha y hora te quedan mejor? Si tienes varias opciones, cuéntame 😊']);
   const time=new Date(intake.date+'T'+intake.start+':00-05:00').getTime();
   if(!Number.isFinite(time)||time<=Date.now()||time>Date.now()+90*86400000){delete intake.date;delete intake.start;return result('PREFERENCES',['¿Me confirmas la fecha y la hora, por favor? Podemos coordinar citas para los próximos tres meses 😊']);}
-  const d=result('HUMAN',['Gracias 😊 Revisaremos ese horario con el profesional antes de confirmar tu cita.']);
+  const d=result('HUMAN',['Gracias. El horario solicitado está pendiente de confirmación; la cita aún no está reservada.']);
   d.handoff=`Coordinar disponibilidad: cliente Axis ${intake.clientId}, ${intake.date} ${intake.start}, ${intake.modality}, ${intake.professionalId?'profesional solicitado Axis '+intake.professionalId:'preferencia '+(intake.preference==='male'?'psicólogo':intake.preference==='female'?'psicóloga':'indiferente')}. Datos ya registrados${intake.returning?'; revisar continuidad, tarifa y saldo del paquete antes de cobrar; servicio anterior '+intake.priorServiceId:''}`;
   return d;
  }

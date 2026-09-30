@@ -19,6 +19,7 @@ import {contextReception} from './psychology-reception-context';
 import {handleRentalIntake} from './psychology-rental-intake';
 import {naturalBookingConfirmation,type ConfirmableProposal} from './psychology-booking-messages';
 import {recordPsychologyStaffTakeover,psychologyStaffSendAllowed,chiefStaffDecision,chiefMessageAddressesBot} from './psychology-staff-ownership';
+import {psychologyCommunicationIssue} from './psychology-communication';
 
 type Tx=Prisma.TransactionClient;
 export type AutomationConfig={ enabled:boolean; activatedAt:Date|null; templates:ReceptionTemplates; paymentPolicy:string;staffIdleMinutes?:number };
@@ -212,6 +213,14 @@ export async function drainPsychologyAutomation(config:AutomationConfig) {
     const item=await prisma.$transaction(tx=>claimPsychologyOutbox(tx));if(!item)break;
     let sending=false;
     try {
+      const communicationIssue=psychologyCommunicationIssue(item.phone,item.content);
+      if(communicationIssue){
+        await prisma.$transaction(async tx=>{
+          await tx.$executeRaw`UPDATE "PsicologiaBotOutbox" SET status='CANCELLED',"lastError"=${communicationIssue} WHERE id=${item.id} AND status='SENDING'`;
+          await queuePsychologyMessage(tx,'communication-review:'+item.id,SANDRA_PHONE,`Sandra, quedó pendiente una respuesta a +${item.phone} porque mencionaba información interna. No se envió. ¿Qué respuesta breve prefieres que reciba esa persona?`);
+          await createAuditLog({tenantId:4,accion:'BOT_COMMUNICATION_BLOCKED',entidad:'PsicologiaBotOutbox',entidadId:item.id,detalles:{reason:communicationIssue,sent:false},tx});
+        });continue;
+      }
       if(item.id.includes(':reactivate:')){
         try{
           const review=await reviewCampaignContext(prisma,item);

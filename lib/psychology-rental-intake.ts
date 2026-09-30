@@ -60,7 +60,7 @@ export async function handleRentalIntake(tx:Tx,event:ReceptionEvent,stage:string
  if(u.service&&u.service!=='alquiler')return null;
  if(!isRentalBookingRequest(event,state)&&!(u.service==='alquiler'&&u.rentalRequests?.length)&&!u.roomPreferenceChanges?.length)return null;
  const result=(rental:RentalDraft,messages:string[]):ReceptionResult=>({stage:'RENTAL_DETAILS',state:{...state,service:'alquiler',rental},messages});
- const review=(reason:string):ReceptionResult=>({stage:'HUMAN',state:{...state,reason},messages:['Permíteme consultarlo con Sandra para orientarte bien 😊'],handoff:reason});
+ const review=(reason:string):ReceptionResult=>({stage:'HUMAN',state:{...state,reason},messages:['Tu solicitud está pendiente de confirmación. Gracias por tu paciencia.'],handoff:reason});
  if(u.intent==='reject')return review('Cambio o rechazo de alquiler; aclarar cuál horario desea modificar');
  if(u.confidence<.85)return review('Datos de reserva de consultorio ambiguos');
  const identity=await readReceptionIdentity(tx,event.phone);

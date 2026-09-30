@@ -9,6 +9,7 @@ export function semanticReception(event:ReceptionEvent,stage:string,state:Recept
  if(u?.intent==='urgent')return decideReception({...event,text:'me quiero morir'},stage,state,templates,policy);
  if(stage==='HUMAN')return {stage,state,messages:[]};
  if(u?.intent==='stop'||baseline.state.reason==='No contactar')return decideReception({...event,text:'no me escriban'},stage,state,templates,policy);
+ if(u?.intent==='abusive'&&u.confidence>=0.9)return {stage:'HUMAN',state:{...state,reason:'Atención respetuosa ante insultos'},messages:['Podemos continuar con respeto. Cuéntame qué necesitas resolver.'],handoff:'Insultos dirigidos a la atención; definir respuesta humana sin confrontación'};
  const contextual=contextReception(event,stage,state);if(contextual)return contextual;
  // Booking details take precedence over a generic service offer, even if the model misses dates.
  if(isRentalBookingRequest(event,state)&&(!u?.service||u.service==='alquiler')&&!['courtesy','reject'].includes(u?.intent||''))return {stage:'RENTAL_DETAILS',state:{...state,service:'alquiler'},messages:['Claro 😊 Revisaré el horario que solicitas.']};
@@ -17,12 +18,12 @@ export function semanticReception(event:ReceptionEvent,stage:string,state:Recept
  if(state.resumedFrom&&u.intent==='greeting'&&stage==='NEED')return {stage,state,messages:['Hola 😊 Estoy aquí para continuar contigo. ¿Qué necesitas completar?']};
  if(u.confidence<0.85){
   const next={...state,clarifications:(state.clarifications||0)+1};
-  if(next.clarifications>=2)return {stage:'HUMAN',state:{...next,reason:'Contexto insuficiente'},messages:['Voy a consultarlo con Sandra para responderte correctamente 😊'],handoff:'No se pudo resolver la duda con el contexto disponible'};
+  if(next.clarifications>=2)return {stage:'HUMAN',state:{...next,reason:'Contexto insuficiente'},messages:['Tu solicitud está pendiente de confirmación. Gracias por tu paciencia.'],handoff:'No se pudo resolver la duda con el contexto disponible'};
   return {stage,state:next,messages:['Quiero entenderte bien 😊 ¿Me cuentas un poquito más sobre lo que necesitas?']};
  }
  state={...state,clarifications:0};
  if(u.intent==='courtesy')return {stage,state,messages:['Con gusto 😊 Aquí estamos cuando nos necesites.']};
- if(u.intent==='appointment')return {stage:'HUMAN',state:{...state,reason:'Revisar cita existente'},messages:['Gracias 😊 Voy a verificarlo con Sandra para darte la información correcta.'],handoff:'Consulta o confirmación de cita existente: verificar agenda y contexto del chat'};
+ if(u.intent==='appointment')return {stage:'HUMAN',state:{...state,reason:'Revisar cita existente'},messages:['Gracias. Aún no tengo la confirmación de esa cita.'],handoff:'Consulta o confirmación de cita existente: verificar agenda y contexto del chat'};
  const accepted=['accept','confirm'].includes(u.intent);
  if(stage==='OFFER'&&accepted&&state.servicesOffered&&state.servicesOffered.length>1){
   if(!u.service||!state.servicesOffered.includes(u.service))return {stage,state,messages:['Claro 😊 ¿Por cuál de los servicios deseas empezar a agendar?']};

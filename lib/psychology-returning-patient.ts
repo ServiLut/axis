@@ -9,7 +9,7 @@ export async function handleReturningPatient(tx:Prisma.TransactionClient,e:Recep
  if(e.fromMe||e.kind!=='text'||[SANDRA_PHONE,PSYCHOLOGY_PHONE].includes(e.phone)||phoneDigits(e.phone)!==e.phone||!['NEW','NEED','MENU'].includes(stage)||state.service==='alquiler'||u.confidence<0.9||!['accept','preferences','appointment'].includes(u.intent)||u.service)return null;
  const text=normalizeText(e.text);
  if(!/(?:quiero|decido|deseo|quisiera|me gustaria|voy a)\s+(?:continuar|seguir|retomar)/.test(text)||/\bno\s+(?:quiero|deseo|quisiera|voy a)\b/.test(text))return null;
- const review=(reason:string):ReceptionResult=>({stage:'HUMAN',state:{...state,reason},messages:['Claro 😊 Voy a pedir apoyo a Sandra para revisar tu continuidad.'],handoff:reason});
+ const review=(reason:string):ReceptionResult=>({stage:'HUMAN',state:{...state,reason},messages:['Gracias. Tu solicitud de continuidad está pendiente de confirmación.'],handoff:reason});
  const localPhone=e.phone.startsWith('57')&&e.phone.length===12?e.phone.slice(2):e.phone;
  const customers=await tx.$queryRaw<{id:number}[]>`
   SELECT c.id FROM "Cliente" c WHERE c."tenantId"=4 AND c."deletedAt" IS NULL AND (c."empresaId"=3 OR c."empresaId" IS NULL)

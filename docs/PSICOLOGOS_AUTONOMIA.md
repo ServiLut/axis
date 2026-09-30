@@ -1,5 +1,13 @@
 # Autonomía administrativa de Psicólogos en Colombia
 
+## Privacidad y lenguaje — instrucción directa del 30 de septiembre de 2026
+
+Las respuestas externas comunican el resultado útil o la única pregunta necesaria, con respeto y brevedad. No anuncian a quién se informará, qué se preguntará al personal, pasos internos, controles, razonamientos ni nombres de sistemas. Una confirmación pendiente se expresa como pendiente; no se promete una reserva, pago, plazo o decisión. Los datos de otras personas y empresas no se divulgan. Los informes internos autorizados a Sandra conservan el contexto mínimo necesario para resolver la duda.
+
+Las respuestas de derivación se corrigieron y existe un control previo al envío que bloquea patrones de información interna, tecnología, secretos u otra empresa, incluso en mensajes previamente encolados. Este filtro es una protección adicional, no una certificación de que toda forma posible de filtración esté cubierta. El aislamiento de identidad, registros y destinatarios sigue siendo obligatorio.
+
+Ante insultos dirigidos a la atención: mantener respeto y pasar a atención humana sin discutir, amenazar ni anunciar destinatarios internos. Una cita, un relato de maltrato o angustia no se trata por sí mismo como agresión. Las urgencias conservan prioridad. Las quejas, compensaciones, amenazas y casos no cubiertos requieren pautas concretas de Sandra; preguntar una duda contextualizada a la vez y conservar las respuestas con fuente.
+
 ## Corrección de notificaciones — 30 de septiembre de 2026
 
 Los informes y alertas de supervisión a Sandra deben registrarse antes de enviarse mediante `POST /api/integrations/psicologos/automation`, acción `notify-chief`, con `key` estable por hecho/informe y `content`. Usa la credencial de automatización existente, nunca una credencial de otra empresa. El destinatario está fijado a Sandra. No enviar esos avisos directamente desde WhatsApp Web: su eco carece del registro de salida y puede confundirse con una toma humana.
@@ -18,9 +26,9 @@ WhatsApp Business → Evolution API (instancia exclusiva) → webhook autenticad
 
 El servidor conserva la lógica y el estado. n8n coordina llamadas y recupera pendientes cada minuto. La IA interpreta; no ejecuta SQL libre ni recibe autoridad administrativa por el contenido de un mensaje.
 
-En modo de observación de atención humana, el servidor descarta los campos de respuesta y pregunta aunque el modelo los genere. Conserva la clasificación de urgencia para los controles existentes. Esta protección se aplica al contexto de interpretación; el control previo al envío vuelve a comprobar las tomas humanas posteriores. Las pruebas de este filtro no sustituyen una devolución real del chat por Sandra.
+En modo de observación de atención humana, el servidor descarta los campos de respuesta y pregunta aunque el modelo los genere, salvo el turno de Sandra dirigido al bot y comprobado por el servidor conforme a la aclaración del 30/09. Conserva la clasificación de urgencia. El control previo al envío vuelve a comprobar intervenciones humanas posteriores; la excepción de un turno no libera el chat.
 
-La toma humana incluye el chat compartido con Sandra: un mensaje o archivo enviado por el personal lo deja en observación. Los mensajes posteriores no ejecutan instrucciones ni generan preguntas automáticas hasta devolución expresa. Sandra puede escribir «Luisa, retoma este chat»; debe ser un mensaje posterior a la intervención del personal. Las devoluciones ambiguas o solo transcritas de audio permanecen con el personal. El informe nocturno independiente y las alertas procedentes de otros chats conservan su envío; las respuestas a mensajes del chat tomado se cancelan.
+La toma humana incluye el chat compartido con Sandra. Puede devolverlo expresamente con «Luisa, retoma este chat», mediante texto o transcripción persistida posterior a la intervención. Un mensaje dirigido a Luisa o una respuesta a una pregunta verificada del bot autoriza solo ese turno; las intervenciones del personal y menciones ambiguas siguen en silencio. El informe nocturno y las alertas independientes conservan su autorización.
 
 Instrucción directa de la usuaria del29/09: Sandra debe dirigirse claramente a Luisa Fernanda o al bot para recibir respuesta. El número autorizado por sí solo no basta; una conversación con el personal, una mención en tercera persona o un destinatario dudoso se observa en silencio, sin ejecutar ni aprender órdenes. En audio se comprueba el texto transcrito; si no puede comprenderse el destinatario, no se pregunta automáticamente. Esto no revoca el informe nocturno ni las alertas independientes autorizadas. La dirección explícita tampoco levanta por sí sola una toma humana: se mantiene la devolución expresa del chat.
 

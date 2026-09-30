@@ -154,8 +154,17 @@ test('courtesy continues context, appointment questions request actual verificat
  // A standalone thanks is handled by the deterministic courtesy guard. Use an actual unresolved message here.
  const unclear={...e,text:'Lo del asunto que mencioné antes'};
  const first=semanticReception(unclear,'NEED',{},{} as never,'DEPOSIT_20000',understanding({intent:'unknown',confidence:0.2}));
- const second=semanticReception(unclear,first.stage,first.state,{} as never,'DEPOSIT_20000',understanding({intent:'unknown',confidence:0.2}));assert.equal(second.stage,'HUMAN');assert.ok(second.messages[0].includes('Sandra'));
+ const second=semanticReception(unclear,first.stage,first.state,{} as never,'DEPOSIT_20000',understanding({intent:'unknown',confidence:0.2}));assert.equal(second.stage,'HUMAN');assert.ok(second.handoff);assert.ok(!second.messages[0].includes('Sandra'));
 });
+test('directed abuse receives a respectful handoff, while urgency and human ownership keep priority',()=>{
+ const e={...event,phone:'573001111111',text:'Ustedes son unos inútiles'};
+ const u=understanding({intent:'abusive'});
+ const d=semanticReception(e,'NEED',{},{} as never,'DEPOSIT_20000',u);
+ assert.equal(d.stage,'HUMAN');assert.ok(d.handoff);assert.ok(d.messages[0].includes('respeto'));assert.ok(!d.messages[0].includes('Sandra'));
+ assert.deepEqual(semanticReception(e,'HUMAN',{},{} as never,'DEPOSIT_20000',u).messages,[]);
+ assert.equal(semanticReception({...e,text:'me quiero morir'},'NEED',{},{} as never,'DEPOSIT_20000',u).handoff,'Atención humana urgente');
+});
+
 test('semantic intent retains native pricing and payment order and respects human takeover',()=>{
  const templates={individual:{text:'MENSAJE EXACTO $119.900',approved:true,version:'1'},datos:{text:'DATOS EXACTOS',approved:true,version:'1'}};
  const e={...event,phone:'573009998877',text:'Me gustaría saber cuánto cuesta terapia individual'};

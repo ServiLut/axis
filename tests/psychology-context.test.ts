@@ -8,7 +8,7 @@ const e:ReceptionEvent={id:'synthetic-context',phone:'573000000010',at:'2026-09-
 const state:ReceptionState={context:{role:'professional',professionalId:25,hasHistory:false,coverage:'recent_only',continuation:true,quotedText:'En la tarde te envío el certificado'}};
 test('doctor following up a certificate never receives patient intake even when AI misclassifies greeting',()=>{
  const result=semanticReception(e,'NEW',state,{},'DEPOSIT_20000',{intent:'greeting',confidence:.98} as never);
- assert.equal(result.stage,'HUMAN');assert.match(result.messages[0],/certificado pendiente/);assert.doesNotMatch(result.messages.join(' '),/acompañamiento|terapia|precios/);
+ assert.equal(result.stage,'HUMAN');assert.match(result.messages[0],/certificado.*listo/);assert.doesNotMatch(result.messages.join(' '),/acompañamiento|terapia|precios/);
  assert.match(chiefHelpMessage(e.phone,result.handoff!),/profesional.*certificado/);
  const urgent=semanticReception({...e,text:'me quiero morir'},'NEW',state,{},'DEPOSIT_20000',null);assert.equal(urgent.handoff,'Atención humana urgente');
 });

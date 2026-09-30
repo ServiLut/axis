@@ -53,14 +53,14 @@ function template(templates: ReceptionTemplates, key: string): string | null {
 }
 export function decideReception(event: ReceptionEvent, stage: string, state: ReceptionState, templates: ReceptionTemplates, paymentPolicy: string): ReceptionResult {
   const result = (next: string, messages: string[], extra: Partial<ReceptionState> = {}): ReceptionResult => ({ stage:next,state:{...state,...extra},messages });
-  const handoff = (reason: string, acknowledgement = 'Gracias por contarnos. Voy a pedir apoyo a nuestra coordinadora para orientarte con cuidado.'): ReceptionResult => ({...result('HUMAN',stage==='HUMAN'?[]:[acknowledgement],{reason,humanHold:{kind:reason==='Atención humana urgente'?'urgent':'review',resumeStage:stage,since:event.at}}),handoff:reason});
+  const handoff = (reason: string, acknowledgement = 'Gracias por contarnos. Tu solicitud está pendiente de confirmación.'): ReceptionResult => ({...result('HUMAN',stage==='HUMAN'?[]:[acknowledgement],{reason,humanHold:{kind:reason==='Atención humana urgente'?'urgent':'review',resumeStage:stage,since:event.at}}),handoff:reason});
   if (event.fromMe) return pauseForStaff(stage,state,event.at);
   const text=normalizeText(event.text);
   // This flags some emergencies; absence never classifies a clinical narrative as low risk.
-  if (/suicid|matarme|quitarme la vida|me quiero morir|me corte|me estoy cortando|sobredosis|no quiero vivir/.test(text)) return handoff('Atención humana urgente','Siento que estés pasando por esto. Tu seguridad es lo primero. ¿Estás a salvo y hay alguien de confianza contigo? Si te has lesionado o estás en peligro inmediato, llama al 123 o acude a urgencias. Estoy avisando a nuestra coordinadora para acompañarte.');
+  if (/suicid|matarme|quitarme la vida|me quiero morir|me corte|me estoy cortando|sobredosis|no quiero vivir/.test(text)) return handoff('Atención humana urgente','Siento que estés pasando por esto. Tu seguridad es lo primero. ¿Estás a salvo y hay alguien de confianza contigo? Si te has lesionado o estás en peligro inmediato, llama al 123 o acude a urgencias.');
   if (stage==='HUMAN') return result(stage,[]);
-  if (event.kind==='audio') return handoff('Audio pendiente de transcripción','Recibí tu audio 😊 Lo revisaré con nuestra coordinadora para responderte bien.');
-  if (event.kind==='attachment') return handoff('Archivo o comprobante pendiente de revisión','Recibí tu archivo 😊 Vamos a revisarlo y te confirmaremos.');
+  if (event.kind==='audio') return handoff('Audio pendiente de transcripción','Recibí tu audio, gracias. Aún no tengo una respuesta confirmada.');
+  if (event.kind==='attachment') return handoff('Archivo o comprobante pendiente de revisión','Recibí tu archivo, gracias.');
   if (/^(?:no|no gracias|parar|stop|no me escriban|no me escribas)$/.test(text)) return result('HUMAN',['Entendido, respetamos tu decisión. Aquí estaremos cuando nos necesites.'],{reason:'No contactar',humanHold:{kind:'optout',since:event.at}});
   if (stage==='NEW' && /^(hola[!.\s😊]*|buenos dias|buenas tardes|buenas noches|buenas|informacion|info)$/.test(text)) return result('NEED',['Hola 😊 ¿Cómo estás? Soy Luisa Fernanda de *Psicólogos en Colombia*. Cuéntame, ¿en qué podemos ayudarte hoy?']);
   if (['NEW','NEED','MENU'].includes(stage)) {
@@ -75,12 +75,12 @@ export function decideReception(event: ReceptionEvent, stage: string, state: Rec
   }
   if(stage==='OFFER' && /^(si|si gracias|claro|de acuerdo|quiero agendar|agendemos|continuar|listo|vale|ok)[.!\s😊]*$/.test(text)) {
     if(state.service==='alquiler') return result('DETAILS',['Claro 😊 ¿Qué día, a qué hora y por cuánto tiempo necesitas el consultorio?']);
-    if(paymentPolicy==='REVIEW') return handoff('Confirmar condiciones de reserva antes de solicitar pago','Claro 😊 Nuestra coordinadora te ayudará a confirmar las condiciones de tu reserva.');
+    if(paymentPolicy==='REVIEW') return handoff('Confirmar condiciones de reserva antes de solicitar pago','Las condiciones de tu reserva están pendientes de confirmación.');
     if(paymentPolicy==='DEPOSIT_20000') return result('PAYMENT_FORMAT',['¿Deseas una sesión suelta, comprar un paquete o usar un paquete que ya pagaste?']);
     const t=template(templates,'datos');return t?result('DATA',['Por favor, regálame estos datos 😊',t]):handoff('Falta respuesta rápida de datos');
   }
   if(stage==='PAYMENT_FORMAT'&&paymentPolicy==='DEPOSIT_20000') {
-    if(/ya (pague|pagado|tengo)|paquete (pagado|vigente)|usar (mi|un) paquete/.test(text))return handoff('Verificar saldo del paquete pagado; no pedir nuevo anticipo','Si tu paquete ya está pagado, no necesitas otro anticipo 😊 Revisaremos las sesiones disponibles.');
+    if(/ya (pague|pagado|tengo)|paquete (pagado|vigente)|usar (mi|un) paquete/.test(text))return handoff('Verificar saldo del paquete pagado; no pedir nuevo anticipo','Si tu paquete ya está pagado, no necesitas otro anticipo. El saldo de sesiones está pendiente de confirmación.');
     const single=/^(una?|1) (sola )?sesion(?: suelta)?$|^sesion suelta$|^individual$|^1$/.test(text);
     const pack=/^(?:comprar |un |el )?paquete(?: de (?:3|5|7|10) sesiones)?$|^(3|5|7|10) sesiones$/.test(text);
     if(single||pack) {
@@ -91,6 +91,6 @@ export function decideReception(event: ReceptionEvent, stage: string, state: Rec
     return handoff('Aclarar modalidad de compra antes de solicitar pago');
   }
   if(stage==='DATA') return handoff('Validar datos y registro del paciente','Gracias 😊 ¿Prefieres psicólogo o psicóloga? ¿Qué días y horarios te quedan mejor, y presencial o virtual?');
-  if(stage==='DETAILS') return handoff('Verificar registro, consultorio y confirmación del profesional','Gracias 😊 Revisaremos la disponibilidad del consultorio y te confirmaremos.');
+  if(stage==='DETAILS') return handoff('Verificar registro, consultorio y confirmación del profesional','Gracias. El consultorio solicitado está pendiente de confirmación.');
   return handoff('Pregunta o preferencia requiere revisión');
 }

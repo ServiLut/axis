@@ -35,17 +35,17 @@ export function contextReception(event:ReceptionEvent,stage:string,state:Recepti
  const review=(reason:string,message:string):ReceptionResult=>({stage:'HUMAN',state:{...state,reason},messages:[message],handoff:reason});
  const courtesy=!c?.continuation&&!c?.quotedText&&!event.quotedText?socialCourtesy(event):null;
  const answerCourtesy=():ReceptionResult=>({stage:stage==='NEW'?(c?.role==='professional'?'PROFESSIONAL':'NEED'):stage,state,messages:[courtesy!]});
- if(c?.role==='ambiguous')return review('Identidad ambigua del contacto','Permíteme consultarlo con Sandra para orientarte bien.');
+ if(c?.role==='ambiguous')return review('Identidad ambigua del contacto','Tu solicitud está pendiente de confirmación. Gracias por tu paciencia.');
  if(c?.role==='professional'){
   if(/\b(terapia|consulta|sesion)\b/.test(text)&&/\b(para mi|como paciente|para mi hijo|para mi hija|para mi pareja)\b/.test(text))return null;
-  if(/certificad|certificacion|carta laboral/.test(text+' '+normalizeText(c.quotedText||'')))return review('Profesional consulta certificado administrativo pendiente','Gracias por recordárnoslo. Voy a consultar con Sandra cómo va el certificado pendiente.');
-  if(/confirm|asisti/.test(text)&&/\b(sesion|cita|paciente|asistencia)\b/.test(text)&&!/\b(reservar|agendar|separar|alquilar)\b/.test(text))return review('Profesional pide confirmar asistencia a una sesión',/desplazar|salir|viaj|irme/.test(text)?'Voy a consultar si la sesión está confirmada antes de que te desplaces.':'Voy a consultar si la persona confirmó su asistencia a la sesión.');
+  if(/certificad|certificacion|carta laboral/.test(text+' '+normalizeText(c.quotedText||'')))return review('Profesional consulta certificado administrativo pendiente','Gracias por recordárnoslo. Aún no tengo confirmación de que el certificado esté listo.');
+  if(/confirm|asisti/.test(text)&&/\b(sesion|cita|paciente|asistencia)\b/.test(text)&&!/\b(reservar|agendar|separar|alquilar)\b/.test(text))return review('Profesional pide confirmar asistencia a una sesión',/desplazar|salir|viaj|irme/.test(text)?'Aún no tengo confirmación de esa sesión. Por favor, espera la confirmación antes de desplazarte.':'Aún no tengo confirmación de asistencia a esa sesión.');
   if(courtesy)return answerCourtesy();
   if(/consultorio|alquiler|reservar (?:un )?espacio/.test(text)||isRentalBookingRequest(event,state))return null;
   if(/^(hola[!.\s😊]*|buenos dias|buenas tardes|buenas noches|buenas)$/.test(text)&&!c.continuation)return {stage:'PROFESSIONAL',state,messages:['Hola 😊 ¿Cómo estás? ¿En qué podemos ayudarte hoy?']};
-  return review('Consulta administrativa de profesional; revisar conversación previa','Gracias por escribirnos 😊 Permíteme consultarlo con Sandra.');
+  return review('Consulta administrativa de profesional; revisar conversación previa','Gracias por escribirnos. Tu solicitud está pendiente de confirmación.');
  }
- if(c?.continuation)return review('Solicitud anterior sin resolver; revisar contexto','Gracias por recordárnoslo. Voy a revisar lo que quedó pendiente con Sandra.');
+ if(c?.continuation)return review('Solicitud anterior sin resolver; revisar contexto','Gracias por recordárnoslo. La solicitud anterior sigue pendiente de confirmación.');
  if(courtesy)return answerCourtesy();
  if(c?.hasHistory&&stage==='NEW'&&/^(hola[!.\s😊]*|buenos dias|buenas tardes|buenas noches|buenas)$/.test(text))return {stage:'NEED',state,messages:['Hola 😊 ¿En qué podemos ayudarte con lo que venían conversando?']};
  return null;
