@@ -1,5 +1,13 @@
 # Autonomía administrativa de Psicólogos en Colombia
 
+## Corrección de notificaciones — 30 de septiembre de 2026
+
+Los informes y alertas de supervisión a Sandra deben registrarse antes de enviarse mediante `POST /api/integrations/psicologos/automation`, acción `notify-chief`, con `key` estable por hecho/informe y `content`. Usa la credencial de automatización existente, nunca una credencial de otra empresa. El destinatario está fijado a Sandra. No enviar esos avisos directamente desde WhatsApp Web: su eco carece del registro de salida y puede confundirse con una toma humana.
+
+La respuesta 202 indica registro en la cola; `ACCEPTED` significa aceptación por Chatwoot, no prueba de entrega a WhatsApp. Verificar el estado de entrega antes de afirmar recepción. Repetir la misma clave/contenido consulta el registro sin crear un envío adicional; cambiar el contenido con la misma clave devuelve conflicto. Un estado incierto se inspecciona antes de intentar otro envío.
+
+La devolución expresa de Sandra puede procesarse desde texto o una transcripción persistida. Se aceptan saludos antes de «Luisa, retoma este chat». Un sí, mención en tercera persona, audio sin transcribir o el paso del tiempo no libera la atención humana. Esta corrección no libera retrospectivamente chats ni convierte reportes antiguos en mensajes humanos o automáticos sin verificar su origen.
+
 Actualización: 29 de septiembre de 2026. Este documento describe capacidades y criterios de aceptación; no certifica autonomía total ni sustituye una prueba real de cada recorrido. Para la evidencia de despliegue y mensajes, consultar la continuidad privada `.tmp/PSICOLOGOS_AI_2026-09-28.md` y los identificadores de auditoría. Nunca subir esas evidencias privadas ni archivos `.env` a Git.
 
 ## Arquitectura

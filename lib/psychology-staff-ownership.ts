@@ -19,7 +19,7 @@ export function chiefAddressesBot(event:ReceptionEvent){
 export function chiefStaffDecision(event:ReceptionEvent,stage:string,state:ReceptionState){
  if(event.fromMe||event.phone!==SANDRA_PHONE||stage!=='HUMAN')return null;
  const text=event.text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[¿?¡!,.;:]/g,' ').replace(/\s+/g,' ').trim();
- const explicit=event.kind==='text'&&/^(?:luisa(?: fernanda)?|bot) (?:por favor )?(?:retoma|reanuda|vuelve a atender) (?:tu )?(?:este chat|nuestro chat|la atencion de este chat)(?: por favor)?$/.test(text);
+ const explicit=event.kind==='text'&&/^(?:(?:hola|buenos dias|buenas tardes|buenas noches|buen dia|oye|disculpa) )?(?:luisa(?: fernanda)?|bot) (?:por favor )?(?:retoma|reanuda|vuelve a atender) (?:tu )?(?:este chat|nuestro chat|la atencion de este chat)(?: por favor)?$/.test(text);
  const staffAt=state.staffMessage?.at||state.humanHold?.since;
  if(!explicit||(staffAt&&Date.parse(event.at)<=Date.parse(staffAt)))return {action:'observe' as const};
  const next=resumeReception(state);

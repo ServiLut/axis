@@ -96,7 +96,8 @@ async function processOne(config:AutomationConfig) {
       }
       const chief=(await tx.$queryRaw<{stage:string;state:ReceptionState}[]>`SELECT stage,state FROM "PsicologiaBotConversation" WHERE "tenantId"=4 AND phone=${SANDRA_PHONE} FOR UPDATE`)[0];
       // Ordinary messages to the staff must not become bot instructions or extra questions.
-      const ownership=chief&&chiefStaffDecision({...e,kind:row.kind},chief.stage,chief.state);
+      // e is text only after a persisted audio transcription exists. Do not discard it here.
+      const ownership=chief&&chiefStaffDecision(e,chief.stage,chief.state);
       if(ownership){
         if(ownership.action==='release'){
           await tx.$executeRaw`UPDATE "PsicologiaBotConversation" SET stage=${ownership.stage},state=${JSON.stringify(ownership.state)}::jsonb,"updatedAt"=NOW() WHERE "tenantId"=4 AND phone=${SANDRA_PHONE}`;

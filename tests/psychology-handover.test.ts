@@ -121,6 +121,7 @@ test('the chief explicitly returns her own chat; ambiguous, stale, quoted or oth
  assert.equal(released.state.staffReleasedAt,chief.at);assert.equal(released.state.staffMessage,undefined);assert.equal(released.state.humanHold,undefined);
  for(const text of ['Gracias','Sí','Te ayude a sacar la plata mirar si hay','No, Luisa, retoma este chat','Sandra dijo: Luisa, retoma este chat'])assert.equal(chiefStaffDecision({...chief,text},'HUMAN',state)?.action,'observe');
  assert.equal(chiefStaffDecision({...chief,kind:'audio'},'HUMAN',state)?.action,'observe');
+ assert.equal(chiefStaffDecision({...chief,text:'Hola, Luisa Fernanda, retoma este chat, por favor.'},'HUMAN',state)?.action,'release');
  assert.equal(chiefStaffDecision({...chief,at:staffAt},'HUMAN',state)?.action,'observe');
  assert.equal(chiefStaffDecision({...chief,phone},'HUMAN',state),null);
  assert.equal(chiefStaffDecision({...chief,fromMe:true},'HUMAN',state),null);
