@@ -12,6 +12,7 @@ export function chiefAddressesBot(event:ReceptionEvent){
  const name='(?:luisa(?: fernanda)?|bot)';
  // A vocative or a direct request, not a third-person mention or a quoted example.
  return new RegExp('^'+greeting+name+'(?:$|[,!:;¿?])').test(text)
+  ||new RegExp('^'+name+' +(?:hola|buenos dias|buenas tardes|buenas noches|buen dia)(?:$|[,!:;.¿?]| +(?:hoy|por favor|necesito|quiero|puedes|me ayudas|tratemos|revisa|retoma)\\b)').test(text)
   ||new RegExp('^'+greeting+name+' +(?:por favor|me ayudas|te pido|tu puedes|necesito|quiero|puedes|podrias|revisa|mira|dime|ayudame|confirma|cuentame|recuerda|guarda|ten en cuenta|retoma|reanuda|vuelve a atender|estas|estan funcionando|sigues|me escuchas|me lees|que puedes hacer|con que me puedes ayudar|explicame)(?:[ ?!]|$)').test(text);
 }
 

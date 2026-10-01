@@ -11,6 +11,16 @@ import {sqlTx} from './psychology-campaign-fixture';
 const phone='573000000010';
 const event=(patch:Partial<ReceptionEvent>={}):ReceptionEvent=>({id:'staff-1',phone,at:new Date().toISOString(),kind:'text',text:'Con mucho gusto',fromMe:true,...patch});
 
+test('a greeting after the assistant name authorizes only the verified chief turn',()=>{
+ const text='Luisa buenos días, hoy tratemos de enviar de ocho de la mañana a siete de la noche aunque sea 250 mensajes de clientes que lleven más de cuatro meses que no le hemos hablado';
+ const chief=event({phone:'573016803926',fromMe:false,text});
+ for(const message of [text,'Luisa Fernanda buenas tardes. Necesito ayuda','Bot buenos días','Luisa buenos días hoy revisa la agenda'])assert.equal(chiefAddressesBot({...chief,text:message}),true,message);
+ for(const message of ['Luisa buenos días le dijo a la compañera','Dile a Luisa buenos días','Sandra dijo Luisa buenos días','"Luisa buenos días"','Luisa no respondió hoy'])assert.equal(chiefAddressesBot({...chief,text:message}),false,message);
+ for(const patch of [{fromMe:true},{phone},{kind:'audio' as const}])assert.equal(chiefAddressesBot({...chief,...patch}),false);
+ assert.equal(chiefStaffDecision(chief,'HUMAN',{humanHold:{kind:'staff',since:'2026-09-30T20:00:00Z'}})?.action,'observe');
+ assert.equal(chiefPresenceQuestion(chief),false);
+});
+
 test('direct presence questions without punctuation do not become silent third-person observations',()=>{
  for(const text of ['Luisa estan funcionando?','Luisa estás funcionando?','Hola Luisa me escuchas','Luisa, ¿estás activa?']){
   const e=event({phone:'573016803926',fromMe:false,text});assert.equal(chiefAddressesBot(e),true,text);assert.equal(chiefPresenceQuestion(e),true,text);

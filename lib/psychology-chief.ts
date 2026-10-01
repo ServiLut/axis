@@ -6,6 +6,15 @@ import {campaignCandidates} from './psychology-campaign-candidates';
 type Tx=Prisma.TransactionClient;
 type Queue=(tx:Tx,id:string,phone:string,content:string)=>Promise<void>;
 
+/** Requested parameters remain evidence; they never grant recipient consent. */
+export function campaignRequestedScope(text:string){
+ const s=text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+ const words:Record<string,number>={un:1,uno:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,diez:10,once:11,doce:12};
+ const month=/\b(\d+|un|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce) meses?\b/.exec(s);
+ const goal=/\b(\d{1,4})\s+(?:mensajes|clientes|pacientes)\b/.exec(s);
+ return {inactiveMonths:month?words[month[1]]??Number(month[1]):null,messageGoal:goal?Number(goal[1]):null,criterion:/sin (?:hablar|conversar|contacto)|no (?:le |les |nos )?(?:hemos |han |he )?(?:hablado|escrito|contactado)/.test(s)?'contact' as const:'service' as const};
+}
+
 /** Interpretation proposes an action. Identity and permitted operations are enforced here. */
 export function chiefAction(event:ReceptionEvent,u:Understanding){
  if(event.fromMe||event.phone!==SANDRA_PHONE||u.confidence<0.9||u.instructionUncertainty?.trim())return null;
@@ -17,7 +26,7 @@ export function chiefAction(event:ReceptionEvent,u:Understanding){
  if(u.adminAction==='status')return {type:'command',text:'ESTADO BOT'} as const;
  if(['pause','resume'].includes(u.adminAction||'')&&phone&&![SANDRA_PHONE,PSYCHOLOGY_PHONE].includes(phone))return {type:'command',text:`${u.adminAction==='pause'?'PAUSAR':'REANUDAR'} ${phone}`} as const;
  const text=event.text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
- if(u.adminAction==='reactivate'||(/(?:seis|6) meses/.test(text)&&/clientes|pacientes|psicologos/.test(text)&&/escrib|mensaje|reactiva|envi/.test(text)))return {type:'reactivate'} as const;
+ if(u.adminAction==='reactivate'||(campaignRequestedScope(text).inactiveMonths!==null&&/clientes|pacientes|psicologos/.test(text)&&/escrib|mensaje|reactiva|envi/.test(text)))return {type:'reactivate'} as const;
  if(u.adminAction==='learn'&&u.instruction?.trim())return {type:'learn',instruction:u.instruction.trim()} as const;
  // Do not turn an inferred paraphrase into an outbound message on behalf of the chief.
  if(u.adminAction==='send'&&phone&&phone!==PSYCHOLOGY_PHONE&&u.instruction?.trim()&&event.text.includes(u.instruction.trim()))return {type:'send',phone,text:u.instruction.trim()} as const;
@@ -103,6 +112,18 @@ export async function handleChiefUnderstanding(tx:Tx,e:ReceptionEvent,u:Understa
   await createAuditLog({tenantId:4,accion:'BOT_CHIEF_SEND_QUEUED',entidad:'WhatsApp',entidadId:action.phone,detalles:{sourceEvent:e.id,actorPhone:SANDRA_PHONE},tx});
   await ack('Dejé tu mensaje en la cola de envío a +'+action.phone+'. Si el envío falla, quedará pendiente de revisión.');return true;
  }
+ const requestedScope=campaignRequestedScope(e.text);
+ // Existing execution uses six-month service history and a 20/day ceiling. A new
+ // scope must not silently fall back to those values or reuse its candidate IDs.
+ if((requestedScope.inactiveMonths!==null&&requestedScope.inactiveMonths!==6)||(requestedScope.messageGoal!==null&&requestedScope.messageGoal>20)){
+  const task:ReactivationTask={sourceEvent:e.id,criterion:requestedScope.criterion,daily:/diari|dia siguiente|cada dia|todos los dias/.test(normalized),includeProfessionals:/psicologo|profesional/.test(normalized),status:requestedScope.criterion==='contact'?'NEEDS_HISTORY':'PAUSED',asOf:e.at,lastRunDate:null,candidateIds:null,requestedScope,requestedText:e.text,previousSourceEvent:pending?.sourceEvent};
+  await saveTask(tx,task);
+  if(pending?.sourceEvent)await tx.$executeRaw`UPDATE "PsicologiaBotOutbox" SET status='CANCELLED',"lastError"='CAMPAIGN_SCOPE_CHANGED' WHERE "tenantId"=4 AND status='PENDING' AND id LIKE ${pending.sourceEvent+':reactivate:%'}`;
+  await tx.$executeRaw`UPDATE "PsicologiaBotKnowledge" SET active=false WHERE "sourceEvent"=${e.id}`;
+  await createAuditLog({tenantId:4,accion:'BOT_CAMPAIGN_REQUEST_PENDING',entidad:'WhatsApp',entidadId:e.id,detalles:{sourceEvent:e.id,task,recipientsQueued:0,contactPermissionGranted:false},tx});
+  await ack(`Sandra, dejé anotada tu solicitud${requestedScope.messageGoal?` con la meta de ${requestedScope.messageGoal} mensajes`:''}. ${requestedScope.criterion==='contact'?'Sigue pendiente verificar el historial de conversación y las autorizaciones de los contactos antes de empezar.':'Los envíos quedan pendientes de revisar ese alcance y las autorizaciones de los contactos.'}`);
+  return true;
+ }
  const criterion=/sin (?:hablar|conversar)|sin contacto|sin (?:hablar|contactar) con/.test(normalized)?'contact':'service';
  const task:ReactivationTask={sourceEvent:e.id,criterion,daily:/diari|dia siguiente|cada dia|todos los dias/.test(normalized),includeProfessionals:/psicologo|profesional/.test(normalized),status:criterion==='contact'?'NEEDS_CRITERION':'ACTIVE',asOf:new Date().toISOString(),lastRunDate:null,candidateIds:null};
  await saveTask(tx,task);
@@ -113,7 +134,7 @@ export async function handleChiefUnderstanding(tx:Tx,e:ReceptionEvent,u:Understa
  return true;
 }
 
-type ReactivationTask={sourceEvent:string;criterion:'contact'|'service';daily:boolean;includeProfessionals?:boolean;status:'NEEDS_CRITERION'|'NEEDS_HISTORY'|'ACTIVE'|'WAITING_PERMISSION'|'PAUSED'|'QUEUED';asOf:string;lastRunDate:string|null;candidateIds:(number|string)[]|null};
+type ReactivationTask={sourceEvent:string;criterion:'contact'|'service';daily:boolean;includeProfessionals?:boolean;status:'NEEDS_CRITERION'|'NEEDS_HISTORY'|'ACTIVE'|'WAITING_PERMISSION'|'PAUSED'|'QUEUED';asOf:string;lastRunDate:string|null;candidateIds:(number|string)[]|null;requestedScope?:ReturnType<typeof campaignRequestedScope>;requestedText?:string;previousSourceEvent?:string};
 async function saveTask(tx:Tx,task:ReactivationTask){
  await tx.$executeRaw`UPDATE "PsicologiaBotConversation" SET state=jsonb_set(state,'{reactivationTask}',${JSON.stringify(task)}::jsonb,true),"updatedAt"=NOW() WHERE phone=${SANDRA_PHONE}`;
 }
