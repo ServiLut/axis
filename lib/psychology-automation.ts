@@ -18,7 +18,7 @@ import {chiefHelpMessage,chiefBookingProblem} from './psychology-chief-messages'
 import {contextReception} from './psychology-reception-context';
 import {handleRentalIntake} from './psychology-rental-intake';
 import {naturalBookingConfirmation,type ConfirmableProposal} from './psychology-booking-messages';
-import {recordPsychologyStaffTakeover,psychologyStaffSendAllowed,chiefStaffDecision,chiefMessageAddressesBot,chiefPresenceQuestion} from './psychology-staff-ownership';
+import {recordPsychologyStaffTakeover,psychologyStaffSendAllowed,chiefStaffDecision,chiefMessageAddressesBot,chiefPresenceQuestion,chiefOpeningReply} from './psychology-staff-ownership';
 import {psychologyCommunicationIssue} from './psychology-communication';
 
 type Tx=Prisma.TransactionClient;
@@ -78,7 +78,7 @@ async function processOne(config:AutomationConfig,preparedEventId:string) {
     // All workers lock in the same order. Serialize state transitions, including sender echoes.
     await tx.$queryRaw`SELECT id FROM "PsicologiaBotConfig" WHERE id=4 FOR UPDATE`;
     // Process exactly the event whose context was prepared, even if new events arrive meanwhile.
-    const rows=await tx.$queryRaw<(ReceptionEvent&{eventAt:Date;analysis:unknown;transcript:string|null;analysisError:string|null;resumeOf:string|null})[]>`SELECT id,phone,"eventAt",kind,text,"fromMe","quotedText",analysis,transcript,"analysisError","resumeOf" FROM "PsicologiaBotEvent" WHERE status='PENDING' AND id=${preparedEventId} FOR UPDATE SKIP LOCKED`;
+    const rows=await tx.$queryRaw<(ReceptionEvent&{eventAt:Date;analysis:unknown;transcript:string|null;analysisError:string|null;resumeOf:string|null})[]>`SELECT id,phone,"eventAt",kind,text,"fromMe","quotedText",to_jsonb("PsicologiaBotEvent")->>'quotedOutboxId' AS "quotedOutboxId",analysis,transcript,"analysisError","resumeOf" FROM "PsicologiaBotEvent" WHERE status='PENDING' AND id=${preparedEventId} FOR UPDATE SKIP LOCKED`;
     const row=rows[0];if(!row)return false;
     const e:ReceptionEvent={...row,at:row.eventAt.toISOString(),...(row.kind==='audio'&&row.transcript?{kind:'text',text:row.transcript}:{})};
     const chiefContext={kind:e.kind,text:e.text,quotedText:e.quotedText};
@@ -112,6 +112,12 @@ async function processOne(config:AutomationConfig,preparedEventId:string) {
       if(ownership)await createAuditLog({tenantId:4,accion:'BOT_CHIEF_DIRECTED_TURN',entidad:'WhatsAppEvento',entidadId:e.id,detalles:{sourceEvent:e.id,chatReleased:false},tx});
       if(chiefPresenceQuestion(e)){
         await queuePsychologyMessage(tx,e.id+':chief-presence',SANDRA_PHONE,'Hola, Sandra. Sí, recibí tu mensaje y puedo responderte. ¿Qué necesitas revisar?');
+        await tx.$executeRaw`UPDATE "PsicologiaBotEvent" SET status='DONE',"processedAt"=NOW() WHERE id=${e.id}`;
+        return true;
+      }
+      const opening=chiefOpeningReply(e);
+      if(opening){
+        await queuePsychologyMessage(tx,e.id+':chief-opening',SANDRA_PHONE,opening);
         await tx.$executeRaw`UPDATE "PsicologiaBotEvent" SET status='DONE',"processedAt"=NOW() WHERE id=${e.id}`;
         return true;
       }

@@ -8,7 +8,7 @@ export function phoneDigits(value: string): string | null {
   if (!/^[1-9]\d{7,14}$/.test(digits)) return null;
   return digits.length === 10 && digits.startsWith('3') ? `57${digits}` : digits;
 }
-export type ReceptionEvent = { id: string; phone: string; at: string; kind: 'text'|'audio'|'attachment'; text: string; fromMe: boolean; quotedText?:string };
+export type ReceptionEvent = { id: string; phone: string; at: string; kind: 'text'|'audio'|'attachment'; text: string; fromMe: boolean; quotedText?:string; quotedOutboxId?:string };
 export function validateReceptionEvent(input: unknown, now: number, activatedAt: number): ReceptionEvent | null {
   if (!input || typeof input !== 'object') return null;
   const e = input as Record<string, unknown>;

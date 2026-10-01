@@ -3,9 +3,21 @@ import {pauseForStaff,resumeReception,SANDRA_PHONE,type ReceptionEvent,type Rece
 
 type Tx=Prisma.TransactionClient;
 
+/** A whole directed opening needs only acknowledgement, never an inferred task. */
+export function chiefOpeningReply(event:ReceptionEvent):string|null{
+ if(event.fromMe||event.phone!==SANDRA_PHONE||event.kind!=='text'||event.quotedText?.trim())return null;
+ const text=event.text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[¿?¡!,.;:]/g,' ').replace(/\s+/g,' ').trim();
+ const match=/^(?:(?:hola|buenos dias|buenas tardes|buenas noches) )?(?:luisa(?: fernanda)?|bot) (.+)$/.exec(text);
+ if(!match)return null;
+ if(/^(?:una pregunta|tengo una pregunta|te puedo hacer una pregunta)$/.test(match[1]))return 'Claro, Sandra. Cuéntame.';
+ if(/^(?:me (?:puedes|podrias) hacer un favor|puedes hacerme un favor|necesito un favor)(?: por favor)?$/.test(match[1]))return 'Claro, Sandra. ¿Qué necesitas?';
+ return null;
+}
+
 /** A shared staff/chief chat is not automatically addressed to the assistant. */
 export function chiefAddressesBot(event:ReceptionEvent){
  if(event.fromMe||event.phone!==SANDRA_PHONE||event.kind!=='text')return false;
+ if(chiefOpeningReply(event))return true;
  const text=event.text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
  if(/^(estado bot|ayuda bot)$/.test(text))return true;
  const greeting='(?:(?:hola|buenos dias|buenas tardes|buenas noches|buen dia|oye|disculpa)[,!: ]+)?';
@@ -33,6 +45,14 @@ export async function chiefMessageAddressesBot(tx:Tx,event:ReceptionEvent){
 export async function verifiedChiefQuestion(tx:Tx,event:ReceptionEvent){
  if(event.fromMe||event.phone!==SANDRA_PHONE||event.kind!=='text'||!event.quotedText?.trim())return null;
  const quote=event.quotedText.trim();
+ // Only preparation can persist this reference after checking the provider's
+ // reply ID and the outbound ledger. Inbound validation never accepts this field.
+ if(event.quotedOutboxId){
+  const exact=await tx.$queryRaw<{id:string;content:string}[]>`SELECT id,content FROM "PsicologiaBotOutbox"
+   WHERE "tenantId"=4 AND phone=${SANDRA_PHONE} AND status='ACCEPTED' AND id=${event.quotedOutboxId}
+    AND "attemptedAt"<=${new Date(event.at)} AND content=${quote} LIMIT 2`;
+  return exact.length===1?exact[0]:null;
+ }
  // The inbound transport limits quotes to 1,800 chars. Short fragments are ambiguous.
  if(quote.length<40)return null;
  const matches=await tx.$queryRaw<{id:string;content:string}[]>`SELECT id,content FROM "PsicologiaBotOutbox"
@@ -84,7 +104,7 @@ export async function recordPsychologyStaffTakeover(tx:Tx,event:ReceptionEvent){
 export async function psychologyStaffSendAllowed(tx:Tx,id:string,phone:string){
  let directedAt:Date|null=null;
  if(phone===SANDRA_PHONE){
-  const source=(await tx.$queryRaw<(ReceptionEvent&{eventAt:Date;transcribed:boolean})[]>`SELECT e.id,e.phone,e.kind,e."fromMe",e."eventAt",to_jsonb(e)->>'quotedText' AS "quotedText",COALESCE(NULLIF(to_jsonb(e)->>'transcript',''),e.text) AS text,(NULLIF(to_jsonb(e)->>'transcript','') IS NOT NULL) AS transcribed
+  const source=(await tx.$queryRaw<(ReceptionEvent&{eventAt:Date;transcribed:boolean})[]>`SELECT e.id,e.phone,e.kind,e."fromMe",e."eventAt",to_jsonb(e)->>'quotedText' AS "quotedText",to_jsonb(e)->>'quotedOutboxId' AS "quotedOutboxId",COALESCE(NULLIF(to_jsonb(e)->>'transcript',''),e.text) AS text,(NULLIF(to_jsonb(e)->>'transcript','') IS NOT NULL) AS transcribed
    FROM "PsicologiaBotEvent" e JOIN "PsicologiaBotOutbox" o ON left(o.id,length(e.id)+1)=e.id||':'
    WHERE o.id=${id} AND o.phone=${phone} AND o."tenantId"=4 AND e."tenantId"=4 AND e.phone=${SANDRA_PHONE} AND e."fromMe"=false ORDER BY length(e.id) DESC LIMIT 1`)[0];
   if(source){

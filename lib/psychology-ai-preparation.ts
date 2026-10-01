@@ -2,16 +2,17 @@ import prisma from './prisma';
 import {aiConfigured,transcribePsychologyAudio,understandPsychologyMessage} from './psychology-ai';
 import {isFastGreeting,type ReceptionEvent,type ReceptionState} from './psychology-reception';
 import {readReceptionIdentity,hasContinuation} from './psychology-reception-context';
-import {readPsychologyHistory} from './psychology-chatwoot';
+import {readPsychologyHistory,readChiefReplyReference} from './psychology-chatwoot';
+import {createAuditLog} from './audit';
 import {readChiefKnowledge,readChiefCaseAnswers} from './psychology-knowledge';
 import {classifyReceptionHistory,staffObservation,type BotHistoryReference} from './psychology-staff-observation';
-import {chiefMessageAddressesBot,chiefPresenceQuestion,verifiedChiefQuestion} from './psychology-staff-ownership';
+import {chiefMessageAddressesBot,chiefPresenceQuestion,chiefOpeningReply,verifiedChiefQuestion} from './psychology-staff-ownership';
 import {SANDRA_PHONE} from './psychology-reception';
 
 /** No network call while a database transaction or row lock is held. */
 export async function prepareNextPsychologyEvent(){
  const rows=await prisma.$queryRaw<(ReceptionEvent&{eventAt:Date;analysis:unknown;transcript:string|null;analysisError:string|null;resumeOf:string|null})[]>`
-  SELECT id,phone,"eventAt",kind,text,"fromMe",analysis,transcript,"analysisError","resumeOf","quotedText" FROM "PsicologiaBotEvent" WHERE status='PENDING' ORDER BY "receivedAt",id LIMIT 1`;
+  SELECT id,phone,"eventAt",kind,text,"fromMe",analysis,transcript,"analysisError","resumeOf","quotedText",to_jsonb("PsicologiaBotEvent")->>'quotedOutboxId' AS "quotedOutboxId" FROM "PsicologiaBotEvent" WHERE status='PENDING' ORDER BY "receivedAt",id LIMIT 1`;
  const row=rows[0];if(!row)return null;
  if(row.fromMe||row.analysis||row.analysisError||row.kind==='attachment')return row.id;
  if(row.kind==='text'&&/^(RESERVAR|CONFIRMAR|SOPORTE|PAUSAR|REANUDAR|POLITICA PAGO)\s|^(ESTADO BOT|AYUDA BOT)$/i.test(row.text.trim()))return row.id;
@@ -26,9 +27,28 @@ export async function prepareNextPsychologyEvent(){
    await prisma.$executeRaw`UPDATE "PsicologiaBotEvent" SET transcript=${event.text} WHERE id=${row.id} AND status='PENDING'`;
    event.kind='text';
   }
+  if(row.phone===SANDRA_PHONE&&event.quotedText?.trim()&&!event.quotedOutboxId){
+   const candidates=await prisma.$queryRaw<{conversationId:bigint}[]>`SELECT DISTINCT "conversationId" FROM "PsicologiaBotOutbox"
+    WHERE "tenantId"=4 AND phone=${SANDRA_PHONE} AND status='ACCEPTED' AND content=${event.quotedText.trim()}
+     AND "attemptedAt"<=${row.eventAt} AND "conversationId" IS NOT NULL LIMIT 4`;
+   for(const candidate of candidates){
+    const reference=await readChiefReplyReference(event,candidate.conversationId);if(!reference)continue;
+    const matched=await prisma.$queryRaw<{id:string}[]>`SELECT id FROM "PsicologiaBotOutbox"
+     WHERE "tenantId"=4 AND phone=${SANDRA_PHONE} AND status='ACCEPTED' AND "conversationId"=${reference.conversationId}
+      AND "messageId"::text=${String(reference.messageId)} AND content=${event.quotedText.trim()} AND "attemptedAt"<=${row.eventAt} LIMIT 2`;
+    if(matched.length!==1)continue;
+    const outboxId=matched[0].id;
+    await prisma.$transaction(async tx=>{
+     const saved=await tx.$executeRaw`UPDATE "PsicologiaBotEvent" SET "quotedOutboxId"=${outboxId} WHERE "tenantId"=4 AND id=${row.id} AND phone=${SANDRA_PHONE} AND "fromMe"=false AND status='PENDING' AND "quotedOutboxId" IS NULL`;
+     if(saved)await createAuditLog({tenantId:4,accion:'BOT_CHIEF_REPLY_REFERENCE',entidad:'WhatsAppEvento',entidadId:row.id,detalles:{questionOutboxId:outboxId,replyMessageId:reference.replyMessageId,questionMessageId:reference.messageId,conversationId:reference.conversationId,chatReleased:false},tx});
+    });
+    event.quotedOutboxId=outboxId;break;
+   }
+  }
   const chiefDirectedTurn=row.phone===SANDRA_PHONE&&await chiefMessageAddressesBot(prisma,event);
-  if(row.phone===SANDRA_PHONE&&!chiefDirectedTurn)return row.id;
-  if(chiefPresenceQuestion(event))return row.id;
+  // The WhatsApp webhook may arrive before Chatwoot exposes the reply edge.
+  if(row.phone===SANDRA_PHONE&&!chiefDirectedTurn)return event.quotedText&&Date.now()-row.eventAt.getTime()<120000?null:row.id;
+  if(chiefPresenceQuestion(event)||chiefOpeningReply(event))return row.id;
   const contextAt=row.resumeOf?new Date():row.eventAt;
   const sourceId=row.resumeOf||row.id;
   const history=await prisma.$queryRaw<{direction:string;text:string;at:Date;source:string}[]>`

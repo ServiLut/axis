@@ -11,6 +11,10 @@ export function semanticReception(event:ReceptionEvent,stage:string,state:Recept
  if(u?.intent==='stop'||baseline.state.reason==='No contactar')return decideReception({...event,text:'no me escriban'},stage,state,templates,policy);
  if(u?.intent==='abusive'&&u.confidence>=0.9)return {stage:'HUMAN',state:{...state,reason:'Atención respetuosa ante insultos'},messages:['Podemos continuar con respeto. Cuéntame qué necesitas resolver.'],handoff:'Insultos dirigidos a la atención; definir respuesta humana sin confrontación'};
  const contextual=contextReception(event,stage,state);if(contextual)return contextual;
+ // A request to explain a favor is intake, not an unknown service or permission
+ // to contact a third party. Match only the complete opening without an antecedent.
+ const favor=normalizeText(event.text).replace(/[¿?¡!.,]/g,'').replace(/\s+/g,' ').trim();
+ if(event.kind==='text'&&['NEW','NEED'].includes(stage)&&!event.quotedText&&!state.context?.quotedText&&!state.context?.continuation&&!state.service&&!state.intake&&!state.rental&&/^(?:hola )?(?:me (?:puedes|podrias) hacer un favor|puedes hacerme un favor|necesito un favor)(?: por favor)?$/.test(favor))return {stage:'NEED',state,messages:['Claro, con mucho gusto. ¿Qué necesitas?']};
  // A plain request for therapy does not identify a specialty or justify a
  // referral. Preserve history, prior choices and the approved menu verbatim.
  const plainTherapy=/^(?:para tomar|quiero(?: tomar)?|quisiera(?: tomar)?|necesito|busco) (?:una )?terapia$/.test(normalizeText(event.text).replace(/[¿?¡!.,]/g,'').trim());

@@ -3,13 +3,24 @@ import {test} from 'node:test';
 import {PGlite} from '@electric-sql/pglite';
 import {readFileSync} from 'node:fs';
 import {idleChatSources,enqueueIdleChatResumes,idleResumeDecision,idleReplyStillCurrent} from '../lib/psychology-handover';
-import {recordPsychologyStaffTakeover,psychologyStaffSendAllowed,isPsychologyBotEcho,chiefStaffDecision,chiefAddressesBot,chiefPresenceQuestion} from '../lib/psychology-staff-ownership';
+import {recordPsychologyStaffTakeover,psychologyStaffSendAllowed,isPsychologyBotEcho,chiefStaffDecision,chiefAddressesBot,chiefPresenceQuestion,chiefOpeningReply} from '../lib/psychology-staff-ownership';
 import {classifyReceptionHistory,staffObservation} from '../lib/psychology-staff-observation';
 import {resumeReception,type ReceptionEvent} from '../lib/psychology-reception';
 import {sqlTx} from './psychology-campaign-fixture';
 
 const phone='573000000010';
 const event=(patch:Partial<ReceptionEvent>={}):ReceptionEvent=>({id:'staff-1',phone,at:new Date().toISOString(),kind:'text',text:'Con mucho gusto',fromMe:true,...patch});
+
+test('chief question and favor openings are warm, distinct and never release staff ownership',()=>{
+ const chief=event({phone:'573016803926',fromMe:false});
+ for(const text of ['Luisa, una pregunta','Luisa una pregunta','Hola Luisa Fernanda, tengo una pregunta','Bot, te puedo hacer una pregunta?']){
+  const e={...chief,text};assert.equal(chiefOpeningReply(e),'Claro, Sandra. Cuéntame.');assert.equal(chiefAddressesBot(e),true);
+  assert.equal(chiefStaffDecision(e,'HUMAN',{humanHold:{kind:'staff',since:'2026-09-30T20:00:00Z'}})?.action,'observe');
+ }
+ assert.equal(chiefOpeningReply({...chief,text:'Luisa, me puedes hacer un favor?'}),'Claro, Sandra. ¿Qué necesitas?');
+ for(const text of ['me puedes hacer un favor?','es para el bot','Dile a Luisa una pregunta','"Luisa, una pregunta"','Luisa me puedes hacer un favor con un pago','Luisa, una pregunta: ¿ya pagaron?'])assert.equal(chiefOpeningReply({...chief,text}),null,text);
+ for(const patch of [{phone},{fromMe:true},{kind:'audio' as const},{quotedText:'Pregunta previa que necesita conservar el contexto'}])assert.equal(chiefOpeningReply({...chief,text:'Luisa, una pregunta',...patch}),null);
+});
 
 test('a greeting after the assistant name authorizes only the verified chief turn',()=>{
  const text='Luisa buenos días, hoy tratemos de enviar de ocho de la mañana a siete de la noche aunque sea 250 mensajes de clientes que lleven más de cuatro meses que no le hemos hablado';

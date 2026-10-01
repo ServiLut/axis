@@ -1,4 +1,4 @@
-import { phoneDigits, PSYCHOLOGY_INSTANCE, PSYCHOLOGY_PHONE } from './psychology-reception';
+import { phoneDigits, PSYCHOLOGY_INSTANCE, PSYCHOLOGY_PHONE, SANDRA_PHONE, type ReceptionEvent } from './psychology-reception';
 
 const base='https://chatwoot.servilutioncrm.cloud';
 const account='/api/v1/accounts/2';
@@ -63,6 +63,35 @@ export async function sendPsychologyMessage(conversationId:number,content:string
   return chatwootRequest(account+`/conversations/${conversationId}/messages`,'POST',{
     content,message_type:'outgoing',private:false,content_type:'text',
   });
+}
+
+/** Read a provider reply edge; matching repeated text alone is never sufficient. */
+export async function readChiefReplyReference(event:ReceptionEvent,conversationId:number|bigint){
+ const id=Number(conversationId);
+ if(event.fromMe||event.phone!==SANDRA_PHONE||event.kind!=='text'||!event.quotedText?.trim()||!Number.isSafeInteger(id)||id<1)return null;
+ const path=account+`/conversations/${id}`;
+ const detail=await chatwootRequest(path);
+ if(detail.inbox_id!==10||detail.meta?.sender?.phone_number!=='+'+SANDRA_PHONE)throw Error('CW_REPLY_SCOPE');
+ let before:number|undefined;
+ for(let pageNumber=0;pageNumber<3;pageNumber++){
+  const page=await chatwootRequest(path+'/messages'+(before?'?before='+before:''));
+  const messages=page.payload??[];
+  const matches=messages.filter((m:any)=>String(m.source_id||'').replace(/^WAID:/,'')===event.id);
+  if(matches.length>1)throw Error('CW_REPLY_AMBIGUOUS');
+  const source=matches[0];
+  if(source){
+   const replyId=source.content_attributes?.in_reply_to;
+   if(source.private||source.message_type!==0||(source.inbox_id!==undefined&&source.inbox_id!==10)||!Number.isSafeInteger(source.id)||!Number.isFinite(Number(source.created_at))||Math.abs(Number(source.created_at)*1000-Date.parse(event.at))>120000||!Number.isSafeInteger(replyId)||replyId<1)return null;
+   let targets=messages.filter((m:any)=>m.id===replyId);
+   if(!targets.length){const older=await chatwootRequest(path+'/messages?before='+(replyId+1));targets=(older.payload??[]).filter((m:any)=>m.id===replyId);}
+   const target=targets.length===1?targets[0]:null;
+   if(!target||target.private||target.message_type!==1||(target.inbox_id!==undefined&&target.inbox_id!==10)||target.content!==event.quotedText.trim()||!Number.isFinite(Number(target.created_at))||Number(target.created_at)>Number(source.created_at))return null;
+   return {conversationId:id,messageId:replyId,replyMessageId:source.id};
+  }
+  const ids=messages.map((m:any)=>m.id).filter((id:any)=>Number.isSafeInteger(id)&&id>0);
+  if(!ids.length)return null;before=Math.min(...ids);
+ }
+ return null;
 }
 
 /** Read only: never create a contact to obtain context or read a different inbox. */

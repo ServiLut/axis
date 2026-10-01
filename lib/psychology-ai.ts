@@ -82,6 +82,7 @@ export async function psychologyAiRequest(body:Record<string,unknown>) {
  const value=await r.json();if(value.error)throw Error('AI_PROVIDER_ERROR');return value;
 }
 export const CHIEF_ANSWER_INSTRUCTIONS=`verifiedChiefQuestion es la pregunta real del bot que Sandra contesta. Interpreta su respuesta como aclaración del caso: si da un criterio claro, intent admin, adminAction learn, instruction con alcance exacto y question null. No le ofrezcas a Sandra el servicio pedido por el cliente ni preguntes de nuevo lo resuelto. Caso particular no es regla general. Solo una ambigüedad real requiere instructionUncertainty y una pregunta puntual. No afirmes operaciones ejecutadas.
+Si preguntaste cómo responder a un favor y Sandra indica conocer primero qué necesita el contacto, usa learn para ese caso, sin exigir 'guarda'. Su ejemplo ilustra la pauta; no pide ayuda para ella ni ordena enviarlo. Una pregunta suya no es una instrucción: no inventes.
 priorChiefCaseAnswers son respuestas verificadas de Sandra sobre ESTE contacto. Reutiliza el antecedente aplicable antes de preguntar; conserva caso, fuente y fecha. No prueban disponibilidad, pago, identidad, consentimiento ni reserva guardada. No copies datos internos al cliente. chiefInstructions contiene reglas activas; recordar no implementa capacidades ni elimina controles.`;
 
 /** Preserve complete recent sources and the current request within the private gateway limit. */
@@ -105,19 +106,28 @@ export function psychologyAiInput(context:Record<string,unknown>):string{
 
 export async function understandPsychologyMessage(event:ReceptionEvent,context:Record<string,unknown>):Promise<Understanding>{
  const chiefDirectedTurn=event.phone===SANDRA_PHONE&&!event.fromMe&&event.kind==='text'&&context.chiefDirectedTurn===true;
+ const question=context.verifiedChiefQuestion as {id?:string;content?:string}|undefined;
+ const verifiedAnswer=chiefDirectedTurn&&typeof question?.id==='string'&&typeof question.content==='string'&&!!event.quotedText?.trim()&&question.content.startsWith(event.quotedText.trim());
  const input=psychologyAiInput({...context,chiefDirectedTurn,actorIsChief:event.phone===SANDRA_PHONE,nowColombia:new Date().toLocaleString('sv-SE',{timeZone:'America/Bogota'}),messageSentAtColombia:new Date(event.at).toLocaleString('sv-SE',{timeZone:'America/Bogota'}),currentMessage:event.text});
+ let retryReason='';
  for(let attempt=0;attempt<2;attempt++){
-  const result=await psychologyAiRequest({action:'understand',instructions:RECEPTION_AI_INSTRUCTIONS+'\n'+CHIEF_ANSWER_INSTRUCTIONS+(attempt?'\nLa salida anterior no cumplió el esquema. Relee la entrada original. Usa exclusivamente los valores enumerados y todos los campos; no agregues acciones. Una orden aún no implementada es intent admin, adminAction none y una pregunta clara, no inventes una nueva acción.':''),schema:understandingSchema,input});
+  const result=await psychologyAiRequest({action:'understand',instructions:RECEPTION_AI_INSTRUCTIONS+'\n'+CHIEF_ANSWER_INSTRUCTIONS+(attempt?'\nRelee la entrada original. Usa exclusivamente los valores enumerados y todos los campos; no agregues acciones. Una orden aún no implementada es intent admin, adminAction none y una pregunta clara. '+retryReason:''),schema:understandingSchema,input});
   try{
    let value=result.result??result;
    if(typeof value==='string'){try{value=JSON.parse(value.replace(/^```(?:json)?\s*|\s*```$/g,''))}catch{throw Error('AI_BAD_JSON')}}
    const understanding=parseUnderstanding(value);
+   // A valid JSON object can still have dropped a verified answer. Reinterpret
+   // once from the same source; never blame the chief with a generic repeat request.
+   if(verifiedAnswer&&(!understanding.adminAction||understanding.adminAction==='none')&&!understanding.question?.trim()&&!understanding.instructionUncertainty?.trim()&&!['greeting','courtesy','urgent','stop'].includes(understanding.intent))throw Error('AI_CHIEF_ANSWER_UNRESOLVED');
    const observation=context.staffObservation as {mode?:string}|undefined;
    // The model may ignore observation instructions. Never retain its reply draft in this mode.
    if(!chiefDirectedTurn&&(context.stage==='HUMAN'||observation?.mode==='observe_without_reply'))return {...understanding,reply:null,question:null};
    return understanding;
   }
-  catch(error){if(attempt===1)throw error;}
+  catch(error){
+   if(attempt===1)throw error;
+   retryReason=error instanceof Error&&error.message==='AI_CHIEF_ANSWER_UNRESOLVED'?'La salida omitió qué significa la respuesta actual a verifiedChiefQuestion. Si da una pauta, clasifícala learn con alcance de ese caso. Si pregunta algo, question debe contener esa pregunta concreta. Si no puedes interpretarla, no inventes una duda ni una orden.':'La salida anterior no cumplió el esquema.';
+  }
  }
  throw Error('AI_INVALID');
 }
