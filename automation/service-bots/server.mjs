@@ -24,6 +24,18 @@ export function createBotServer(config,store,transport,engine) {
       if(req.url==='/channel-health'){
         const lines=[];for(const line of config.lines)lines.push(await transport.verifyLine(line.phone));return reply(200,{company:config.name,lines});
       }
+      if(req.url==='/supervision'){
+        const after=body.afterEventRow??0,limit=body.limit??50;
+        if(!Number.isSafeInteger(after)||after<0||!Number.isSafeInteger(limit)||limit<1||limit>100)return reply(400,{error:'INVALID_CURSOR'});
+        const total=store.db.prepare('SELECT COUNT(*) n FROM events WHERE rowid>?').get(after).n;
+        const events=store.db.prepare('SELECT rowid AS cursor,id,phone,line,at,from_me,state FROM events WHERE rowid>? ORDER BY rowid LIMIT ?').all(after,limit);
+        const outbox=store.db.prepare('SELECT id,phone,line,internal,state,mid,created,updated FROM outbox ORDER BY updated DESC,rowid DESC LIMIT ?').all(limit);
+        return reply(200,{company:config.name,bot:config.bot,checkedAt:new Date().toISOString(),metadataOnly:true,
+          events,nextEventRow:events.at(-1)?.cursor??after,remainingEvents:total-events.length,
+          outbox,outboxTotal:store.db.prepare('SELECT COUNT(*) n FROM outbox').get().n,outboxCoverageComplete:store.db.prepare('SELECT COUNT(*) n FROM outbox').get().n===outbox.length,
+          humanChats:store.db.prepare('SELECT COUNT(*) n FROM conversations WHERE hold=1').get().n,
+          questions:store.db.prepare('SELECT state,COUNT(*) n FROM questions GROUP BY state').all()});
+      }
       if(req.url==='/event'){
         const event=validateEvent(body,config);if(!event)return reply(202,{accepted:false,reason:'UNSUPPORTED_OR_STALE_OR_OUTSIDE_SCOPE'});
         await transport.verifyLine(event.line);return reply(202,{accepted:true,...store.enqueue(event)});

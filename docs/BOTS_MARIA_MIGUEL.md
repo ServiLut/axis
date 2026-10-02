@@ -6,16 +6,16 @@ Autorización: mensajes directos de la usuaria del 02/10/2026 para construir los
 
 | Capacidad | Implementación | Prueba real en servidor |
 |---|---|---|
-| María Ángel: dos líneas de FUMIGACION | Runtime separado en Dokploy | HTTP autenticado y propietarios OPEN verificados; respuestas aún deshabilitadas |
-| Miguel Ángel: dos líneas de S.TECNICO | Runtime separado en Dokploy | HTTP autenticado y propietarios OPEN verificados; respuestas aún deshabilitadas |
+| María Ángel: dos líneas de FUMIGACION | Runtime separado en Dokploy; recepción habilitada desde el corte 02/10/2026 18:23:07.554Z | HTTP autenticado comprobado; 4997 OPEN. 8721 se desconectó después de verificarse OPEN, QR nuevo solicitado |
+| Miguel Ángel: dos líneas de S.TECNICO | Runtime separado en Dokploy; recepción habilitada desde el mismo corte | HTTP autenticado y propietarios 1941/9392 OPEN comprobados; primera respuesta legítima pendiente |
 | Recepción, preguntas de servicio, lugar, síntomas y preferencia | Implementada; respuestas breves | Pendiente |
 | Solicitud administrativa persistida antes del acuse | SQLite con cifrado autenticado | Pendiente |
-| Atención humana y devolución expresa de Sandra | Implementadas | Pendiente |
+| Atención humana y devolución expresa de Sandra | Implementadas | Un evento real de Fumigación preservó atención humana; devolución legítima pendiente |
 | Preguntas internas a Diego/Sandra, sin grupos | Cola e identificación exacta | Pendiente |
 | Respuestas citadas a preguntas entregadas | Aprendizaje del mismo caso con fuente y fecha | Pendiente |
 | Memoria histórica por empresa | 38 observaciones de Fumigación y 39 de ST, conservadas como referencias | Importación remota y persistencia tras reinicio verificadas el 02/10/2026 |
 | Preguntas anteriores pendientes | Una por empresa importada; no crean salidas | Importación remota y persistencia verificadas; ninguna respuesta nueva atribuida |
-| Revisión de atención previa al primer mensaje | Consulta metadatos salientes anteriores al corte en las dos líneas propias | Protocolo de consulta verificado; guardia en pruebas aisladas, publicación pendiente |
+| Revisión de atención previa al primer mensaje | Consulta metadatos salientes anteriores al corte en las dos líneas propias | Protocolo, publicación y flag de producción verificados; siguiente cliente real pendiente |
 | Audio, imágenes, documentos y video | Conservan revisión humana del original | Interpretación propia pendiente |
 | IA para extracción literal de datos | Adaptador opcional por empresa | Credenciales y prueba propia pendientes |
 | Programa, agenda y órdenes | Adaptador de lectura con comprobación de ámbito | Conexión propia pendiente |
@@ -47,7 +47,9 @@ Los secretos van en los archivos privados de entorno del servidor. No se incluye
 
 ## API autenticada
 
-Solo POST. Administración: `/status`, `/channel-health`, `/knowledge`, `/import-pending-questions`, `/drain`. Ingesta: `/webhook`, `/event`, `/delivery`. Cada grupo usa su clave propia, mediante `Authorization: Bearer …`.
+Solo POST. Administración: `/status`, `/channel-health`, `/supervision`, `/knowledge`, `/import-pending-questions`, `/drain`. Ingesta: `/webhook`, `/event`, `/delivery`. Cada grupo usa su clave propia, mediante `Authorization: Bearer …`.
+
+`/supervision` entrega metadatos de eventos con cursor por fila y límite de 100, estado de las salidas con ID exacto del proveedor y conteo de atención humana. No devuelve texto, archivos, claves ni el contenido del conocimiento. `remainingEvents` y `outboxCoverageComplete` indican la cobertura de la consulta; el listado limitado no se presenta como inventario íntegro. Guardar la evidencia privada por empresa y verificar las entregas exactas antes de repetir cualquier salida.
 
 `/webhook` admite `messages.upsert` y `messages.update` de Evolution. Verifica nombre técnico y propietario real de la instancia. Los grupos y los LID sin teléfono verificado quedan sin respuesta. El webhook debe configurarse con el encabezado de autenticación; si el proveedor no lo soporta, hace falta un puente propio autenticado. No reemplazar ni borrar un webhook existente sin inspeccionar su destino y preservar los demás consumidores.
 
@@ -67,8 +69,10 @@ La revisión anterior al corte usa exclusivamente metadatos del programa de mens
 
 ## Publicación y verificaciones pendientes
 
-Verificación del 02/10/2026: las cuatro líneas están OPEN y sus propietarios coinciden. Se creó la instancia propia `servicio-tecnico-a` para el 1941 después de la solicitud directa de QR de la usuaria. El 9392 se recuperó mediante su conexión propia; no se reinició el servidor compartido. María y Miguel están desplegados con claves y volúmenes independientes, HTTPS y autenticación comprobada; el estado continúa `enabled=false`. La memoria y las preguntas pendientes sobrevivieron a reinicios propios. Esto no acredita respuestas a clientes, agenda, aprendizaje nuevo ni autonomía completa.
+Verificación del 02/10/2026: las cuatro líneas estuvieron OPEN con sus propietarios coincidentes a las 18:21Z. Se creó la instancia propia `servicio-tecnico-a` para el 1941 después de la solicitud directa de QR de la usuaria. El 9392 se recuperó mediante su conexión propia; no se reinició el servidor compartido. María y Miguel están desplegados con claves y volúmenes independientes, HTTPS, autenticación y guardia comprobados; el estado fue verificado `enabled=true` a las 18:25Z. La memoria y las preguntas pendientes sobrevivieron a reinicios propios. Esto no acredita respuestas a clientes, agenda, aprendizaje nuevo ni autonomía completa.
 
-Faltan las fuentes autenticadas de eventos y la publicación de la guardia de atención previa antes de habilitar recepción. La activación solo procesa eventos nuevos desde el corte. No recuperar mensajes antiguos para enviarlos a clientes. Verificar recepción, salida y entrega reales, tomando como fuente el registro persistido. Las conexiones de IA, programa, agenda, órdenes y pagos conservan sus pendientes específicos.
+Las cuatro fuentes de Evolution quedaron configuradas con autenticación por empresa y solo `MESSAGES_UPSERT`/`MESSAGES_UPDATE`, sin base64 ni rutas por evento. Lectura posterior verificó cada destino y encabezado. Un evento real de Fumigación llegó al servidor y quedó `STAFF_TAKEOVER`, sin salidas del bot. A las 18:24Z la línea 8721 pasó a `close`; reinicio propio no recuperó la conexión y se mostró un QR nuevo. Mientras no pueda comprobar ambas líneas, la guardia conserva los clientes nuevos para revisión. 1941 y 9392 siguen OPEN en la comprobación de las 18:25Z.
+
+La activación solo procesa eventos nuevos desde el corte. No recuperar mensajes antiguos para enviarlos a clientes. Verificar recepción, salida y entrega reales, tomando como fuente el registro persistido. Las conexiones de IA, programa, agenda, órdenes y pagos conservan sus pendientes específicos. La recepción actual utiliza reglas acotadas de recolección de datos y revisión humana; no declara una conversación completa con IA ni autonomía administrativa integral.
 
 La cuenta autenticada del creador, la auditoría y la protección del crédito de cada servicio futuro siguen pendientes de integración con el programa. Esta entrega no crea usuarios sensibles, registra órdenes, acredita pagos, reserva técnicos ni cambia registros históricos. El dashboard de conciliación solicitado continúa después de la revisión histórica.
