@@ -4,7 +4,7 @@ import { randomBytes,createHash } from 'node:crypto';
 import { Store } from '../automation/service-bots/store.mjs';
 import { Engine,customerDecision,parseUnderstanding } from '../automation/service-bots/engine.mjs';
 import { BUSINESSES,configFromEnv,validateEvent,authorized,SANDRA,DIEGO } from '../automation/service-bots/config.mjs';
-import { drain } from '../automation/service-bots/transport.mjs';
+import { Transport,drain } from '../automation/service-bots/transport.mjs';
 import { decodeWebhook } from '../automation/service-bots/webhook.mjs';
 import { createBotServer } from '../automation/service-bots/server.mjs';
 const config=(company='fumigacion')=>({company,...BUSINESSES[company],enabled:true,activatedAt:Date.now()-60000,lines:BUSINESSES[company].phones.map((phone,i)=>({phone,instance:company+'-'+i}))});
@@ -12,9 +12,28 @@ const event=(overrides={})=>({id:'MESSAGE001',phone:'573001112233',at:Date.now()
 const fixture=(company='fumigacion')=>{const store=new Store(':memory:',company,randomBytes(32));return {store,config:config(company),engine:new Engine(store,config(company))};};
 
 test('company config rejects other businesses and shared database paths',()=>{
-  const env={BOT_COMPANY:'fumigacion',BOT_LINES_JSON:JSON.stringify(config().lines),BOT_AUTH_TOKEN_HASH:'a'.repeat(64),BOT_WEBHOOK_TOKEN_HASH:'c'.repeat(64),BOT_DATA_KEY:'b'.repeat(64),BOT_DATABASE_PATH:'/data/fumigacion/bot.sqlite',BOT_EVOLUTION_URL:'https://own.example',BOT_EVOLUTION_TOKEN:'own'};
+  const lines=config().lines.map((l,i)=>({...l,apiKey:String(i).repeat(32)}));
+  const env={BOT_COMPANY:'fumigacion',BOT_LINES_JSON:JSON.stringify(lines),BOT_AUTH_TOKEN_HASH:'a'.repeat(64),BOT_WEBHOOK_TOKEN_HASH:'c'.repeat(64),BOT_DATA_KEY:'b'.repeat(64),BOT_DATABASE_PATH:'/data/fumigacion/bot.sqlite',BOT_EVOLUTION_URL:'https://own.example'};
   assert.equal(configFromEnv(env).bot,'María Ángel');
   for(const patch of [{BOT_COMPANY:'psicologos'},{BOT_DATABASE_PATH:'/data/servicio-tecnico/bot.sqlite'},{BOT_LINES_JSON:JSON.stringify(config('servicio-tecnico').lines)},{BOT_EVOLUTION_URL:'http://own.example'}])assert.throws(()=>configFromEnv({...env,...patch}));
+  for(const patch of [{BOT_EVOLUTION_TOKEN:'shared-global-access'},
+    {BOT_LINES_JSON:JSON.stringify(lines.map(l=>({...l,apiKey:lines[0].apiKey})))},
+    {BOT_LINES_JSON:JSON.stringify(config().lines)}])assert.throws(()=>configFromEnv({...env,...patch}),/DEDICATED_INSTANCE_ACCESS_REQUIRED/);
+});
+
+test('provider requests select only the existing key of their own originating line',async()=>{
+ const c={...config(),provider:'https://own.example',lines:config().lines.map((l,i)=>({...l,apiKey:String(i).repeat(32)})),providerToken:'must-never-be-used'};
+ const calls=[];
+ const t=new Transport(c,async(url,options)=>{calls.push({url,options});const line=c.lines.find(l=>url.includes(encodeURIComponent(l.instance)));return {ok:true,json:async()=>url.includes('/message/')?{key:{id:'OUTBOUND001'}}:[{name:line.instance,ownerJid:line.phone+'@s.whatsapp.net',connectionStatus:'open'}]};});
+ for(const line of c.lines){await t.verifyLine(line.phone);await t.send({phone:'573001112233',line:line.phone,internal:false},'Hola');}
+ assert.deepEqual(calls.map(call=>call.options.headers.apikey),[c.lines[0].apiKey,c.lines[0].apiKey,c.lines[1].apiKey,c.lines[1].apiKey]);
+ assert.equal(calls.some(call=>call.options.headers.apikey===c.providerToken),false);
+ const before=calls.length;
+ await assert.rejects(()=>t.verifyLine('573016818845'),/LINE_OUTSIDE_COMPANY/);
+ await assert.rejects(()=>t.request({...c.lines[0]},'/instance/fetchInstances'),/INSTANCE_ACCESS_REQUIRED/);
+ assert.equal(calls.length,before);
+ const bad=new Transport(c,async()=>({ok:true,json:async()=>[{name:c.lines[0].instance,ownerJid:'573152819233@s.whatsapp.net',connectionStatus:'open'}]}));
+ await assert.rejects(()=>bad.verifyLine(c.lines[0].phone),/CHANNEL_OWNER_MISMATCH/);
 });
 test('authentication requires a dedicated token and constant-time matching',()=>{
   const token=randomBytes(32).toString('base64url'),hash=createHash('sha256').update(token).digest('hex');

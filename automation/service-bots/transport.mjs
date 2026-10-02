@@ -2,13 +2,14 @@ import { SANDRA, DIEGO } from './config.mjs';
 
 export class Transport {
   constructor(config, fetcher=fetch){this.config=config;this.fetcher=fetcher;}
-  async request(path,body) {
-    const response=await this.fetcher(this.config.provider+path,{method:body?'POST':'GET',headers:{apikey:this.config.providerToken,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),redirect:'error',signal:AbortSignal.timeout(20000)});
+  async request(line,path,body) {
+    if(!this.config.lines.includes(line)||!line.apiKey)throw new Error('INSTANCE_ACCESS_REQUIRED');
+    const response=await this.fetcher(this.config.provider+path,{method:body?'POST':'GET',headers:{apikey:line.apiKey,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),redirect:'error',signal:AbortSignal.timeout(20000)});
     if(!response.ok)throw new Error('CHANNEL_HTTP_'+response.status); return response.json();
   }
   async verifyLine(phone) {
     const line=this.config.lines.find(l=>l.phone===phone);if(!line)throw new Error('LINE_OUTSIDE_COMPANY');
-    const data=await this.request('/instance/fetchInstances?instanceName='+encodeURIComponent(line.instance));
+    const data=await this.request(line,'/instance/fetchInstances?instanceName='+encodeURIComponent(line.instance));
     const own=(Array.isArray(data)?data:[data]).filter(x=>(x.name??x.instance?.instanceName??x.instanceName)===line.instance);
     if(own.length!==1||own[0].ownerJid?.split('@')[0]!==phone)throw new Error('CHANNEL_OWNER_MISMATCH');
     if(String(own[0].connectionStatus).toLowerCase()!=='open')throw new Error('CHANNEL_NOT_OPEN');
@@ -18,7 +19,7 @@ export class Transport {
     if(row.internal&&![SANDRA,DIEGO].includes(row.phone))throw new Error('INTERNAL_RECIPIENT_MISMATCH');
     if(!/^57\d{10}$/.test(row.phone))throw new Error('GROUP_OR_INVALID_RECIPIENT');
     const line=this.config.lines.find(l=>l.phone===row.line);if(!line)throw new Error('LINE_OUTSIDE_COMPANY');
-    const result=await this.request('/message/sendText/'+encodeURIComponent(line.instance),{number:row.phone,text,linkPreview:false});
+    const result=await this.request(line,'/message/sendText/'+encodeURIComponent(line.instance),{number:row.phone,text,linkPreview:false});
     if(!result.key?.id)throw new Error('SEND_WITHOUT_RECEIPT');return result.key.id;
   }
   async programContext(phone) {

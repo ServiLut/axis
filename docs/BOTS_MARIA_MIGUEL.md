@@ -31,12 +31,12 @@ Variables por servicio:
 | Variable | Valor o función |
 |---|---|
 | `BOT_COMPANY` | `fumigacion` o `servicio-tecnico` |
-| `BOT_LINES_JSON` | Dos objetos con `instance` y `phone`; nombres técnicos obtenidos del proveedor y propietarios comprobados |
+| `BOT_LINES_JSON` | Dos objetos con `instance`, `phone` y `apiKey`; claves existentes diferentes por instancia, nombres técnicos y propietarios comprobados |
 | `BOT_DATABASE_PATH` | `/data/fumigacion/bot.sqlite` o `/data/servicio-tecnico/bot.sqlite` |
 | `BOT_DATA_KEY` | Clave de cifrado propia de 32 bytes, en hexadecimal |
 | `BOT_AUTH_TOKEN_HASH` | SHA256 de clave de administración exclusiva de este bot |
 | `BOT_WEBHOOK_TOKEN_HASH` | SHA256 de otra clave exclusiva para eventos/entregas |
-| `BOT_EVOLUTION_URL`, `BOT_EVOLUTION_TOKEN` | Conexión propia de las dos líneas de esta empresa |
+| `BOT_EVOLUTION_URL` | Servidor HTTPS comprobado; cada petición usa exclusivamente la clave de su instancia en `BOT_LINES_JSON`. Una clave global compartida se rechaza |
 | `BOT_ENABLED`, `BOT_ACTIVATED_AT` | Habilitación y corte de activación, después de comprobaciones reales |
 | `BOT_UNDERSTANDING_URL`, `BOT_UNDERSTANDING_TOKEN` | Adaptador privado opcional; nunca el proyecto o clave de Psicólogos/Abogados |
 | `BOT_PROGRAM_CONTEXT_URL`, `BOT_PROGRAM_READ_TOKEN`, `BOT_PROGRAM_COMPANY_ID` | Lectura del programa de esta empresa, cuando esté implementada y verificada |
@@ -63,6 +63,6 @@ Un mensaje del personal mantiene la atención humana. Sandra puede devolver un c
 
 ## Publicación pendiente
 
-Verificar primero servidor propio, las cuatro instancias y sus propietarios, las rutas existentes, persistencia y credenciales independientes. La activación solo procesa eventos nuevos desde el corte. No recuperar mensajes antiguos para enviarlos a clientes. Verificar recepción, salida y entrega reales, tomando como fuente el registro persistido. Falta acceso al panel de publicación; no se afirma despliegue.
+Verificar primero servidor propio, las cuatro instancias y sus propietarios, las rutas existentes, persistencia y credenciales independientes. La activación solo procesa eventos nuevos desde el corte. No recuperar mensajes antiguos para enviarlos a clientes. Verificar recepción, salida y entrega reales, tomando como fuente el registro persistido. Dokploy y Evolution Manager ya son accesibles. Tres instancias propias existentes aparecen desconectadas; la cuarta línea sigue pendiente de localizar o provisionar con control de acceso. No se afirma despliegue.
 
 La cuenta autenticada del creador, la auditoría y la protección del crédito de cada servicio futuro siguen pendientes de integración con el programa. Esta entrega no crea usuarios sensibles, registra órdenes, acredita pagos, reserva técnicos ni cambia registros históricos. El dashboard de conciliación solicitado continúa después de la revisión histórica.

@@ -23,10 +23,13 @@ export function configFromEnv(env = process.env) {
   if (!database || !database.replaceAll('\\','/').includes('/'+company+'/')) throw new Error('SEPARATE_DATABASE_REQUIRED');
   const provider = new URL(env.BOT_EVOLUTION_URL);
   if (provider.protocol !== 'https:' || provider.username || provider.password || provider.search || provider.hash) throw new Error('PROVIDER_HTTPS_REQUIRED');
-  if (!env.BOT_EVOLUTION_TOKEN) throw new Error('OWN_PROVIDER_ACCESS_REQUIRED');
+  // Evolution instance keys restrict the provider itself, not just our local filter.
+  // A shared/global key must never be installed in either business runtime.
+  if (env.BOT_EVOLUTION_TOKEN || lines.some(l=>!/^[A-Za-z0-9_-]{24,128}$/.test(l.apiKey || '')) ||
+      new Set(lines.map(l=>l.apiKey)).size !== 2) throw new Error('DEDICATED_INSTANCE_ACCESS_REQUIRED');
   if(env.BOT_ENABLED==='true'&&!Number.isFinite(Date.parse(env.BOT_ACTIVATED_AT||'')))throw new Error('ACTIVATION_CUTOFF_REQUIRED');
   return { company, ...business, lines, database, encryptionKey: Buffer.from(env.BOT_DATA_KEY,'hex'),
-    authHash: env.BOT_AUTH_TOKEN_HASH, webhookHash:env.BOT_WEBHOOK_TOKEN_HASH, provider: provider.href.replace(/\/$/,''), providerToken: env.BOT_EVOLUTION_TOKEN,
+    authHash: env.BOT_AUTH_TOKEN_HASH, webhookHash:env.BOT_WEBHOOK_TOKEN_HASH, provider: provider.href.replace(/\/$/,''),
     enabled: env.BOT_ENABLED === 'true', activatedAt: Date.parse(env.BOT_ACTIVATED_AT || ''),
     port: Number(env.PORT || 8080), programContextUrl: env.BOT_PROGRAM_CONTEXT_URL || null,
     programToken: env.BOT_PROGRAM_READ_TOKEN || null, expectedProgramCompanyId: env.BOT_PROGRAM_COMPANY_ID || null,
