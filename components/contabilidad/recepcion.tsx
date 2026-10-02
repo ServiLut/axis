@@ -23,6 +23,7 @@ type Operation = { kind: "cargo"; input: CargoInput } | { kind: "pago"; input: P
 
 export function Recepcion() {
   const [fecha, setFecha] = useState(bogotaToday);
+  const [fechaReserva, setFechaReserva] = useState(bogotaToday);
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
@@ -49,14 +50,14 @@ export function Recepcion() {
   useEffect(() => {
     let active = true;
     setLoading(true); setError("");
-    Promise.resolve().then(() => getReceptionData(token(), fecha)).then((result) => {
+    Promise.resolve().then(() => getReceptionData(token(), fecha, fechaReserva)).then((result) => {
       if (!active) return;
       if ("error" in result) { setError(result.error); setData(null); }
       else setData(result);
     }).catch(() => { if (active) { setError("No se pudo cargar recepción. Reintenta."); setData(null); } })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [fecha, revision]);
+  }, [fecha, fechaReserva, revision]);
 
   async function run(operation: Operation) {
     if (inFlight.current) return;
@@ -117,7 +118,7 @@ export function Recepcion() {
       <p className="mt-1 text-sm text-slate-600">Impresiones y adicionales, con sus cargos y pagos separados.</p></div>
       <Button variant="outline" asChild><Link href="/dashboard/contabilidad/caja"><Wallet className="mr-2 h-4 w-4" />Libro diario</Link></Button></header>
     <div className="flex flex-wrap items-end gap-3"><div><Label htmlFor="recepcion-fecha">Fecha de los cargos</Label>
-      <Input id="recepcion-fecha" type="date" value={fecha} disabled={busy || !!pending} onChange={(e) => { setFecha(e.target.value); setSelected({}); setCitaId(""); }} /></div>
+      <Input id="recepcion-fecha" type="date" value={fecha} disabled={busy || !!pending} onChange={(e) => { setFecha(e.target.value); setFechaReserva(e.target.value); setSelected({}); setCitaId(""); }} /></div>
       <Button variant="outline" disabled={busy || !!pending} onClick={() => setRevision((v) => v + 1)}><RefreshCw className="mr-2 h-4 w-4" />Actualizar</Button>
       <p className="text-xs text-slate-500">Para cobrar un cargo anterior, selecciona su fecha. El pago conserva su propia fecha.</p></div>
     {error && <p role="alert" className="rounded-lg bg-red-50 p-4 text-red-800">{error}</p>}
@@ -132,12 +133,16 @@ export function Recepcion() {
         <fieldset disabled={frozen} className="space-y-4"><div className="flex flex-wrap gap-2">
           <Button type="button" variant={tipo === "IMPRESION" ? "default" : "outline"} onClick={() => setTipo("IMPRESION")}><Printer className="mr-2 h-4 w-4" />Impresiones</Button>
           <Button type="button" variant={tipo === "TIEMPO_EXTRA" ? "default" : "outline"} onClick={() => setTipo("TIEMPO_EXTRA")}><Clock3 className="mr-2 h-4 w-4" />Tiempo extra</Button></div>
+          <div className="space-y-2"><Label htmlFor="recepcion-reserva-fecha">Fecha de la reserva</Label>
+            <Input id="recepcion-reserva-fecha" type="date" required value={fechaReserva} onChange={(e) => { setFechaReserva(e.target.value); setCitaId(""); }} />
+            <p className="text-sm text-slate-600">Si la cita fue otro día, busca su fecha aquí. El cargo conserva la fecha seleccionada arriba.</p></div>
           <div className="grid gap-4 md:grid-cols-3"><div className="space-y-2"><Label htmlFor="recepcion-profesional">Profesional</Label>
             <select id="recepcion-profesional" className={selectStyle} required value={profesionalId} onChange={(e) => { setProfesionalId(e.target.value); setCitaId(""); }}>
               <option value="">Seleccionar profesional</option>{data.profesionales.map((p) => <option key={p.id} value={p.id}>{p.nombre} {p.apellido}</option>)}</select></div>
             <div className="space-y-2"><Label htmlFor="recepcion-reserva">Reserva {tipo === "IMPRESION" ? "(opcional)" : "de alquiler"}</Label>
               <select id="recepcion-reserva" className={selectStyle} value={citaId} required={tipo === "TIEMPO_EXTRA"} onChange={(e) => setCitaId(e.target.value)}>
-                <option value="">Seleccionar reserva</option>{professionalReservations.map((r) => <option key={r.id} value={r.id}>CITA-{r.id} · {time(r.inicio)}–{time(r.fin)} · {r.consultorio}</option>)}</select></div>
+                <option value="">Seleccionar reserva</option>{professionalReservations.map((r) => <option key={r.id} value={r.id}>CITA-{r.id} · {fechaReserva} · {time(r.inicio)}–{time(r.fin)} · {r.consultorio}</option>)}</select>
+              {profesionalId && !loading && !professionalReservations.length && <p role="status" className="text-sm text-slate-600">No hay reservas vigentes de este profesional para el {fechaReserva}. Revisa la fecha de la reserva.</p>}</div>
             <div className="space-y-2"><Label htmlFor="recepcion-cantidad">{tipo === "IMPRESION" ? "Cantidad de hojas" : "Minutos después del fin reservado"}</Label>
               <Input id="recepcion-cantidad" type="number" min="1" max={tipo === "IMPRESION" ? 10000 : 2147483647} step="1" required value={tipo === "IMPRESION" ? cantidad : minutos}
                 onChange={(e) => tipo === "IMPRESION" ? setCantidad(e.target.value) : setMinutos(e.target.value)} /></div></div>

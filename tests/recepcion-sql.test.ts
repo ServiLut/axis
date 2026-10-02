@@ -11,11 +11,12 @@ async function fixture() {
   const db = new PGlite();
   await db.exec(`CREATE TABLE "Tenant" ("id" INTEGER PRIMARY KEY);
     CREATE TABLE "Usuario" ("id" INTEGER PRIMARY KEY,"tenantId" INTEGER,"nombre" TEXT,"apellido" TEXT);
-    CREATE TABLE "CitasPsicologos" ("id" BIGINT PRIMARY KEY);
+    CREATE TABLE "CitasPsicologos" ("id" BIGINT PRIMARY KEY,"tenantId" INTEGER,"psicologoId" INTEGER,"fechaCita" TIMESTAMPTZ,
+      "horaInicio" TIMESTAMPTZ,"horaFin" TIMESTAMPTZ,"realizada" BOOLEAN,"consultorioId" BIGINT);
     CREATE TABLE "Auditoria" ("id" BIGSERIAL PRIMARY KEY,"tenantId" INTEGER,"entidad" TEXT,"entidadId" TEXT,"accion" TEXT);
     INSERT INTO "Tenant" VALUES (4),(9);
     INSERT INTO "Usuario" VALUES (10,4,'Recepción','Prueba'),(20,4,'Profesional','Uno'),(21,4,'Profesional','Dos'),(90,9,'Otro','Sistema');
-    INSERT INTO "CitasPsicologos" VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9);`);
+    INSERT INTO "CitasPsicologos" ("id") VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9);`);
   await db.exec(readFileSync("docs/sql/2026-09-24-caja-diaria.sql", "utf8"));
   await db.exec(readFileSync("docs/sql/2026-09-25-recepcion.sql", "utf8"));
   const state = { tenantId: 4, rol: "ADMIN", activo: true, aprobado: true, auditFail: false, hourly: 18900, rentalCount: 1 };
@@ -29,7 +30,13 @@ async function fixture() {
       id: where.id, psicologoId: 20, consultorioId: 1n, realizada: false,
       horaFin: new Date("2026-01-01T16:00:00Z"), PaqueteAdquirido: { TerapiasPsicologos: { nombre: "Alquiler de consultorio" } },
     } : null,
-    findMany: async () => [],
+    findMany: async ({ where }: { where: { tenantId: number; fechaCita: { gte: Date; lt: Date } } }) => {
+      const rows = (await db.query<{ id: string; psicologoId: number; horaInicio: Date; horaFin: Date }>(
+        `SELECT "id"::text,"psicologoId","horaInicio","horaFin" FROM "CitasPsicologos"
+         WHERE "tenantId"=$1 AND "fechaCita">=$2 AND "fechaCita"<$3 AND "realizada" IS NOT NULL ORDER BY "horaInicio"`,
+        [where.tenantId, where.fechaCita.gte, where.fechaCita.lt])).rows;
+      return rows.map((r) => ({ ...r, id: BigInt(r.id), horaInicio: new Date(r.horaInicio), horaFin: new Date(r.horaFin), consultorios: { nombre: "Consultorio de prueba" } }));
+    },
   };
   const terapiasPsicologos = { findMany: async () => Array.from({ length: state.rentalCount }, () => ({ precioBase: state.hourly })) };
   const raw = (driver: PGlite | Transaction) => {
@@ -56,6 +63,33 @@ async function fixture() {
   const count = async (table: string) => Number((await db.query<{ n: string }>(`SELECT count(*)::text AS n FROM "${table}"`)).rows[0].n);
   return { db, state, actions, create, count };
 }
+
+test("Postgres: a previous-day reservation is selectable without moving today's charges or payments", async () => {
+  const f = await fixture();
+  try {
+    await f.db.exec(`UPDATE "CitasPsicologos" SET "tenantId"=4,"psicologoId"=20,"fechaCita"='2026-01-01T05:00:00Z',
+      "horaInicio"='2026-01-01T21:30:00Z',"horaFin"='2026-01-01T22:30:00Z',"realizada"=true,"consultorioId"=1 WHERE "id" IN (1,2,3);
+      UPDATE "CitasPsicologos" SET "tenantId"=9 WHERE "id"=2;
+      UPDATE "CitasPsicologos" SET "realizada"=NULL WHERE "id"=3;`);
+    const charge = await f.create({ fecha: "2026-01-02" });
+    assert.ok("id" in charge);
+    if (!("id" in charge)) return;
+    const payment = await f.actions.recordReceptionPayment("valid", { solicitudId: randomUUID(), fecha: "2026-01-02", metodoPago: "EFECTIVO", referencia: "REC-TODAY", aplicaciones: [{ cargoId: charge.id, monto: "8000" }] });
+    assert.ok("id" in payment);
+    const current = await f.actions.getReceptionData("valid", "2026-01-02");
+    assert.ok("reservas" in current && current.reservas.length === 0);
+    const previous = await f.actions.getReceptionData("valid", "2026-01-02", "2026-01-01");
+    assert.ok("reservas" in previous);
+    if (!("reservas" in previous)) return;
+    assert.deepEqual(Array.from(previous.reservas, (r) => r.id), ["1"]);
+    assert.equal(previous.fechaReserva, "2026-01-01");
+    assert.equal(previous.cargos[0].fecha, "2026-01-02");
+    assert.equal(previous.pagos[0].fecha, "2026-01-02");
+    assert.equal(await f.count("MovimientoCaja"), 1);
+    assert.ok("error" in await f.actions.getReceptionData("valid", "2026-02-30", "2026-01-01"));
+    assert.ok("error" in await f.actions.getReceptionData("valid", "2026-01-02", "2026-02-30"));
+  } finally { await f.db.close(); }
+});
 
 test("Postgres: sale, partial/shared payment and reversal leave exact balances and one cash event", async () => {
   const f = await fixture();
