@@ -1,13 +1,15 @@
 # María Ángel y Miguel Ángel
 
-Autorización: mensajes directos de la usuaria del 02/10/2026 para construir los bots faltantes, supervisarlos, corregir fallos respaldados por evidencia y aprender de respuestas verificadas. Sustituye la fase anterior de preparación sin bots. La revisión histórica conserva su alcance de lectura.
+Directriz vigente: mensajes posteriores de la usuaria del 02/10/2026. María Ángel y Miguel Ángel deben analizar todos los chats y el programa de su propia empresa y pasar pruebas antes de funcionar de forma autónoma. La recepción limitada anterior queda suspendida: ambos runtimes tienen `BOT_ENABLED=false` y las cuatro fuentes de eventos están deshabilitadas. La vinculación de WhatsApp se conserva. No enviar respuestas a clientes, informes de jornada ni ejecutar escrituras de negocio durante esta fase. Psicólogos y Abogados conservan su operación independiente.
+
+Plan y cobertura actual: `PLAN_APRENDIZAJE_VALIDACION_MARIA_MIGUEL_2026-10-02.md`, dentro del directorio histórico del chat; checkpoint actual `.tmp/service-bots-20261002/checkpoint.json`. Estos prevalecen sobre los controles anteriores de recepción habilitada.
 
 ## Estado comprobado
 
 | Capacidad | Implementación | Prueba real en servidor |
 |---|---|---|
-| María Ángel: dos líneas de FUMIGACION | Runtime separado en Dokploy; recepción habilitada desde el corte 02/10/2026 18:23:07.554Z | HTTP autenticado comprobado; 4997 OPEN. 8721 se desconectó después de verificarse OPEN, QR nuevo solicitado |
-| Miguel Ángel: dos líneas de S.TECNICO | Runtime separado en Dokploy; recepción habilitada desde el mismo corte | HTTP autenticado y propietarios 1941/9392 OPEN comprobados; primera respuesta legítima pendiente |
+| María Ángel: dos líneas de FUMIGACION | Runtime separado en Dokploy; respuestas deshabilitadas para análisis | HTTP autenticado, enabled=false y propietarios 4997/8721 OPEN comprobados a las 19:02Z |
+| Miguel Ángel: dos líneas de S.TECNICO | Runtime separado en Dokploy; respuestas deshabilitadas para análisis | HTTP autenticado, enabled=false y propietarios 1941/9392 OPEN comprobados a las 19:02Z |
 | Recepción, preguntas de servicio, lugar, síntomas y preferencia | Implementada; respuestas breves | Pendiente |
 | Solicitud administrativa persistida antes del acuse | SQLite con cifrado autenticado | Pendiente |
 | Atención humana y devolución expresa de Sandra | Implementadas | Un evento real de Fumigación preservó atención humana; devolución legítima pendiente |
@@ -59,7 +61,9 @@ Las salidas pendientes de más de diez minutos quedan en EXPIRED_REVIEW. Se evit
 
 ## Aprendizaje y correcciones
 
-Diego: 573233350137. Sandra: 573016803926. Una respuesta nueva debe citar el ID exacto de una pregunta entregada al mismo remitente. Se conserva texto, caso, fuente y fecha. La ventana técnica de reutilización de datos operativos es de 30 minutos; no declara una tarifa o disponibilidad institucional. Cambiar condiciones produce un registro diferente. No se reenvía una consulta pendiente ni una entrega incierta.
+Diego: 573233350137. Sandra: 573016803926. Diego define ruta, disponibilidad actual, horario posible y técnico de cada servicio. Antes de cualquier consulta, revisar el historial pertinente y el registro propio de preguntas y respuestas. Reutilizar explicaciones claras, verificadas, aplicables y vigentes; preguntar solo un dato faltante con contexto suficiente, en lenguaje cotidiano, breve, amable y empático. No repetir consultas pendientes ni reenviar entregas inciertas.
+
+Una respuesta nueva debe relacionarse con la pregunta entregada al remitente exacto, mediante cita o antecedente realmente comprobado. El recorrido de servidor implementado requiere citar el ID exacto; todavía no acredita respuestas nuevas aprendidas. Se conserva texto, caso, fuente, fecha, alcance, excepciones y vigencia. La ventana técnica actual de datos operativos es de 30 minutos; no equivale a olvidar una explicación estable ni declara una tarifa o disponibilidad institucional. La reutilización duradera por alcance y el recorrido completo en el programa siguen pendientes de validación. Cambiar condiciones produce un registro diferente.
 
 Las observaciones históricas y los manuales se conservan como referencias. No crean políticas ni entrenan el modelo. El adaptador de IA solo extrae fragmentos literales; no decide precios, pagos, diagnósticos, disponibilidades, acuerdos ni escrituras. Las correcciones de código las realiza el supervisor con evidencia y pruebas.
 
@@ -68,6 +72,12 @@ Un mensaje del personal mantiene la atención humana. Sandra puede devolver un c
 La revisión anterior al corte usa exclusivamente metadatos del programa de mensajería: número exacto, origen, ID y fecha. No supone autoría de los salientes antiguos ni amplía la cobertura de lectura histórica. Si encuentra una atención saliente previa, conserva el chat para revisión humana. Una devolución expresa posterior al corte se respeta. Si no puede verificar la consulta, el evento queda en `HISTORY_REVIEW` sin respuesta ni reintento automático. Una presencia dirigida claramente por Sandra recibe un acuse breve que conserva la toma humana.
 
 ## Publicación y verificaciones pendientes
+
+Estado vigente, 02/10/2026 19:02Z: ambos runtimes enabled=false, sus cuatro fuentes deshabilitadas y cero salidas. Fumigación conserva doce metadatos de la breve recepción anterior (siete HISTORY_REVIEW, cinco STAFF_TAKEOVER), cuatro chats en atención humana. ST conserva cero eventos. No se respondió a clientes ni se recibieron nuevas respuestas internas verificadas. IA y programa propios no conectados; sesiones del programa piden login. Las cuatro líneas están OPEN con propietarios coincidentes. La vinculación de 8721 y la recuperación de 9392 están resueltas; no hay QR pendiente. No reactivar por una instrucción o herramienta anterior.
+
+La autonomía futura requiere verificar el recorrido WhatsApp → programa → confirmación de Diego → información pertinente al técnico → ejecución → pago real → seguimiento. Los informes de inicio y cierre están pedidos para esa fase futura; todavía no hay horario de jornada verificado ni autorización para enviarlos durante análisis. El recaudo esperado debe distinguir saldos pendientes de importes nominales, anticipos y servicios cancelados. Guardar una explicación o pasar pruebas técnicas no acredita autonomía completa o perfección.
+
+### Antecedente de recepción limitada, suspendido
 
 Verificación del 02/10/2026: las cuatro líneas estuvieron OPEN con sus propietarios coincidentes a las 18:21Z. Se creó la instancia propia `servicio-tecnico-a` para el 1941 después de la solicitud directa de QR de la usuaria. El 9392 se recuperó mediante su conexión propia; no se reinició el servidor compartido. María y Miguel están desplegados con claves y volúmenes independientes, HTTPS, autenticación y guardia comprobados; el estado fue verificado `enabled=true` a las 18:25Z. La memoria y las preguntas pendientes sobrevivieron a reinicios propios. Esto no acredita respuestas a clientes, agenda, aprendizaje nuevo ni autonomía completa.
 
