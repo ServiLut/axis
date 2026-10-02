@@ -17,6 +17,36 @@ test('missing analysis never asks the chief to repeat a clear explanation',async
  assert.equal(result,false);
 });
 
+test('a directed chief thank-you receives a brief courtesy without reopening pending tasks',async()=>{
+ const e={...event,text:'Luisa, eres la mejor. Gracias'};
+ const messages:string[]=[];
+ const state={stage:'HUMAN',humanHold:{kind:'staff'},reactivationTask:{status:'NEEDS_HISTORY'},pendingContactList:{status:'WAITING_LIST'}};
+ const original=structuredClone(state);
+ const tx={$queryRaw:async()=>{throw Error('Courtesy must not reopen pending tasks')},$executeRaw:async()=>{throw Error('Courtesy must not change state or save knowledge')}};
+ const result=await handleChiefUnderstanding(tx as never,e,understanding({intent:'courtesy',adminAction:null,reply:'Con mucho gusto, estamos pendientes.'}),async(_,id,phone,text)=>{
+  assert.equal(id,e.id+':chief-result');assert.equal(phone,SANDRA_PHONE);messages.push(text);
+ },async()=>{throw Error('Courtesy must not execute commands')});
+ assert.equal(result,true);assert.deepEqual(messages,['Con mucho gusto, Sandra 😊']);assert.deepEqual(state,original);
+});
+
+test('courtesy cannot conceal an unresolved instruction, a question or an administrative action',async()=>{
+ const e={...event,text:'Luisa, gracias. Necesito que revises esta instrucción'};
+ const tx={$queryRaw:async()=>[{state:{}}],$executeRaw:async()=>{throw Error('No unsupported action')}};
+ for(const patch of [
+  {instructionUncertainty:'esta instrucción',question:'¿Qué indicación deseas revisar?'},
+  {question:'¿Qué horario necesitas revisar?'},
+  {adminAction:'pause' as const,targetPhone:'3001112233'},
+  {instruction:'Revisar el cierre con soporte'}
+ ]){
+  const messages:string[]=[];
+  await handleChiefUnderstanding(tx as never,e,understanding({intent:'courtesy',adminAction:null,...patch}),async(_,id,phone,text)=>{messages.push(text)},async()=>{throw Error('No command')});
+  assert.equal(messages.length,1);assert.notEqual(messages[0],'Con mucho gusto, Sandra 😊');
+ }
+ for(const patch of [{fromMe:true},{phone:'573001112233'}]){
+  assert.equal(await handleChiefUnderstanding(tx as never,{...e,...patch},understanding({intent:'courtesy',adminAction:null}),async()=>{throw Error('No unauthorized reply')},async()=>{throw Error('No command')}),false);
+ }
+});
+
 test('invalid AI classification is retried once without changing the source or inventing defaults',async()=>{
  const originalFetch=globalThis.fetch,oldUrl=process.env.PSICOLOGOS_AI_URL,oldToken=process.env.PSICOLOGOS_AI_TOKEN;let calls=0,invalidAlways=false;const inputs:string[]=[];
  process.env.PSICOLOGOS_AI_URL='https://abogadosencolombia.app.n8n.cloud/webhook/fixture';process.env.PSICOLOGOS_AI_TOKEN='fixture';

@@ -59,6 +59,11 @@ export async function handleChiefUnderstanding(tx:Tx,e:ReceptionEvent,u:Understa
  // An unresolved fragment blocks every interpretation-driven action, including
  // the clarification and campaign shortcuts below. Preserve the source for review.
  if(u?.instructionUncertainty?.trim()){await ack(chiefClarification(u));return true;}
+ // A standalone social turn is already understood; it neither asks for an
+ // administrative action nor changes ownership or a pending task.
+ if(u.intent==='courtesy'&&(!u.adminAction||u.adminAction==='none')&&!u.instruction?.trim()&&!u.question?.trim()){
+  await ack('Con mucho gusto, Sandra 😊');return true;
+ }
  // Announcing a future list is neither an instruction to send now nor marketing consent.
  if(/(?:voy a|vamos a|te mandare|te enviare|te pasare).*(?:lista|listado|listadito|base de datos)/.test(normalized)&&/clientes|pacientes|psicologos|profesionales/.test(normalized)){
   const request={sourceEvent:e.id,status:'WAITING_LIST',clients:/clientes|pacientes/.test(normalized),professionals:/psicologos|profesionales/.test(normalized),receivedAt:e.at};
