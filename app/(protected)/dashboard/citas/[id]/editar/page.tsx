@@ -32,6 +32,7 @@ import type {
 import { format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import { rentalQuote } from "@/lib/booking";
+import { CorregirValorAlquiler } from "@/components/contabilidad/corregir-valor-alquiler";
 
 const TIMEZONE = "America/Bogota";
 
@@ -495,6 +496,8 @@ export default function EditarCitaPage() {
           </div>
 
           {/* Sección: Información de Pago */}
+          {currentIsRental && process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true" &&
+            <CorregirValorAlquiler citaId={id} disabled={saving} onSaved={() => router.push("/dashboard/citas")} />}
           <div className="space-y-6">
             <div className="flex items-center gap-3 pb-3 border-b-2 border-slate-200">
               <div className="p-2 bg-purple-50 rounded-lg">

@@ -1317,7 +1317,7 @@ export default function CitasPage() {
                                <span className="font-medium text-blue-900">{selectedCita.PaqueteAdquirido.saldoRestante}</span>
                            </div>
                            <div>
-                               <span className="text-xs text-blue-500 block uppercase tracking-wider">Valor Pagado</span>
+                               <span className="text-xs text-blue-500 block uppercase tracking-wider">Valor del paquete</span>
                                <span className="font-medium text-blue-900">
                                    {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP' }).format(selectedCita.PaqueteAdquirido.precioPagado)}
                                </span>
