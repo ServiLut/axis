@@ -1,0 +1,26 @@
+services:
+  maria-angel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: ../../.env.maria-angel.production
+    restart: unless-stopped
+    volumes:
+      - maria_data:/data/fumigacion
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+  miguel-angel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: ../../.env.miguel-angel.production
+    restart: unless-stopped
+    volumes:
+      - miguel_data:/data/servicio-tecnico
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+volumes:
+  maria_data:
+  miguel_data:
