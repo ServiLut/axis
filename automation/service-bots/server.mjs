@@ -19,7 +19,7 @@ export function createBotServer(config,store,transport,engine) {
       const body=JSON.parse(raw);
       if(req.url==='/status')return reply(200,{company:config.name,bot:config.bot,enabled:config.enabled,mode:'reception-with-human-review',fullyAutonomous:false,
         events:store.db.prepare('SELECT state,COUNT(*) n FROM events GROUP BY state').all(),outbox:store.db.prepare('SELECT state,COUNT(*) n FROM outbox GROUP BY state').all(),
-        communicationGuard:'private-routing-and-media-work-v2',internalConversationEnabled:Boolean(config.chiefOnly),customerResponsesEnabled:config.enabled,
+        communicationGuard:'private-routing-and-media-work-v2',internalConversationGuard:'verified-internal-per-line-v2',internalConversationEnabled:Boolean(config.chiefOnly),customerResponsesEnabled:config.enabled,
         unanswered:store.db.prepare("SELECT COUNT(*) n FROM questions WHERE state IN ('PENDING','LEGACY_PENDING','ANSWER_REVIEW')").get().n,
         knowledge:store.db.prepare('SELECT kind,COUNT(*) n FROM knowledge GROUP BY kind').all(),programConnected:Boolean(config.programContextUrl&&config.programToken),aiConfigured:Boolean(config.aiUrl&&config.aiToken),priorHistoryProtection:Boolean(config.historyCheckRequired)});
       if(req.url==='/channel-health'){
@@ -52,7 +52,12 @@ export function createBotServer(config,store,transport,engine) {
         const rows=(found.messages?.records??[]).filter(r=>r.key?.remoteJid===jid&&r.key?.id===event.id&&r.key?.fromMe===false);
         const native=rows.map(r=>decodeWebhook({instance:line.instance,event:'messages.upsert',data:r},config).events[0]?.event).filter(Boolean);
         if(!native.length||native.some(n=>n.phone!==event.phone||n.kind!==event.kind||n.quotedId!==event.quotedId||n.text!==event.text||n.at!==new Date(event.at).toISOString()||n.forwarded))return reply(400,{error:'NATIVE_SOURCE_MISMATCH'});
-        return reply(200,{accepted:true,...store.enqueue(event)});
+        const queued=store.enqueue(event);
+        if(queued.duplicate){
+          const reset=store.db.prepare("UPDATE events SET state='PENDING' WHERE id=? AND state='OBSERVED_SUPERSEDED' AND NOT EXISTS(SELECT 1 FROM outbox WHERE id LIKE ?)").run(event.id,event.id+':%');
+          if(reset.changes)store.audit('VERIFIED_INTERNAL_LINE_RECOVERY',event.id,{line:event.line});
+        }
+        return reply(200,{accepted:true,...queued});
       }
       if(req.url==='/webhook'){
         const parsed=decodeWebhook(body,config);let accepted=0,duplicates=0,deliveryUpdates=0;

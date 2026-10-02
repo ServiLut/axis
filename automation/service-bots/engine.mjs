@@ -61,8 +61,9 @@ export class Engine {
         s.hold(e.phone,e.id,true);finish('STAFF_TAKEOVER');return;
       }
       const conv=s.conversation(e.phone);
-      if(e.at<conv.at||row.revision<conv.revision){finish('OBSERVED_SUPERSEDED');return;}
       const internal=[SANDRA,DIEGO].includes(e.phone);
+      const newerOnLine=internal&&s.db.prepare('SELECT 1 FROM events WHERE phone=? AND line=? AND from_me=0 AND (at>? OR (at=? AND revision>?)) LIMIT 1').get(e.phone,e.line,e.at,e.at,row.revision);
+      if(internal?newerOnLine:(e.at<conv.at||row.revision<conv.revision)){finish('OBSERVED_SUPERSEDED');return;}
       if(!c.enabled&&(!c.chiefOnly||!internal)){finish('OBSERVED_ANALYSIS_ONLY');return;}
       if(internal){
         if(e.forwarded){finish('OBSERVED_FORWARDED');return;}

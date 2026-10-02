@@ -47,3 +47,10 @@ test('transport rejects customer delivery before contacting the provider in chie
  const c=config('fumigacion');let calls=0;const t=new Transport(c,async()=>{calls++;throw Error('MUST_NOT_CALL');});
  await assert.rejects(()=>t.send({phone:'573001112233',line:c.lines[0].phone,internal:false},'Hola'),/CUSTOMER_GATE_CLOSED/);assert.equal(calls,0);
 });
+test('a chief capability question on each originating line receives its own single answer',async()=>{
+ const c=config('servicio-tecnico'),s=new Store(':memory:',c.company,randomBytes(32)),engine=new Engine(s,c);try{
+  const later=ev(c,{id:'LINE_A_CHIEF_1',at:Date.now()+2}),earlier=ev(c,{id:'LINE_B_CHIEF_1',line:c.lines[1].phone,at:Date.now()+1});
+  s.enqueue(later);await engine.process(later);s.enqueue(earlier);await engine.process(earlier);
+  assert.deepEqual(s.db.prepare('SELECT line FROM outbox ORDER BY line').all().map(x=>x.line),c.lines.map(x=>x.phone).sort());
+ }finally{s.close();}
+});
