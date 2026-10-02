@@ -7,7 +7,7 @@ Estado, configuración, límites y comprobaciones: [BOTS_MARIA_MIGUEL.md](../../
 Pruebas aisladas, sin mensajes externos:
 
 ```sh
-node --test tests/service-bots.test.mjs
+node --test tests/service-bots.test.mjs tests/service-bots-history.test.mjs
 ```
 
 Importación local en directorio privado ignorado por Git:

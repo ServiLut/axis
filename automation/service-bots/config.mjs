@@ -28,9 +28,11 @@ export function configFromEnv(env = process.env) {
   if (env.BOT_EVOLUTION_TOKEN || lines.some(l=>!/^[A-Za-z0-9_-]{24,128}$/.test(l.apiKey || '')) ||
       new Set(lines.map(l=>l.apiKey)).size !== 2) throw new Error('DEDICATED_INSTANCE_ACCESS_REQUIRED');
   if(env.BOT_ENABLED==='true'&&!Number.isFinite(Date.parse(env.BOT_ACTIVATED_AT||'')))throw new Error('ACTIVATION_CUTOFF_REQUIRED');
+  if(env.BOT_ENABLED==='true'&&env.BOT_PRIOR_HISTORY_CHECK!=='true')throw new Error('PRIOR_HISTORY_GUARD_REQUIRED');
   return { company, ...business, lines, database, encryptionKey: Buffer.from(env.BOT_DATA_KEY,'hex'),
     authHash: env.BOT_AUTH_TOKEN_HASH, webhookHash:env.BOT_WEBHOOK_TOKEN_HASH, provider: provider.href.replace(/\/$/,''),
     enabled: env.BOT_ENABLED === 'true', activatedAt: Date.parse(env.BOT_ACTIVATED_AT || ''),
+    historyCheckRequired:env.BOT_PRIOR_HISTORY_CHECK==='true',
     port: Number(env.PORT || 8080), programContextUrl: env.BOT_PROGRAM_CONTEXT_URL || null,
     programToken: env.BOT_PROGRAM_READ_TOKEN || null, expectedProgramCompanyId: env.BOT_PROGRAM_COMPANY_ID || null,
     aiUrl: env.BOT_UNDERSTANDING_URL || null, aiToken: env.BOT_UNDERSTANDING_TOKEN || null };

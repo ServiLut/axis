@@ -55,9 +55,25 @@ export class Store {
     const r=this.db.prepare('SELECT * FROM conversations WHERE phone=?').get(phone);return r?{...r,state:this.open(r.body)}:null;
   }
   saveConversation(phone,state) {this.db.prepare('UPDATE conversations SET body=? WHERE phone=?').run(this.seal(state),phone);}
-  hold(phone,source,value=true) {
-    this.db.prepare('UPDATE conversations SET hold=?,revision=revision+1 WHERE phone=?').run(Number(value),phone);
+  priorHistory(phone) {
+    const row=this.db.prepare('SELECT value FROM meta WHERE key=?').get('prior-history:'+phone);
+    return row?this.open(row.value):null;
+  }
+  savePriorHistory(phone,check,source) {
+    this.tx(()=>{
+      this.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('prior-history:'+phone,this.seal(check));
+      // Historical outgoing author is not assumed to be a bot or staff member.
+      // Preserve attention for review; only a subsequent explicit chief release lifts it.
+      const release=this.db.prepare('SELECT value FROM meta WHERE key=?').get('chief-release:'+phone);
+      const releasedAfterCutoff=release&&this.open(release.value).at>=check.cutoff;
+      if(check.priorOutgoing&&!releasedAfterCutoff)this.hold(phone,source,true,false);
+      this.audit('PRIOR_HISTORY_CHECKED',source,{phone,...check});
+    });
+  }
+  hold(phone,source,value=true,invalidatePending=true) {
+    this.db.prepare('UPDATE conversations SET hold=?,revision=revision+? WHERE phone=?').run(Number(value),Number(invalidatePending),phone);
     if(value)this.db.prepare("UPDATE outbox SET state='SUPPRESSED_HUMAN',updated=? WHERE phone=? AND internal=0 AND state='READY'").run(Date.now(),phone);
+    if(!value)this.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('chief-release:'+phone,this.seal({source,at:Date.now()}));
     this.audit(value?'HUMAN_TAKEOVER':'EXPLICIT_RELEASE',source,{phone});
   }
   queue(id,phone,line,text,internal,revision) {

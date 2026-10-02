@@ -10,8 +10,9 @@ export class Transport {
   async verifyLine(phone) {
     const line=this.config.lines.find(l=>l.phone===phone);if(!line)throw new Error('LINE_OUTSIDE_COMPANY');
     const data=await this.request(line,'/instance/fetchInstances?instanceName='+encodeURIComponent(line.instance));
-    const own=(Array.isArray(data)?data:[data]).filter(x=>(x.name??x.instance?.instanceName??x.instanceName)===line.instance);
-    if(own.length!==1||own[0].ownerJid?.split('@')[0]!==phone)throw new Error('CHANNEL_OWNER_MISMATCH');
+    const scope=Array.isArray(data)?data:[data];
+    const own=scope.filter(x=>(x.name??x.instance?.instanceName??x.instanceName)===line.instance);
+    if(scope.length!==1||own.length!==1||own[0].ownerJid?.split('@')[0]!==phone)throw new Error('CHANNEL_OWNER_MISMATCH');
     if(String(own[0].connectionStatus).toLowerCase()!=='open')throw new Error('CHANNEL_NOT_OPEN');
     return {phone,instance:line.instance,open:true,ownerVerified:true,checkedAt:new Date().toISOString()};
   }
@@ -21,6 +22,24 @@ export class Transport {
     const line=this.config.lines.find(l=>l.phone===row.line);if(!line)throw new Error('LINE_OUTSIDE_COMPANY');
     const result=await this.request(line,'/message/sendText/'+encodeURIComponent(line.instance),{number:row.phone,text,linkPreview:false});
     if(!result.key?.id)throw new Error('SEND_WITHOUT_RECEIPT');return result.key.id;
+  }
+  async priorHistory(phone) {
+    const c=this.config;
+    if(!/^57\d{10}$/.test(phone)||!Number.isFinite(c.activatedAt))throw new Error('HISTORY_SCOPE_REQUIRED');
+    const checks=[];
+    for(const line of c.lines){
+      await this.verifyLine(line.phone);
+      const data=await this.request(line,'/chat/findMessages/'+encodeURIComponent(line.instance),{
+        where:{key:{remoteJid:phone+'@s.whatsapp.net',fromMe:true},messageTimestamp:{gte:'2000-01-01T00:00:00.000Z',lte:new Date(c.activatedAt-1).toISOString()}},offset:1,page:1
+      });
+      const value=data?.messages;
+      if(!value||!Number.isSafeInteger(value.total)||value.total<0||!Array.isArray(value.records)||
+        (value.total===0&&value.records.length!==0)||(value.total>0&&value.records.length!==1))throw new Error('HISTORY_RESULT_UNVERIFIED');
+      const r=value.records[0];
+      if(r&&(r.key?.remoteJid!==phone+'@s.whatsapp.net'||r.key.fromMe!==true||!r.key.id||!Number.isFinite(Number(r.messageTimestamp))||Number(r.messageTimestamp)*1000>=c.activatedAt))throw new Error('HISTORY_RESULT_OUTSIDE_SCOPE');
+      checks.push({line:line.phone,instance:line.instance,total:value.total,lastSourceId:r?.key.id??null,lastAt:r?Number(r.messageTimestamp)*1000:null});
+    }
+    return {cutoff:c.activatedAt,checkedAt:Date.now(),priorOutgoing:checks.some(x=>x.total>0),checks,scope:'own-two-lines; metadata-only; historical-author-unattributed'};
   }
   async programContext(phone) {
     const c=this.config;
@@ -46,6 +65,13 @@ export async function drain(store,config,transport,engine) {
   const pending=store.db.prepare("SELECT body FROM events WHERE state='PENDING' ORDER BY from_me DESC,at,rowid LIMIT 30").all();
   for(const row of pending) {
     const e=store.open(row.body); let analysis={};
+    if(config.historyCheckRequired&&!e.fromMe&&![SANDRA,DIEGO].includes(e.phone)){
+      const checked=store.priorHistory(e.phone);
+      if(checked?.cutoff!==config.activatedAt){
+        try{store.savePriorHistory(e.phone,await transport.priorHistory(e.phone),e.id);}
+        catch{store.audit('PRIOR_HISTORY_UNVERIFIED',e.id);store.db.prepare("UPDATE events SET state='HISTORY_REVIEW' WHERE id=? AND state='PENDING'").run(e.id);continue;}
+      }
+    }
     if(!e.fromMe&&![SANDRA,DIEGO].includes(e.phone)&&!store.conversation(e.phone)?.hold){
       // Customer history remains in its company. Observations are explicitly untrusted reference, never policy.
       const knowledge=store.db.prepare('SELECT body FROM knowledge ORDER BY imported DESC LIMIT 10').all().map(k=>store.open(k.body));
