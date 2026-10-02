@@ -2,7 +2,8 @@ import { normalize, SANDRA, DIEGO, publicTextSafe } from './config.mjs';
 
 function directed(text,name) {
   const t=normalize(text), n=normalize(name);
-  return new RegExp('^(?:(?:hola|buenos dias|buenas tardes|buenas noches)[, :]+)?(?:'+n+'|bot)[, :]').test(t);
+  const aliases=n==='maria angel'?'maria angel|mariangel':n;
+  return new RegExp('^[¿¡ ]*(?:(?:hola|buenos dias|buenas tardes|buenas noches)[, :]+)?(?:'+aliases+'|bot)(?:[, :¿?!]|$)').test(t)&&!new RegExp('^(?:'+aliases+'|bot)\\s+(?:dijo|dice|respondio|comento|me dijo|le dijo)\\b').test(t);
 }
 export function extractSlots(text,company) {
   const t=normalize(text), slots={};
@@ -62,7 +63,9 @@ export class Engine {
       const conv=s.conversation(e.phone);
       if(e.at<conv.at||row.revision<conv.revision){finish('OBSERVED_SUPERSEDED');return;}
       const internal=[SANDRA,DIEGO].includes(e.phone);
+      if(!c.enabled&&(!c.chiefOnly||!internal)){finish('OBSERVED_ANALYSIS_ONLY');return;}
       if(internal){
+        if(e.forwarded){finish('OBSERVED_FORWARDED');return;}
         const quoted=e.quotedId&&s.db.prepare("SELECT q.*,o.state AS delivery FROM questions q JOIN outbox o ON o.id=q.outbox_id WHERE q.recipient=? AND o.mid=? AND o.state IN ('DELIVERED','READ')").get(e.phone,e.quotedId);
         if(quoted&&e.kind==='text'&&e.text.trim()&&quoted.state==='PENDING'){
           if(/^(si|no|ok|listo|vale|perfecto|gracias)[.! ]*$/.test(normalize(e.text))){
@@ -74,16 +77,30 @@ export class Engine {
           s.audit('CASE_ANSWER_LEARNED',e.id,{question:quoted.id,caseId:quoted.case_id,role:e.phone===SANDRA?'chief':'coordinator'});
           s.queue(e.id+':answer-ack',e.phone,e.line,'Gracias. Guardé tu aclaración para esta solicitud.',true,0);finish('CASE_ANSWER');return;
         }
-        if(e.phone===SANDRA&&e.kind==='text'&&directed(e.text,c.bot)){
+        const ownQuote=e.quotedId&&s.db.prepare("SELECT id FROM outbox WHERE phone=? AND line=? AND mid=? AND internal=1 AND state IN ('DELIVERED','READ')").get(e.phone,e.line,e.quotedId);
+        if(e.kind==='text'&&(directed(e.text,c.bot)||ownQuote)){
+          const body=normalize(e.text).replace(/^[¿¡ ]*(?:(?:hola|buenos dias|buenas tardes|buenas noches)[, :]+)?(?:maria angel|mariangel|miguel angel|bot)[, :¿?!]*/,'').replace(/[¿?!.]+$/,'').trim();
+          if(/^(?:que (?:funciones )?puedes (?:hacer|realizar)(?: en este momento)?|que sabes hacer|como puedes ayudarme)$/.test(body)){
+            const chief=e.phone===SANDRA?'Doña Sandra':'Diego';
+            const reply=chief+', por ahora soy '+c.bot+' y sigo en aprendizaje. Puedo revisar chats, guardar aclaraciones verificadas y consultar dudas contigo'+(e.phone===SANDRA?' o con Diego.':' o con Sandra.')+' Todavía no tengo consulta automática del programa y no atiendo clientes, confirmo horarios, creo servicios ni registro pagos.';
+            s.queue(e.id+':capabilities',e.phone,e.line,reply,true,0);finish('CHIEF_CAPABILITIES');return;
+          }
+          if(/^(?:estas (?:ahi|presente|funcionando|disponible)|me escuchas|puedes responder|sigues ahi)$/.test(body)){
+            s.queue(e.id+':presence',e.phone,e.line,'Sí, '+(e.phone===SANDRA?'Sandra':'Diego')+'. '+(c.enabled?'Soy '+c.bot+'. Estoy aquí para ayudarte.':'Recibí tu mensaje. Sigo en aprendizaje y puedo atenderte por aquí.'),true,0);finish('CHIEF_PRESENCE');return;
+          }
+          if(e.phone!==SANDRA){s.audit('COORDINATOR_DIRECTED_PENDING_REVIEW',e.id,{kind:e.kind});s.queue(e.id+':review-ack',e.phone,e.line,'Diego, tu consulta quedó guardada para revisión; todavía no he ejecutado cambios.',true,0);finish('COORDINATOR_REVIEW');return;}
           if(new RegExp('^(?:(?:hola|buenos dias|buenas tardes|buenas noches)[, :]+)?(?:'+normalize(c.bot)+'|bot)[, :]+[¿ ]*(?:hola|estas ahi|estas presente|me escuchas|estas disponible|puedes responder|sigues ahi)[?!. ]*$').test(normalize(e.text))){
             s.queue(e.id+':presence',SANDRA,e.line,'Sí, Sandra. Soy '+c.bot+'. Estoy aquí para ayudarte.',true,0);finish('CHIEF_PRESENCE');return;
           }
           const target=/retoma (?:el )?chat (?:de )?(?:\+)?(57\d{10})\b/.exec(normalize(e.text));
-          if(target&&target[1]!==SANDRA&&target[1]!==DIEGO&&s.conversation(target[1])){
+          if(c.enabled&&target&&target[1]!==SANDRA&&target[1]!==DIEGO&&s.conversation(target[1])){
             s.hold(target[1],e.id,false);s.queue(e.id+':release',SANDRA,e.line,'El chat quedó devuelto al bot para el próximo mensaje.',true,0);finish('EXPLICIT_RELEASE');return;
           }
           if(/^(?:maria angel|miguel angel|bot)[, :]+(?:gracias|muchas gracias)[.! ]*$/.test(normalize(e.text))){s.queue(e.id+':courtesy',SANDRA,e.line,'Con gusto, Sandra.',true,0);finish('CHIEF_COURTESY');return;}
-          s.audit('CHIEF_DIRECTED_PENDING_REVIEW',e.id,{kind:e.kind});finish('CHIEF_REVIEW');return;
+          s.db.exec('CREATE TABLE IF NOT EXISTS chief_requests(id TEXT PRIMARY KEY,phone TEXT,line TEXT,body TEXT,at INTEGER,state TEXT)');
+          s.db.prepare('INSERT OR IGNORE INTO chief_requests VALUES(?,?,?,?,?,?)').run(e.id,e.phone,e.line,s.seal(e.text),e.at,'REVIEW');
+          s.audit('CHIEF_DIRECTED_PENDING_REVIEW',e.id,{kind:e.kind});
+          s.queue(e.id+':review-ack',SANDRA,e.line,'Doña Sandra, guardé tu solicitud para revisarla en esta etapa de aprendizaje. Aún no he ejecutado cambios ni enviado mensajes a clientes.',true,0);finish('CHIEF_REVIEW');return;
         }
         finish('OBSERVED_INTERNAL');return;
       }

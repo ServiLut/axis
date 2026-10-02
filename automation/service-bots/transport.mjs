@@ -17,6 +17,7 @@ export class Transport {
     return {phone,instance:line.instance,open:true,ownerVerified:true,checkedAt:new Date().toISOString()};
   }
   async send(row,text) {
+    if(!row.internal&&!this.config.enabled)throw new Error('CUSTOMER_GATE_CLOSED');
     if(row.internal&&![SANDRA,DIEGO].includes(row.phone))throw new Error('INTERNAL_RECIPIENT_MISMATCH');
     if(!row.internal&&!publicTextSafe(text))throw new Error('EXTERNAL_TEXT_REJECTED');
     if(!/^57\d{10}$/.test(row.phone))throw new Error('GROUP_OR_INVALID_RECIPIENT');
@@ -62,8 +63,8 @@ export class Transport {
 }
 
 export async function drain(store,config,transport,engine) {
-  if(!config.enabled)return {enabled:false};
-  const pending=store.db.prepare("SELECT body FROM events WHERE state='PENDING' ORDER BY from_me DESC,at,rowid LIMIT 30").all();
+  if(!config.enabled&&!config.chiefOnly)return {enabled:false};
+  const pending=store.db.prepare("SELECT body FROM events WHERE state='PENDING' AND (?=1 OR phone IN (?,?)) ORDER BY from_me DESC,at,rowid LIMIT 30").all(Number(config.enabled),SANDRA,DIEGO);
   for(const row of pending) {
     const e=store.open(row.body); let analysis={};
     if(config.historyCheckRequired&&!e.fromMe&&![SANDRA,DIEGO].includes(e.phone)){
@@ -82,9 +83,9 @@ export async function drain(store,config,transport,engine) {
     await engine.process(e,analysis);
   }
   let accepted=0,suppressed=0,uncertain=0;
-  const out=store.db.prepare("SELECT * FROM outbox WHERE state='READY' ORDER BY created,rowid LIMIT 20").all();
+  const out=store.db.prepare("SELECT * FROM outbox WHERE state='READY' AND (?=1 OR (internal=1 AND phone IN (?,?))) ORDER BY created,rowid LIMIT 20").all(Number(config.enabled),SANDRA,DIEGO);
   for(const o of out) {
-    if(!config.enabled)break;
+    if(!config.enabled&&!(config.chiefOnly&&o.internal&&[SANDRA,DIEGO].includes(o.phone)))continue;
     if(o.created<Date.now()-600000){store.db.prepare("UPDATE outbox SET state='EXPIRED_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id);suppressed++;continue;}
     // Reject before any delivery attempt; this is a review, never an uncertain send.
     const text=store.open(o.body);

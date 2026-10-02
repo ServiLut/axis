@@ -1,6 +1,6 @@
 # María Ángel y Miguel Ángel
 
-Directriz vigente: mensajes posteriores de la usuaria del 02/10/2026. María Ángel y Miguel Ángel deben analizar todos los chats y el programa de su propia empresa y pasar pruebas antes de funcionar de forma autónoma. La recepción limitada anterior queda suspendida: ambos runtimes tienen `BOT_ENABLED=false` y las cuatro fuentes de eventos están deshabilitadas. La vinculación de WhatsApp se conserva. No enviar respuestas a clientes, informes de jornada ni ejecutar escrituras de negocio durante esta fase. Psicólogos y Abogados conservan su operación independiente.
+Directriz vigente: mensajes posteriores de la usuaria del 02/10/2026. María Ángel y Miguel Ángel deben analizar todos los chats y el programa de su propia empresa y pasar pruebas antes de funcionar de forma autónoma. La recepción limitada anterior queda suspendida: `BOT_ENABLED=false` mantiene cerrada la atención a clientes. La instrucción directa posterior sobre los silencios permite `BOT_CHIEF_ONLY=true` para atender únicamente a Sandra o Diego verificados, con webhooks propios autenticados que descartan clientes y grupos. La vinculación de WhatsApp se conserva. No ejecutar escrituras de negocio durante esta fase. El nuevo informe de pendientes solicitado directamente por la usuaria se prepara por empresa y se envía exclusivamente a Sandra, con cobertura y fuentes declaradas; no activa informes diarios automáticos. Psicólogos y Abogados conservan su operación independiente.
 
 Plan y cobertura actual: `PLAN_APRENDIZAJE_VALIDACION_MARIA_MIGUEL_2026-10-02.md`, dentro del directorio histórico del chat; checkpoint actual `.tmp/service-bots-20261002/checkpoint.json`. Estos prevalecen sobre los controles anteriores de recepción habilitada.
 
@@ -60,6 +60,8 @@ El worker corre cada diez segundos. Una salida pasa por READY → SENDING → AC
 Las salidas pendientes de más de diez minutos quedan en EXPIRED_REVIEW. Se evita enviar mensajes antiguos al recuperar una conexión. La solicitud y la pregunta permanecen guardadas para revisión; no se recrean ni se reenvían automáticamente.
 
 ## Aprendizaje y correcciones
+
+Una pregunta de capacidades o presencia dirigida al nombre del bot recibe una respuesta breve y veraz incluso bajo atención humana, sin liberar globalmente el chat. Una cita exacta de una salida propia entregada también puede acreditar ese turno. La alternativa de teléfono suministrada por el proveedor autenticado permite resolver un LID solo de Sandra o Diego; un nombre visible, un LID sin alternativa o un grupo no confiere autoridad. Las órdenes que exceden aprendizaje quedan cifradas para revisión, sin ejecutar cambios ni campañas. La recuperación administrativa de un mensaje interno exige comparación con su fuente nativa (ID, teléfono, línea, fecha, texto, tipo y cita), mantiene deduplicación y no recupera mensajes de clientes.
 
 La aclaración directa posterior de la usuaria del 02/10/2026 mantiene a María y Miguel en análisis y pruebas: pueden hacer preguntas necesarias exclusivamente a Sandra o Diego. Luisa y Jeison conservan su recepción productiva independiente. Los mensajes a clientes deben comunicar solo el resultado pertinente o un dato necesario; no anunciar consultas al equipo ni la transcripción o procesamiento de audios y archivos.
 

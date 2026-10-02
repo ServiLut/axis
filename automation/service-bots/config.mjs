@@ -27,11 +27,11 @@ export function configFromEnv(env = process.env) {
   // A shared/global key must never be installed in either business runtime.
   if (env.BOT_EVOLUTION_TOKEN || lines.some(l=>!/^[A-Za-z0-9_-]{24,128}$/.test(l.apiKey || '')) ||
       new Set(lines.map(l=>l.apiKey)).size !== 2) throw new Error('DEDICATED_INSTANCE_ACCESS_REQUIRED');
-  if(env.BOT_ENABLED==='true'&&!Number.isFinite(Date.parse(env.BOT_ACTIVATED_AT||'')))throw new Error('ACTIVATION_CUTOFF_REQUIRED');
+  if((env.BOT_ENABLED==='true'||env.BOT_CHIEF_ONLY==='true')&&!Number.isFinite(Date.parse(env.BOT_ACTIVATED_AT||'')))throw new Error('ACTIVATION_CUTOFF_REQUIRED');
   if(env.BOT_ENABLED==='true'&&env.BOT_PRIOR_HISTORY_CHECK!=='true')throw new Error('PRIOR_HISTORY_GUARD_REQUIRED');
   return { company, ...business, lines, database, encryptionKey: Buffer.from(env.BOT_DATA_KEY,'hex'),
     authHash: env.BOT_AUTH_TOKEN_HASH, webhookHash:env.BOT_WEBHOOK_TOKEN_HASH, provider: provider.href.replace(/\/$/,''),
-    enabled: env.BOT_ENABLED === 'true', activatedAt: Date.parse(env.BOT_ACTIVATED_AT || ''),
+    enabled: env.BOT_ENABLED === 'true', chiefOnly:env.BOT_CHIEF_ONLY==='true', activatedAt: Date.parse(env.BOT_ACTIVATED_AT || ''),
     historyCheckRequired:env.BOT_PRIOR_HISTORY_CHECK==='true',
     port: Number(env.PORT || 8080), programContextUrl: env.BOT_PROGRAM_CONTEXT_URL || null,
     programToken: env.BOT_PROGRAM_READ_TOKEN || null, expectedProgramCompanyId: env.BOT_PROGRAM_COMPANY_ID || null,
@@ -44,17 +44,18 @@ export function authorized(header, hash) {
   return /^[a-f0-9]{64}$/.test(hash || '') && timingSafeEqual(actual,Buffer.from(hash,'hex'));
 }
 
-export function validateEvent(body, config, now = Date.now()) {
+export function validateEvent(body, config, now = Date.now(), recoverChief = false) {
   const line = config.lines.find(l=>l.instance===body.instance && l.phone===body.owner);
   const event = body.event;
-  if (!line || !event || !config.enabled || !Number.isFinite(config.activatedAt)) return null;
+  const internal=event&&[SANDRA,DIEGO].includes(event.phone);
+  if (!line || !event || (!config.enabled&&!(config.chiefOnly&&internal)) || !Number.isFinite(config.activatedAt)) return null;
   const at = Date.parse(event.at);
   if (!/^[A-Za-z0-9_-]{8,100}$/.test(event.id || '') || !/^57\d{10}$/.test(event.phone || '') ||
-      typeof event.fromMe !== 'boolean' || !Number.isFinite(at) || at < config.activatedAt || at > now+60000 || at < now-600000 ||
+      typeof event.fromMe !== 'boolean' || !Number.isFinite(at) || at < config.activatedAt || at > now+60000 || at < now-(recoverChief&&internal&&!event.fromMe?86400000:600000) ||
       !['text','audio','image','document','video','call'].includes(event.kind) || typeof event.text !== 'string' || event.text.length > 6000 ||
       event.group === true || /@g\.us$/.test(event.jid || '')) return null;
   return { id:event.id, phone:event.phone, at, line:line.phone, kind:event.kind, fromMe:event.fromMe,
-    text:event.text, quotedId:typeof event.quotedId==='string'?event.quotedId.slice(0,120):null };
+    text:event.text, forwarded:event.forwarded===true, quotedId:typeof event.quotedId==='string'?event.quotedId.slice(0,120):null };
 }
 
 export function publicTextSafe(text) {
