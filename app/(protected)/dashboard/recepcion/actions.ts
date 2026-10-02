@@ -40,10 +40,11 @@ function sameRequest(saved: unknown, input: unknown) {
   if (canonical(saved) !== canonical(input)) throw new Error("Este identificador ya se usó con otros datos. Consulta el registro antes de crear otra operación.");
 }
 
-export async function getReceptionData(token: string, fecha: string) {
+export async function getReceptionData(token: string, fecha: string, fechaReserva = fecha) {
   try {
     const user = await requireReceptionUser(token);
-    const range = getBogotaDayRange(fecha);
+    getBogotaDayRange(fecha);
+    const range = getBogotaDayRange(fechaReserva);
     const [catalogo, profesionales, reservas, cargos, pagos] = await Promise.all([
       services(prisma, user.tenantId),
       prisma.usuario.findMany({ where: { tenantId: user.tenantId, rol: "TECNICO", activo: true },
@@ -64,7 +65,7 @@ export async function getReceptionData(token: string, fecha: string) {
         FROM "PagoRecepcion" p JOIN "AplicacionPagoRecepcion" ap ON ap."pagoId" = p."id"
         WHERE p."tenantId" = ${user.tenantId} AND p."fecha" = ${fecha}::date GROUP BY p."id" ORDER BY p."id" DESC`,
     ]);
-    return { catalogo, profesionales, cargos, pagos, admin: ["ADMIN", "SU_ADMIN"].includes(user.rol || ""),
+    return { catalogo, profesionales, cargos, pagos, fechaReserva, admin: ["ADMIN", "SU_ADMIN"].includes(user.rol || ""),
       reservas: reservas.map((r) => ({ id: r.id.toString(), profesionalId: r.psicologoId,
         inicio: r.horaInicio?.toISOString() || "", fin: r.horaFin?.toISOString() || "", consultorio: r.consultorios?.nombre || "Sin consultorio" })) };
   } catch (error) { return failure(error); }
