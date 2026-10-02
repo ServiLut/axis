@@ -58,6 +58,12 @@ export function validateEvent(body, config, now = Date.now()) {
 }
 
 export function publicTextSafe(text) {
-  return typeof text==='string' && text.length>0 && text.length<1500 &&
-    !/(api.?key|bearer\s|contrase[nñ]a|token\s*[:=]|destinatario interno|voy a (?:preguntar|informar) (?:a )?(?:diego|sandra)|https?:\/\/)/i.test(text);
+  if(typeof text!=='string'||!text.trim()||text.length>=1500)return false;
+  const value=normalize(text);
+  const routing=/\b(?:voy|vamos|debo|debemos|estoy|estamos|necesito|necesitamos|lo|le|te|ya|hemos)\b.{0,65}\b(?:consult\w*|pregunt\w*|avis\w*|inform\w*|escal\w*|notific\w*|pedir apoyo|verific\w*|revis\w*)\b.{0,65}\b(?:diego|sandra|coordinador\w*|equipo|supervisor|personal)\b/s;
+  const directRouting=/\b(?:consultare|consultaremos|preguntare|avisare|informare|verificare|verificaremos|revisare|revisaremos)\b.{0,65}\b(?:diego|sandra|coordinador\w*|equipo|supervisor|personal)\b/s;
+  const mediaWork=/\b(?:estoy|estamos|voy a|vamos a|procedere a|procederemos a)\s+(?:transcrib\w*|proces\w*|convert\w*|analiz\w*|escuch\w*)\b.{0,65}\b(?:audio|mensaje de voz|archivo|adjunto|documento)\b/s;
+  const transcription=/\b(?:transcribo|transcribimos|transcribire|transcribiremos|transcripcion|transcribiendo)\b.{0,65}\b(?:audio|mensaje de voz)\b/s;
+  return !routing.test(value)&&!directRouting.test(value)&&!mediaWork.test(value)&&!transcription.test(value)&&
+    !/(api.?key|bearer\s|contrase[nñ]a|token\s*[:=]|destinatario interno|webhook|payload|outbox|chatwoot|n8n|https?:\/\/)/i.test(text);
 }

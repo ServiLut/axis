@@ -1,4 +1,4 @@
-import { SANDRA, DIEGO } from './config.mjs';
+import { SANDRA, DIEGO, publicTextSafe } from './config.mjs';
 
 export class Transport {
   constructor(config, fetcher=fetch){this.config=config;this.fetcher=fetcher;}
@@ -18,6 +18,7 @@ export class Transport {
   }
   async send(row,text) {
     if(row.internal&&![SANDRA,DIEGO].includes(row.phone))throw new Error('INTERNAL_RECIPIENT_MISMATCH');
+    if(!row.internal&&!publicTextSafe(text))throw new Error('EXTERNAL_TEXT_REJECTED');
     if(!/^57\d{10}$/.test(row.phone))throw new Error('GROUP_OR_INVALID_RECIPIENT');
     const line=this.config.lines.find(l=>l.phone===row.line);if(!line)throw new Error('LINE_OUTSIDE_COMPANY');
     const result=await this.request(line,'/message/sendText/'+encodeURIComponent(line.instance),{number:row.phone,text,linkPreview:false});
@@ -85,6 +86,12 @@ export async function drain(store,config,transport,engine) {
   for(const o of out) {
     if(!config.enabled)break;
     if(o.created<Date.now()-600000){store.db.prepare("UPDATE outbox SET state='EXPIRED_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id);suppressed++;continue;}
+    // Reject before any delivery attempt; this is a review, never an uncertain send.
+    const text=store.open(o.body);
+    if(!o.internal&&!publicTextSafe(text)){
+      store.db.prepare("UPDATE outbox SET state='COMMUNICATION_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id);
+      store.hold(o.phone,'communication-review');store.audit('EXTERNAL_TEXT_REJECTED',o.id);suppressed++;continue;
+    }
     // Revalidate channel identity before each attempt. A disconnected channel leaves READY without attempting delivery.
     try{await transport.verifyLine(o.line);}catch{store.audit('CHANNEL_CHECK_FAILED',o.id);continue;}
     const staffPending=store.db.prepare("SELECT id FROM events WHERE phone=? AND from_me=1 AND state='PENDING'").get(o.phone);
@@ -95,7 +102,7 @@ export async function drain(store,config,transport,engine) {
     }
     if(!store.db.prepare("UPDATE outbox SET state='SENDING',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id).changes)continue;
     try {
-      const mid=await transport.send(o,store.open(o.body));
+      const mid=await transport.send(o,text);
       store.db.prepare("UPDATE outbox SET mid=?,state='ACCEPTED',updated=? WHERE id=?").run(mid,Date.now(),o.id);accepted++;
     } catch {store.db.prepare("UPDATE outbox SET state='UNCERTAIN',updated=? WHERE id=?").run(Date.now(),o.id);uncertain++;}
   }

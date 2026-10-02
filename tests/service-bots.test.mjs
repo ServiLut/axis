@@ -3,13 +3,35 @@ import assert from 'node:assert/strict';
 import { randomBytes,createHash } from 'node:crypto';
 import { Store } from '../automation/service-bots/store.mjs';
 import { Engine,customerDecision,parseUnderstanding } from '../automation/service-bots/engine.mjs';
-import { BUSINESSES,configFromEnv,validateEvent,authorized,SANDRA,DIEGO } from '../automation/service-bots/config.mjs';
+import { BUSINESSES,configFromEnv,validateEvent,authorized,SANDRA,DIEGO,publicTextSafe } from '../automation/service-bots/config.mjs';
 import { Transport,drain } from '../automation/service-bots/transport.mjs';
 import { decodeWebhook } from '../automation/service-bots/webhook.mjs';
 import { createBotServer } from '../automation/service-bots/server.mjs';
 const config=(company='fumigacion')=>({company,...BUSINESSES[company],enabled:true,activatedAt:Date.now()-60000,lines:BUSINESSES[company].phones.map((phone,i)=>({phone,instance:company+'-'+i}))});
 const event=(overrides={})=>({id:'MESSAGE001',phone:'573001112233',at:Date.now(),line:'573126944997',fromMe:false,kind:'text',text:'Hola',...overrides});
 const fixture=(company='fumigacion')=>{const store=new Store(':memory:',company,randomBytes(32));return {store,config:config(company),engine:new Engine(store,config(company))};};
+
+test('public replies exclude internal consultation and media work; necessary questions stay valid',()=>{
+ for(const text of ['Voy a verificar con Diego o Sandra.','Estoy verificando la ruta con Diego.','Consultaré con Sandra.','Ya le pregunté al equipo.','Estoy transcribiendo el audio.','Voy a procesar tu archivo adjunto.','Transcribo tu mensaje de voz.'])assert.equal(publicTextSafe(text),false,text);
+ for(const text of ['Gracias por tu audio. ¿En qué barrio necesitas el servicio?','Tu solicitud sigue pendiente de confirmación.','¿Qué falla presenta la nevera?','No pude escuchar bien tu audio. ¿Me escribes lo que necesitas?'])assert.equal(publicTextSafe(text),true,text);
+});
+
+test('last delivery gate blocks an old unsafe customer reply without contacting the provider',async()=>{
+ const f=fixture();try{
+  f.store.enqueue(event());await f.engine.process(event());f.store.db.prepare('DELETE FROM outbox').run();
+  f.store.queue('unsafe-old','573001112233',f.config.lines[0].phone,'Estoy transcribiendo el audio.',false,f.store.conversation('573001112233').revision);
+  let calls=0;const result=await drain(f.store,f.config,{verifyLine:async()=>{calls++;},send:async()=>{calls++;return 'MUST_NOT_SEND';}},f.engine);
+  assert.equal(calls,0);assert.equal(result.uncertain,0);assert.equal(f.store.db.prepare('SELECT state FROM outbox WHERE id=?').get('unsafe-old').state,'COMMUNICATION_REVIEW');assert.equal(f.store.conversation('573001112233').hold,1);
+ }finally{f.store.close();}
+});
+
+test('transport validates external text while retaining exact internal recipients',async()=>{
+ const c={...config(),provider:'https://own.example',lines:config().lines.map((l,i)=>({...l,apiKey:String(i).repeat(32)}))};let calls=0;
+ const t=new Transport(c,async()=>{calls++;return {ok:true,json:async()=>({key:{id:'INTERNALMSG'}})};});
+ await assert.rejects(()=>t.send({phone:'573001112233',line:c.lines[0].phone,internal:false},'Voy a verificar con Sandra.'),/EXTERNAL_TEXT_REJECTED/);assert.equal(calls,0);
+ assert.equal(await t.send({phone:DIEGO,line:c.lines[0].phone,internal:true},'Diego, ¿cuánto dura el refuerzo de este servicio?'), 'INTERNALMSG');
+ await assert.rejects(()=>t.send({phone:'573001112233',line:c.lines[0].phone,internal:true},'¿Cuánto dura?'),/INTERNAL_RECIPIENT_MISMATCH/);assert.equal(calls,1);
+});
 
 test('company config rejects other businesses and shared database paths',()=>{
   const lines=config().lines.map((l,i)=>({...l,apiKey:String(i).repeat(32)}));
