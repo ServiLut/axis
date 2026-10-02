@@ -70,6 +70,15 @@ export function createBotServer(config,store,transport,engine) {
         return reply(200,{updated:n});
       }
       if(req.url==='/knowledge')return reply(200,store.importKnowledge(body));
+      if(req.url==='/notify-chief-report'){
+        if(!config.chiefOnly)return reply(403,{error:'INTERNAL_MODE_REQUIRED'});
+        if(!/^[a-z0-9_-]{8,100}$/.test(body.key||'')||!/^[a-f0-9]{64}$/.test(body.sourceHash||'')||typeof body.text!=='string'||!body.text.trim()||body.text.length>6000||/bearer\s|api.?key|contrase[nñ]a|token\s*[:=]/i.test(body.text))return reply(400,{error:'VERIFIED_REPORT_REQUIRED'});
+        const line=config.lines.find(l=>l.phone===body.line);if(!line)return reply(400,{error:'OWN_LINE_REQUIRED'});
+        await transport.verifyLine(line.phone);
+        const id='chief-report:'+body.key+':573016803926';
+        const created=store.tx(()=>{const added=store.queue(id,'573016803926',line.phone,body.text,true,0);if(added)store.audit('USER_AUTHORIZED_CHIEF_REPORT',id,{sourceHash:body.sourceHash,line:line.phone});return added;});
+        return reply(200,{queued:created,id,delivery:store.db.prepare('SELECT state,mid FROM outbox WHERE id=?').get(id)});
+      }
       if(req.url==='/import-pending-questions')return reply(200,store.importPendingQuestions(body));
       if(req.url==='/drain')return reply(200,await run());
       return reply(404,{error:'NOT_FOUND'});
