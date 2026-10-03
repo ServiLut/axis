@@ -24,6 +24,11 @@ export function parseUnderstanding(value,customerText) {
   }
   return result;
 }
+export function capabilitiesReply(config,phone) {
+  const recipient=phone===SANDRA?'Doña Sandra':'Diego';
+  if(config.enabled)return recipient+', soy '+config.bot+'. Puedo recibir solicitudes, preguntar los datos que faltan y guardar cada solicitud para revisión. La cotización, el horario y el técnico siguen pendientes de confirmación para cada caso. Todavía no creo servicios en el programa ni registro pagos.';
+  return recipient+', por ahora soy '+config.bot+' y sigo en aprendizaje. Puedo revisar chats, guardar aclaraciones verificadas y consultar dudas contigo'+(phone===SANDRA?' o con Diego.':' o con Sandra.')+' Todavía no tengo consulta automática del programa y no atiendo clientes, confirmo horarios, creo servicios ni registro pagos.';
+}
 export function customerDecision(company,state,e,analysis={}) {
   const t=normalize(e.text);const next={...state,slots:{...state.slots,...extractSlots(e.text,company),...parseUnderstanding(analysis,e.text)},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)};
   if(e.kind==='call')return {state:{...next,lastCallEvent:e.id},observed:true};
@@ -82,9 +87,7 @@ export class Engine {
         if(e.kind==='text'&&(directed(e.text,c.bot)||ownQuote)){
           const body=normalize(e.text).replace(/^[¿¡ ]*(?:(?:hola|buenos dias|buenas tardes|buenas noches)[, :]+)?(?:maria angel|mariangel|miguel angel|bot)[, :¿?!]*/,'').replace(/[¿?!.]+$/,'').trim();
           if(/^(?:que (?:funciones )?puedes (?:hacer|realizar)(?: en este momento)?|que sabes hacer|como puedes ayudarme)$/.test(body)){
-            const chief=e.phone===SANDRA?'Doña Sandra':'Diego';
-            const reply=chief+', por ahora soy '+c.bot+' y sigo en aprendizaje. Puedo revisar chats, guardar aclaraciones verificadas y consultar dudas contigo'+(e.phone===SANDRA?' o con Diego.':' o con Sandra.')+' Todavía no tengo consulta automática del programa y no atiendo clientes, confirmo horarios, creo servicios ni registro pagos.';
-            s.queue(e.id+':capabilities',e.phone,e.line,reply,true,0);finish('CHIEF_CAPABILITIES');return;
+            s.queue(e.id+':capabilities',e.phone,e.line,capabilitiesReply(c,e.phone),true,0);finish('CHIEF_CAPABILITIES');return;
           }
           if(/^(?:estas (?:ahi|presente|funcionando|disponible)|me escuchas|puedes responder|sigues ahi)$/.test(body)){
             s.queue(e.id+':presence',e.phone,e.line,'Sí, '+(e.phone===SANDRA?'Sandra':'Diego')+'. '+(c.enabled?'Soy '+c.bot+'. Estoy aquí para ayudarte.':'Recibí tu mensaje. Sigo en aprendizaje y puedo atenderte por aquí.'),true,0);finish('CHIEF_PRESENCE');return;
@@ -101,7 +104,7 @@ export class Engine {
           s.db.exec('CREATE TABLE IF NOT EXISTS chief_requests(id TEXT PRIMARY KEY,phone TEXT,line TEXT,body TEXT,at INTEGER,state TEXT)');
           s.db.prepare('INSERT OR IGNORE INTO chief_requests VALUES(?,?,?,?,?,?)').run(e.id,e.phone,e.line,s.seal(e.text),e.at,'REVIEW');
           s.audit('CHIEF_DIRECTED_PENDING_REVIEW',e.id,{kind:e.kind});
-          s.queue(e.id+':review-ack',SANDRA,e.line,'Doña Sandra, guardé tu solicitud para revisarla en esta etapa de aprendizaje. Aún no he ejecutado cambios ni enviado mensajes a clientes.',true,0);finish('CHIEF_REVIEW');return;
+          s.queue(e.id+':review-ack',SANDRA,e.line,c.enabled?'Doña Sandra, guardé tu solicitud para revisión. Todavía no he ejecutado cambios.':'Doña Sandra, guardé tu solicitud para revisarla en esta etapa de aprendizaje. Aún no he ejecutado cambios ni enviado mensajes a clientes.',true,0);finish('CHIEF_REVIEW');return;
         }
         finish('OBSERVED_INTERNAL');return;
       }

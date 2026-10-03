@@ -20,6 +20,7 @@ export function createBotServer(config,store,transport,engine) {
       if(req.url==='/status')return reply(200,{company:config.name,bot:config.bot,enabled:config.enabled,mode:'reception-with-human-review',fullyAutonomous:false,
         events:store.db.prepare('SELECT state,COUNT(*) n FROM events GROUP BY state').all(),outbox:store.db.prepare('SELECT state,COUNT(*) n FROM outbox GROUP BY state').all(),
         communicationGuard:'private-routing-and-media-work-v2',internalConversationGuard:'verified-internal-per-line-v2',internalConversationEnabled:Boolean(config.chiefOnly),customerResponsesEnabled:config.enabled,
+        customerIntakeEnabled:config.enabled,businessWritesEnabled:false,capabilityDisclosure:'runtime-mode-and-implemented-intake-v1',
         unanswered:store.db.prepare("SELECT COUNT(*) n FROM questions WHERE state IN ('PENDING','LEGACY_PENDING','ANSWER_REVIEW')").get().n,
         knowledge:store.db.prepare('SELECT kind,COUNT(*) n FROM knowledge GROUP BY kind').all(),programConnected:Boolean(config.programContextUrl&&config.programToken),aiConfigured:Boolean(config.aiUrl&&config.aiToken),priorHistoryProtection:Boolean(config.historyCheckRequired)});
       if(req.url==='/channel-health'){

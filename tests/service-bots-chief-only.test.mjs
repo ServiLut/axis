@@ -3,11 +3,27 @@ import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
 import {BUSINESSES,SANDRA,DIEGO,validateEvent} from '../automation/service-bots/config.mjs';
 import {Store} from '../automation/service-bots/store.mjs';
-import {Engine} from '../automation/service-bots/engine.mjs';
+import {Engine,capabilitiesReply} from '../automation/service-bots/engine.mjs';
 import {Transport,drain} from '../automation/service-bots/transport.mjs';
 import {decodeWebhook} from '../automation/service-bots/webhook.mjs';
 const config=company=>({company,...BUSINESSES[company],enabled:false,chiefOnly:true,activatedAt:Date.now()-3600000,lines:BUSINESSES[company].phones.map((phone,i)=>({phone,instance:company+'-'+i}))});
 const ev=(c,patch={})=>({id:'CHIEF_EVENT_01',phone:SANDRA,line:c.lines[0].phone,fromMe:false,kind:'text',text:c.bot+' que funciones puedes realizar en este momento?',at:Date.now(),quotedId:null,...patch});
+
+test('enabled reception describes actual intake without claiming programme writes or full autonomy',async()=>{
+ const c={...config('fumigacion'),enabled:true},s=new Store(':memory:',c.company,randomBytes(32)),engine=new Engine(s,c);try{
+  s.enqueue(ev(c,{id:'STAFF_SOURCE',fromMe:true,at:Date.now()-10}));
+  s.hold(SANDRA,'STAFF_SOURCE',true);
+  const e=ev(c);s.enqueue(e);await engine.process(e);
+  const reply=s.open(s.db.prepare('SELECT body FROM outbox').get().body);
+  assert.match(reply,/recibir solicitudes/);assert.match(reply,/Todavía no creo servicios en el programa ni registro pagos/);
+  assert.doesNotMatch(reply,/sigo en aprendizaje|no atiendo clientes/);assert.equal(s.conversation(SANDRA).hold,1);
+  const command=ev(c,{id:'CHIEF_WRITE_REVIEW',text:'María Ángel, crea el servicio',at:e.at+1});s.enqueue(command);await engine.process(command);
+  assert.equal(s.db.prepare('SELECT state FROM chief_requests').get().state,'REVIEW');
+  const ack=s.open(s.db.prepare('SELECT body FROM outbox WHERE id=?').get(command.id+':review-ack').body);
+  assert.match(ack,/Todavía no he ejecutado cambios/);assert.doesNotMatch(ack,/etapa de aprendizaje|ni enviado mensajes a clientes/);
+  assert.match(capabilitiesReply(config('servicio-tecnico'),DIEGO),/no atiendo clientes/);
+ }finally{s.close();}
+});
 test('chief-only ingestion accepts only the two verified internal phones, with bounded recovery',()=>{
  const c=config('fumigacion'),e=ev(c);const body={instance:c.lines[0].instance,owner:e.line,event:{...e,at:new Date(e.at).toISOString()}};
  assert.ok(validateEvent(body,c));assert.ok(validateEvent({...body,event:{...body.event,phone:DIEGO}},c));
