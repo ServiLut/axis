@@ -53,6 +53,7 @@ test('arrival question without punctuation preserves its purpose instead of aski
   assert.equal(d.reviewTopic,'service-followup');
   assert.match(d.reviewQuestion,/estado actual|llegada/i);
   assert.doesNotMatch(d.reply,/plaga|inmueble|cotización/i);
+  assert.doesNotMatch(d.review,/ya acordado|hora confirmada/i);
 });
 
 test('arrival followup preserves personal safety and payment review priority',()=>{
