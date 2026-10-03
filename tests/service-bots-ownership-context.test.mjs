@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { randomBytes } from 'node:crypto';
+import { randomBytes,createHash } from 'node:crypto';
 import { mkdtempSync, unlinkSync, rmdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,6 +9,7 @@ import { Engine } from '../automation/service-bots/engine.mjs';
 import { drain } from '../automation/service-bots/transport.mjs';
 import { decodeWebhook } from '../automation/service-bots/webhook.mjs';
 import { BUSINESSES, SANDRA } from '../automation/service-bots/config.mjs';
+import { createBotServer } from '../automation/service-bots/server.mjs';
 
 function fixture(company='fumigacion',path=':memory:',key=randomBytes(32)) {
   const c={company,...BUSINESSES[company],enabled:true,chiefOnly:true,historyCheckRequired:true,activatedAt:Date.now()-10000,
@@ -203,5 +204,92 @@ test('a delayed earlier staff source requires authorship review without erasing 
     assert.equal(after.firstProviderMessageId,before.firstProviderMessageId);
     assert.equal(after.attentionOrderingReview,'EARLIER_STAFF_SOURCE_RECEIVED_LATE');
     assert.equal(after.creatorCreditWritten,false);
+  }finally{f.s.close();}
+});
+
+test('different replies about the same missing field create one precise question and one review acknowledgement',async()=>{
+  const f=fixture();
+  try {
+    await f.process({text:'Necesito fumigar cucarachas en Sabaneta'});
+    await f.process({id:'MISSINGONE',at:Date.now()+1,text:'Necesito el servicio'});
+    await f.process({id:'MISSINGTWO',at:Date.now()+2,text:'Para mañana'});
+    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,1);
+    const question=f.s.open(f.s.db.prepare('SELECT body FROM questions').get().body);
+    assert.match(question.text,/tipo de inmueble/);
+    assert.match(question.text,/cucarachas/);
+    assert.match(question.text,/sabaneta/);
+    assert.ok(!question.text.includes('Falta site'));
+    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get('MISSINGTWO:reply').n,0);
+  }finally{f.s.close();}
+});
+
+test('an already delivered legacy clarification is reused without a third question or another customer acknowledgement',async()=>{
+  const f=fixture();
+  try {
+    const first=await f.process({text:'cucarachas en sabaneta'}),caseId=f.s.conversation(first.phone).state.caseId;
+    const old=f.s.question({phone:first.phone,line:first.line,caseId,topic:'revision:OLDREQUEST',conditions:{event:'OLDREQUEST',caseId},recipient:SANDRA,source:'OLDREQUEST',text:'FUMIGACION: contacto terminado en 2233. Falta site. La pregunta ya se hizo; la nueva respuesta no permitió verificar ese dato.'});
+    f.s.db.prepare("UPDATE outbox SET state='DELIVERED',mid='OLDQUESTIONMID' WHERE id=?").run('question:'+old.id);
+    await f.process({id:'AFTERLEGACY',at:Date.now()+1,text:'Lo necesito pronto'});
+    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,1);
+    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get('AFTERLEGACY:reply').n,0);
+    assert.equal(f.s.db.prepare('SELECT state FROM outbox WHERE mid=?').get('OLDQUESTIONMID').state,'DELIVERED');
+  }finally{f.s.close();}
+});
+
+test('continuation after an upgrade preserves the actual older reply instead of claiming the new reply was first',async()=>{
+  const f=fixture();
+  try {
+    const first=f.event();f.s.enqueue(first);
+    f.s.saveConversation(first.phone,{slots:{service:'cucarachas'},asked:['site'],caseId:f.c.company+':'+first.id});
+    f.s.queue(first.id+':reply',first.phone,first.line,'¿En qué tipo de inmueble?',false,1);
+    f.s.db.prepare("UPDATE outbox SET state='READ',mid='LEGACYBOTMID' WHERE id=?").run(first.id+':reply');
+    f.s.db.prepare("UPDATE events SET state='DONE' WHERE id=?").run(first.id);
+    await f.process({id:'CONTINUE02',at:Date.now()+1,text:'casa'});
+    const owner=f.s.caseAuthorship(f.c.company+':'+first.id);
+    assert.equal(owner.firstProviderMessageId,'LEGACYBOTMID');
+    assert.equal(owner.firstOutboxId,first.id+':reply');
+    assert.equal(owner.state,'FIRST_REPLY_REVIEW');
+    assert.equal(owner.firstReplyEligible,false);
+    assert.equal(owner.sentAt,null);
+    assert.equal(owner.creatorCreditWritten,false);
+  }finally{f.s.close();}
+});
+
+test('supervisor reads only explicit own sources, uses administrative authentication, and changes no stored state',async()=>{
+  const f=fixture(),token='a'.repeat(43),webhookToken='b'.repeat(43);
+  f.c.authHash=createHash('sha256').update(token).digest('hex');f.c.webhookHash=createHash('sha256').update(webhookToken).digest('hex');
+  const server=createBotServer(f.c,f.s,f.transport,f.engine);
+  try {
+    const first=await f.process({text:'cucarachas en sabaneta'});
+    await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+    const url='http://127.0.0.1:'+server.address().port+'/review-events';
+    const call=async(body,auth=token)=>fetch(url,{method:'POST',headers:{Authorization:'Bearer '+auth,'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const before={events:f.s.db.prepare('SELECT id,state FROM events').all(),outbox:f.s.db.prepare('SELECT id,state FROM outbox').all(),audit:f.s.db.prepare('SELECT COUNT(*) n FROM audit').get().n};
+    assert.equal((await call({company:f.c.company,eventIds:[first.id]},webhookToken)).status,401);
+    assert.equal((await call({company:'servicio-tecnico',eventIds:[first.id]})).status,400);
+    assert.equal((await call({company:f.c.company,eventIds:Array(51).fill(first.id)})).status,400);
+    const result=await(await call({company:f.c.company,eventIds:[first.id,'UNKNOWN001']})).json();
+    assert.equal(result.readOnly,true);assert.equal(result.fullWhatsAppHistoryRead,false);assert.equal(result.originalMediaRead,false);
+    assert.equal(result.results[0].event.text,'cucarachas en sabaneta');
+    assert.equal(result.results[0].response.id,first.id+':reply');
+    assert.deepEqual(result.results[1],{id:'UNKNOWN001',found:false});
+    assert.deepEqual({events:f.s.db.prepare('SELECT id,state FROM events').all(),outbox:f.s.db.prepare('SELECT id,state FROM outbox').all(),audit:f.s.db.prepare('SELECT COUNT(*) n FROM audit').get().n},before);
+  }finally{await new Promise(resolve=>server.close(resolve));f.s.close();}
+});
+
+test('a concrete customer question is preserved and an interrogative alternative is not saved as an answer',async()=>{
+  const f=fixture();
+  try {
+    await f.process();
+    const before=f.s.conversation('573001112233').state;
+    await f.process({id:'PRICEQUERY',at:Date.now()+1,text:'¿Cuánto cuesta para casa o apartamento?'});
+    const after=f.s.conversation('573001112233').state;
+    assert.deepEqual(after.asked,before.asked);assert.deepEqual(after.slots,before.slots);
+    assert.equal(f.s.db.prepare('SELECT state FROM events WHERE id=?').get('PRICEQUERY').state,'REVIEW');
+    const question=f.s.open(f.s.db.prepare('SELECT body FROM questions').get().body);
+    assert.match(question.text,/Cuánto cuesta para casa o apartamento/);
+    assert.match(question.text,/Qué respuesta verificada/);
+    const response=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get('PRICEQUERY:reply').body);
+    assert.ok(!response.includes('Qué plaga'));assert.ok(!response.includes('tipo de inmueble'));
   }finally{f.s.close();}
 });

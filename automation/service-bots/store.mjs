@@ -90,6 +90,16 @@ export class Store {
   }
   recordFirstBotReply(row,mid,bot,sentAt) {
     if(row.internal||!row.case_id||this.caseAuthorship(row.case_id))return;
+    // An earlier reply from the previous software remains the actual first source.
+    // Do not relabel a continuation as a first reply after an upgrade.
+    const firstSource=row.case_id.startsWith(this.company+':')?row.case_id.slice(this.company.length+1):null;
+    const legacy=firstSource&&this.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND internal=0 AND case_id IS NULL AND mid IS NOT NULL AND state IN ('ACCEPTED','DELIVERED','READ')").get(firstSource+':reply',row.phone);
+    if(legacy){
+      const record={company:this.company,caseId:row.case_id,phone:row.phone,bot,firstOutboxId:legacy.id,firstProviderMessageId:legacy.mid,line:legacy.line,sentAt:null,recordedAt:legacy.created,firstReplyEligible:false,priorOutgoing:null,priorStaffSource:null,priorReadByStaff:'UNVERIFIED',attentionOrderingReview:'LEGACY_FIRST_REPLY_ORDER_UNVERIFIED',deliveryState:legacy.state,creatorCreditWritten:false,programServiceId:null,serviceCompleted:false};
+      this.db.prepare('INSERT OR IGNORE INTO case_authorship VALUES(?,?,?,?,?)').run(row.case_id,row.phone,legacy.id,'FIRST_REPLY_REVIEW',this.seal(record));
+      this.audit('LEGACY_FIRST_BOT_REPLY_PRESERVED',legacy.id,{caseId:row.case_id,continuationOutboxId:row.id,deliveryState:legacy.state,creatorCreditWritten:false});
+      return;
+    }
     const history=this.priorHistory(row.phone);
     const priorStaff=this.db.prepare("SELECT e.id FROM events e WHERE e.phone=? AND e.from_me=1 AND e.at<=? AND NOT EXISTS(SELECT 1 FROM outbox o WHERE o.mid=e.id AND o.phone=e.phone AND o.line=e.line) LIMIT 1").get(row.phone,sentAt);
     // Absence of an outgoing message does not identify who read a chat.
@@ -147,6 +157,13 @@ export class Store {
     const id=createHash('sha256').update(JSON.stringify([this.company,caseId,topic,hash,recipient])).digest('hex');
     const old=this.db.prepare('SELECT * FROM questions WHERE id=?').get(id);
     if(old)return {id,state:old.state,answer:old.answer&&this.open(old.answer),sourceId:old.source_id,valid:old.state==='ANSWERED'&&(!old.valid_until||old.valid_until>Date.now()),created:false};
+    if(topic.startsWith('missing-intake:')){
+      const field=topic.slice('missing-intake:'.length);
+      if(!['service','site','detail','location','preference'].includes(field))throw new Error('INTAKE_FIELD_REQUIRED');
+      const pending=this.db.prepare("SELECT q.*,o.state delivery FROM questions q JOIN outbox o ON o.id=q.outbox_id WHERE q.case_id=? AND q.phone=? AND q.recipient=? AND q.state IN ('PENDING','ANSWER_REVIEW') AND o.state IN ('READY','SENDING','UNCERTAIN','ACCEPTED','DELIVERED','READ')").all(caseId,phone,recipient);
+      const legacy=pending.find(q=>q.topic===topic||(q.topic.startsWith('revision:')&&this.open(q.body).text.includes('contacto terminado en '+phone.slice(-4)+'. Falta '+field+'. La pregunta ya se hizo;')));
+      if(legacy)return {id:legacy.id,state:legacy.state,created:false,valid:false};
+    }
     const legacy=this.db.prepare("SELECT id,state FROM questions WHERE case_id=? AND state='LEGACY_PENDING'").get(caseId);
     if(legacy)return {...legacy,created:false,valid:false};
     const outboxId='question:'+id;

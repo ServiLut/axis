@@ -51,7 +51,7 @@ Los secretos van en los archivos privados de entorno del servidor. No se incluye
 
 ## API autenticada
 
-Solo POST. Administración: `/status`, `/channel-health`, `/supervision`, `/knowledge`, `/import-pending-questions`, `/drain`. Ingesta: `/webhook`, `/event`, `/delivery`. Cada grupo usa su clave propia, mediante `Authorization: Bearer …`.
+Solo POST. Administración: `/status`, `/channel-health`, `/supervision`, `/review-events`, `/knowledge`, `/import-pending-questions`, `/drain`. Ingesta: `/webhook`, `/event`, `/delivery`. Cada grupo usa su clave propia, mediante `Authorization: Bearer …`.
 
 `/supervision` entrega metadatos de eventos con cursor por fila y límite de 100, estado de las salidas con ID exacto del proveedor y conteo de atención humana. No devuelve texto, archivos, claves ni el contenido del conocimiento. `remainingEvents` y `outboxCoverageComplete` indican la cobertura de la consulta; el listado limitado no se presenta como inventario íntegro. Guardar la evidencia privada por empresa y verificar las entregas exactas antes de repetir cualquier salida.
 
@@ -121,4 +121,12 @@ La ausencia de mensajes salientes no prueba quién había leído el chat. El reg
 
 El contexto incluye únicamente los turnos guardados del mismo contacto y empresa, en orden y con fuentes, estados de entrega y cobertura. Conserva conversaciones anteriores como referencia, sin convertirlas en políticas o instrucciones. No presenta los últimos turnos como lectura completa de WhatsApp ni incorpora contenido de medios no leído. Una solicitud nueva explícita tiene otro caso y no hereda tarifas, aclaraciones o datos operativos del anterior. Una referencia ambigua a lo ya comunicado conserva la pregunta actual para revisión; el bot no sustituye esa pregunta por otra de recepción ni repite la misma consulta interna pendiente. Se reservan claves y códigos de acceso en los extractos internos.
 
-Estas reglas no activan respuestas de Miguel Ángel: S.TECNICO mantiene su fase de análisis. Comprobar los indicadores `caseOwnershipGuard=first-reply-source-preserved-v1` y `conversationContext=stored-scoped-turns-with-coverage-v1` en el despliegue real. No retroatribuir servicios, probar con clientes ni convertir pruebas aisladas en atención verificada.
+Estas reglas no activan respuestas de Miguel Ángel: S.TECNICO mantiene su fase de análisis. Comprobar los indicadores `caseOwnershipGuard=first-reply-source-preserved-v2` y `conversationContext=stored-scoped-turns-with-coverage-v1` en el despliegue real. No retroatribuir servicios, probar con clientes ni convertir pruebas aisladas en atención verificada.
+
+## Revisión de respuestas reales y preguntas pendientes
+
+El supervisor autorizado puede consultar `/review-events` con `company` y una lista explícita de 1–50 `eventIds` de esa empresa. Requiere la clave administrativa; la clave de ingesta no permite leer contenido. Devuelve únicamente el evento guardado, su respuesta pública vinculada y el contexto guardado hasta esa fuente, con cobertura declarada. No lee medios originales, no acredita lectura completa de WhatsApp y no encola, reenvía, libera chats ni modifica registros. Conservar la evidencia cifrada y mostrar solo el mínimo necesario, sin claves ni datos de otros clientes.
+
+Las consultas por un mismo dato de recepción faltante se deduplican por caso y campo. También se reconocen las preguntas ya entregadas por la versión anterior: no se crea una tercera consulta al actualizar. Se usa lenguaje cotidiano, por ejemplo «tipo de inmueble», y se conserva el mensaje actual con los datos del caso. Una reiteración mientras esa aclaración está pendiente no genera otro acuse genérico al cliente. Una pregunta concreta de la persona no se reemplaza por la siguiente pregunta del formulario ni una alternativa interrogativa se guarda como dato confirmado.
+
+Una continuación posterior a la actualización conserva como primera fuente una respuesta previa de ese mismo caso cuyo ID exacto y entrega consten en la cola. Si su orden temporal no fue comprobado, permanece en revisión, sin inventar fecha de envío o condición de chat no leído y sin otorgar crédito de creador en el programa.

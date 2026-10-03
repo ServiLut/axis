@@ -21,7 +21,7 @@ export function createBotServer(config,store,transport,engine) {
         events:store.db.prepare('SELECT state,COUNT(*) n FROM events GROUP BY state').all(),outbox:store.db.prepare('SELECT state,COUNT(*) n FROM outbox GROUP BY state').all(),
         communicationGuard:'private-routing-and-media-work-v2',internalConversationGuard:'verified-internal-per-line-v2',internalConversationEnabled:Boolean(config.chiefOnly),customerResponsesEnabled:config.enabled,
         customerIntakeEnabled:config.enabled,businessWritesEnabled:false,capabilityDisclosure:'runtime-mode-and-implemented-intake-v1',
-        caseOwnershipGuard:'first-reply-source-preserved-v1',conversationContext:'stored-scoped-turns-with-coverage-v1',
+        caseOwnershipGuard:'first-reply-source-preserved-v2',conversationContext:'stored-scoped-turns-with-coverage-v1',internalQuestionGuard:'missing-field-and-case-dedup-v1',supervisorContentReview:'explicit-source-ids-readonly-v1',
         caseAuthorship:store.db.prepare('SELECT state,COUNT(*) n FROM case_authorship GROUP BY state').all(),
         unanswered:store.db.prepare("SELECT COUNT(*) n FROM questions WHERE state IN ('PENDING','LEGACY_PENDING','ANSWER_REVIEW')").get().n,
         knowledge:store.db.prepare('SELECT kind,COUNT(*) n FROM knowledge GROUP BY kind').all(),programConnected:Boolean(config.programContextUrl&&config.programToken),aiConfigured:Boolean(config.aiUrl&&config.aiToken),priorHistoryProtection:Boolean(config.historyCheckRequired)});
@@ -40,6 +40,19 @@ export function createBotServer(config,store,transport,engine) {
           humanChats:store.db.prepare('SELECT COUNT(*) n FROM conversations WHERE hold=1').get().n,
           questions:store.db.prepare('SELECT state,COUNT(*) n FROM questions GROUP BY state').all(),
           caseAuthorship:store.db.prepare('SELECT state,COUNT(*) n FROM case_authorship GROUP BY state').all()});
+      }
+      if(req.url==='/review-events'){
+        if(body.company!==config.company||!Array.isArray(body.eventIds)||body.eventIds.length<1||body.eventIds.length>50||new Set(body.eventIds).size!==body.eventIds.length||body.eventIds.some(id=>typeof id!=='string'||!/^[A-Za-z0-9_-]{8,100}$/.test(id)))return reply(400,{error:'SCOPED_SOURCE_IDS_REQUIRED'});
+        const results=[];
+        for(const id of body.eventIds){
+          const row=store.db.prepare('SELECT body,state FROM events WHERE id=?').get(id);
+          if(!row){results.push({id,found:false});continue;}
+          const event=store.open(row.body);
+          if(!config.lines.some(l=>l.phone===event.line))return reply(409,{error:'STORED_SOURCE_OUTSIDE_SCOPE'});
+          const response=store.db.prepare('SELECT id,body,state,mid,case_id FROM outbox WHERE id=? AND phone=? AND line=? AND internal=0').get(id+':reply',event.phone,event.line);
+          results.push({id,found:true,event,processingState:row.state,response:response?{id:response.id,text:store.open(response.body),delivery:response.state,mid:response.mid,caseId:response.case_id}:null,context:store.conversationContext(event.phone,event.at,20,id)});
+        }
+        return reply(200,{company:config.company,checkedAt:new Date().toISOString(),readOnly:true,storedContentOnly:true,fullWhatsAppHistoryRead:false,originalMediaRead:false,results});
       }
       if(req.url==='/event'){
         const event=validateEvent(body,config);if(!event)return reply(202,{accepted:false,reason:'UNSUPPORTED_OR_STALE_OR_OUTSIDE_SCOPE'});
