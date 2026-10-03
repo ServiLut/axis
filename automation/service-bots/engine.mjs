@@ -29,6 +29,10 @@ export function capabilitiesReply(config,phone) {
   if(config.enabled)return recipient+', soy '+config.bot+'. Puedo recibir solicitudes, preguntar los datos que faltan y guardar cada solicitud para revisión. La cotización, el horario y el técnico siguen pendientes de confirmación para cada caso. Todavía no creo servicios en el programa ni registro pagos.';
   return recipient+', por ahora soy '+config.bot+' y sigo en aprendizaje. Puedo revisar chats, guardar aclaraciones verificadas y consultar dudas contigo'+(phone===SANDRA?' o con Diego.':' o con Sandra.')+' Todavía no tengo consulta automática del programa y no atiendo clientes, confirmo horarios, creo servicios ni registro pagos.';
 }
+function questionExcerpt(text) {
+  if(/\b(?:bearer|api[ _-]?key|token|contrase[nñ]a|clave|c[oó]digo de acceso)\b/i.test(text)||/\b\d{16,}\b/.test(text))return '[Contiene un dato reservado: revisar el mensaje original del mismo caso.]';
+  return text.slice(0,350);
+}
 export function customerDecision(company,state,e,analysis={}) {
   const t=normalize(e.text);const next={...state,slots:{...state.slots,...extractSlots(e.text,company),...parseUnderstanding(analysis,e.text)},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)};
   if(e.kind==='call')return {state:{...next,lastCallEvent:e.id},observed:true};
@@ -43,6 +47,8 @@ export function customerDecision(company,state,e,analysis={}) {
   const fields=company==='fumigacion'?['service','site','location']:['service','detail','location'];
   const missing=fields.find(f=>!next.slots[f]);
   const questions={service:company==='fumigacion'?'¿Qué plaga deseas tratar o buscas un servicio preventivo?':'¿Qué equipo necesitas revisar?',site:'¿En qué tipo de inmueble necesitas el servicio?',detail:'¿Qué falla presenta el equipo?',location:'¿En qué municipio y barrio necesitas el servicio?'};
+  if(/[?¿]/.test(e.text)&&/\b(eso|lo anterior|lo que (?:me )?(?:dij|coment|indic|explic)|me habian|me hab[ií]as|mismo (?:precio|horario|servicio)|como qued|que qued)\w*/.test(t))
+    return {state:next,reviewTopic:'previous-communication',review:'El cliente pregunta por algo comunicado antes. Hay que relacionar su pregunta con el contexto guardado y el servicio correcto antes de contestar.',reply:'Gracias. Revisaremos lo que ya conversamos para responder tu pregunta con claridad.'};
   if(missing&&!next.asked.includes(missing)){next.asked.push(missing);return {state:next,reply:questions[missing]};}
   if(missing)return {state:next,review:'Falta '+missing+'. La pregunta ya se hizo; la nueva respuesta no permitió verificar ese dato.',reply:'Gracias. Revisaremos los detalles que nos compartiste para continuar.'};
   if(!next.asked.includes('preference')){next.asked.push('preference');return {state:next,reply:'¿Qué día y franja horaria prefieres?'};}
@@ -63,7 +69,7 @@ export class Engine {
         if(own){finish('BOT_ECHO');return;}
         // A provider echo can arrive before the send request returns. Resolve by exact returned ID on the next cycle.
         if(s.db.prepare("SELECT id FROM outbox WHERE phone=? AND state='SENDING'").get(e.phone))return;
-        s.hold(e.phone,e.id,true);finish('STAFF_TAKEOVER');return;
+        s.noteStaffIntervention(e);s.hold(e.phone,e.id,true);finish('STAFF_TAKEOVER');return;
       }
       const conv=s.conversation(e.phone);
       const internal=[SANDRA,DIEGO].includes(e.phone);
@@ -119,16 +125,20 @@ export class Engine {
       }
       s.saveConversation(e.phone,decision.state);
       const labels={service:'Servicio',location:'Ubicación',site:'Inmueble',detail:'Falla informada',preference:'Preferencia'};
-      const context=Object.entries(decision.state.slots).map(([k,v])=>(labels[k]||k)+': '+v).join('; ').slice(0,650);
-      if(decision.review)s.question({phone:e.phone,line:e.line,caseId:caseState.caseId,topic:'revision:'+e.id,conditions:{event:e.id},recipient:SANDRA,source:e.id,
-        text:c.name+': contacto terminado en '+e.phone.slice(-4)+'. '+decision.review+(context?' Contexto registrado: '+context+'.':'')+' ¿Cómo debemos continuar en este caso?'});
+      const context=Object.entries(decision.state.slots).map(([k,v])=>(labels[k]||k)+': '+questionExcerpt(String(v))).join('; ').slice(0,650);
+      if(decision.review){
+        const history=s.conversationContext(e.phone,e.at,20,e.id);
+        s.audit('CONVERSATION_CONTEXT_REVIEW',e.id,{caseId:caseState.caseId,turns:history.turns.length,storedCoverageComplete:history.completeStoredHistory,fullWhatsAppHistoryRead:false,originalMediaRead:false});
+        s.question({phone:e.phone,line:e.line,caseId:caseState.caseId,topic:decision.reviewTopic||'revision:'+e.id,conditions:decision.reviewTopic?{question:normalize(e.text),caseId:caseState.caseId}:{event:e.id,caseId:caseState.caseId},recipient:SANDRA,source:e.id,
+          text:c.name+': contacto terminado en '+e.phone.slice(-4)+'. '+decision.review+' Pregunta o mensaje actual: '+questionExcerpt(e.text)+(context?' Contexto registrado: '+context+'.':'')+' ¿Cómo debemos continuar en este caso?'});
+      }
       if(decision.question){
         const slots=decision.question.conditions;
-        const summary=Object.entries(slots).map(([k,v])=>(labels[k]||k)+': '+v).join('; ');
+        const summary=Object.entries(slots).map(([k,v])=>(labels[k]||k)+': '+questionExcerpt(String(v))).join('; ');
         s.question({phone:e.phone,line:e.line,caseId:caseState.caseId,topic:decision.question.topic,conditions:slots,recipient:DIEGO,source:e.id,
           text:c.name+': solicitud del contacto terminado en '+e.phone.slice(-4)+'. '+summary+'. Aún no hay técnico, horario ni precio confirmados. ¿Qué técnico, horario disponible y cotización corresponden a este caso?'});
       }
-      if(decision.reply){if(!publicTextSafe(decision.reply))throw new Error('EXTERNAL_TEXT_REJECTED');s.queue(e.id+':reply',e.phone,e.line,decision.reply,false,conv.revision);}
+      if(decision.reply){if(!publicTextSafe(decision.reply))throw new Error('EXTERNAL_TEXT_REJECTED');s.queue(e.id+':reply',e.phone,e.line,decision.reply,false,conv.revision,caseState.caseId);}
       finish(decision.observed?'OBSERVED_CALL':decision.review?'REVIEW':decision.question?'WAITING_COORDINATOR':'DONE');
     });
   }

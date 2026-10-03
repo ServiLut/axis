@@ -10,8 +10,8 @@ Plan y cobertura actual: `PLAN_APRENDIZAJE_VALIDACION_MARIA_MIGUEL_2026-10-02.md
 
 | Capacidad | Implementación | Prueba real en servidor |
 |---|---|---|
-| María Ángel: dos líneas de FUMIGACION | Runtime separado en Dokploy; respuestas deshabilitadas para análisis | HTTP autenticado, enabled=false y propietarios 4997/8721 OPEN comprobados a las 19:02Z |
-| Miguel Ángel: dos líneas de S.TECNICO | Runtime separado en Dokploy; respuestas deshabilitadas para análisis | HTTP autenticado, enabled=false y propietarios 1941/9392 OPEN comprobados a las 19:02Z |
+| María Ángel: dos líneas de FUMIGACION | Recepción de solicitudes nuevas habilitada con revisión humana | Dokploy DONE, HTTP autenticado enabled=true y propietarios 4997/8721 OPEN comprobados el 03/10 a las 14:25Z; siguiente solicitud legítima pendiente |
+| Miguel Ángel: dos líneas de S.TECNICO | Runtime separado en Dokploy; respuestas a clientes deshabilitadas para análisis | HTTP autenticado enabled=false y propietarios 1941/9392 OPEN comprobados el 03/10 a las 14:25Z |
 | Recepción, preguntas de servicio, lugar, síntomas y preferencia | Implementada; respuestas breves | Pendiente |
 | Solicitud administrativa persistida antes del acuse | SQLite con cifrado autenticado | Pendiente |
 | Atención humana y devolución expresa de Sandra | Implementadas | Un evento real de Fumigación preservó atención humana; devolución legítima pendiente |
@@ -65,7 +65,7 @@ Las salidas pendientes de más de diez minutos quedan en EXPIRED_REVIEW. Se evit
 
 Una pregunta de capacidades o presencia dirigida al nombre del bot recibe una respuesta breve y veraz incluso bajo atención humana, sin liberar globalmente el chat. Una cita exacta de una salida propia entregada también puede acreditar ese turno. La alternativa de teléfono suministrada por el proveedor autenticado permite resolver un LID solo de Sandra o Diego; un nombre visible, un LID sin alternativa o un grupo no confiere autoridad. Las órdenes que exceden aprendizaje quedan cifradas para revisión, sin ejecutar cambios ni campañas. La recuperación administrativa de un mensaje interno exige comparación con su fuente nativa (ID, teléfono, línea, fecha, texto, tipo y cita), mantiene deduplicación y no recupera mensajes de clientes.
 
-La aclaración directa posterior de la usuaria del 02/10/2026 mantiene a María y Miguel en análisis y pruebas: pueden hacer preguntas necesarias exclusivamente a Sandra o Diego. Luisa y Jeison conservan su recepción productiva independiente. Los mensajes a clientes deben comunicar solo el resultado pertinente o un dato necesario; no anunciar consultas al equipo ni la transcripción o procesamiento de audios y archivos.
+La aclaración de análisis del 02/10/2026 sigue aplicando a Miguel Ángel. Para María Ángel la autorización directa del 03/10 permite recepción de solicitudes nuevas con los límites implementados y comprobados. Las consultas operativas necesarias se dirigen exclusivamente a Sandra o Diego. Luisa y Jeison conservan su recepción productiva independiente. Los mensajes a clientes deben comunicar solo el resultado pertinente o un dato necesario; no anunciar consultas al equipo ni la transcripción o procesamiento de audios y archivos.
 
 Las dudas nuevas sobre tipos de servicio, refuerzos, duración, intervalo y condiciones también deben consultarse. Primero revisar las respuestas guardadas, su ámbito y vigencia. Si una explicación necesaria sigue sin respuesta, verificar que la consulta se entregó y que no fue contestada por otro medio; preparar un seguimiento breve que identifique el dato faltante y explique por qué es importante para gestionar ese servicio. Registrar el seguimiento con una clave estable, sin repetir el mensaje original, sin reintentar entregas inciertas ni insistir por cada control. Una explicación estable no acredita disponibilidad actual, asignación de técnico, precio o pago de otro caso.
 
@@ -95,10 +95,30 @@ La activación solo procesa eventos nuevos desde el corte. No recuperar mensajes
 
 La cuenta autenticada del creador, la auditoría y la protección del crédito de cada servicio futuro siguen pendientes de integración con el programa. Esta entrega no crea usuarios sensibles, registra órdenes, acredita pagos, reserva técnicos ni cambia registros históricos. El dashboard de conciliación solicitado continúa después de la revisión histórica.
 
-## Control vigente de comunicación interna — 02/10/2026 22:19Z
+## Antecedente de comunicación interna — 02/10/2026 22:19Z
 
 Publicación b98aab66b4383bbe2a2d54bc78338bbd46e55a85, 47 pruebas aprobadas y dos despliegues propios DONE. BOT_ENABLED=false y BOT_CHIEF_ONLY=true. Las cuatro fuentes propias están habilitadas para procesar únicamente mensajes internos de Sandra/Diego con identidad verificada; guardia verified-internal-per-line-v2. Las cuatro respuestas de capacidades a Sandra tienen entrega comprobada. Se conservan atención humana y deduplicación; no hay atención a clientes ni escrituras de negocio. IA propia y adaptador permanente del programa continúan sin conexión; el supervisor sí pudo consultar el programa por empresa en Chrome.
 
 La usuaria autorizó los informes iniciales y una revisión diaria a las 13:00 America/Bogota: ver REVISION_SERVICIOS_13H.md. Dos informes parciales fueron DELIVERED a Sandra el 02/10 a las 22:14Z. El aviso ST de lavavajillas pendiente de concretar está visible en GRUPO SERVICIOS TESA con MID 3EB06C8407F4DA6C468DF6; recepción de miembros sin comprobar. Esta es una excepción de aviso de gestión, no habilita conversaciones genéricas con grupos. No repetir.
 
 Leer BOTS_CLARIDAD_PRIVACIDAD_2026-10-02.md en visualizaciones y .tmp/bot-tone-20261002/checkpoint-private.json antes de continuar; preservar registros históricos y pendientes reales.
+
+## Control vigente — 03/10/2026 14:25Z
+
+La usuaria autorizó directamente la recepción y respuestas de María Ángel, con vigilancia estricta, y pidió verificar Psicólogos y Abogados. Solo FUMIGACION fue activada. Configuración visible guardada en Dokploy: BOT_ENABLED=true, BOT_CHIEF_ONLY=true, BOT_PRIOR_HISTORY_CHECK=true y corte de eventos nuevos 2026-10-03T14:23:58.495Z. Despliegue propio DONE con commit 9058fe1713fd55ab782fba2969944e4b83071e35; 48 pruebas aisladas aprobadas. API autenticada posterior verificó customerResponsesEnabled=true, customerIntakeEnabled=true, businessWritesEnabled=false y capabilityDisclosure=runtime-mode-and-implemented-intake-v1. Ambas líneas propias OPEN; las cuatro fuentes autenticadas fueron verificadas a14:29Z. Cuatro chats de Fumigación conservan atención humana. No hubo nuevas solicitudes ni salidas de clientes en la comprobación, por lo que la primera atención legítima sigue pendiente.
+
+Miguel Ángel continúa enabled=false con conversación interna habilitada. No hubo cambios en sus variables o despliegue. Ningún bot de estas dos empresas tiene IA propia o adaptador permanente de programa conectado. María recibe y guarda solicitudes para revisión; no crea servicios en el programa, confirma técnicos u horarios, registra ingresos ni acredita el recorrido completo. La prueba y la habilitación no equivalen a autonomía integral. No recuperar mensajes históricos ni liberar chats por el paso del tiempo.
+
+Checkpoint de esta autorización y despliegue: .tmp/service-bots-20261002/user-production-20261003/checkpoint-private.json. El checkpoint principal conserva fuentes, hashes, preguntas y cursores históricos, y distingue los permisos actuales de las dos empresas. La supervisión recurrente debe respetar esta nueva autoridad de FUMIGACION; no aplicar a María la antigua prohibición conjunta de respuestas a clientes.
+
+## Autoría y continuidad — instrucciones directas del 03/10/2026
+
+La usuaria precisó para ambas empresas: si el bot atiende primero un chat nuevo sin atención previa de un compañero, el servicio le corresponde hasta finalizar; abrir o leer el chat después no transfiere la autoría. Antes de continuar debe reconocer la pregunta actual y revisar lo ya pedido y respondido, distinguiendo el mismo servicio de uno nuevo. No inferir una conversación nueva por el paso del tiempo.
+
+El servidor registra cifrados el caso, el primer bot, línea, salida, ID nativo y fecha, y verifica la entrega exacta antes de acreditar la primera respuesta. Una lectura o una sincronización sin mensaje escrito no activan toma humana. Una intervención escrita conserva esa fuente original y detiene respuestas simultáneas; la devolución expresa reanuda el mismo caso sin borrar su autoría. Si aparece una fuente anterior del personal, o el orden temporal es ambiguo, se conserva la evidencia del bot y se marca revisión, sin apropiarse de un servicio ajeno. Entrega incierta no crea autoría confirmada ni reintento.
+
+La ausencia de mensajes salientes no prueba quién había leído el chat. El registro mantiene `priorReadByStaff=UNVERIFIED` cuando no existe evidencia atribuible de esa lectura; no acredita la condición de chat no leído, un creador en el programa, comisión o ingreso. La asignación y protección definitiva del creador del servicio siguen pendientes del adaptador propio, vínculo con el servicio real y verificación de la condición previa. La autoría de una solicitud no confirma creación o finalización del servicio.
+
+El contexto incluye únicamente los turnos guardados del mismo contacto y empresa, en orden y con fuentes, estados de entrega y cobertura. Conserva conversaciones anteriores como referencia, sin convertirlas en políticas o instrucciones. No presenta los últimos turnos como lectura completa de WhatsApp ni incorpora contenido de medios no leído. Una solicitud nueva explícita tiene otro caso y no hereda tarifas, aclaraciones o datos operativos del anterior. Una referencia ambigua a lo ya comunicado conserva la pregunta actual para revisión; el bot no sustituye esa pregunta por otra de recepción ni repite la misma consulta interna pendiente. Se reservan claves y códigos de acceso en los extractos internos.
+
+Estas reglas no activan respuestas de Miguel Ángel: S.TECNICO mantiene su fase de análisis. Comprobar los indicadores `caseOwnershipGuard=first-reply-source-preserved-v1` y `conversationContext=stored-scoped-turns-with-coverage-v1` en el despliegue real. No retroatribuir servicios, probar con clientes ni convertir pruebas aisladas en atención verificada.

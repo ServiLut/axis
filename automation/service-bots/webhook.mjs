@@ -14,6 +14,8 @@ export function decodeWebhook(body,config) {
     if(m.ephemeralMessage?.message)content=m.ephemeralMessage.message;
     const kind=content.audioMessage?'audio':content.imageMessage?'image':content.videoMessage?'video':content.documentMessage?'document':'text';
     const text=content.conversation??content.extendedTextMessage?.text??content.imageMessage?.caption??content.videoMessage?.caption??'';
+    // A receipt, synchronization stub or protocol update is not a staff message.
+    if(kind==='text'&&(typeof text!=='string'||!text.trim()))continue;
     const context=content.extendedTextMessage?.contextInfo??content.audioMessage?.contextInfo??content.imageMessage?.contextInfo??content.messageContextInfo??d.contextInfo;
     const timestamp=typeof d.messageTimestamp==='object'?Number(d.messageTimestamp.low):Number(d.messageTimestamp);
     if(!Number.isFinite(timestamp)||typeof text!=='string')continue;

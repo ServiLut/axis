@@ -17,8 +17,11 @@ export class Store {
       CREATE UNIQUE INDEX IF NOT EXISTS question_once ON questions(case_id,topic,conditions_hash,recipient);
       CREATE TABLE IF NOT EXISTS knowledge(id TEXT PRIMARY KEY,kind TEXT,body TEXT,hash TEXT,imported INTEGER);
       CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY,at INTEGER,action TEXT,source TEXT,detail TEXT);
+      CREATE TABLE IF NOT EXISTS case_authorship(case_id TEXT PRIMARY KEY,phone TEXT,first_outbox TEXT UNIQUE,state TEXT,body TEXT);
       CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY,value TEXT);`);
     if(!this.db.prepare('PRAGMA table_info(events)').all().some(c=>c.name==='revision'))this.db.exec('ALTER TABLE events ADD COLUMN revision INTEGER DEFAULT 0');
+    if(!this.db.prepare('PRAGMA table_info(outbox)').all().some(c=>c.name==='case_id'))this.db.exec('ALTER TABLE outbox ADD COLUMN case_id TEXT');
+    if(!this.db.prepare('PRAGMA table_info(events)').all().some(c=>c.name==='received_at'))this.db.exec('ALTER TABLE events ADD COLUMN received_at INTEGER');
     const scope=this.db.prepare('SELECT company FROM scope').get();
     if(scope&&scope.company!==company)throw new Error('DATABASE_SCOPE_MISMATCH');
     this.db.prepare('INSERT OR IGNORE INTO scope VALUES(?)').run(company);
@@ -46,7 +49,7 @@ export class Store {
       this.db.prepare('INSERT OR IGNORE INTO conversations(phone,line,body) VALUES(?,?,?)').run(e.phone,e.line,this.seal({slots:{},asked:[],lastText:''}));
       if(!e.fromMe)this.db.prepare('UPDATE conversations SET revision=revision+CASE WHEN ?>=at THEN 1 ELSE 0 END,at=MAX(at,?),line=CASE WHEN ?>=at THEN ? ELSE line END WHERE phone=?').run(e.at,e.at,e.at,e.line,e.phone);
       const revision=this.conversation(e.phone).revision;
-      this.db.prepare('INSERT INTO events(id,phone,at,line,from_me,body,revision) VALUES(?,?,?,?,?,?,?)').run(e.id,e.phone,e.at,e.line,Number(e.fromMe),this.seal(e),revision);
+      this.db.prepare('INSERT INTO events(id,phone,at,line,from_me,body,revision,received_at) VALUES(?,?,?,?,?,?,?,?)').run(e.id,e.phone,e.at,e.line,Number(e.fromMe),this.seal(e),revision,Date.now());
       this.db.prepare('INSERT INTO event_sources VALUES(?,?)').run(e.id,e.line);
       return {duplicate:false};
     });
@@ -76,10 +79,68 @@ export class Store {
     if(!value)this.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('chief-release:'+phone,this.seal({source,at:Date.now()}));
     this.audit(value?'HUMAN_TAKEOVER':'EXPLICIT_RELEASE',source,{phone});
   }
-  queue(id,phone,line,text,internal,revision) {
+  queue(id,phone,line,text,internal,revision,caseId=null) {
     const r=this.db.prepare('SELECT body FROM outbox WHERE id=?').get(id);
     if(r){if(this.open(r.body)!==text)throw new Error('OUTBOX_ID_CONFLICT');return false;}
-    this.db.prepare('INSERT INTO outbox(id,phone,line,body,internal,revision,created,updated) VALUES(?,?,?,?,?,?,?,?)').run(id,phone,line,this.seal(text),Number(internal),revision,Date.now(),Date.now());return true;
+    this.db.prepare('INSERT INTO outbox(id,phone,line,body,internal,revision,created,updated,case_id) VALUES(?,?,?,?,?,?,?,?,?)').run(id,phone,line,this.seal(text),Number(internal),revision,Date.now(),Date.now(),internal?null:caseId);return true;
+  }
+  caseAuthorship(caseId) {
+    const row=this.db.prepare('SELECT state,body FROM case_authorship WHERE case_id=?').get(caseId);
+    return row?{state:row.state,...this.open(row.body)}:null;
+  }
+  recordFirstBotReply(row,mid,bot,sentAt) {
+    if(row.internal||!row.case_id||this.caseAuthorship(row.case_id))return;
+    const history=this.priorHistory(row.phone);
+    const priorStaff=this.db.prepare("SELECT e.id FROM events e WHERE e.phone=? AND e.from_me=1 AND e.at<=? AND NOT EXISTS(SELECT 1 FROM outbox o WHERE o.mid=e.id AND o.phone=e.phone AND o.line=e.line) LIMIT 1").get(row.phone,sentAt);
+    // Absence of an outgoing message does not identify who read a chat.
+    // Preserve actual first-reply evidence; never manufacture program creator credit.
+    const firstReplyEligible=Boolean(history&&history.priorOutgoing===false&&!priorStaff);
+    const record={company:this.company,caseId:row.case_id,phone:row.phone,bot,firstOutboxId:row.id,firstProviderMessageId:mid,line:row.line,sentAt,firstReplyEligible,priorOutgoing:history?.priorOutgoing??null,priorStaffSource:priorStaff?.id??null,priorReadByStaff:'UNVERIFIED',creatorCreditWritten:false,programServiceId:null,serviceCompleted:false};
+    this.db.prepare('INSERT OR IGNORE INTO case_authorship VALUES(?,?,?,?,?)').run(row.case_id,row.phone,row.id,'DELIVERY_PENDING',this.seal(record));
+    this.audit('FIRST_BOT_REPLY_RECORDED',row.id,{caseId:row.case_id,firstReplyEligible,deliveryVerified:false,creatorCreditWritten:false});
+  }
+  noteStaffIntervention(e) {
+    for(const row of this.db.prepare("SELECT case_id FROM case_authorship WHERE phone=? AND state IN ('DELIVERY_PENDING','BOT_FIRST_REPLY_VERIFIED')").all(e.phone)){
+      const attribution=this.caseAuthorship(row.case_id);
+      if(e.at>attribution.sentAt)continue;
+      const {state,...record}=attribution;
+      record.firstReplyEligible=false;record.priorStaffSource=e.id;
+      record.attentionOrderingReview=e.at+1000<=record.sentAt?'EARLIER_STAFF_SOURCE_RECEIVED_LATE':'SAME_SECOND_ORDER_UNVERIFIED';
+      this.db.prepare('UPDATE case_authorship SET state=?,body=? WHERE case_id=?').run('FIRST_REPLY_REVIEW',this.seal(record),row.case_id);
+      this.audit('FIRST_REPLY_ORDER_REVIEW',e.id,{caseId:row.case_id,firstBotOutboxPreserved:record.firstOutboxId,reason:record.attentionOrderingReview,creatorCreditWritten:false});
+    }
+  }
+  delivery(mid,line,state) {
+    return this.tx(()=>{
+      const row=this.db.prepare('SELECT * FROM outbox WHERE mid=? AND line=?').get(mid,line);
+      if(!row||!['DELIVERED','READ'].includes(state)||!['SENDING','ACCEPTED','DELIVERED','READ'].includes(row.state))return 0;
+      if(row.state==='READ'||row.state===state)return 0;
+      this.db.prepare('UPDATE outbox SET state=?,updated=? WHERE id=?').run(state,Date.now(),row.id);
+      const attribution=row.case_id&&this.caseAuthorship(row.case_id);
+      if(attribution&&attribution.firstOutboxId===row.id&&attribution.state==='DELIVERY_PENDING'){
+        const {state:oldState,...record}=attribution;
+        record.deliveryVerifiedAt=Date.now();record.deliveryState=state;
+        this.db.prepare('UPDATE case_authorship SET state=?,body=? WHERE case_id=?').run(record.firstReplyEligible?'BOT_FIRST_REPLY_VERIFIED':'FIRST_REPLY_REVIEW',this.seal(record),row.case_id);
+        this.audit('FIRST_BOT_REPLY_DELIVERY_VERIFIED',row.id,{caseId:row.case_id,firstReplyEligible:record.firstReplyEligible,priorReadByStaff:'UNVERIFIED',creatorCreditWritten:false});
+      }
+      return 1;
+    });
+  }
+  conversationContext(phone,at,limit=20,sourceId=null) {
+    if(!Number.isSafeInteger(limit)||limit<1||limit>40)throw new Error('CONTEXT_LIMIT_REQUIRED');
+    const conv=this.conversation(phone);
+    const source=sourceId&&this.db.prepare('SELECT rowid,received_at FROM events WHERE id=? AND phone=?').get(sourceId,phone);
+    if(sourceId&&!source)throw new Error('CONTEXT_SOURCE_SCOPE_REQUIRED');
+    const throughRow=source?.rowid??Number.MAX_SAFE_INTEGER,throughTime=source?.received_at??at;
+    const events=this.db.prepare('SELECT id,line,at,from_me,body,state FROM events WHERE phone=? AND at<=? AND rowid<=? ORDER BY at DESC,rowid DESC LIMIT ?').all(phone,at,throughRow,limit);
+    const replies=this.db.prepare("SELECT id,line,body,mid,state,created,case_id FROM outbox WHERE phone=? AND internal=0 AND created<=? AND state IN ('ACCEPTED','DELIVERED','READ') ORDER BY created DESC,rowid DESC LIMIT ?").all(phone,throughTime,limit);
+    const own=new Set(replies.filter(r=>r.mid).map(r=>r.line+':'+r.mid));
+    const turns=events.filter(e=>!(e.from_me&&own.has(e.line+':'+e.id))).map(e=>({sourceId:e.id,line:e.line,at:e.at,role:e.from_me?'outbound-author-unverified':'customer',kind:this.open(e.body).kind,text:this.open(e.body).text,processingState:e.state}));
+    turns.push(...replies.map(r=>({sourceId:r.id,providerMessageId:r.mid,line:r.line,at:r.created,role:'bot',text:this.open(r.body),delivery:r.state,caseId:r.case_id??null})));
+    turns.sort((a,b)=>a.at-b.at||a.sourceId.localeCompare(b.sourceId));
+    const totalEvents=this.db.prepare('SELECT COUNT(*) n FROM events WHERE phone=? AND at<=? AND rowid<=?').get(phone,at,throughRow).n;
+    const totalReplies=this.db.prepare("SELECT COUNT(*) n FROM outbox WHERE phone=? AND internal=0 AND created<=? AND state IN ('ACCEPTED','DELIVERED','READ')").get(phone,throughTime).n;
+    return {company:this.company,phone,caseId:conv?.state.caseId??null,scope:'same-company-contact; previous-case-boundaries-may-be-unverified',turns,completeStoredHistory:totalEvents<=limit&&totalReplies<=limit,fullWhatsAppHistoryRead:false,mediaOriginalsIncluded:false,referencesAreUntrusted:true};
   }
   question({phone,line,caseId,topic,conditions,recipient,text,source}) {
     const hash=createHash('sha256').update(JSON.stringify(conditions)).digest('hex');

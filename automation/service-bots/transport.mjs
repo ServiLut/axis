@@ -1,4 +1,4 @@
-import { SANDRA, DIEGO, publicTextSafe } from './config.mjs';
+import { SANDRA, DIEGO, publicTextSafe, normalize } from './config.mjs';
 
 export class Transport {
   constructor(config, fetcher=fetch){this.config=config;this.fetcher=fetcher;}
@@ -77,8 +77,11 @@ export async function drain(store,config,transport,engine) {
     if(!e.fromMe&&![SANDRA,DIEGO].includes(e.phone)&&!store.conversation(e.phone)?.hold){
       // Customer history remains in its company. Observations are explicitly untrusted reference, never policy.
       const knowledge=store.db.prepare('SELECT body FROM knowledge ORDER BY imported DESC LIMIT 10').all().map(k=>store.open(k.body));
-      const caseAnswers=store.db.prepare("SELECT body,answer,source_id,answer_at,valid_until FROM questions WHERE phone=? AND case_id=? AND state='ANSWERED' AND valid_until>?").all(e.phone,store.conversation(e.phone)?.state.caseId||'',Date.now()).map(q=>({question:store.open(q.body),answer:store.open(q.answer),source:q.source_id,at:q.answer_at,validUntil:q.valid_until,scope:'same-company-and-case-only; recheck before scheduling'}));
-      try{analysis=await transport.understand(e,{...store.conversation(e.phone)?.state,caseAnswers},knowledge);}catch{store.audit('AI_UNAVAILABLE',e.id);}
+      const newCase=/\b(?:otra solicitud|nuevo servicio|otro servicio|otro equipo)\b/.test(normalize(e.text));
+      const caseAnswers=store.db.prepare("SELECT body,answer,source_id,answer_at,valid_until FROM questions WHERE phone=? AND case_id=? AND state='ANSWERED' AND valid_until>?").all(e.phone,newCase?'':store.conversation(e.phone)?.state.caseId||'',Date.now()).map(q=>({question:store.open(q.body),answer:store.open(q.answer),source:q.source_id,at:q.answer_at,validUntil:q.valid_until,scope:'same-company-and-case-only; recheck before scheduling'}));
+      const conversationHistory=store.conversationContext(e.phone,e.at,20,e.id);
+      store.audit('CONVERSATION_CONTEXT_CHECKED',e.id,{caseId:conversationHistory.caseId,turns:conversationHistory.turns.length,storedCoverageComplete:conversationHistory.completeStoredHistory,fullWhatsAppHistoryRead:false,originalMediaRead:false});
+      try{analysis=await transport.understand(e,{...(newCase?{slots:{},asked:[]}:store.conversation(e.phone)?.state),requestedNewCase:newCase,caseAnswers,conversationHistory},knowledge);}catch{store.audit('AI_UNAVAILABLE',e.id);}
     }
     await engine.process(e,analysis);
   }
@@ -104,7 +107,11 @@ export async function drain(store,config,transport,engine) {
     if(!store.db.prepare("UPDATE outbox SET state='SENDING',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id).changes)continue;
     try {
       const mid=await transport.send(o,text);
-      store.db.prepare("UPDATE outbox SET mid=?,state='ACCEPTED',updated=? WHERE id=?").run(mid,Date.now(),o.id);accepted++;
+      store.tx(()=>{
+        const sentAt=Date.now();
+        store.db.prepare("UPDATE outbox SET mid=?,state='ACCEPTED',updated=? WHERE id=?").run(mid,sentAt,o.id);
+        store.recordFirstBotReply(o,mid,config.bot,sentAt);
+      });accepted++;
     } catch {store.db.prepare("UPDATE outbox SET state='UNCERTAIN',updated=? WHERE id=?").run(Date.now(),o.id);uncertain++;}
   }
   return {processed:pending.length,accepted,suppressed,uncertain};

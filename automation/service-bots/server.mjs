@@ -21,6 +21,8 @@ export function createBotServer(config,store,transport,engine) {
         events:store.db.prepare('SELECT state,COUNT(*) n FROM events GROUP BY state').all(),outbox:store.db.prepare('SELECT state,COUNT(*) n FROM outbox GROUP BY state').all(),
         communicationGuard:'private-routing-and-media-work-v2',internalConversationGuard:'verified-internal-per-line-v2',internalConversationEnabled:Boolean(config.chiefOnly),customerResponsesEnabled:config.enabled,
         customerIntakeEnabled:config.enabled,businessWritesEnabled:false,capabilityDisclosure:'runtime-mode-and-implemented-intake-v1',
+        caseOwnershipGuard:'first-reply-source-preserved-v1',conversationContext:'stored-scoped-turns-with-coverage-v1',
+        caseAuthorship:store.db.prepare('SELECT state,COUNT(*) n FROM case_authorship GROUP BY state').all(),
         unanswered:store.db.prepare("SELECT COUNT(*) n FROM questions WHERE state IN ('PENDING','LEGACY_PENDING','ANSWER_REVIEW')").get().n,
         knowledge:store.db.prepare('SELECT kind,COUNT(*) n FROM knowledge GROUP BY kind').all(),programConnected:Boolean(config.programContextUrl&&config.programToken),aiConfigured:Boolean(config.aiUrl&&config.aiToken),priorHistoryProtection:Boolean(config.historyCheckRequired)});
       if(req.url==='/channel-health'){
@@ -36,7 +38,8 @@ export function createBotServer(config,store,transport,engine) {
           events,nextEventRow:events.at(-1)?.cursor??after,remainingEvents:total-events.length,
           outbox,outboxTotal:store.db.prepare('SELECT COUNT(*) n FROM outbox').get().n,outboxCoverageComplete:store.db.prepare('SELECT COUNT(*) n FROM outbox').get().n===outbox.length,
           humanChats:store.db.prepare('SELECT COUNT(*) n FROM conversations WHERE hold=1').get().n,
-          questions:store.db.prepare('SELECT state,COUNT(*) n FROM questions GROUP BY state').all()});
+          questions:store.db.prepare('SELECT state,COUNT(*) n FROM questions GROUP BY state').all(),
+          caseAuthorship:store.db.prepare('SELECT state,COUNT(*) n FROM case_authorship GROUP BY state').all()});
       }
       if(req.url==='/event'){
         const event=validateEvent(body,config);if(!event)return reply(202,{accepted:false,reason:'UNSUPPORTED_OR_STALE_OR_OUTSIDE_SCOPE'});
@@ -65,14 +68,14 @@ export function createBotServer(config,store,transport,engine) {
         const own=config.lines.find(l=>l.instance===body.instance);if(!own)return reply(400,{error:'INSTANCE_OUTSIDE_SCOPE'});
         await transport.verifyLine(own.phone);
         for(const value of parsed.events){const e=validateEvent(value,config);if(e){const r=store.enqueue(e);accepted++;if(r.duplicate)duplicates++;}}
-        for(const d of parsed.deliveries)deliveryUpdates+=store.db.prepare("UPDATE outbox SET state=?,updated=? WHERE mid=? AND line=? AND state IN ('SENDING','ACCEPTED','DELIVERED')").run(d.state,Date.now(),d.mid,own.phone).changes;
+        for(const d of parsed.deliveries)deliveryUpdates+=store.delivery(d.mid,own.phone,d.state);
         return reply(202,{accepted,duplicates,deliveryUpdates});
       }
       if(req.url==='/delivery'){
         const line=config.lines.find(l=>l.instance===body.instance&&l.phone===body.owner);
         if(!line||!['DELIVERED','READ'].includes(body.state)||typeof body.mid!=='string')return reply(400,{error:'DELIVERY_OUTSIDE_SCOPE'});
         await transport.verifyLine(line.phone);
-        const n=store.db.prepare("UPDATE outbox SET state=?,updated=? WHERE mid=? AND line=? AND state IN ('SENDING','ACCEPTED','DELIVERED')").run(body.state,Date.now(),body.mid,line.phone).changes;
+        const n=store.delivery(body.mid,line.phone,body.state);
         return reply(200,{updated:n});
       }
       if(req.url==='/knowledge')return reply(200,store.importKnowledge(body));
