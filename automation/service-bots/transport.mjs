@@ -1,4 +1,5 @@
 import { SANDRA, DIEGO, publicTextSafe, normalize } from './config.mjs';
+import {parseChiefDocument} from './chief-document.mjs';
 
 export class Transport {
   constructor(config, fetcher=fetch){this.config=config;this.fetcher=fetcher;}
@@ -22,6 +23,12 @@ export class Transport {
     if(!row.internal&&!publicTextSafe(text))throw new Error('EXTERNAL_TEXT_REJECTED');
     if(!/^57\d{10}$/.test(row.phone))throw new Error('GROUP_OR_INVALID_RECIPIENT');
     const line=this.config.lines.find(l=>l.phone===row.line);if(!line)throw new Error('LINE_OUTSIDE_COMPANY');
+    if(typeof text==='object'){
+      if(!row.internal||row.phone!==SANDRA||text?.kind!=='chief_document')throw Error('CHIEF_DOCUMENT_SCOPE_REQUIRED');
+      const doc=parseChiefDocument({...text,key:'stored-document',sourceHash:text.sha256});
+      const sent=await this.request(line,'/message/sendMedia/'+encodeURIComponent(line.instance),{number:SANDRA,mediatype:'document',mimetype:doc.mimetype,fileName:doc.fileName,media:doc.mediaBase64,caption:doc.caption});
+      if(!sent.key?.id)throw Error('SEND_WITHOUT_RECEIPT');return sent.key.id;
+    }
     const result=await this.request(line,'/message/sendText/'+encodeURIComponent(line.instance),{number:row.phone,text,linkPreview:false});
     if(!result.key?.id)throw new Error('SEND_WITHOUT_RECEIPT');return result.key.id;
   }

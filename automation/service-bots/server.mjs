@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { decodeWebhook } from './webhook.mjs';
 import {validateApprovedAnswers} from './faq.mjs';
 import {customerActivity} from './chief-status.mjs';
+import {queueChiefDocument} from './chief-document.mjs';
 
 async function verifyApprovedAnswerSource(document,config,transport){
   validateApprovedAnswers(document,config.company);
@@ -35,11 +36,12 @@ export function createBotServer(config,store,transport,engine) {
     if(!authorized(req.headers.authorization,ingestion?config.webhookHash:config.authHash))return reply(401,{error:'UNAUTHORIZED'});
     if(req.method!=='POST')return reply(405,{error:'POST_REQUIRED'});
     try {
-      let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>20000)return reply(413,{error:'PAYLOAD_TOO_LARGE'});}
+      const bodyLimit=req.url==='/notify-chief-document'?720000:20000;
+      let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>bodyLimit)return reply(413,{error:'PAYLOAD_TOO_LARGE'});}
       const body=JSON.parse(raw);
       if(req.url==='/status')return reply(200,{company:config.name,bot:config.bot,enabled:config.enabled,mode:'reception-with-human-review',fullyAutonomous:false,
         events:store.db.prepare('SELECT state,COUNT(*) n FROM events GROUP BY state').all(),outbox:store.db.prepare('SELECT state,COUNT(*) n FROM outbox GROUP BY state').all(),
-        communicationGuard:'private-routing-and-media-work-v2',internalConversationGuard:'verified-internal-per-line-v2',chiefStatusGuard:'actual-mode-and-delivered-own-chat-counts-v1',internalConversationEnabled:Boolean(config.chiefOnly),customerResponsesEnabled:config.enabled,
+        communicationGuard:'private-routing-and-media-work-v2',confirmationRecipient:'573016803926',chiefDocumentGuard:'fixed-chief-encrypted-hash-and-idempotency-v1',internalConversationGuard:'verified-internal-per-line-v2',chiefStatusGuard:'actual-mode-and-delivered-own-chat-counts-v1',internalConversationEnabled:Boolean(config.chiefOnly),customerResponsesEnabled:config.enabled,
         customerIntakeEnabled:config.enabled,businessWritesEnabled:false,capabilityDisclosure:'runtime-mode-and-implemented-intake-v1',customerCourtesyGuard:'gratitude-only-without-intake-or-ownership-v1',
         commonAnswerGuard:config.company==='fumigacion'?'approved-source-context-and-complete-topics-v1':null,approvedCustomerAnswerDocuments:store.approvedCustomerAnswers().length,customerActivity:customerActivity(store,config),
         caseOwnershipGuard:'first-reply-source-preserved-v2',conversationContext:'stored-scoped-turns-with-coverage-v2',internalQuestionGuard:'missing-field-and-case-dedup-v1',supervisorContentReview:'explicit-source-ids-readonly-v1',liveAttentionGuard:'own-native-outgoing-before-send-v1',intakeGuard:config.company==='fumigacion'?'full-initial-fields-and-quote-before-schedule-v1':'technical-intake-with-human-review-v1',
@@ -74,6 +76,14 @@ export function createBotServer(config,store,transport,engine) {
           results.push({id,found:true,event,processingState:row.state,response:response?{id:response.id,text:store.open(response.body),delivery:response.state,mid:response.mid,caseId:response.case_id}:null,context:store.conversationContext(event.phone,event.at,20,id)});
         }
         return reply(200,{company:config.company,checkedAt:new Date().toISOString(),readOnly:true,storedContentOnly:true,fullWhatsAppHistoryRead:false,originalMediaRead:false,results});
+      }
+      if(req.url==='/review-questions'){
+        const after=body.afterRow??0,limit=body.limit??50;
+        if(body.company!==config.company||!Number.isSafeInteger(after)||after<0||!Number.isSafeInteger(limit)||limit<1||limit>50)return reply(400,{error:'SCOPED_QUESTION_CURSOR_REQUIRED'});
+        const rows=store.db.prepare("SELECT rowid cursor,* FROM questions WHERE rowid>? AND state IN ('PENDING','LEGACY_PENDING','ANSWER_REVIEW') ORDER BY rowid LIMIT ?").all(after,limit);
+        return reply(200,{company:config.company,readOnly:true,checkedAt:new Date().toISOString(),nextRow:rows.at(-1)?.cursor??after,
+          remaining:store.db.prepare("SELECT COUNT(*) n FROM questions WHERE rowid>? AND state IN ('PENDING','LEGACY_PENDING','ANSWER_REVIEW')").get(rows.at(-1)?.cursor??after).n,
+          questions:rows.map(q=>({cursor:q.cursor,id:q.id,phone:q.phone,caseId:q.case_id,topic:q.topic,recipient:q.recipient,state:q.state,question:store.open(q.body),answer:q.answer?store.open(q.answer):null,answerSource:q.source_id,outbox:q.outbox_id?store.db.prepare('SELECT line,state,mid FROM outbox WHERE id=?').get(q.outbox_id):null}))});
       }
       if(req.url==='/event'){
         const event=validateEvent(body,config);if(!event)return reply(202,{accepted:false,reason:'UNSUPPORTED_OR_STALE_OR_OUTSIDE_SCOPE'});
@@ -124,6 +134,13 @@ export function createBotServer(config,store,transport,engine) {
         const id='chief-report:'+body.key+':573016803926';
         const created=store.tx(()=>{const added=store.queue(id,'573016803926',line.phone,body.text,true,0);if(added)store.audit('USER_AUTHORIZED_CHIEF_REPORT',id,{sourceHash:body.sourceHash,line:line.phone});return added;});
         return reply(200,{queued:created,id,delivery:store.db.prepare('SELECT state,mid FROM outbox WHERE id=?').get(id)});
+      }
+      if(req.url==='/notify-chief-document'){
+        if(!config.chiefOnly)return reply(403,{error:'INTERNAL_MODE_REQUIRED'});
+        const line=config.lines.find(l=>l.phone===body.line);if(!line)return reply(400,{error:'OWN_LINE_REQUIRED'});
+        if(body.recipient&&body.recipient!=='573016803926')return reply(400,{error:'CHIEF_RECIPIENT_REQUIRED'});
+        await transport.verifyLine(line.phone);
+        try{return reply(200,queueChiefDocument(store,body,line.phone));}catch(e){return reply(e.message==='CHIEF_DOCUMENT_ID_CONFLICT'?409:400,{error:e.message});}
       }
       if(req.url==='/import-pending-questions')return reply(200,store.importPendingQuestions(body));
       if(req.url==='/drain')return reply(200,await run());

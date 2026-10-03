@@ -165,6 +165,8 @@ export class Store {
     const id=createHash('sha256').update(JSON.stringify([this.company,caseId,topic,hash,recipient])).digest('hex');
     const old=this.db.prepare('SELECT * FROM questions WHERE id=?').get(id);
     if(old)return {id,state:old.state,answer:old.answer&&this.open(old.answer),sourceId:old.source_id,valid:old.state==='ANSWERED'&&(!old.valid_until||old.valid_until>Date.now()),created:false};
+    const alreadyPending=this.db.prepare("SELECT id,state FROM questions WHERE phone=? AND case_id=? AND topic=? AND conditions_hash=? AND state IN ('PENDING','ANSWER_REVIEW')").get(phone,caseId,topic,hash);
+    if(alreadyPending)return {...alreadyPending,created:false,valid:false};
     if(topic.startsWith('missing-intake:')){
       const field=topic.slice('missing-intake:'.length);
       if(!['service','site','size','detail','location','preference'].includes(field))throw new Error('INTAKE_FIELD_REQUIRED');
