@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Menu, UserCircle } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
+import { HalloweenTheme } from "@/components/dashboard/halloween-theme";
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -13,7 +14,7 @@ export function Header({ onMenuClick, showMenuButtonOnDesktop = false }: HeaderP
   const { userFullName, tenantName } = useUserRole();
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center border-b border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 px-4 shadow-sm md:px-6">
+    <header className="axis-header sticky top-0 z-30 flex h-16 items-center border-b border-border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 px-4 shadow-sm md:px-6">
       <Button
         variant="ghost"
         size="icon"
@@ -27,6 +28,7 @@ export function Header({ onMenuClick, showMenuButtonOnDesktop = false }: HeaderP
         <span className="hidden md:inline-block">Panel de Control</span>
       </div>
       <div className="ml-auto flex items-center space-x-4">
+        <HalloweenTheme />
         <div className="flex items-center gap-2 text-sm">
           <span className="hidden text-muted-foreground md:inline-block">
             {userFullName} {tenantName && <span className="ml-1 opacity-70">({tenantName})</span>}

@@ -87,7 +87,7 @@ export function DashboardLayoutClient({
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-stone-50 dark:bg-stone-950">
+    <div className="axis-dashboard flex h-screen overflow-hidden bg-stone-50 dark:bg-stone-950">
       {isIdle && (
         <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-center bg-yellow-500/90 py-1 text-xs font-medium text-white backdrop-blur-sm transition-all animate-in slide-in-from-top">
           Modo inactivo - Actividad detenida

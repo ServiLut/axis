@@ -125,3 +125,56 @@
         @apply bg-background text-foreground;
     }
 }
+
+/* October decoration: scoped to the dashboard; status colors retain their meaning. */
+html[data-halloween] .axis-dashboard {
+    --primary: #9a3e0b;
+    --primary-foreground: #ffffff;
+    --ring: #b45309;
+    --sidebar: #21172e;
+    --sidebar-foreground: #f7f0ff;
+    --sidebar-primary: #ffb568;
+    --sidebar-primary-foreground: #21172e;
+    --sidebar-accent: #3c294e;
+    --sidebar-accent-foreground: #fff0dd;
+    --sidebar-border: #493354;
+    --sidebar-ring: #ffb568;
+    background-color: #fff8f0;
+    background-image: radial-gradient(ellipse at top right, #f3e8ff 0, transparent 55%);
+}
+
+html[data-halloween] .axis-header {
+    background: linear-gradient(110deg, #fffaf5, #fff0df 60%, #f3e8ff);
+    border-bottom-color: #e7c7a5;
+}
+
+html[data-halloween] .halloween-toggle {
+    color: #84370d;
+    background: #fff4e5;
+    border-color: #d6a575;
+}
+
+html.dark[data-halloween] .axis-dashboard {
+    --primary: #ffb568;
+    --primary-foreground: #28170c;
+    --ring: #ffb568;
+    background-color: #19121f;
+    background-image: radial-gradient(ellipse at top right, #30203e 0, transparent 55%);
+}
+
+html.dark[data-halloween] .axis-header {
+    background: linear-gradient(110deg, #21172e, #30203e);
+    border-bottom-color: #493354;
+}
+
+html.dark[data-halloween] .halloween-toggle {
+    color: #ffd6a8;
+    background: #3a261c;
+    border-color: #986338;
+}
+
+@media print {
+    .halloween-toggle { display: none; }
+    html[data-halloween] .axis-dashboard,
+    html[data-halloween] .axis-header { background: white; }
+}
