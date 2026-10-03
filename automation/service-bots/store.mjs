@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { randomBytes, createCipheriv, createDecipheriv, createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import {validateApprovedAnswers,selectCommonAnswer} from './faq.mjs';
 
 export class Store {
   constructor(path, company, key) {
@@ -190,11 +191,26 @@ export class Store {
   }
   importKnowledge(document) {
     if(document.company!==this.company)throw new Error('KNOWLEDGE_SCOPE_MISMATCH');
-    if(!['instructions','historical_observations','reference'].includes(document.kind)||!document.source||!document.at||!Array.isArray(document.entries))throw new Error('KNOWLEDGE_SOURCE_REQUIRED');
+    if(document.kind==='approved_customer_answers')validateApprovedAnswers(document,this.company);
+    if(!['instructions','historical_observations','reference','approved_customer_answers'].includes(document.kind)||!document.source||!document.at||!Array.isArray(document.entries))throw new Error('KNOWLEDGE_SOURCE_REQUIRED');
     // Importing observations never converts them into operational policy.
     const hash=createHash('sha256').update(JSON.stringify(document)).digest('hex');
     this.db.prepare('INSERT OR IGNORE INTO knowledge VALUES(?,?,?,?,?)').run(hash,document.kind,this.seal(document),hash,Date.now());
-    this.audit('KNOWLEDGE_IMPORTED',document.source,{hash,kind:document.kind,count:document.entries.length});return {hash,kind:document.kind,count:document.entries.length};
+    this.audit('KNOWLEDGE_IMPORTED',typeof document.source==='string'?document.source:document.source.id,{hash,kind:document.kind,count:document.entries.length});return {hash,kind:document.kind,count:document.entries.length};
+  }
+  approvedCustomerAnswers(){
+    return this.db.prepare("SELECT body FROM knowledge WHERE kind='approved_customer_answers' ORDER BY imported,rowid").all().map(row=>this.open(row.body));
+  }
+  saveApprovedReplyReference(outboxId,reference){
+    this.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('approved-reply:'+outboxId,this.seal(reference));
+  }
+  approvedReplyStillValid(row){
+    const link=this.db.prepare('SELECT value FROM meta WHERE key=?').get('approved-reply:'+row.id);
+    if(!link)return true;
+    try{
+      const reference=this.open(link.value),current=selectCommonAnswer(reference.question,reference.context,this.approvedCustomerAnswers(),reference.caseId);
+      return current?.answer===reference.answer&&this.open(row.body)===reference.finalText;
+    }catch{return false;}
   }
   close(){this.db.close();}
 }

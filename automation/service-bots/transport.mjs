@@ -150,6 +150,10 @@ export async function drain(store,config,transport,engine) {
     if(!o.internal&&(conv?.hold||conv?.revision!==o.revision)){
       store.db.prepare("UPDATE outbox SET state='SUPPRESSED_HUMAN',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id);suppressed++;continue;
     }
+    if(!o.internal&&!store.approvedReplyStillValid(o)){
+      store.db.prepare("UPDATE outbox SET state='APPROVED_ANSWER_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id);
+      store.audit('APPROVED_ANSWER_RECHECK_FAILED',o.id,{attemptedSend:false});suppressed++;continue;
+    }
     if(!store.db.prepare("UPDATE outbox SET state='SENDING',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id).changes)continue;
     try {
       const mid=await transport.send(o,text);

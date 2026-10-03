@@ -1,5 +1,17 @@
 # María Ángel y Miguel Ángel
 
+## Preguntas frecuentes — 03/10/2026
+
+La usuaria pidió directamente consultar a Hilary573043332213 por respuestas completas sobre duración, productos, precauciones, preparación, limpieza, refuerzos, garantías y otras preguntas comunes. Esta autorización corresponde a FUMIGACION y no libera chats ni reactiva clientes. La nueva consulta se deduplica aparte de la cotización pendiente del apartamento de66m²; leer el registro de preguntas antes de repetir o consultar otro dato. Su entrega nativa está comprobada, pero aún no hay una respuesta verificada.
+
+`commonAnswerGuard=approved-source-context-and-complete-topics-v1` selecciona textos revisados por tema, plaga, inmueble y caso. Solo `approved_customer_answers` se puede ejecutar; `reference`, documentos históricos y mensajes del personal continúan como referencias. El importador autenticado contrasta el ID y texto originales entrantes, remitente exacto, línea propia, fecha y pregunta propia entregada. Una respuesta citada acredita su antecedente; si no hay cita, se exige revisión documentada del antecedente, nunca proximidad temporal por sí sola. La autorización directa y la revisión de alcance se conservan cifradas junto a la fuente.
+
+Cada texto tiene fecha de revisión y condiciones explícitas. Si falta una respuesta para alguna pregunta identificada, hay conflicto, otra plaga/inmueble, una condición anterior sin relación comprobada, precio u horario adicional no verificado, no se sustituye por una respuesta parcial. Se consulta el dato faltante del mismo caso una sola vez. Una repetición mientras sigue pendiente no envía otro acuse genérico. Si existe un texto aplicable pero falta conocer la plaga o el inmueble, se pregunta ese dato y se conserva la pregunta original para contestarla después. Los datos de cotización, la atención humana y la autoría previa permanecen.
+
+La duración de visita se distingue de duración del efecto o garantía. Las indicaciones de seguridad necesitan producto realmente confirmado y etiqueta/ficha leída con ID y hash; no se promete que un producto sea inofensivo o que no exista riesgo. Síntomas, exposición, embarazo y excepciones continúan en revisión personal. Antes de enviar se comprueba otra vez que el texto siga aplicable y vigente, además de las guardias de atención humana y canal.
+
+Este mecanismo no crea tarifas, garantías, instrucciones químicas ni entrenamiento del modelo. Cero respuestas de Hilary importadas al corte; los ejemplos de pruebas son ficticios y aislados. Ambos bots siguen pausados para clientes. La cotización, conexión del programa y recorrido legítimo completo conservan sus pendientes.
+
 ## Control vigente — 03/10/2026: pausa y cortesía de clientes
 
 Ambos runtimes conservan `BOT_ENABLED=false` y `BOT_CHIEF_ONLY=true`. La pausa de María por la queja prevalece sobre su activación anterior. La cotización, elección de respuesta aprobada, respuesta verificada de Hilary y recorrido posterior siguen pendientes. No reactivar por pruebas aisladas ni recuperar las respuestas históricas.

@@ -1,4 +1,5 @@
 import { normalize, SANDRA, DIEGO, publicTextSafe } from './config.mjs';
+import {selectCommonAnswer,commonQuestionTopics,faqNeedsPersonalReview,faqTopicLabel} from './faq.mjs';
 
 function directed(text,name) {
   const t=normalize(text), n=normalize(name);
@@ -39,7 +40,7 @@ function questionExcerpt(text) {
   if(/\b(?:bearer|api[ _-]?key|token|contrase[nñ]a|clave|c[oó]digo de acceso)\b/i.test(text)||/\b\d{16,}\b/.test(text))return '[Contiene un dato reservado: revisar el mensaje original del mismo caso.]';
   return text.slice(0,350);
 }
-function isCustomerQuestion(text){return /[?¿]/.test(text)||/\b(?:cuanto (?:cuesta|vale|cobran|dura)|cual es (?:el|la)|como funciona|que incluye|me puedes (?:decir|confirmar)|pueden (?:venir|atender))\b/.test(normalize(text));}
+function isCustomerQuestion(text){return /[?¿]/.test(text)||commonQuestionTopics(text).length>0||/\b(?:cuanto (?:cuesta|vale|cobran|dura)|cual es (?:el|la)|como funciona|que incluye|me puedes (?:decir|confirmar)|pueden (?:venir|atender))\b/.test(normalize(text));}
 function customerCourtesy(text){
   const value=normalize(text).replace(/\s+/g,' ');
   if(/[?¿\d]/.test(value)||!/^(?:(?:hola|buenos dias|buen dia|buenas tardes|buenas noches)[,.! ]+)?(?:(?:muchas|muchisimas|mil)\s+)?gracias\b/.test(value))return false;
@@ -155,7 +156,23 @@ export class Engine {
         }
         if(literalIntakeTurn(e)&&Object.keys(extractSlots(e.text,c.company)).length)pendingQuestion=turns.filter(turn=>turn.id!==e.id&&turn.kind==='text'&&!turn.forwarded&&isCustomerQuestion(turn.text)).at(-1)||null;
       }
-      const decision=pendingQuestion?{state:{...caseState,lastText:e.text},reviewTopic:'customer-question',reviewConditions:{question:normalize(pendingQuestion.text),caseId:caseState.caseId},reviewSource:pendingQuestion.id,pendingQuestion:pendingQuestion.text,review:'Hay una pregunta pendiente en esta misma secuencia; el mensaje siguiente aporta datos, pero no sustituye esa pregunta.',reviewQuestion:'¿Qué respuesta verificada corresponde a esta pregunta?',reply:'Recibí tu pregunta. Tu solicitud sigue pendiente de confirmación.'}:customerDecision(c.company,caseState,e,analysis);
+      const priorFaq=caseState.pendingFaqQuestion;
+      const faqQuestion=pendingQuestion|| (priorFaq&&literalIntakeTurn(e)?priorFaq:e);
+      const faq=c.company==='fumigacion'&&e.kind==='text'&&!e.forwarded&&!faqNeedsPersonalReview(e.text)&&faqQuestion.kind==='text'?selectCommonAnswer(faqQuestion.text,caseState.slots,s.approvedCustomerAnswers(),caseState.caseId):null;
+      let decision;
+      if(faq?.answer){
+        decision={state:{...caseState,lastText:e.text,pendingFaqQuestion:null},reply:faq.answer};
+        s.audit('APPROVED_CUSTOMER_ANSWER_SELECTED',e.id,{caseId:caseState.caseId,topics:faq.topics,answers:faq.answerIds,sources:faq.sourceIds,originalQuestion:faqQuestion.id});
+      }else if(faq?.missing?.some(x=>x==='service'||x==='site')&&!faq.missing.includes('verifiedProducts')){
+        const field=faq.missing.includes('service')?'service':'site';
+        decision={state:{...caseState,lastText:e.text,pendingFaqQuestion:{id:faqQuestion.id,text:faqQuestion.text,kind:'text'}},reply:field==='service'?'¿Para qué plaga necesitas el servicio?':'¿En qué tipo de inmueble necesitas el servicio?'};
+      }else decision=pendingQuestion?{state:{...caseState,lastText:e.text},reviewTopic:'customer-question',reviewConditions:{question:normalize(pendingQuestion.text),caseId:caseState.caseId},reviewSource:pendingQuestion.id,pendingQuestion:pendingQuestion.text,review:'Hay una pregunta pendiente en esta misma secuencia; el mensaje siguiente aporta datos, pero no sustituye esa pregunta.',reviewQuestion:'¿Qué respuesta verificada corresponde a esta pregunta?',reply:'Recibí tu pregunta. Tu solicitud sigue pendiente de confirmación.'}:customerDecision(c.company,caseState,e,analysis);
+      if(faq&&!faq.answer&&decision.review){
+        decision.reviewTopic='common-question';decision.reviewConditions={question:normalize(faqQuestion.text),topics:faq.topics,caseId:caseState.caseId};decision.reviewSource=faqQuestion.id;
+        const subjects=faq.topics.map(faqTopicLabel).join(' y ');
+        decision.pendingQuestion=faqQuestion.text;decision.review='Falta una respuesta comprobada sobre '+subjects+' para este servicio.';
+        decision.reviewQuestion='¿Qué debemos explicarle sobre '+subjects+' en este caso?';
+      }
       decision.state.lastHandledSourceId=e.id;
       if(/^[¡! ]*(?:hola\b|buenos dias\b|buen dia\b|buenas tardes\b|buenas noches\b)/.test(normalize(e.text))&&!conv.state.introduced&&decision.reply){
         if(c.company==='fumigacion'&&!decision.courtesy&&!decision.review&&!decision.question&&!decision.observed){
@@ -175,7 +192,7 @@ export class Engine {
         s.audit('CONVERSATION_CONTEXT_REVIEW',e.id,{caseId:caseState.caseId,turns:history.turns.length,storedCoverageComplete:history.completeStoredHistory,fullWhatsAppHistoryRead:false,originalMediaRead:false});
         const request=s.question({phone:e.phone,line:e.line,caseId:caseState.caseId,topic:decision.reviewTopic||'revision:'+e.id,conditions:decision.reviewConditions|| (decision.reviewTopic?{question:normalize(e.text),caseId:caseState.caseId}:{event:e.id,caseId:caseState.caseId}),recipient:SANDRA,source:decision.reviewSource||e.id,
           text:c.name+': contacto terminado en '+e.phone.slice(-4)+'. '+decision.review+(decision.pendingQuestion?' Pregunta pendiente: '+questionExcerpt(decision.pendingQuestion)+'.':'')+' Mensaje actual: '+questionExcerpt(e.text)+(context?' Datos de esta solicitud: '+context+'.':'')+' '+(decision.reviewQuestion||'¿Cómo debemos continuar en este caso?')});
-        if(!request.created&&decision.reviewTopic?.startsWith('missing-intake:')){
+        if(!request.created&&(decision.reviewTopic?.startsWith('missing-intake:')||decision.reviewTopic==='common-question')){
           decision.reply=null;
           s.audit('PENDING_CLARIFICATION_REUSED',e.id,{caseId:caseState.caseId,questionId:request.id,topic:decision.reviewTopic,newOutboundCreated:false});
         }
@@ -188,7 +205,11 @@ export class Engine {
           text:c.name+': solicitud del contacto terminado en '+e.phone.slice(-4)+'. '+summary+(quoteOnly?'. Falta confirmar el precio y la respuesta aplicable. ¿Qué cotización y texto vigente corresponden a esta solicitud?':'. Aún no hay técnico, horario ni precio confirmados. ¿Qué técnico, horario disponible y cotización corresponden a este caso?')});
         if(quoteOnly&&!request.created)decision.reply=null;
       }
-      if(decision.reply){if(!publicTextSafe(decision.reply))throw new Error('EXTERNAL_TEXT_REJECTED');s.queue(e.id+':reply',e.phone,e.line,decision.reply,false,conv.revision,decision.courtesy?null:caseState.caseId);}
+      if(decision.reply){
+        if(!publicTextSafe(decision.reply))throw new Error('EXTERNAL_TEXT_REJECTED');
+        s.queue(e.id+':reply',e.phone,e.line,decision.reply,false,conv.revision,decision.courtesy?null:caseState.caseId);
+        if(faq?.answer)s.saveApprovedReplyReference(e.id+':reply',{question:faqQuestion.text,context:caseState.slots,caseId:caseState.caseId,answer:faq.answer,finalText:decision.reply,answerIds:faq.answerIds,sourceIds:faq.sourceIds});
+      }
       finish(decision.observed?'OBSERVED_CALL':decision.review?'REVIEW':decision.question?'WAITING_COORDINATOR':'DONE');
     });
   }

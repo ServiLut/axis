@@ -5,6 +5,25 @@ import { Engine } from './engine.mjs';
 import { Transport,drain } from './transport.mjs';
 import { pathToFileURL } from 'node:url';
 import { decodeWebhook } from './webhook.mjs';
+import {validateApprovedAnswers} from './faq.mjs';
+
+async function verifyApprovedAnswerSource(document,config,transport){
+  validateApprovedAnswers(document,config.company);
+  const source=document.source,line=config.lines.find(l=>l.phone===source.line),jid=source.sender+'@s.whatsapp.net';
+  if(!line)throw Error('FAQ_OWN_LINE_REQUIRED');
+  await transport.verifyLine(line.phone);
+  const lookup=async id=>{
+    const found=await transport.request(line,'/chat/findMessages/'+encodeURIComponent(line.instance),{where:{key:{id}},offset:10,page:1});
+    const records=found.messages?.records?.filter(r=>r.key?.id===id&&(r.key.remoteJid===jid||r.key.remoteJidAlt===jid))??[];
+    if(records.length!==1)throw Error('FAQ_NATIVE_SOURCE_NOT_UNIQUE');return records[0];
+  };
+  const [native,question]=await Promise.all([lookup(source.id),lookup(source.questionMid)]);
+  const message=native.message?.ephemeralMessage?.message??native.message??{},context=message.extendedTextMessage?.contextInfo??native.contextInfo??{};
+  const text=message.conversation??message.extendedTextMessage?.text;
+  const ownStatus=[question.status,...(question.MessageUpdate??[]).map(x=>x.status)];
+  if(native.key.fromMe!==false||question.key.fromMe!==true||text!==source.originalText||new Date(Number(native.messageTimestamp)*1000).toISOString()!==source.at||Number(question.messageTimestamp)>Number(native.messageTimestamp)||context.isForwarded||context.forwardingScore>0||!ownStatus.some(x=>['DELIVERY_ACK','READ','PLAYED'].includes(x)))throw Error('FAQ_NATIVE_SOURCE_MISMATCH');
+  if(context.stanzaId!==source.questionMid&&!(source.antecedentReviewed===true&&typeof source.antecedentEvidence==='string'&&source.antecedentEvidence.trim().length>=20))throw Error('FAQ_DIRECTED_ANTECEDENT_REQUIRED');
+}
 
 export function createBotServer(config,store,transport,engine) {
   let draining=false;
@@ -21,6 +40,7 @@ export function createBotServer(config,store,transport,engine) {
         events:store.db.prepare('SELECT state,COUNT(*) n FROM events GROUP BY state').all(),outbox:store.db.prepare('SELECT state,COUNT(*) n FROM outbox GROUP BY state').all(),
         communicationGuard:'private-routing-and-media-work-v2',internalConversationGuard:'verified-internal-per-line-v2',internalConversationEnabled:Boolean(config.chiefOnly),customerResponsesEnabled:config.enabled,
         customerIntakeEnabled:config.enabled,businessWritesEnabled:false,capabilityDisclosure:'runtime-mode-and-implemented-intake-v1',customerCourtesyGuard:'gratitude-only-without-intake-or-ownership-v1',
+        commonAnswerGuard:config.company==='fumigacion'?'approved-source-context-and-complete-topics-v1':null,approvedCustomerAnswerDocuments:store.approvedCustomerAnswers().length,
         caseOwnershipGuard:'first-reply-source-preserved-v2',conversationContext:'stored-scoped-turns-with-coverage-v2',internalQuestionGuard:'missing-field-and-case-dedup-v1',supervisorContentReview:'explicit-source-ids-readonly-v1',liveAttentionGuard:'own-native-outgoing-before-send-v1',intakeGuard:config.company==='fumigacion'?'full-initial-fields-and-quote-before-schedule-v1':'technical-intake-with-human-review-v1',
         caseAuthorship:store.db.prepare('SELECT state,COUNT(*) n FROM case_authorship GROUP BY state').all(),
         unanswered:store.db.prepare("SELECT COUNT(*) n FROM questions WHERE state IN ('PENDING','LEGACY_PENDING','ANSWER_REVIEW')").get().n,
@@ -91,7 +111,10 @@ export function createBotServer(config,store,transport,engine) {
         const n=store.delivery(body.mid,line.phone,body.state);
         return reply(200,{updated:n});
       }
-      if(req.url==='/knowledge')return reply(200,store.importKnowledge(body));
+      if(req.url==='/knowledge'){
+        if(body.kind==='approved_customer_answers')await verifyApprovedAnswerSource(body,config,transport);
+        return reply(200,store.importKnowledge(body));
+      }
       if(req.url==='/notify-chief-report'){
         if(!config.chiefOnly)return reply(403,{error:'INTERNAL_MODE_REQUIRED'});
         if(!/^[a-z0-9_-]{8,100}$/.test(body.key||'')||!/^[a-f0-9]{64}$/.test(body.sourceHash||'')||typeof body.text!=='string'||!body.text.trim()||body.text.length>6000||/bearer\s|api.?key|contrase[nñ]a|token\s*[:=]/i.test(body.text))return reply(400,{error:'VERIFIED_REPORT_REQUIRED'});
