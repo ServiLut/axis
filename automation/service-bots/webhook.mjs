@@ -16,10 +16,13 @@ export function decodeWebhook(body,config) {
     const text=content.conversation??content.extendedTextMessage?.text??content.imageMessage?.caption??content.videoMessage?.caption??'';
     // A receipt, synchronization stub or protocol update is not a staff message.
     if(kind==='text'&&(typeof text!=='string'||!text.trim()))continue;
-    const context=content.extendedTextMessage?.contextInfo??content.audioMessage?.contextInfo??content.imageMessage?.contextInfo??content.messageContextInfo??d.contextInfo;
+    const contexts=[content.extendedTextMessage?.contextInfo,content.audioMessage?.contextInfo,content.imageMessage?.contextInfo,content.videoMessage?.contextInfo,content.documentMessage?.contextInfo,content.messageContextInfo,d.contextInfo].filter(x=>x&&typeof x==='object');
+    // A conversation may carry an unrelated messageContextInfo while the provider
+    // stores its actual reply citation separately. Conflicting citations grant no authority.
+    const citations=[...new Set(contexts.map(x=>x.stanzaId).filter(x=>typeof x==='string'&&x.trim()))];
     const timestamp=typeof d.messageTimestamp==='object'?Number(d.messageTimestamp.low):Number(d.messageTimestamp);
     if(!Number.isFinite(timestamp)||typeof text!=='string')continue;
-    events.push({instance:line.instance,owner:line.phone,event:{id:key.id,phone:jid.split('@')[0],at:new Date(timestamp*1000).toISOString(),kind,text,fromMe:key.fromMe,forwarded:context?.isForwarded===true||Number(context?.forwardingScore)>0,quotedId:context?.stanzaId??null}});
+    events.push({instance:line.instance,owner:line.phone,event:{id:key.id,phone:jid.split('@')[0],at:new Date(timestamp*1000).toISOString(),kind,text,fromMe:key.fromMe,forwarded:contexts.some(x=>x.isForwarded===true||Number(x.forwardingScore)>0),quotedId:citations.length===1?citations[0]:null}});
   }
   if(body.event==='messages.update')for(const d of data){
     const mid=d?.key?.id??d?.keyId;const status=d?.update?.status??d?.status;

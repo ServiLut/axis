@@ -1,5 +1,6 @@
 import { normalize, SANDRA, DIEGO, publicTextSafe } from './config.mjs';
 import {selectCommonAnswer,commonQuestionTopics,faqNeedsPersonalReview,faqTopicLabel} from './faq.mjs';
+import {chiefStatusTopic,chiefStatusReply} from './chief-status.mjs';
 
 function directed(text,name) {
   const t=normalize(text), n=normalize(name);
@@ -122,8 +123,9 @@ export class Engine {
           if(/^(?:que (?:funciones )?puedes (?:hacer|realizar)(?: en este momento)?|que sabes hacer|como puedes ayudarme)$/.test(body)){
             s.queue(e.id+':capabilities',e.phone,e.line,capabilitiesReply(c,e.phone),true,0);finish('CHIEF_CAPABILITIES');return;
           }
-          if(/^(?:estas (?:ahi|presente|funcionando|disponible)|me escuchas|puedes responder|sigues ahi)$/.test(body)){
-            s.queue(e.id+':presence',e.phone,e.line,'Sí, '+(e.phone===SANDRA?'Sandra':'Diego')+'. '+(c.enabled?'Soy '+c.bot+'. Estoy aquí para ayudarte.':'Recibí tu mensaje. Sigo en aprendizaje y puedo atenderte por aquí.'),true,0);finish('CHIEF_PRESENCE');return;
+          const statusTopic=chiefStatusTopic(body);
+          if(statusTopic){
+            s.queue(e.id+(statusTopic==='presence'?':presence':':status'),e.phone,e.line,chiefStatusReply(s,c,e.phone,statusTopic,body),true,0);finish(statusTopic==='presence'?'CHIEF_PRESENCE':'CHIEF_STATUS');return;
           }
           if(e.phone!==SANDRA){s.audit('COORDINATOR_DIRECTED_PENDING_REVIEW',e.id,{kind:e.kind});s.queue(e.id+':review-ack',e.phone,e.line,'Diego, tu consulta quedó guardada para revisión; todavía no he ejecutado cambios.',true,0);finish('COORDINATOR_REVIEW');return;}
           if(new RegExp('^(?:(?:hola|buenos dias|buenas tardes|buenas noches)[, :]+)?(?:'+normalize(c.bot)+'|bot)[, :]+[¿ ]*(?:hola|estas ahi|estas presente|me escuchas|estas disponible|puedes responder|sigues ahi)[?!. ]*$').test(normalize(e.text))){

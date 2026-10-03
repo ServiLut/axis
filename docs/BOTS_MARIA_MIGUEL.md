@@ -1,5 +1,11 @@
 # María Ángel y Miguel Ángel
 
+## Preguntas de estado y cantidad — 03/10/2026
+
+`chiefStatusGuard=actual-mode-and-delivered-own-chat-counts-v1` responde preguntas dirigidas de Sandra/Diego sobre atención y cantidad de chats usando la configuración actual y la cola propia. La presencia bajo pausa dice expresamente que no atiende clientes. El conteo excluye mensajes del personal, salidas internas, salidas suprimidas y entregas sin comprobar; cuenta contactos únicos en ambas líneas y distingue sus subtotales. «Hoy» usa la medianoche de Bogotá; una pregunta sin fecha describe solo los registros propios disponibles, sin atribuir servicios creados o finalizados. No libera chats ni ejecuta órdenes.
+
+Una cita del proveedor puede estar separada de `messageContextInfo`. Se conserva su ID exacto aunque ese otro campo exista sin cita; citas contradictorias no confieren autoridad y cualquier marca de reenvío se conserva. Solo una salida propia interna, del mismo destinatario/línea y con entrega comprobada autoriza el turno citado. No reconstruir antecedentes por captura ni recuperar respuestas históricas ya entregadas.
+
 ## Preguntas frecuentes — 03/10/2026
 
 La usuaria pidió directamente consultar a Hilary573043332213 por respuestas completas sobre duración, productos, precauciones, preparación, limpieza, refuerzos, garantías y otras preguntas comunes. Esta autorización corresponde a FUMIGACION y no libera chats ni reactiva clientes. La nueva consulta se deduplica aparte de la cotización pendiente del apartamento de66m²; leer el registro de preguntas antes de repetir o consultar otro dato. Su entrega nativa está comprobada, pero aún no hay una respuesta verificada.
