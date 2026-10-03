@@ -166,7 +166,7 @@ export class Store {
     if(old)return {id,state:old.state,answer:old.answer&&this.open(old.answer),sourceId:old.source_id,valid:old.state==='ANSWERED'&&(!old.valid_until||old.valid_until>Date.now()),created:false};
     if(topic.startsWith('missing-intake:')){
       const field=topic.slice('missing-intake:'.length);
-      if(!['service','site','detail','location','preference'].includes(field))throw new Error('INTAKE_FIELD_REQUIRED');
+      if(!['service','site','size','detail','location','preference'].includes(field))throw new Error('INTAKE_FIELD_REQUIRED');
       const pending=this.db.prepare("SELECT q.*,o.state delivery FROM questions q JOIN outbox o ON o.id=q.outbox_id WHERE q.case_id=? AND q.phone=? AND q.recipient=? AND q.state IN ('PENDING','ANSWER_REVIEW') AND o.state IN ('READY','SENDING','UNCERTAIN','ACCEPTED','DELIVERED','READ')").all(caseId,phone,recipient);
       const legacy=pending.find(q=>q.topic===topic||(q.topic.startsWith('revision:')&&this.open(q.body).text.includes('contacto terminado en '+phone.slice(-4)+'. Falta '+field+'. La pregunta ya se hizo;')));
       if(legacy)return {id:legacy.id,state:legacy.state,created:false,valid:false};

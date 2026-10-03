@@ -305,7 +305,7 @@ test('a rapid multipart reply keeps an earlier house answer when the municipalit
     assert.equal(current.intakeSources.site.sourceId,'HOUSEFIRST');
     assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);
     assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get('HOUSEFIRST:reply').n,0);
-    assert.equal(f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get('CITYAFTER:reply').body),'¿Qué día y franja horaria prefieres?');
+    assert.equal(f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get('CITYAFTER:reply').body),'¿Cuántas habitaciones o metros cuadrados tiene el lugar?');
   }finally{f.s.close();}
 });
 
@@ -400,5 +400,83 @@ test('the supplied multi-pest case retains both pests, the stated area, and lite
     assert.equal(slots.price,undefined);assert.equal(slots.technician,undefined);
     assert.equal(extractSlots('Un apartamento de 66 m² en Robledo','fumigacion').area,'66 m²');
     assert.equal(extractSlots('4 habitaciones, Santa Helena vereda el placer, ratas','fumigacion').rooms,'4 habitaciones');
+  }finally{f.s.close();}
+});
+
+test('a new pest-control greeting requests the quotation intake together, without a tariff or technical claims',async()=>{
+  const f=fixture();
+  try {
+    const first=await f.process({text:'Buenos días'});
+    const reply=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(first.id+':reply').body);
+    assert.match(reply,/Hola, soy María Ángel/);assert.match(reply,/Qué plaga/);
+    assert.match(reply,/tipo de inmueble/);assert.match(reply,/habitaciones o metros cuadrados/);
+    assert.match(reply,/municipio y barrio o vereda/);
+    assert.doesNotMatch(reply,/139|300|ISO|insecticida|veneno|Sandra|Diego|técnico/i);
+    assert.equal(f.s.conversation(first.phone).state.initialIntakeAllRequested,true);
+  }finally{f.s.close();}
+});
+
+test('the supplied multi-line room and rodent answer retains each fact and asks only the still-missing property type',async()=>{
+  const f=fixture();
+  try {
+    await f.process({text:'Buenos días'});
+    const answer=await f.process({id:'ROOMSVEREDARODENTS',at:Date.now()+1,text:'4 habitaciones\nSanta helena vereda el placer\nRatas'});
+    const state=f.s.conversation(answer.phone).state;
+    assert.equal(state.slots.rooms,'4 habitaciones');assert.equal(state.slots.service,'ratas');
+    assert.match(state.slots.locationDetails,/Santa helena vereda el placer/);
+    const reply=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(answer.id+':reply').body);
+    assert.match(reply,/tipo de inmueble/);assert.doesNotMatch(reply,/habitaciones|qué plaga|municipio|139|300/i);
+  }finally{f.s.close();}
+});
+
+test('a property and town without size cannot skip the room or area requirement',async()=>{
+  const f=fixture();
+  try {
+    const first=await f.process({text:'Cucarachas en una casa en Bello'});
+    const reply=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(first.id+':reply').body);
+    assert.match(reply,/habitaciones o metros cuadrados/);
+    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);
+    assert.doesNotMatch(reply,/precio|horario|confirmada/i);
+  }finally{f.s.close();}
+});
+
+test('complete quotation facts create one human quotation request before asking availability or inventing a price',async()=>{
+  const f=fixture();
+  try {
+    await f.process({text:'Buenos días'});
+    const answer=await f.process({id:'FULLQUOTEFACTS',at:Date.now()+1,text:'Cucarachas y hormigas, apartamento de 66 m², Villa Suramericana, Robledo'});
+    const row=f.s.db.prepare('SELECT * FROM questions').get(),question=f.s.open(row.body);
+    assert.equal(row.topic,'cotizacion-verificada');assert.equal(row.recipient,SANDRA);
+    assert.match(question.text,/66 m²/);assert.match(question.text,/cucarachas y hormigas/);
+    assert.match(question.text,/Robledo/);assert.doesNotMatch(question.text,/139|300|horario disponible/);
+    const reply=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(answer.id+':reply').body);
+    assert.match(reply,/cotización sigue pendiente/);assert.doesNotMatch(reply,/día|horaria|confirmada|139|300/i);
+    assert.equal(f.s.conversation(answer.phone).state.slots.price,undefined);
+    await f.process({id:'SAMEQUOTEFACTS',at:Date.now()+2,text:'Un apartamento de 66 m²'});
+    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,1);
+    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get('SAMEQUOTEFACTS:reply').n,0);
+  }finally{f.s.close();}
+});
+
+test('an initial greeting with a concrete price question keeps the question instead of sending the intake list',async()=>{
+  const f=fixture();
+  try {
+    const first=await f.process({text:'Hola, ¿cuánto cuesta el servicio para ratas?'});
+    const reply=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(first.id+':reply').body);
+    assert.match(reply,/Recibí tu pregunta/);assert.doesNotMatch(reply,/cuéntame|habitaciones|metros cuadrados/i);
+    assert.equal(f.s.open(f.s.db.prepare('SELECT body FROM questions').get().body).source,first.id);
+  }finally{f.s.close();}
+});
+
+test('an unanswered size requirement is a precise single pending clarification rather than an error or repeated customer acknowledgement',async()=>{
+  const f=fixture();
+  try {
+    await f.process({text:'Cucarachas en una casa en Bello'});
+    await f.process({id:'SIZEUNKNOWN1',at:Date.now()+1,text:'No sé cuánto mide'});
+    await f.process({id:'SIZEUNKNOWN2',at:Date.now()+2,text:'No tengo ese dato'});
+    const row=f.s.db.prepare('SELECT * FROM questions').get();
+    assert.equal(row.topic,'missing-intake:size');assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,1);
+    assert.match(f.s.open(row.body).text,/habitaciones o metros cuadrados/);
+    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get('SIZEUNKNOWN2:reply').n,0);
   }finally{f.s.close();}
 });
