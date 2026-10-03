@@ -31,17 +31,48 @@ export class Transport {
     const checks=[];
     for(const line of c.lines){
       await this.verifyLine(line.phone);
+      for(const addressField of ['remoteJid','remoteJidAlt']){
       const data=await this.request(line,'/chat/findMessages/'+encodeURIComponent(line.instance),{
-        where:{key:{remoteJid:phone+'@s.whatsapp.net',fromMe:true},messageTimestamp:{gte:'2000-01-01T00:00:00.000Z',lte:new Date(c.activatedAt-1).toISOString()}},offset:1,page:1
+        where:{key:{[addressField]:phone+'@s.whatsapp.net',fromMe:true},messageTimestamp:{gte:'2000-01-01T00:00:00.000Z',lte:new Date(c.activatedAt-1).toISOString()}},offset:1,page:1
       });
       const value=data?.messages;
       if(!value||!Number.isSafeInteger(value.total)||value.total<0||!Array.isArray(value.records)||
         (value.total===0&&value.records.length!==0)||(value.total>0&&value.records.length!==1))throw new Error('HISTORY_RESULT_UNVERIFIED');
       const r=value.records[0];
-      if(r&&(r.key?.remoteJid!==phone+'@s.whatsapp.net'||r.key.fromMe!==true||!r.key.id||!Number.isFinite(Number(r.messageTimestamp))||Number(r.messageTimestamp)*1000>=c.activatedAt))throw new Error('HISTORY_RESULT_OUTSIDE_SCOPE');
-      checks.push({line:line.phone,instance:line.instance,total:value.total,lastSourceId:r?.key.id??null,lastAt:r?Number(r.messageTimestamp)*1000:null});
+      if(r&&(r.key?.[addressField]!==phone+'@s.whatsapp.net'||!/^57\d{10}@s\.whatsapp\.net$|^\d+@lid$/.test(r.key.remoteJid||'')||r.key.fromMe!==true||!r.key.id||!Number.isFinite(Number(r.messageTimestamp))||Number(r.messageTimestamp)*1000>=c.activatedAt))throw new Error('HISTORY_RESULT_OUTSIDE_SCOPE');
+      checks.push({line:line.phone,instance:line.instance,addressField,total:value.total,lastSourceId:r?.key.id??null,lastAt:r?Number(r.messageTimestamp)*1000:null});
+      }
     }
-    return {cutoff:c.activatedAt,checkedAt:Date.now(),priorOutgoing:checks.some(x=>x.total>0),checks,scope:'own-two-lines; metadata-only; historical-author-unattributed'};
+    return {cutoff:c.activatedAt,checkedAt:Date.now(),guardVersion:'canonical-and-alternate-phone-v2',priorOutgoing:checks.some(x=>x.total>0),checks,scope:'own-two-lines-and-explicit-phone-alternatives; metadata-only; historical-author-unattributed'};
+  }
+  async currentAttention(phone) {
+    const c=this.config;if(!/^57\d{10}$/.test(phone)||!Number.isFinite(c.activatedAt))throw new Error('ATTENTION_SCOPE_REQUIRED');
+    const through=Date.now(),sources=new Map(),checks=[];
+    for(const line of c.lines){
+      await this.verifyLine(line.phone);
+      for(const addressField of ['remoteJid','remoteJidAlt']){
+        let expectedTotal=null,read=0;
+        for(let page=1;page<=2;page++){
+          const data=await this.request(line,'/chat/findMessages/'+encodeURIComponent(line.instance),{where:{key:{[addressField]:phone+'@s.whatsapp.net',fromMe:true},messageTimestamp:{gte:new Date(c.activatedAt).toISOString(),lte:new Date(through).toISOString()}},offset:50,page});
+          const result=data.messages;
+          if(!result||!Number.isSafeInteger(result.total)||result.total<0||result.total>100||!Array.isArray(result.records)||result.records.length>50||(expectedTotal!==null&&expectedTotal!==result.total))throw new Error('ATTENTION_COVERAGE_UNVERIFIED');
+          expectedTotal=result.total;read+=result.records.length;
+          for(const r of result.records){
+            const key=r.key,at=Number(r.messageTimestamp)*1000;
+            if(key?.[addressField]!==phone+'@s.whatsapp.net'||key.fromMe!==true||!key.id||!/^57\d{10}@s\.whatsapp\.net$|^\d+@lid$/.test(key.remoteJid||'')||!Number.isFinite(at)||at<c.activatedAt||at>through)throw new Error('ATTENTION_SOURCE_OUTSIDE_SCOPE');
+            const message=r.message?.ephemeralMessage?.message??r.message??{};
+            const text=message.conversation??message.extendedTextMessage?.text??'';
+            const written=typeof text==='string'&&text.trim().length>0;
+            const media=Boolean(message.audioMessage||message.imageMessage||message.videoMessage||message.documentMessage);
+            if(written||media)sources.set(line.phone+':'+key.id,{id:key.id,line:line.phone,at,kind:media?'media':'text'});
+          }
+          if(read===expectedTotal)break;
+          if(!result.records.length||page===2||read>expectedTotal)throw new Error('ATTENTION_COVERAGE_UNVERIFIED');
+        }
+        checks.push({line:line.phone,addressField,total:expectedTotal,read});
+      }
+    }
+    return {sources:[...sources.values()],checks,through,complete:true,scope:'own-two-lines-and-explicit-phone-alternatives; written-or-media-outgoing'};
   }
   async programContext(phone) {
     const c=this.config;
@@ -69,7 +100,7 @@ export async function drain(store,config,transport,engine) {
     const e=store.open(row.body); let analysis={};
     if(config.historyCheckRequired&&!e.fromMe&&![SANDRA,DIEGO].includes(e.phone)){
       const checked=store.priorHistory(e.phone);
-      if(checked?.cutoff!==config.activatedAt){
+      if(checked?.cutoff!==config.activatedAt||(transport instanceof Transport&&checked.guardVersion!=='canonical-and-alternate-phone-v2')){
         try{store.savePriorHistory(e.phone,await transport.priorHistory(e.phone),e.id);}
         catch{store.audit('PRIOR_HISTORY_UNVERIFIED',e.id);store.db.prepare("UPDATE events SET state='HISTORY_REVIEW' WHERE id=? AND state='PENDING'").run(e.id);continue;}
       }
@@ -98,6 +129,21 @@ export async function drain(store,config,transport,engine) {
     }
     // Revalidate channel identity before each attempt. A disconnected channel leaves READY without attempting delivery.
     try{await transport.verifyLine(o.line);}catch{store.audit('CHANNEL_CHECK_FAILED',o.id);continue;}
+    if(!o.internal&&config.historyCheckRequired&&typeof transport.currentAttention==='function'){
+      try{
+        const attention=await transport.currentAttention(o.phone);
+        if(!attention.complete)throw new Error('ATTENTION_COVERAGE_UNVERIFIED');
+        const unknown=attention.sources.find(source=>!store.db.prepare('SELECT 1 FROM outbox WHERE mid=? AND phone=? AND line=?').get(source.id,o.phone,source.line));
+        if(unknown){
+          store.hold(o.phone,unknown.id,true);
+          store.audit('NATIVE_PRIOR_ATTENTION_BLOCKED_REPLY',unknown.id,{phone:o.phone,line:unknown.line,at:unknown.at,outboxId:o.id,authorUnverified:true,firstBotEvidencePreserved:true});suppressed++;continue;
+        }
+        store.audit('NATIVE_ATTENTION_CHECKED',o.id,{through:attention.through,checks:attention.checks,knownOutgoing:attention.sources.length});
+      }catch{
+        store.db.prepare("UPDATE outbox SET state='ATTENTION_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id);
+        store.hold(o.phone,'attention-review:'+o.id,true);store.audit('NATIVE_ATTENTION_UNVERIFIED',o.id,{attemptedSend:false});suppressed++;continue;
+      }
+    }
     const staffPending=store.db.prepare("SELECT id FROM events WHERE phone=? AND from_me=1 AND state='PENDING'").get(o.phone);
     if(staffPending)continue;
     const conv=store.conversation(o.phone);

@@ -4,9 +4,9 @@ export function decodeWebhook(body,config) {
   const events=[],deliveries=[];const data=Array.isArray(body.data)?body.data:[body.data];
   if(body.event==='messages.upsert')for(const d of data){
     const key=d?.key;let jid=key?.remoteJid;
-    // Accept only the authenticated provider's explicit phone alternative for the two verified internal contacts.
-    // A bare LID, group participant or display name never supplies authority.
-    if(/^\d+@lid$/.test(jid||'')&&[SANDRA,DIEGO].map(p=>p+'@s.whatsapp.net').includes(key.remoteJidAlt))jid=key.remoteJidAlt;
+    // The own authenticated provider may supply an explicit direct phone alternative.
+    // Authority still comes from validateEvent's exact internal roles, never a LID or name.
+    if(/^\d+@lid$/.test(jid||'')&&/^57\d{10}@s\.whatsapp\.net$/.test(key.remoteJidAlt||'')&&(config.enabled||[SANDRA,DIEGO].map(p=>p+'@s.whatsapp.net').includes(key.remoteJidAlt)))jid=key.remoteJidAlt;
     if(/^57\d{10}@s\.whatsapp\.net$/.test(jid||'')&&key.remoteJidAlt?.endsWith('@s.whatsapp.net')&&key.remoteJidAlt!==jid)continue;
     // A LID, display name or participant in a group is insufficient to resolve a direct sender.
     if(!/^57\d{10}@s\.whatsapp\.net$/.test(jid||'')||!key.id||typeof key.fromMe!=='boolean')continue;

@@ -152,6 +152,13 @@ export class Store {
     const totalReplies=this.db.prepare("SELECT COUNT(*) n FROM outbox WHERE phone=? AND internal=0 AND created<=? AND state IN ('ACCEPTED','DELIVERED','READ')").get(phone,throughTime).n;
     return {company:this.company,phone,caseId:conv?.state.caseId??null,scope:'same-company-contact; previous-case-boundaries-may-be-unverified',turns,completeStoredHistory:totalEvents<=limit&&totalReplies<=limit,fullWhatsAppHistoryRead:false,mediaOriginalsIncluded:false,referencesAreUntrusted:true};
   }
+  customerTurnBatch(phone,sourceId,previousSourceId){
+    const current=this.db.prepare('SELECT rowid,at FROM events WHERE id=? AND phone=? AND from_me=0').get(sourceId,phone);
+    if(!current)throw new Error('CUSTOMER_SOURCE_SCOPE_REQUIRED');
+    const previous=previousSourceId&&this.db.prepare('SELECT rowid FROM events WHERE id=? AND phone=? AND from_me=0').get(previousSourceId,phone);
+    if(!previous||previous.rowid>=current.rowid)return [this.open(this.db.prepare('SELECT body FROM events WHERE id=?').get(sourceId).body)];
+    return this.db.prepare("SELECT body FROM events WHERE phone=? AND from_me=0 AND rowid>? AND rowid<=? AND at<=? AND state IN ('PENDING','OBSERVED_SUPERSEDED') ORDER BY at,rowid LIMIT 40").all(phone,previous.rowid,current.rowid,current.at).map(r=>this.open(r.body));
+  }
   question({phone,line,caseId,topic,conditions,recipient,text,source}) {
     const hash=createHash('sha256').update(JSON.stringify(conditions)).digest('hex');
     const id=createHash('sha256').update(JSON.stringify([this.company,caseId,topic,hash,recipient])).digest('hex');

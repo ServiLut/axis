@@ -5,7 +5,7 @@ import { mkdtempSync, unlinkSync, rmdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../automation/service-bots/store.mjs';
-import { Engine } from '../automation/service-bots/engine.mjs';
+import { Engine, extractSlots } from '../automation/service-bots/engine.mjs';
 import { drain } from '../automation/service-bots/transport.mjs';
 import { decodeWebhook } from '../automation/service-bots/webhook.mjs';
 import { BUSINESSES, SANDRA } from '../automation/service-bots/config.mjs';
@@ -291,5 +291,114 @@ test('a concrete customer question is preserved and an interrogative alternative
     assert.match(question.text,/Qué respuesta verificada/);
     const response=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get('PRICEQUERY:reply').body);
     assert.ok(!response.includes('Qué plaga'));assert.ok(!response.includes('tipo de inmueble'));
+  }finally{f.s.close();}
+});
+
+test('a rapid multipart reply keeps an earlier house answer when the municipality arrives next',async()=>{
+  const f=fixture();
+  try {
+    await f.process({text:'cucarachas'});
+    const house=f.event({id:'HOUSEFIRST',at:Date.now()+1,text:'Casa 2 niveles'}),city=f.event({id:'CITYAFTER',at:house.at+1000,text:'Sabaneta'});
+    f.s.enqueue(house);f.s.enqueue(city);await drain(f.s,f.c,f.transport,f.engine);
+    const current=f.s.conversation(house.phone).state;
+    assert.equal(current.slots.site,'casa');assert.equal(current.slots.location,'sabaneta');
+    assert.equal(current.intakeSources.site.sourceId,'HOUSEFIRST');
+    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);
+    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get('HOUSEFIRST:reply').n,0);
+    assert.equal(f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get('CITYAFTER:reply').body),'¿Qué día y franja horaria prefieres?');
+  }finally{f.s.close();}
+});
+
+test('batch context does not mix another contact, a future reply, a quoted question, or an earlier case',async()=>{
+  const f=fixture();
+  try {
+    await f.process({text:'cucarachas en casa en bello'});
+    await f.process({id:'NEWBATCHCASE',at:Date.now()+1,text:'Necesito otro servicio para hormigas'});
+    const first=f.event({id:'SITEQUESTION',at:Date.now()+2,text:'¿Es para una casa?'}),city=f.event({id:'BATCHCITY',at:first.at+1000,text:'Sabaneta'});
+    f.s.enqueue(first);f.s.enqueue(f.event({id:'OTHERCONTACT',phone:'573009998877',at:first.at,text:'Casa'}));f.s.enqueue(city);
+    await f.engine.process(first);await f.engine.process(city);
+    const current=f.s.conversation(city.phone).state;
+    assert.equal(current.slots.service,'hormigas');assert.equal(current.slots.site,undefined);assert.equal(current.slots.location,'sabaneta');
+    assert.equal(current.intakeSources.site,undefined);
+    f.s.enqueue(f.event({id:'FUTUREHOUSE',at:city.at+1,text:'Casa'}));
+    assert.ok(f.s.customerTurnBatch(city.phone,city.id,'NEWBATCHCASE').every(e=>e.id!=='FUTUREHOUSE'&&e.id!=='OTHERCONTACT'));
+  }finally{f.s.close();}
+});
+
+test('a compound greeting introduces the actual bot once and a named-person request is not turned into pest intake',async()=>{
+  for(const text of ['Hola buenos días!','Hola, requiero una cotización para mi inmueble.','Hola con daniela']){
+    const f=fixture();
+    try {
+      const first=await f.process({text});
+      const reply=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(first.id+':reply').body);
+      assert.match(reply,/Hola, soy María Ángel/);
+      if(text==='Hola con daniela'){assert.ok(!reply.includes('Qué plaga'));assert.equal(f.s.db.prepare('SELECT state FROM events WHERE id=?').get(first.id).state,'REVIEW');}
+      await f.process({id:'HELLOAGAIN',at:Date.now()+1,text:'Hola'});
+      const next=f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get('HELLOAGAIN:reply');
+      if(next)assert.ok(!f.s.open(next.body).includes('soy María Ángel'));
+    }finally{f.s.close();}
+  }
+});
+
+test('a question followed rapidly by location data remains the question to answer with its original source',async()=>{
+  const f=fixture();
+  try {
+    await f.process({text:'cucarachas en casa'});
+    const question=f.event({id:'BATCHPRICEQ',at:Date.now()+1,text:'¿Cuánto cuesta?'}),city=f.event({id:'AFTERPRICE',at:question.at+1000,text:'Sabaneta'});
+    f.s.enqueue(question);f.s.enqueue(city);await drain(f.s,f.c,f.transport,f.engine);
+    const review=f.s.open(f.s.db.prepare('SELECT body FROM questions').get().body);
+    assert.equal(review.source,question.id);assert.match(review.text,/Pregunta pendiente: ¿Cuánto cuesta/);assert.match(review.text,/Mensaje actual: Sabaneta/);
+    assert.equal(f.s.conversation(city.phone).state.slots.location,'sabaneta');
+    const response=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(city.id+':reply').body);
+    assert.ok(!response.includes('día y franja'));
+  }finally{f.s.close();}
+});
+
+test('a native outgoing message missing from the webhook blocks sending but does not erase first bot evidence',async()=>{
+  const f=fixture();
+  try {
+    const first=await f.process();f.s.delivery('BOTMID1',first.line,'READ');
+    const before=f.s.caseAuthorship(f.s.conversation(first.phone).state.caseId);
+    f.transport.currentAttention=async()=>({complete:true,sources:[{id:'NATIVESTAFF',line:first.line,at:Date.now()}]});
+    await f.process({id:'NEXTATTENTION',at:Date.now()+1,text:'cucarachas'});
+    assert.equal(f.s.conversation(first.phone).hold,1);
+    assert.equal(f.s.db.prepare('SELECT state FROM outbox WHERE id=?').get('NEXTATTENTION:reply').state,'SUPPRESSED_HUMAN');
+    assert.deepEqual(f.s.caseAuthorship(before.caseId),before);
+    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE mid IS NOT NULL').get().n,1);
+  }finally{f.s.close();}
+});
+
+test('an unavailable native attention check stops before any send and does not retry an old response',async()=>{
+  const f=fixture();
+  try {
+    let sent=0;f.transport.send=async()=>{sent++;return 'NEVER';};f.transport.currentAttention=async()=>{throw Error('partial');};
+    const first=await f.process();await drain(f.s,f.c,f.transport,f.engine);
+    assert.equal(sent,0);assert.equal(f.s.db.prepare('SELECT state FROM outbox WHERE id=?').get(first.id+':reply').state,'ATTENTION_REVIEW');
+    assert.equal(f.s.caseAuthorship(f.c.company+':'+first.id),null);
+  }finally{f.s.close();}
+});
+
+test('a provider phone alternative resolves customer and staff identity without granting internal authority',()=>{
+  const f=fixture();
+  try {
+    for(const fromMe of [false,true]){
+      const result=decodeWebhook({instance:f.c.lines[0].instance,event:'messages.upsert',data:{key:{id:'ALTSOURCE01',remoteJid:'987654321@lid',remoteJidAlt:'573001112233@s.whatsapp.net',fromMe},messageTimestamp:Math.floor(Date.now()/1000),message:{conversation:'Hola'}}},f.c);
+      assert.equal(result.events.length,1);assert.equal(result.events[0].event.phone,'573001112233');assert.equal(result.events[0].event.fromMe,fromMe);
+    }
+  }finally{f.s.close();}
+});
+
+test('the supplied multi-pest case retains both pests, the stated area, and literal locality without inventing a municipality or price',async()=>{
+  const f=fixture();
+  try {
+    await f.process({text:'Cucarachas pequeñas en cocina y hormigas'});
+    await f.process({id:'AREAREPLY',at:Date.now()+1,text:'Un apartamento de 66 m cuadrados'});
+    await f.process({id:'LOCALITYREPLY',at:Date.now()+2,text:'Villa suramericana, Robledo'});
+    const slots=f.s.conversation('573001112233').state.slots;
+    assert.equal(slots.service,'cucarachas y hormigas');assert.equal(slots.area,'66 m cuadrados');assert.equal(slots.site,'apartamento');
+    assert.equal(slots.locationDetails,'Villa suramericana, Robledo');assert.equal(slots.location,undefined);
+    assert.equal(slots.price,undefined);assert.equal(slots.technician,undefined);
+    assert.equal(extractSlots('Un apartamento de 66 m² en Robledo','fumigacion').area,'66 m²');
+    assert.equal(extractSlots('4 habitaciones, Santa Helena vereda el placer, ratas','fumigacion').rooms,'4 habitaciones');
   }finally{f.s.close();}
 });
