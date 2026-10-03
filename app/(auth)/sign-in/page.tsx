@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { HalloweenTheme } from "@/components/dashboard/halloween-theme";
+import { HalloweenScene } from "@/components/seasonal/halloween-scene";
 import {
   Lock,
   Loader2,
@@ -95,10 +97,10 @@ export default function SignInPage() {
   };
 
   return (
-    <div className="min-h-screen flex lg:flex-row-reverse w-full bg-white font-sans overflow-hidden relative">
+    <div className="axis-sign-in min-h-screen flex lg:flex-row-reverse w-full bg-white font-sans overflow-hidden relative">
       <Link 
         href="/"
-        className="absolute top-8 left-8 z-50 group flex items-center gap-3 text-[11px] uppercase tracking-[0.2em] font-bold text-slate-200 transition-all duration-300"
+        className="axis-sign-in-back absolute top-8 left-8 z-50 group flex items-center gap-3 text-[11px] uppercase tracking-[0.2em] font-bold text-slate-200 transition-all duration-300"
       >
         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 border border-white/20 shadow-lg backdrop-blur-md group-hover:bg-gradient-to-br group-hover:from-indigo-500 group-hover:to-violet-500 group-hover:text-white group-hover:border-transparent group-hover:shadow-indigo-500/30 group-hover:-translate-x-1 transition-all duration-300">
           <ArrowLeft className="w-4 h-4 text-white transition-transform duration-300" />
@@ -109,13 +111,15 @@ export default function SignInPage() {
       {/* Contenedor principal: lg:flex-row-reverse invierte el orden para colocar el formulario a la derecha y el banner a la izquierda en pantallas grandes */}
       
       {/* === SECCIÓN IZQUIERDA (Formulario - renderizado visualmente a la derecha) === */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-8 py-12 sm:px-12 lg:px-16 xl:px-24 z-10 bg-white">
+      <div className="login-form w-full lg:w-1/2 flex items-center justify-center px-8 py-24 lg:py-12 sm:px-12 lg:px-16 xl:px-24 z-10 bg-white">
         {/* Contenido del formulario: Se anima deslizándose desde la izquierda de manera sutil (slide-in-from-left-8) para crear un efecto cruzado sin revelar el fondo */}
         <div className="w-full max-w-md space-y-8 animate-in fade-in slide-in-from-left-8 duration-1000 ease-out">
+          <div className="login-season-controls"><HalloweenTheme /></div>
+          <HalloweenScene variant="compact" />
           {/* Header & Logo */}
           <div className="space-y-4">
             <Link href="/" className="flex items-center gap-3 font-bold text-2xl text-slate-900 tracking-tight hover:opacity-80 transition-opacity w-fit">
-              <div className="p-2.5 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-2xl text-white shadow-lg shadow-indigo-500/30 ring-1 ring-black/10">
+              <div className="login-logo-mark p-2.5 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-2xl text-white shadow-lg shadow-indigo-500/30 ring-1 ring-black/10">
                 <ShieldCheck className="h-6 w-6" />
               </div>
               Axis
@@ -218,7 +222,7 @@ export default function SignInPage() {
               </div>
               <Link
                 href="/forgot-password"
-                className="text-[14px] font-bold text-indigo-600 hover:text-indigo-700 transition-colors"
+                className="login-accent-link text-[14px] font-bold text-indigo-600 hover:text-indigo-700 transition-colors"
               >
                 ¿Olvidaste tu contraseña?
               </Link>
@@ -227,7 +231,7 @@ export default function SignInPage() {
             {/* Submit Button */}
             <Button
               type="submit"
-              className="w-full h-12 mt-4 text-[15px] font-bold bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white rounded-xl shadow-[0_8px_20px_rgba(79,70,229,0.25)] hover:shadow-[0_10px_25px_rgba(79,70,229,0.35)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300 border border-indigo-500/50"
+              className="login-submit w-full h-12 mt-4 text-[15px] font-bold bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white rounded-xl shadow-[0_8px_20px_rgba(79,70,229,0.25)] hover:shadow-[0_10px_25px_rgba(79,70,229,0.35)] hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300 border border-indigo-500/50"
               disabled={isLoading}
             >
               {isLoading ? (
@@ -246,7 +250,7 @@ export default function SignInPage() {
             ¿Nuevo en nuestra plataforma?<br />
             <Link
               href="/sign-up"
-              className="font-bold text-indigo-600 hover:text-indigo-700 transition-colors inline-block mt-1"
+              className="login-accent-link font-bold text-indigo-600 hover:text-indigo-700 transition-colors inline-block mt-1"
             >
               Crea una cuenta
             </Link>
@@ -255,7 +259,7 @@ export default function SignInPage() {
       </div>
 
       {/* === SECCIÓN DERECHA (Banner Oscuro/Glassmorphism) === */}
-      <div className="hidden lg:flex w-1/2 bg-[#0f0a1f] relative items-center justify-center p-12 overflow-hidden">
+      <div className="login-banner hidden lg:flex w-1/2 bg-[#0f0a1f] relative items-center justify-center p-12 overflow-hidden">
         {/* Elementos decorativos de fondo */}
         <div className="absolute inset-0 z-0">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(99,102,241,0.1)_0%,transparent_50%)]"></div>
@@ -273,7 +277,8 @@ export default function SignInPage() {
         ></div>
 
         {/* Contenido del Banner: Se anima deslizándose desde la derecha para completar la transición cruzada */}
-        <div className="relative z-10 w-full max-w-lg text-white space-y-8 mb-20 animate-in fade-in slide-in-from-right-8 duration-1000 ease-out">
+        <div className="login-banner-content relative z-10 w-full max-w-lg text-white space-y-8 mb-20 animate-in fade-in slide-in-from-right-8 duration-1000 ease-out">
+          <HalloweenScene variant="login" />
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 text-sm font-medium backdrop-blur-md border border-white/10 text-indigo-200 shadow-xl">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
@@ -284,7 +289,7 @@ export default function SignInPage() {
           <h2 className="text-4xl xl:text-5xl font-bold tracking-tight leading-tight text-white drop-shadow-lg">
             ¡Bienvenido de nuevo!
             <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-purple-300">
+            <span className="login-title-accent text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-purple-300">
               Accede a tu cuenta.
             </span>
           </h2>

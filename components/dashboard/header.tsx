@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Menu, UserCircle } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
 import { HalloweenTheme } from "@/components/dashboard/halloween-theme";
+import { HalloweenScene } from "@/components/seasonal/halloween-scene";
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -26,6 +27,7 @@ export function Header({ onMenuClick, showMenuButtonOnDesktop = false }: HeaderP
       </Button>
       <div className="flex items-center gap-2 font-semibold">
         <span className="hidden md:inline-block">Panel de Control</span>
+        <HalloweenScene variant="panel" />
       </div>
       <div className="ml-auto flex items-center space-x-4">
         <HalloweenTheme />
