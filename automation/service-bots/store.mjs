@@ -161,7 +161,7 @@ export class Store {
     return this.db.prepare("SELECT body FROM events WHERE phone=? AND from_me=0 AND rowid>? AND rowid<=? AND at<=? AND state IN ('PENDING','OBSERVED_SUPERSEDED') ORDER BY at,rowid LIMIT 40").all(phone,previous.rowid,current.rowid,current.at).map(r=>this.open(r.body));
   }
   question({phone,line,caseId,topic,conditions,recipient,text,source}) {
-    if(['cotizacion-verificada','disponibilidad-y-cotizacion','service-followup'].includes(topic)){
+    if(['cotizacion-verificada','disponibilidad-y-cotizacion','service-followup','requested-technician-contact'].includes(topic)){
       // Further details are retained in the conversation. A pending question for
       // the same case must not be sent again because its details or route changed.
       const pending=this.db.prepare("SELECT id,state FROM questions WHERE phone=? AND case_id=? AND topic=? AND state IN ('PENDING','ANSWER_REVIEW') ORDER BY rowid LIMIT 1").get(phone,caseId,topic);

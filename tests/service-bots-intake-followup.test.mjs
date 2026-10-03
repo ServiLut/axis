@@ -96,3 +96,46 @@ test('technical service also keeps a single availability question and acknowledg
     assert.equal(s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get(e.id+':reply').n,0);
   }finally{s.close();}
 });
+
+test('explicit technician phone request without punctuation does not reopen quotation intake',()=>{
+  const text='Hola me podrías compartir el número del técnico por que mi mama es toda nerviosa y viejita y quiere preguntarle cosas de la fumigacion ppr favor';
+  for(const company of ['fumigacion','servicio-tecnico']){
+    const state={slots:{site:'apartamento'},asked:['size']};
+    const d=customerDecision(company,state,{kind:'text',text});
+    assert.equal(d.reviewTopic,'requested-technician-contact');
+    assert.deepEqual(d.state.slots,state.slots);
+    assert.deepEqual(d.state.asked,state.asked);
+    assert.match(d.reviewQuestion,/autorizado|compartir/i);
+    assert.doesNotMatch(d.reply,/metros|plaga|inmueble|cotización|Sandra|Diego|\d{10}/i);
+    assert.equal(d.question,undefined);
+  }
+});
+
+test('repeated technician contact request keeps one chief question and no duplicate customer acknowledgment',async()=>{
+  const f=fixture();try{
+    await f.process('Me compartes el número del técnico');
+    const e=await f.process('Me puedes pasar el teléfono del técnico por favor');
+    const q=f.store.db.prepare('SELECT recipient,topic FROM questions').all();
+    assert.deepEqual(q.map(({recipient,topic})=>({recipient,topic})),[{recipient:SANDRA,topic:'requested-technician-contact'}]);
+    assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get(e.id+':reply').n,0);
+  }finally{f.store.close();}
+});
+
+test('a new technical service request still collects intake and personal-risk contact requests keep human review',()=>{
+  const d=customerDecision('fumigacion',{slots:{},asked:[]},{kind:'text',text:'Necesito un técnico para fumigar cucarachas'});
+  assert.equal(d.reviewTopic,undefined);assert.match(d.reply,/inmueble/i);
+  for(const text of ['Pásame el número del técnico, tengo dolor e intoxicación','Quiero el teléfono del técnico porque ya pagué']){
+    const r=customerDecision('fumigacion',{slots:{},asked:[]},{kind:'text',text});
+    assert.equal(r.reviewTopic,undefined);assert.ok(r.review);
+  }
+});
+
+test('technician contact request cannot release existing human attention',async()=>{
+  const f=fixture();try{
+    const first=await f.process('Hola');f.store.hold(first.phone,'verified-staff');
+    const e=await f.process('Me compartes el número del técnico');
+    assert.equal(f.store.db.prepare('SELECT state FROM events WHERE id=?').get(e.id).state,'OBSERVED_HUMAN');
+    assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);
+    assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get(e.id+':reply').n,0);
+  }finally{f.store.close();}
+});
