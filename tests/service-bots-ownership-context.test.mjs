@@ -480,3 +480,59 @@ test('an unanswered size requirement is a precise single pending clarification r
     assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get('SIZEUNKNOWN2:reply').n,0);
   }finally{f.s.close();}
 });
+
+test('the verified service thank-you receives courtesy without reopening intake or claiming that service',async()=>{
+  const f=fixture();
+  try {
+    const first=await f.process({text:'muchísimas gracias  por  servició  de  fumigación  Dios  bendiga  la  empresa y  a todo  el  personal 🙏🏻'});
+    const reply=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(first.id+':reply').body);
+    assert.match(reply,/Con gusto/);assert.doesNotMatch(reply,/inmueble|plaga|cotización|habitaciones|municipio|confirmad/i);
+    assert.deepEqual(f.s.conversation(first.phone).state.slots,{});
+    assert.deepEqual(f.s.conversation(first.phone).state.asked,[]);
+    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);
+    f.s.delivery('BOTMID1',first.line,'READ');
+    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM case_authorship').get().n,0);
+  }finally{f.s.close();}
+});
+
+test('courtesy with a greeting preserves an existing pending case without another intake list or clarification',async()=>{
+  const f=fixture();
+  try {
+    const first=await f.process({text:'Cucarachas en casa en Bello'});
+    const before=f.s.conversation(first.phone).state;
+    const replyEvent=await f.process({id:'SERVICETHANKS',at:Date.now()+1,text:'Hola, muchas gracias por la atención. Dios los bendiga 🙏'});
+    const after=f.s.conversation(first.phone).state;
+    assert.deepEqual(after.slots,before.slots);assert.deepEqual(after.asked,before.asked);assert.equal(after.caseId,before.caseId);
+    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);
+    assert.doesNotMatch(f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(replyEvent.id+':reply').body),/cuéntame|metros|municipio|plaga/i);
+  }finally{f.s.close();}
+});
+
+test('thanks containing a new request, uncertainty, payment, or safety issue are not dismissed as courtesy',async()=>{
+  const cases=[
+    ['Gracias, necesito otro servicio para ratas',/inmueble/],
+    ['Gracias, ¿qué garantía tiene el servicio?',/Revisaremos tu caso/],
+    ['Gracias, ya pagué por el servicio',/falta verificarlo/],
+    ['Gracias, pero mi perro está intoxicado',/Revisaremos tu caso/],
+  ];
+  for(const [text,expected] of cases){
+    const f=fixture();
+    try{
+      const first=await f.process({text});
+      assert.match(f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(first.id+':reply').body),expected);
+    }finally{f.s.close();}
+  }
+});
+
+test('service gratitude cannot release staff attention or produce a customer response while paused',async()=>{
+  for(const held of [true,false]){
+    const f=fixture();
+    try{
+      if(held){const staff=f.event({id:'STAFFTHANKS',fromMe:true,text:'Ya te atendí.'});f.s.enqueue(staff);await f.engine.process(staff);}
+      else f.c.enabled=false;
+      const source=await f.process({id:'CUSTOMERTHANKS',at:Date.now()+1,text:'Muchas gracias por el servicio de fumigación.'});
+      assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox').get().n,0);
+      assert.equal(f.s.conversation(source.phone).hold,Number(held));
+    }finally{f.s.close();}
+  }
+});

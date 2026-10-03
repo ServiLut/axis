@@ -40,8 +40,18 @@ function questionExcerpt(text) {
   return text.slice(0,350);
 }
 function isCustomerQuestion(text){return /[?¿]/.test(text)||/\b(?:cuanto (?:cuesta|vale|cobran|dura)|cual es (?:el|la)|como funciona|que incluye|me puedes (?:decir|confirmar)|pueden (?:venir|atender))\b/.test(normalize(text));}
-function literalIntakeTurn(e){return e.kind==='text'&&!e.forwarded&&!isCustomerQuestion(e.text)&&!/\b(?:antes|anterior|cancel\w*|reprogram\w*|reclamo|queja|garantia|pague|pago|abono|comprobante|me dijeron|me dijo|otra solicitud|otro servicio|nuevo servicio|otro equipo)\b/.test(normalize(e.text));}
+function customerCourtesy(text){
+  const value=normalize(text).replace(/\s+/g,' ');
+  if(/[?¿\d]/.test(value)||!/^(?:(?:hola|buenos dias|buen dia|buenas tardes|buenas noches)[,.! ]+)?(?:(?:muchas|muchisimas|mil)\s+)?gracias\b/.test(value))return false;
+  // Only affirmative gratitude vocabulary qualifies. A request, complaint, uncertainty,
+  // payment or safety concern must continue through the ordinary review/intake path.
+  const words=value.replace(/[^\p{L} ]/gu,' ').split(/\s+/).filter(Boolean);
+  const permitted=new Set('hola buenos buen buenas dia dias tardes noches muchas muchisimas mil gracias por el la los las su tu sus tus servicio servicios de fumigacion control plagas atencion ayuda excelente amable muy bueno buena todo toda todos todas personal empresa equipo dios bendiga bendiciones a y al les nos ustedes recibido recibida'.split(' '));
+  return words.every(word=>permitted.has(word));
+}
+function literalIntakeTurn(e){return e.kind==='text'&&!e.forwarded&&!customerCourtesy(e.text)&&!isCustomerQuestion(e.text)&&!/\b(?:antes|anterior|cancel\w*|reprogram\w*|reclamo|queja|garantia|pague|pago|abono|comprobante|me dijeron|me dijo|otra solicitud|otro servicio|nuevo servicio|otro equipo)\b/.test(normalize(e.text));}
 export function customerDecision(company,state,e,analysis={}) {
+  if(e.kind==='text'&&customerCourtesy(e.text))return {state:{...state,slots:{...state.slots},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)},courtesy:true,reply:'Con gusto. Estamos para servirte.'};
   const t=normalize(e.text);const next={...state,slots:{...state.slots,...extractSlots(e.text,company),...parseUnderstanding(analysis,e.text)},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)};
   if(company==='fumigacion'&&literalIntakeTurn(e)&&(state.asked?.at(-1)==='location'||state.initialIntakeAllRequested)&&e.text.length<=240&&/\b(?:villa|barrio|vereda|calle|carrera|unidad|urbanizacion|robledo|medellin|bello|envigado|itagui|sabaneta|santa helena)\b/.test(t))next.slots.locationDetails=e.text;
   if(e.kind==='call')return {state:{...next,lastCallEvent:e.id},observed:true};
@@ -148,7 +158,7 @@ export class Engine {
       const decision=pendingQuestion?{state:{...caseState,lastText:e.text},reviewTopic:'customer-question',reviewConditions:{question:normalize(pendingQuestion.text),caseId:caseState.caseId},reviewSource:pendingQuestion.id,pendingQuestion:pendingQuestion.text,review:'Hay una pregunta pendiente en esta misma secuencia; el mensaje siguiente aporta datos, pero no sustituye esa pregunta.',reviewQuestion:'¿Qué respuesta verificada corresponde a esta pregunta?',reply:'Recibí tu pregunta. Tu solicitud sigue pendiente de confirmación.'}:customerDecision(c.company,caseState,e,analysis);
       decision.state.lastHandledSourceId=e.id;
       if(/^[¡! ]*(?:hola\b|buenos dias\b|buen dia\b|buenas tardes\b|buenas noches\b)/.test(normalize(e.text))&&!conv.state.introduced&&decision.reply){
-        if(c.company==='fumigacion'&&!decision.review&&!decision.question&&!decision.observed){
+        if(c.company==='fumigacion'&&!decision.courtesy&&!decision.review&&!decision.question&&!decision.observed){
           const missing=decision.state.slots,requests=[];
           if(!missing.service)requests.push('Qué plaga deseas tratar o si buscas prevención.');
           if(!missing.site||!missing.area&&!missing.rooms)requests.push(!missing.site&&!missing.area&&!missing.rooms?'Qué tipo de inmueble es y cuántas habitaciones o metros cuadrados tiene.':!missing.site?'Qué tipo de inmueble es.':'Cuántas habitaciones o metros cuadrados tiene.');
@@ -178,7 +188,7 @@ export class Engine {
           text:c.name+': solicitud del contacto terminado en '+e.phone.slice(-4)+'. '+summary+(quoteOnly?'. Falta confirmar el precio y la respuesta aplicable. ¿Qué cotización y texto vigente corresponden a esta solicitud?':'. Aún no hay técnico, horario ni precio confirmados. ¿Qué técnico, horario disponible y cotización corresponden a este caso?')});
         if(quoteOnly&&!request.created)decision.reply=null;
       }
-      if(decision.reply){if(!publicTextSafe(decision.reply))throw new Error('EXTERNAL_TEXT_REJECTED');s.queue(e.id+':reply',e.phone,e.line,decision.reply,false,conv.revision,caseState.caseId);}
+      if(decision.reply){if(!publicTextSafe(decision.reply))throw new Error('EXTERNAL_TEXT_REJECTED');s.queue(e.id+':reply',e.phone,e.line,decision.reply,false,conv.revision,decision.courtesy?null:caseState.caseId);}
       finish(decision.observed?'OBSERVED_CALL':decision.review?'REVIEW':decision.question?'WAITING_COORDINATOR':'DONE');
     });
   }
