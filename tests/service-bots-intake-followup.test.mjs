@@ -238,3 +238,77 @@ test('technician contact request cannot release existing human attention',async(
     assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get(e.id+':reply').n,0);
   }finally{f.store.close();}
 });
+
+test('a request for the amount to send is payment review, never fresh intake or a received payment',()=>{
+  for(const company of ['fumigacion','servicio-tecnico']){
+    const state={slots:{site:'casa'},asked:['service']};
+    for(const text of ['Cuanto te mando','Cuánto te pago','Cómo te pago','A qué cuenta transfiero']){
+      const d=customerDecision(company,state,{kind:'text',text});
+      assert.equal(d.reviewTopic,'payment-instructions');
+      assert.deepEqual(d.state.asked,state.asked);
+      assert.match(d.reviewQuestion,/importe|medio de pago/i);
+      assert.doesNotMatch(d.reply,/recibí|pago recibido|inmueble|plaga|Sandra|Diego|\d/i);
+      assert.equal(d.question,undefined);
+    }
+  }
+});
+
+test('a reported prior quotation without punctuation does not ask the property again',()=>{
+  const d=customerDecision('fumigacion',{slots:{},asked:['service']},{kind:'text',text:'Yo ya cotize para san pedro de los milagros'});
+  assert.equal(d.reviewTopic,'existing-quotation');
+  assert.match(d.reviewQuestion,/cotización|antecedente/i);
+  assert.doesNotMatch(d.reply,/inmueble|plaga|habitaciones|ya confirmada/i);
+  assert.equal(d.question,undefined);
+});
+
+test('reported pests returning after a prior treatment keep post-service review without promising a warranty',()=>{
+  const d=customerDecision('fumigacion',{slots:{},asked:['service']},{kind:'text',text:'Hola es q en el mes de mayo me hicieron una fumigación a mi casa de chinches de cama y en mi habitación otra vez están apareciendo'});
+  assert.equal(d.reviewTopic,'service-followup');
+  assert.equal(d.reviewConditions.kind,'post-service');
+  assert.doesNotMatch(d.reply,/habitaciones|metros cuadrados|garantía|gratis|precio|hora confirmada/i);
+  assert.match(d.reviewQuestion,/antecedente|revisita/i);
+});
+
+test('a direct scheduling question without punctuation is reviewed before asking intake again',()=>{
+  const d=customerDecision('fumigacion',{slots:{},asked:['service']},{kind:'text',text:'A que horas me puedes colaborar mañana'});
+  assert.equal(d.reviewTopic,'customer-question');
+  assert.doesNotMatch(d.reply,/plaga|inmueble|habitaciones/i);
+});
+
+test('new payment and prior-quotation turns each retain one question and no repeated acknowledgment',async()=>{
+  for(const [first,next,topic]of [['Cuanto te mando','Cuánto debo enviarte','payment-instructions'],['Yo ya cotize para san pedro de los milagros','Ya me cotizaron este servicio','existing-quotation']]){
+    const f=fixture();try{
+      await f.process(first);const e=await f.process(next);
+      assert.deepEqual(f.store.db.prepare('SELECT topic,recipient FROM questions').all().map(({topic,recipient})=>({topic,recipient})),[{topic,recipient:SANDRA}]);
+      assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get(e.id+':reply').n,0);
+    }finally{f.store.close();}
+  }
+});
+
+test('payment requests cannot override reported-payment or personal-safety review',()=>{
+  for(const [text,expected]of [['Cuanto te mando, ya pagué','comprobar el ingreso'],['Cuánto debo enviarte, tengo dolor e intoxicación','atención personal']]){
+    const d=customerDecision('fumigacion',{slots:{},asked:[]},{kind:'text',text});
+    assert.equal(d.reviewTopic,undefined);assert.ok(d.review.includes(expected));
+  }
+});
+
+test('previous-service review does not convert a new quotation or equipment part into a prior service',()=>{
+  for(const text of ['Quiero cotizar una fumigación para chinches en una casa','Me hicieron un presupuesto para fumigar mi casa','Cuanto te mando de fotos del equipo']){
+    const d=customerDecision('fumigacion',{slots:{},asked:[]},{kind:'text',text});
+    assert.notEqual(d.reviewTopic,'existing-quotation');
+    assert.notEqual(d.reviewTopic,'service-followup');
+    assert.notEqual(d.reviewTopic,'payment-instructions');
+  }
+});
+
+test('existing human attention prevents payment and prior-quotation replies and questions',async()=>{
+  const f=fixture();try{
+    const first=await f.process('Hola');f.store.hold(first.phone,'verified-staff');
+    for(const text of ['Cuanto te mando','Yo ya cotize para san pedro de los milagros']){
+      const e=await f.process(text);
+      assert.equal(f.store.db.prepare('SELECT state FROM events WHERE id=?').get(e.id).state,'OBSERVED_HUMAN');
+      assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get(e.id+':reply').n,0);
+    }
+    assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);
+  }finally{f.store.close();}
+});

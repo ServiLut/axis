@@ -52,12 +52,22 @@ function questionExcerpt(text) {
   return text.slice(0,350);
 }
 function serviceFollowup(text){return /\b(?:quedaron de venir|quedaron (?:en )?venir|a que hora (?:llega\w*|viene\w*)|(?:cuando|en cuanto tiempo) (?:llega\w*|viene\w*)|(?:no han|no ha|aun no han|todavia no han) (?:llegado|venido))\b/.test(normalize(text));}
+function paymentInquiry(text){
+  const t=normalize(text);
+  if(/\b(?:fotos?|imagenes?|documentos?|datos|medidas|piezas)\b/.test(t))return false;
+  return /\bcuanto(?: dinero)?\s+(?:(?:te|les?)\s+(?:mando|envio|pago|transfiero)|(?:debo|puedo|tengo que)\s+(?:enviar(?:te|les)?|mandar(?:te|les)?|pagar(?:te|les)?|transferir(?:te|les)?))\b/.test(t)||/\b(?:como (?:te|les?) (?:pago|transfiero)|a que cuenta (?:pago|transfiero|consigno))\b/.test(t);
+}
+function previousQuotation(text){return /\b(?:ya (?:lo |la )?cotiz[eo]|ya (?:me )?cotizaron|ya tengo (?:la |una )?cotizacion|me cotizaron (?:este|el|ese) servicio)\b/.test(normalize(text));}
+function postServiceReturn(text){
+  const t=normalize(text);
+  return /\bme (?:hicieron|realizaron|aplicaron) (?:una |la |el |un )?(?:fumigacion|tratamiento)\b/.test(t)&&/\b(?:otra vez|nuevamente|de nuevo|volvieron|vuelven|siguen)\b/.test(t)&&/\b(?:aparec\w*|chinches?|cucarachas?|hormigas?|pulgas?|ratas?|ratones|plagas?)\b/.test(t);
+}
 function requestedTechnicalContact(text){
   const t=normalize(text);
   return /\b(?:numero|telefono|celular|whatsapp|contacto)\s+(?:de(?:l| la)?\s+)?(?:tecnic[oa]|fumigador[ae]?)\b/.test(t)&&
     /\b(?:podrias?|podrian|puedes?|pueden|compartir|compartes|comparte|comparteme|pasar|pasas|pasa|pasame|enviar|envias|envia|enviame|dame|darme|necesito|quiero|quisiera|cual (?:es|seria))\b/.test(t);
 }
-function isCustomerQuestion(text){return /[?¿]/.test(text)||serviceFollowup(text)||requestedTechnicalContact(text)||commonQuestionTopics(text).length>0||/\b(?:cuanto (?:cuesta|vale|cobran|dura)|cual es (?:el|la)|como funciona|que incluye|me puedes (?:decir|confirmar)|pueden (?:venir|atender))\b/.test(normalize(text));}
+function isCustomerQuestion(text){return /[?¿]/.test(text)||serviceFollowup(text)||paymentInquiry(text)||previousQuotation(text)||postServiceReturn(text)||requestedTechnicalContact(text)||commonQuestionTopics(text).length>0||/\b(?:cuanto (?:cuesta|vale|cobran|dura)|cual es (?:el|la)|como funciona|que incluye|me puedes (?:decir|confirmar)|pueden (?:venir|atender)|a que horas? (?:me |nos )?(?:puedes|pueden|podrias) (?:colaborar|atender|ayudar|venir))\b/.test(normalize(text));}
 function customerCourtesy(text){
   const value=normalize(text).replace(/\s+/g,' ');
   if(/[?¿\d]/.test(value)||!/^(?:(?:hola|buenos dias|buen dia|buenas tardes|buenas noches)[,.! ]+)?(?:(?:muchas|muchisimas|mil)\s+)?gracias\b/.test(value))return false;
@@ -83,7 +93,10 @@ export function customerDecision(company,state,e,analysis={}) {
   if(/\b(factura|certificado|seguimiento|posservicio|ya tengo (?:una )?cita|estado de (?:la )?orden)\b/.test(t))return {state:next,review:'El cliente consulta un servicio previo, su estado o un soporte. Hace falta contrastar el registro del programa.',reply:'Gracias. Revisaremos el registro de tu servicio para poder ayudarte.'};
   if(/\b(cancel|reprogram|reclamo|queja|garantia|devolucion|amenaz|abogad|denuncia|dolor|intoxic|embaraz|mascota|bebe|niño|nino)\w*/.test(t))
     return {state:next,review:'El cliente solicita revisar una excepción o situación que necesita atención personal.',reply:'Gracias por contarnos. Revisaremos tu caso para darte una respuesta clara.'};
-  if(/\b(pague|pago|comprobante|transfer|consign|abono)\w*/.test(t))return {state:next,review:'El cliente informa un pago. Hace falta comprobar el ingreso y su asociación al servicio.',reply:'Gracias. Recibí la información del pago; falta verificarlo para poder confirmarte.'};
+  if(/\b(pague|pago|comprobante|transfer|consign|abono)\w*/.test(t)&&(!paymentInquiry(e.text)||/\b(?:pague|comprobante|transferencia|consignacion|abono|(?:hice|realice) (?:el |un )?pago)\b/.test(t)))return {state:next,review:'El cliente informa un pago. Hace falta comprobar el ingreso y su asociación al servicio.',reply:'Gracias. Recibí la información del pago; falta verificarlo para poder confirmarte.'};
+  if(paymentInquiry(e.text))return {state:next,reviewTopic:'payment-instructions',reviewConditions:{kind:'amount-and-instructions'},review:'La persona pregunta cuánto enviar o cómo pagar. No informa un ingreso recibido; el importe, medio de pago y asociación al caso requieren una fuente verificable.',reviewQuestion:'¿Qué importe y medio de pago verificados corresponden a esta solicitud?',reply:'Con gusto. Aún falta confirmar cuánto debes enviar y el medio de pago.'};
+  if(previousQuotation(e.text))return {state:next,reviewTopic:'existing-quotation',reviewConditions:{kind:'previous-quotation'},review:'La persona dice que ya recibió una cotización. Esa afirmación no confirma precio, aceptación ni reserva; hace falta contrastar el antecedente del mismo caso.',reviewQuestion:'¿Qué cotización previa comprobada corresponde a este caso y cuál es la respuesta vigente?',reply:'Entiendo. La cotización anterior aún necesita verificarse para continuar.'};
+  if(company==='fumigacion'&&postServiceReturn(e.text))return {state:next,reviewTopic:'service-followup',reviewConditions:{kind:'post-service'},review:'La persona relata reaparición de una plaga tras una fumigación anterior. Hace falta comprobar el antecedente y las condiciones aplicables; no consta una garantía o revisita aprobada.',reviewQuestion:'¿Qué antecedente y condiciones de revisita comprobados corresponden a este caso?',reply:'Entiendo lo que nos cuentas. Tu caso necesita revisión para confirmar cómo continuar.'};
   if(requestedTechnicalContact(e.text))return {state:{...next,slots:{...state.slots}},reviewTopic:'requested-technician-contact',reviewConditions:{kind:'technician-contact'},review:'La persona solicita un medio de contacto del técnico para hacerle preguntas. No consta aquí un contacto autorizado para compartir; no es una nueva solicitud de cotización.',reviewQuestion:'¿Qué contacto está autorizado para atender sus dudas y qué dato podemos compartirle?',reply:'Entiendo. Aún falta confirmar el contacto que puede atender tus dudas.'};
   if(serviceFollowup(e.text))return {state:{...next,slots:{...state.slots}},reviewTopic:'service-followup',reviewConditions:{kind:'arrival'},review:'La persona pregunta por la llegada del servicio. Hace falta contrastar el antecedente y comprobar el estado actual; no consta aquí una hora verificada.',reviewQuestion:'¿Cuál es el estado actual del servicio y qué respuesta confirmada podemos darle sobre la llegada?',reply:'Entiendo tu preocupación. Aún no tengo una hora de llegada confirmada.'};
   if(/^(gracias|muchas gracias|muy amable|ok|listo)[.! ]*$/.test(t))return {state:next,reply:'Con gusto.'};
@@ -184,7 +197,7 @@ export class Engine {
       }
       const priorFaq=caseState.pendingFaqQuestion;
       const faqQuestion=pendingQuestion|| (priorFaq&&literalIntakeTurn(e)?priorFaq:e);
-      const faq=c.company==='fumigacion'&&e.kind==='text'&&!e.forwarded&&!faqNeedsPersonalReview(e.text)&&faqQuestion.kind==='text'?selectCommonAnswer(faqQuestion.text,caseState.slots,s.approvedCustomerAnswers(),caseState.caseId):null;
+      const faq=c.company==='fumigacion'&&e.kind==='text'&&!e.forwarded&&!faqNeedsPersonalReview(e.text)&&!paymentInquiry(e.text)&&!previousQuotation(e.text)&&!postServiceReturn(e.text)&&faqQuestion.kind==='text'?selectCommonAnswer(faqQuestion.text,caseState.slots,s.approvedCustomerAnswers(),caseState.caseId):null;
       let decision;
       if(faq?.answer){
         decision={state:{...caseState,lastText:e.text,pendingFaqQuestion:null},reply:faq.answer};
@@ -218,7 +231,7 @@ export class Engine {
         s.audit('CONVERSATION_CONTEXT_REVIEW',e.id,{caseId:caseState.caseId,turns:history.turns.length,storedCoverageComplete:history.completeStoredHistory,fullWhatsAppHistoryRead:false,originalMediaRead:false});
         const request=s.question({phone:e.phone,line:e.line,caseId:caseState.caseId,topic:decision.reviewTopic||'revision:'+e.id,conditions:decision.reviewConditions|| (decision.reviewTopic?{question:normalize(e.text),caseId:caseState.caseId}:{event:e.id,caseId:caseState.caseId}),recipient:SANDRA,source:decision.reviewSource||e.id,
           text:c.name+': contacto terminado en '+e.phone.slice(-4)+'. '+decision.review+(decision.pendingQuestion?' Pregunta pendiente: '+questionExcerpt(decision.pendingQuestion)+'.':'')+' Mensaje actual: '+questionExcerpt(e.text)+(context?' Datos de esta solicitud: '+context+'.':'')+' '+(decision.reviewQuestion||'¿Cómo debemos continuar en este caso?')});
-        if(!request.created&&(decision.reviewTopic?.startsWith('missing-intake:')||['common-question','service-followup','requested-technician-contact'].includes(decision.reviewTopic))){
+        if(!request.created&&(decision.reviewTopic?.startsWith('missing-intake:')||['common-question','service-followup','requested-technician-contact','payment-instructions','existing-quotation'].includes(decision.reviewTopic))){
           decision.reply=null;
           s.audit('PENDING_CLARIFICATION_REUSED',e.id,{caseId:caseState.caseId,questionId:request.id,topic:decision.reviewTopic,newOutboundCreated:false});
         }

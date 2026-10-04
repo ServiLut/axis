@@ -204,3 +204,13 @@ Una continuación propia aportó un café y Santa Fe de Antioquia, pero el parse
 
 La corrección se aplica a turnos nuevos. Las pruebas aisladas cubren la secuencia, el dato de tamaño posterior, una sola consulta de cotización a Sandra, la separación de S.TECNICO y la atención humana. No recuperan ni envían mensajes de prueba, resuelven la pregunta histórica o acreditan el guardado de un servicio. La próxima continuación legítima posterior al despliegue conserva su verificación pendiente.
 
+## Pago solicitado, cotización previa y revisita — control 04/10/2026 21:56Z
+
+Las fuentes propias verificadas mostraron tres preguntas sustituidas por recepción: cuánto enviar, una cotización que el cliente dice haber recibido y la reaparición de chinches después de una fumigación anterior. También una pregunta de horario sin signos fue tratada como dato de formulario. Se conservan las respuestas históricas y las consultas ya pendientes, sin reproducirlas ni marcarlas como resueltas por el cambio de código.
+
+`paymentInquiryGuard=amount-before-intake-and-no-receipt-v1` distingue la pregunta sobre importe o medio de pago de un pago informado. Guarda una única consulta del caso a Sandra y no anuncia un ingreso, importe o cuenta sin verificación. `existingQuotationGuard=verified-prior-quote-before-intake-v1` conserva la afirmación de cotización previa como antecedente por contrastar, sin confirmar precio, aceptación o reserva. Ambas guardias se aplican por separado en las dos empresas.
+
+En FUMIGACION, `postServiceGuard=reported-recurrence-before-intake-v1` reconoce la reaparición relatada después de una fumigación y consulta el antecedente y las condiciones de revisita del caso; no abre una cotización nueva automáticamente ni presume garantía. Las preguntas concretas de horario tienen prioridad aunque no lleven signos. Cada consulta conserva fuente y caso, deduplica reiteraciones y mantiene la atención humana. Pagos informados y situaciones personales o de seguridad mantienen su revisión prioritaria.
+
+Estas correcciones no confirman una cotización, revisita, horario, técnico, pago o guardado de negocio. Las recepciones permanecen activas por la instrucción vigente y las confirmaciones nuevas se dirigen exclusivamente a Sandra. La siguiente atención legítima con estas guardias debe verificarse en producción.
+
