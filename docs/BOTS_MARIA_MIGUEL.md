@@ -186,6 +186,8 @@ La recepción activa de ambas empresas conserva prioridad sobre las pausas hist�
 
 `serviceFollowupGuard=existing-service-arrival-before-intake-v1` reconoce preguntas sobre llegada incluso sin signos de interrogación. Conserva el caso y solicita a Sandra el estado y una respuesta comprobada antes de anunciar una hora. Pagos y excepciones de seguridad mantienen prioridad de revisión personal. No crea, confirma ni modifica servicios en el programa. La atención humana sigue bloqueando las respuestas y no se libera por esta corrección.
 
+`intakeLiteralFieldsGuard=plural-property-and-room-synonyms-v1` reconoce tipos de inmueble en plural. En FUMIGACION, «3 piezas» se conserva literalmente como habitaciones cuando el mismo texto identifica el inmueble; piezas de repuesto o de un motor no se convierten en tamaño. Los datos aportados en varios renglones mantienen sus fuentes y evitan repetir inmueble o habitaciones. Una ubicación indicada como barrio permanece literal, sin atribuirle un municipio. La cotización conserva una sola consulta pendiente del caso, su revisión personal y los holds. Esta corrección no modifica ni recupera los mensajes anteriores.
+
 La cortesía legítima posterior fue observada con una respuesta breve READ sin reiniciar la recepción. La revisión guardada distingue metadatos, textos efectivamente leídos y medios originales pendientes. Las respuestas frecuentes aprobadas, los productos con etiqueta/ficha original y el recorrido guardado en el programa siguen pendientes; estas correcciones no acreditan autonomía completa. Verificar ambos indicadores en las API propias tras el despliegue y guardar la siguiente respuesta legítima sin pruebas enviadas a clientes.
 
 ## Solicitud del contacto del técnico — control 03/10/2026 22:14Z

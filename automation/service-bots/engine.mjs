@@ -15,10 +15,16 @@ export function extractSlots(text,company) {
   slots.service=(specific.length?specific:found).join(' y ')||undefined;
   const city=['medellin','bello','envigado','itagui','sabaneta','la estrella','copacabana','girardota','rionegro'].find(s=>new RegExp('\\b'+s+'\\b').test(t));
   if(city)slots.location=city;
-  if(company==='fumigacion')slots.site=/\bcasa\s+finca\b/.test(t)?'casa finca':/\bfinca\b/.test(t)?'finca':['apartamento','casa','restaurante','local','oficina','bodega'].find(s=>new RegExp('\\b'+s+'\\b').test(t));
+  if(company==='fumigacion'){
+    const properties={'casa finca':/\bcasas?\s+fincas?\b/,finca:/\bfincas?\b/,apartamento:/\bapartamentos?\b/,casa:/\bcasas?\b/,restaurante:/\brestaurantes?\b/,local:/\blocal(?:es)?\b/,oficina:/\boficinas?\b/,bodega:/\bbodegas?\b/};
+    slots.site=Object.keys(properties).find(site=>properties[site].test(t));
+  }
   if(company==='fumigacion'){
     slots.area=text.match(/\b\d{1,5}(?:[.,]\d{1,2})?\s*(?:m\s*(?:²|2|cuadrados?)|metros?\s*cuadrados?)(?=$|[\s.,;:)])/i)?.[0];
     slots.rooms=text.match(/\b\d{1,3}\s*(?:habitaciones?|cuartos?)\b/i)?.[0];
+    // "Piezas" describes rooms only with an explicit property in this text;
+    // an equipment part or an unrelated count must not become the home's size.
+    if(!slots.rooms&&slots.site)slots.rooms=text.match(/\b\d{1,3}\s*piezas?\b(?!\s+(?:de|del|para|repuestos?|motor|maquina)\b)/i)?.[0];
   }
   return Object.fromEntries(Object.entries(slots).filter(([,v])=>v));
 }

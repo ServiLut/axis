@@ -12,6 +12,40 @@ function fixture(){
   return {store,async process(text){const event={id:'INTAKEFIX'+(++n),phone:'573001112233',line:config.lines[0].phone,at:Date.now()+n,fromMe:false,kind:'text',text};store.enqueue(event);await engine.process(event);return event;}};
 }
 
+test('the observed multiline apartment and room reply does not repeat either intake question',async()=>{
+  const f=fixture();try{
+    await f.process('Hola');
+    const e=await f.process('Cucarachas\nApartamentos con 3 piezas grandes\nBarrio las palmas');
+    const state=f.store.conversation(e.phone).state;
+    assert.equal(state.slots.site,'apartamento');
+    assert.equal(state.slots.rooms,'3 piezas');
+    assert.equal(state.slots.location,undefined);
+    assert.match(state.slots.locationDetails,/Barrio las palmas/);
+    assert.equal(state.intakeSources.site.sourceId,e.id);
+    assert.equal(state.intakeSources.rooms.sourceId,e.id);
+    assert.equal(f.store.db.prepare('SELECT state FROM events WHERE id=?').get(e.id).state,'WAITING_COORDINATOR');
+    const reply=f.store.open(f.store.db.prepare('SELECT body FROM outbox WHERE id=?').get(e.id+':reply').body);
+    assert.doesNotMatch(reply,/tipo de inmueble|cuántas habitaciones|metros cuadrados/i);
+    const detail=await f.process('Para todo el Apartamento donde vivo mi apartamento consta con 3 piezas baño sala pequeña y cocina');
+    assert.equal(f.store.conversation(detail.phone).state.slots.rooms,'3 piezas');
+    assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get(detail.id+':reply').n,0);
+    const questions=f.store.db.prepare('SELECT topic,recipient FROM questions').all();
+    assert.deepEqual(questions.map(({topic,recipient})=>({topic,recipient})),[{topic:'cotizacion-verificada',recipient:SANDRA}]);
+  }finally{f.store.close();}
+});
+
+test('property plurals remain canonical and pieces require an explicit property in the literal text',()=>{
+  for(const [literal,expected] of [['apartamentos','apartamento'],['casas','casa'],['restaurantes','restaurante'],['locales','local'],['oficinas','oficina'],['bodegas','bodega'],['fincas','finca']]){
+    assert.equal(extractSlots(literal,'fumigacion').site,expected);
+  }
+  assert.equal(extractSlots('Mi apartamento tiene 3 piezas grandes','fumigacion').rooms,'3 piezas');
+  for(const text of ['Tengo 3 piezas grandes','Apartamento con 3 piezas de repuesto','Apartamento con 3 piezas del motor']){
+    assert.equal(extractSlots(text,'fumigacion').rooms,undefined);
+  }
+  const technical=extractSlots('Lavadora en apartamentos con 3 piezas','servicio-tecnico');
+  assert.equal(technical.site,undefined);assert.equal(technical.rooms,undefined);
+});
+
 test('size reply uses the preceding area question without repeating the same data request',async()=>{
   const f=fixture();try{
     await f.process('Hola, requiero una cotización técnica para control de Cucarachas en un apartamento ubicado en Medellín.');
