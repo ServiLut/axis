@@ -16,7 +16,11 @@ export function extractSlots(text,company) {
   const city=['medellin','bello','envigado','itagui','sabaneta','la estrella','copacabana','girardota','rionegro'].find(s=>new RegExp('\\b'+s+'\\b').test(t));
   if(city)slots.location=city;
   if(company==='fumigacion'){
-    const properties={'casa finca':/\bcasas?\s+fincas?\b/,finca:/\bfincas?\b/,apartamento:/\bapartamentos?\b/,casa:/\bcasas?\b/,restaurante:/\brestaurantes?\b/,local:/\blocal(?:es)?\b/,oficina:/\boficinas?\b/,bodega:/\bbodegas?\b/};
+    const municipality=text.match(/\b(?:santa\s+fe|santaf[eé])\s+de\s+antioquia\b/i)?.[0];
+    if(municipality)slots.location=municipality;
+    // A locative answer names a café as the place. Coffee drinks or colors
+    // alone do not identify an inmueble, and no restaurant type is inferred.
+    const properties={'casa finca':/\bcasas?\s+fincas?\b/,finca:/\bfincas?\b/,apartamento:/\bapartamentos?\b/,casa:/\bcasas?\b/,restaurante:/\brestaurantes?\b/,local:/\blocal(?:es)?\b/,oficina:/\boficinas?\b/,bodega:/\bbodegas?\b/,'cafetería':/\bcafeterias?\b/,'café':/^(?:(?:es|seria)\s+)?en\s+(?:(?:el|un|nuestro|mi)\s+)?cafe\b/};
     slots.site=Object.keys(properties).find(site=>properties[site].test(t));
   }
   if(company==='fumigacion'){

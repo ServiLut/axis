@@ -46,6 +46,71 @@ test('property plurals remain canonical and pieces require an explicit property 
   assert.equal(technical.site,undefined);assert.equal(technical.rooms,undefined);
 });
 
+test('a literal cafe and Santa Fe de Antioquia reply keeps the pest and asks only the missing size',async()=>{
+  const f=fixture();try{
+    await f.process('Hola buenas tardes');
+    await f.process('Sería para tratar unas ratas');
+    const e=await f.process('Es en café de la plaza en santa fe de Antioquia');
+    const state=f.store.conversation(e.phone).state;
+    assert.equal(state.slots.service,'ratas');
+    assert.equal(state.slots.site,'café');
+    assert.equal(state.slots.location,'santa fe de Antioquia');
+    assert.equal(state.intakeSources.site.sourceId,e.id);
+    assert.equal(state.intakeSources.location.sourceId,e.id);
+    assert.equal(state.slots.area,undefined);
+    assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);
+    const reply=f.store.open(f.store.db.prepare('SELECT body FROM outbox WHERE id=?').get(e.id+':reply').body);
+    assert.match(reply,/habitaciones|metros cuadrados/i);
+    assert.doesNotMatch(reply,/tipo de inmueble|municipio|revisaremos/i);
+  }finally{f.store.close();}
+});
+
+test('literal cafe locations and cafeteria nouns remain scoped to fumigacion',()=>{
+  assert.equal(extractSlots('Es en café de la plaza','fumigacion').site,'café');
+  assert.equal(extractSlots('En el café de la plaza','fumigacion').site,'café');
+  assert.equal(extractSlots('Una cafetería en Santafé de Antioquia','fumigacion').site,'cafetería');
+  assert.equal(extractSlots('Una cafetería en Santafé de Antioquia','fumigacion').location,'Santafé de Antioquia');
+  const technical=extractSlots('Cafetería en Santa Fe de Antioquia','servicio-tecnico');
+  assert.equal(technical.site,undefined);
+  assert.equal(technical.location,undefined);
+});
+
+test('coffee beverages, colors and a different Santa Fe do not invent property or municipality',()=>{
+  for(const text of ['Las ratas son de color café','Es un café con leche','No es en un café','Tomamos café']){
+    assert.equal(extractSlots(text,'fumigacion').site,undefined);
+  }
+  assert.equal(extractSlots('Santa Fe de Bogotá','fumigacion').location,undefined);
+});
+
+test('size after a literal cafe creates one quotation question without inventing price or schedule',async()=>{
+  const f=fixture();try{
+    await f.process('Hola');
+    await f.process('Ratas');
+    await f.process('Es en café de la plaza en Santa Fe de Antioquia');
+    const e=await f.process('Son 52 metros cuadrados');
+    const state=f.store.conversation(e.phone).state;
+    assert.equal(state.slots.site,'café');
+    assert.equal(state.slots.area,'52 metros cuadrados');
+    assert.equal(state.slots.preference,undefined);
+    const questions=f.store.db.prepare('SELECT topic,recipient FROM questions').all();
+    assert.deepEqual(questions.map(({topic,recipient})=>({topic,recipient})),[{topic:'cotizacion-verificada',recipient:SANDRA}]);
+    const next=await f.process('Son aproximadamente 52 metros cuadrados');
+    assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM questions').get().n,1);
+    assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get(next.id+':reply').n,0);
+  }finally{f.store.close();}
+});
+
+test('literal cafe intake does not resume a case taken by staff',async()=>{
+  const f=fixture();try{
+    const first=await f.process('Hola');f.store.hold(first.phone,'verified-staff');
+    const e=await f.process('Ratas en una cafetería en Santa Fe de Antioquia de 52 metros cuadrados');
+    assert.equal(f.store.conversation(e.phone).hold,1);
+    assert.equal(f.store.db.prepare('SELECT state FROM events WHERE id=?').get(e.id).state,'OBSERVED_HUMAN');
+    assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);
+    assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get(e.id+':reply').n,0);
+  }finally{f.store.close();}
+});
+
 test('size reply uses the preceding area question without repeating the same data request',async()=>{
   const f=fixture();try{
     await f.process('Hola, requiero una cotización técnica para control de Cucarachas en un apartamento ubicado en Medellín.');

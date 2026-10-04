@@ -196,3 +196,11 @@ Una fuente propia de FUMIGACION solicitó el número del técnico, sin signos de
 
 La primera pregunta legítima recibida por Miguel Ángel tras activarse tuvo respuesta propia READ comprobada por ID nativo y consulta del caso DELIVERED a Sandra. Era una duda sobre compra de equipos dañados para repuestos: no se confirmó compra ni se creó un servicio. Esa recepción verificada no acredita una cotización, una reparación o un guardado completo en el programa. Ambos bots permanecen activos con las confirmaciones nuevas dirigidas a Sandra.
 
+## Lugar comercial literal — control 04/10/2026 18:53Z
+
+Una continuación propia aportó un café y Santa Fe de Antioquia, pero el parser conservó sólo la plaga y produjo una consulta por el tipo de inmueble ya indicado. Fuente, tres respuestas y pregunta a Sandra fueron cotejadas con sus IDs nativos exactos; las salidas entregadas no se reproducen. La pregunta existente sigue pendiente de revisión, sin marcarla como contestada por una corrección de código.
+
+`intakeLiteralFieldsGuard=literal-business-place-and-room-synonyms-v2` reconoce en FUMIGACION una descripción locativa explícita como «Es en café…», el sustantivo cafetería y el municipio completo Santa Fe/Santafé de Antioquia. Conserva la plaga y las fuentes del mismo caso; pregunta por habitaciones o metros cuadrados si aún faltan. Un color, una bebida o el nombre Santa Fe de otro municipio no confirman esos campos. Café no se transforma en restaurante, tarifa, producto, horario o disponibilidad.
+
+La corrección se aplica a turnos nuevos. Las pruebas aisladas cubren la secuencia, el dato de tamaño posterior, una sola consulta de cotización a Sandra, la separación de S.TECNICO y la atención humana. No recuperan ni envían mensajes de prueba, resuelven la pregunta histórica o acreditan el guardado de un servicio. La próxima continuación legítima posterior al despliegue conserva su verificación pendiente.
+
