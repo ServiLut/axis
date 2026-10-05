@@ -79,6 +79,14 @@ function paymentInquiry(text){
   return /\bcuanto(?: dinero)?\s+(?:(?:te|les?)\s+(?:mando|envio|pago|transfiero)|(?:debo|puedo|tengo que)\s+(?:enviar(?:te|les)?|mandar(?:te|les)?|pagar(?:te|les)?|transferir(?:te|les)?))\b/.test(t)||/\b(?:como (?:te|les?) (?:pago|transfiero)|a que cuenta (?:pago|transfiero|consigno))\b/.test(t);
 }
 function previousQuotation(text){return /\b(?:ya (?:lo |la )?cotiz[eo]|ya (?:me )?cotizaron|ya tengo (?:la |una )?cotizacion|me cotizaron (?:este|el|ese) servicio)\b/.test(normalize(text));}
+function postServiceDocuments(text){
+  const t=normalize(textWithoutLinks(text));
+  if(!/\b(?:documentos?|soportes?|fichas de seguridad|certificados?|permisos?|arl)\b/.test(t))return false;
+  if(!/\b(?:solicitar|solicito|solicitando|necesito|requiero|requiriendo|requiere|requeridos|enviar|enviarme|entregar|pedir)\b/.test(t))return false;
+  const prior=/\b(?:(?:posterior(?:es)?|despues|tras) (?:a |de |del |la |el )*(?:prestacion del servicio|servicio|fumigacion|reparacion|visita)|(?:me|nos) (?:hicieron|realizaron|prestaron|aplicaron) (?:una |la |el |un )?(?:fumigacion|tratamiento|servicio|reparacion)|(?:servicio|reparacion|fumigacion|visita) realizad[oa])\b/;
+  if(/\b(?:no|nunca) (?:me|nos) (?:hicieron|realizaron|prestaron|aplicaron)\b/.test(t))return false;
+  return prior.test(t);
+}
 function postServiceReturn(text){
   const t=normalize(text);
   return /\bme (?:hicieron|realizaron|aplicaron) (?:una |la |el |un )?(?:fumigacion|tratamiento)\b/.test(t)&&/\b(?:otra vez|nuevamente|de nuevo|volvieron|vuelven|siguen)\b/.test(t)&&/\b(?:aparec\w*|chinches?|cucarachas?|hormigas?|pulgas?|ratas?|ratones|plagas?)\b/.test(t);
@@ -97,7 +105,7 @@ function requestedTechnicalContact(text){
   return /\b(?:numero|telefono|celular|whatsapp|contacto)\s+(?:de(?:l| la)?\s+)?(?:tecnic[oa]|fumigador[ae]?)\b/.test(t)&&
     /\b(?:podrias?|podrian|puedes?|pueden|compartir|compartes|comparte|comparteme|pasar|pasas|pasa|pasame|enviar|envias|envia|enviame|dame|darme|necesito|quiero|quisiera|cual (?:es|seria))\b/.test(t);
 }
-function isCustomerQuestion(text){text=textWithoutLinks(text);return /[?¿]/.test(text)||serviceFollowup(text)||paymentInquiry(text)||previousQuotation(text)||postServiceReturn(text)||plannedRevisit(text)||requestedTechnicalContact(text)||commonQuestionTopics(text).length>0||/\b(?:cuanto (?:cuesta|vale|cobran|dura)|cual es (?:el|la)|como funciona|que incluye|me puedes (?:decir|confirmar)|pueden (?:venir|atender)|a que horas? (?:me |nos )?(?:puedes|pueden|podrias) (?:colaborar|atender|ayudar|venir))\b/.test(normalize(text));}
+function isCustomerQuestion(text){text=textWithoutLinks(text);return /[?¿]/.test(text)||postServiceDocuments(text)||serviceFollowup(text)||paymentInquiry(text)||previousQuotation(text)||postServiceReturn(text)||plannedRevisit(text)||requestedTechnicalContact(text)||commonQuestionTopics(text).length>0||/\b(?:cuanto (?:cuesta|vale|cobran|dura)|cual es (?:el|la)|como funciona|que incluye|me puedes (?:decir|confirmar)|pueden (?:venir|atender)|a que horas? (?:me |nos )?(?:puedes|pueden|podrias) (?:colaborar|atender|ayudar|venir))\b/.test(normalize(text));}
 function customerCourtesy(text){
   const value=normalize(text).replace(/\s+/g,' ');
   if(/[?¿\d]/.test(value)||!/^(?:(?:hola|buenos dias|buen dia|buenas tardes|buenas noches)[,.! ]+)?(?:(?:muchas|muchisimas|mil)\s+)?gracias\b/.test(value))return false;
@@ -111,7 +119,7 @@ function ambiguousIntake(text){return /\b(?:casa o apartamento|apartamento o cas
 function literalIntakeTurn(e){
   const text=normalize(textWithoutLinks(e.text));
   const facts=/\b(?:tengo|mi (?:casa|apartamento)|son \d+|mide)\b/.test(text)||/^(?:hola[, ]+)?es una? (?:casa|apartamento)\b/.test(text);
-  return e.kind==='text'&&!e.forwarded&&!unreadLinkOnly(e.text)&&!customerCourtesy(e.text)&&!ambiguousIntake(e.text)&&(!isCustomerQuestion(e.text)||quotationInquiry(e.text)||facts)&&!serviceFollowup(e.text)&&!postServiceReturn(e.text)&&!plannedRevisit(e.text)&&!paymentInquiry(e.text)&&!previousQuotation(e.text)&&!requestedTechnicalContact(e.text)&&!/\b(?:antes|anterior|cancel\w*|reprogram\w*|reclamo|queja|garantia|pague|pago|abono|comprobante|me dijeron|me dijo|otra solicitud|otro servicio|nuevo servicio|otro equipo)\b/.test(text);
+  return e.kind==='text'&&!e.forwarded&&!unreadLinkOnly(e.text)&&!customerCourtesy(e.text)&&!ambiguousIntake(e.text)&&(!isCustomerQuestion(e.text)||quotationInquiry(e.text)||facts)&&!postServiceDocuments(e.text)&&!serviceFollowup(e.text)&&!postServiceReturn(e.text)&&!plannedRevisit(e.text)&&!paymentInquiry(e.text)&&!previousQuotation(e.text)&&!requestedTechnicalContact(e.text)&&!/\b(?:antes|anterior|cancel\w*|reprogram\w*|reclamo|queja|garantia|pague|pago|abono|comprobante|me dijeron|me dijo|otra solicitud|otro servicio|nuevo servicio|otro equipo)\b/.test(text);
 }
 function promptedSize(e,state){
   return literalIntakeTurn(e)&&(state.asked?.includes('size')||state.initialIntakeAllRequested)?textWithoutLinks(e.text).match(/\b\d{1,5}(?:[.,]\d{1,2})?\s*metros?(?=[.! ,;]*$)/i)?.[0]:undefined;
@@ -148,6 +156,7 @@ export function customerDecision(company,state,e,analysis={}) {
   if(company==='fumigacion')retainPromptedLocation(next,e);
   if(e.kind==='call')return {state:{...next,lastCallEvent:e.id},observed:true};
   if(e.kind!=='text')return {state:next,review:'El cliente envió '+e.kind+'. El contenido original necesita revisión.',reply:e.kind==='audio'?'Recibí tu audio. Te atenderemos en cuanto revisemos su contenido.':'Recibí el archivo. Revisaremos su contenido para continuar contigo.'};
+  if(postServiceDocuments(e.text)&&!faqNeedsPersonalReview(e.text)&&!paymentInquiry(e.text))return {state:{...next,slots:{...state.slots}},reviewTopic:'service-documents',reviewConditions:{kind:'reported-post-service-documents',directCustomerReport:!e.forwarded},review:'La persona solicita documentos de un servicio que relata como realizado. El mensaje no acredita registro, ejecución ni existencia o autorización de documentos; hay que contrastar el servicio y revisar qué soportes pueden entregarse.',reviewQuestion:'¿Qué servicio y soportes autorizados comprobados corresponden a esta solicitud?',reply:'Con gusto. Una asesora continuará contigo para revisar los documentos que necesitas.'};
   if(/\b(factura|certificado|seguimiento|posservicio|ya tengo (?:una )?cita|estado de (?:la )?orden)\b/.test(t))return {state:next,review:'El cliente consulta un servicio previo, su estado o un soporte. Hace falta contrastar el registro del programa.',reply:'Gracias. Revisaremos el registro de tu servicio para poder ayudarte.'};
   if(/\b(cancel|reprogram|reclamo|queja|garantia|devolucion|amenaz|abogad|denuncia|dolor|intoxic|embaraz|mascota|bebe|niño|nino)\w*/.test(t))
     return {state:next,review:'El cliente solicita revisar una excepción o situación que necesita atención personal.',reply:'Gracias por contarnos. Revisaremos tu caso para darte una respuesta clara.'};
@@ -254,10 +263,11 @@ export class Engine {
       const newCase=/\b(?:otra solicitud|nuevo servicio|otro servicio|otro equipo)\b/.test(normalize(e.text));
       const caseState=newCase?{slots:{},asked:[],introduced:conv.state.introduced,caseId:c.company+':'+e.id}:conv.state;
       caseState.caseId ||= reportedOrder || c.company+':'+e.id;
-      let pendingQuestion=null;
+      let pendingQuestion=null,documentRequest=null;
       if(!newCase){
         const firstSource=caseState.caseId.startsWith(c.company+':')?caseState.caseId.slice(c.company.length+1):null;
         const turns=s.customerTurnBatch(e.phone,e.id,caseState.lastHandledSourceId||firstSource);
+        documentRequest=turns.filter(turn=>turn.kind==='text'&&postServiceDocuments(turn.text)).at(-1)||null;
         caseState.intakeSources={...caseState.intakeSources};
         for(const turn of turns.filter(literalIntakeTurn)){
           const fields=extractSlots(turn.text,c.company);
@@ -276,9 +286,13 @@ export class Engine {
       }
       const priorFaq=caseState.pendingFaqQuestion;
       const faqQuestion=pendingQuestion|| (priorFaq&&literalIntakeTurn(e)?priorFaq:e);
-      const faq=c.company==='fumigacion'&&e.kind==='text'&&!e.forwarded&&!unreadLinkOnly(e.text)&&!faqNeedsPersonalReview(e.text)&&!paymentInquiry(e.text)&&!previousQuotation(e.text)&&!postServiceReturn(e.text)&&!plannedRevisit(e.text)&&faqQuestion.kind==='text'?selectCommonAnswer(textWithoutLinks(faqQuestion.text),caseState.slots,s.approvedCustomerAnswers(),caseState.caseId):null;
+      const documentSource=e.kind==='text'&&!faqNeedsPersonalReview(e.text)&&!paymentInquiry(e.text)?(postServiceDocuments(e.text)?e:documentRequest):null;
+      const faq=c.company==='fumigacion'&&!documentSource&&e.kind==='text'&&!e.forwarded&&!unreadLinkOnly(e.text)&&!faqNeedsPersonalReview(e.text)&&!paymentInquiry(e.text)&&!previousQuotation(e.text)&&!postServiceReturn(e.text)&&!plannedRevisit(e.text)&&faqQuestion.kind==='text'?selectCommonAnswer(textWithoutLinks(faqQuestion.text),caseState.slots,s.approvedCustomerAnswers(),caseState.caseId):null;
       let decision;
-      if(faq?.answer){
+      if(documentSource){
+        decision=customerDecision(c.company,caseState,{...e,text:documentSource.text,forwarded:documentSource.forwarded},analysis);
+        decision.reviewSource=documentSource.id;decision.pendingQuestion=documentSource.text;decision.state.lastText=e.text;
+      }else if(faq?.answer){
         decision={state:{...caseState,lastText:e.text,pendingFaqQuestion:null},reply:faq.answer};
         s.audit('APPROVED_CUSTOMER_ANSWER_SELECTED',e.id,{caseId:caseState.caseId,topics:faq.topics,answers:faq.answerIds,sources:faq.sourceIds,originalQuestion:faqQuestion.id});
       }else if(faq?.missing?.some(x=>x==='service'||x==='site')&&!faq.missing.includes('verifiedProducts')){
@@ -337,12 +351,12 @@ export class Engine {
       const labels={service:'Servicio',location:'Municipio confirmado por el texto',locationDetails:'Ubicación indicada',site:'Inmueble',area:'Área informada',rooms:'Habitaciones informadas',mattresses:'Colchones afectados',roomScale:'Tamaño de las habitaciones',siteScale:'Tamaño del inmueble indicado',floors:'Pisos informados',patio:'Patio informado',treatmentScope:'Alcance informado',detail:'Falla informada',preference:'Preferencia'};
       const context=Object.entries(decision.state.slots).map(([k,v])=>(labels[k]||k)+': '+questionExcerpt(String(v))).join('; ').slice(0,650);
       if(decision.review){
-        if(c.company==='fumigacion'&&decision.reviewTopic==='special-quotation'){decision.state.awaitingHumanReview=true;s.saveConversation(e.phone,decision.state);}
+        if(decision.reviewTopic==='service-documents'||c.company==='fumigacion'&&decision.reviewTopic==='special-quotation'){decision.state.awaitingHumanReview=true;s.saveConversation(e.phone,decision.state);}
         const history=s.conversationContext(e.phone,e.at,20,e.id);
         s.audit('CONVERSATION_CONTEXT_REVIEW',e.id,{caseId:caseState.caseId,turns:history.turns.length,storedCoverageComplete:history.completeStoredHistory,fullWhatsAppHistoryRead:false,originalMediaRead:false});
         const request=s.questionToRecipients({phone:e.phone,line:e.line,caseId:caseState.caseId,topic:decision.reviewTopic||'revision:'+e.id,conditions:decision.reviewConditions|| (decision.reviewTopic?{question:normalize(e.text),caseId:caseState.caseId}:{event:e.id,caseId:caseState.caseId}),recipients:questionRecipients(c,decision.reviewTopic||'revision:'+e.id),source:decision.reviewSource||e.id,
           text:c.name+': contacto terminado en '+e.phone.slice(-4)+'. '+decision.review+(decision.pendingQuestion?' Pregunta pendiente: '+questionExcerpt(decision.pendingQuestion)+'.':'')+' Mensaje actual: '+questionExcerpt(e.text)+(context?' Datos de esta solicitud: '+context+'.':'')+' '+(decision.reviewQuestion||'¿Cómo debemos continuar en este caso?')});
-        if(!request.created&&(decision.reviewTopic?.startsWith('missing-intake:')||['common-question','service-followup','requested-technician-contact','payment-instructions','existing-quotation','unread-link'].includes(decision.reviewTopic))){
+        if(!request.created&&(decision.reviewTopic?.startsWith('missing-intake:')||['common-question','service-documents','service-followup','requested-technician-contact','payment-instructions','existing-quotation','unread-link'].includes(decision.reviewTopic))){
           decision.reply=null;
           s.audit('PENDING_CLARIFICATION_REUSED',e.id,{caseId:caseState.caseId,questionId:request.id,topic:decision.reviewTopic,newOutboundCreated:false});
         }
