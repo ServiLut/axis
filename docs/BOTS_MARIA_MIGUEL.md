@@ -289,3 +289,24 @@ Una solicitud explícita de documentos posterior a una fumigación fue tratada c
 La consulta administrativa de soportes va sólo a Sandra. Diego/Hilary conservan la ruta operativa autorizada, sus preguntas pendientes y entregas originales. Los detalles y repeticiones permanecen en la misma revisión sin otros acuses; una toma humana sigue prevaleciendo y una nueva solicitud explícita conserva su caso independiente. Seguridad y pagos mantienen sus controles anteriores. El guardia compartido admite documentos de un servicio técnico relatado sin trasladar precios o conocimientos de Fumigación.
 
 Código y pruebas aisladas no acreditan instalación o el siguiente recorrido legítimo: verificar el checkpoint de este control y las API propias antes de afirmar producción. Programa, documentos de negocio, audios, historia y guardados reales conservan sus pendientes.
+
+## Precios aportados y autorización directa — 05/10/2026
+
+La usuaria aportó dos tablas, una aclaración escrita y un audio, y después ordenó: «dile los precios a mariangel y ponlo a recibir servicios y cotizarlos». Autoriza incorporar esos precios exclusivamente a María/FUMIGACION y mantener la recepción. La autoridad es esta orden directa; el material adjunto es la fuente de las cifras. Sus textos sobre productos, inocuidad, garantías o tratamientos no se convierten en política por esta aprobación de precios.
+
+| Habitaciones | m² | Cucarachas COP | Roedores COP |
+|---|---|---|---|
+| 1 | 30–40 | 99.000 | 129.000 |
+| 2 | 41–50 | 129.000 | 129.000 |
+| 3 | 51–75 | 149.000 | 149.000 |
+| 4 | 76–100 | 169.000 | 169.000 |
+| 5 | 101–150 | 189.000 | 189.000 |
+| 6 | 151–200 | 209.000 | 209.000 |
+
+Se cotiza la columna **Valor de fumigación**; el mínimo es referencia interna y no se aplica como descuento automático. Comején suma50.000 a la fila correspondiente de cucarachas. Chinches:70.000 por colchón confirmado;100.000 continúa como propuesta y no se activa. Desde6colchones o con bases/otros muebles mencionados, el alcance y un eventual descuento necesitan cotización operativa. Avispas requiere inspección por tamaño y altura del panal, sin precio inventado.
+
+`businessPriceGuard=direct-approved-table-standard-price-and-scoped-extras-v1` exige una tabla exacta, la aprobación directa y los hashes de los cuatro materiales. La importación administrativa guarda cifrada una única tabla; rechaza cambios de cifras, descuentos, otra aprobación o S.TECNICO. No simula una fuente nativa de WhatsApp para los adjuntos del chat de Codex. Antes de cada salida se reevalúan alcance, precio, persistencia, línea propia y atención humana.
+
+La selección automática cubre una casa o apartamento ordinario en Medellín,Bello,Envigado,Itagüí,Sabaneta,LaEstrella,Copacabana oGirardota. Habitaciones y área, si aparecen ambas, deben coincidir en una fila. Medidas lineales, rangos ambiguos, tamaños fuera de tabla, varias propiedades, zonas comunes, inmuebles especiales, pisos/alcances adicionales o desplazamientos externos mantienen revisión; se conservan los cuatro ejemplos nativos anteriores con su alcance estricto. La tabla directa tiene prioridad cuando sus condiciones coinciden. Una cotización aceptada sólo continúa después de entrega exacta; disponibilidad y técnico se consultan a Diego/Hilary, sin confirmar reserva o guardar un servicio en el programa.
+
+Preparación y pruebas en `.tmp/direct-prices-20261005/`. Verificar instalación e importación en ese checkpoint antes de atribuirlas a producción. Las otras empresas, los cortes originales, holds, preguntas pendientes y registros de entrega conservan su separación.

@@ -226,8 +226,8 @@ export class Store {
   importKnowledge(document) {
     if(document.company!==this.company)throw new Error('KNOWLEDGE_SCOPE_MISMATCH');
     if(document.kind==='approved_customer_answers')validateApprovedAnswers(document,this.company);
-    if(document.kind==='approved_price_catalog')validatePriceCatalog(document,this.company);
-    if(!['instructions','historical_observations','reference','approved_customer_answers','approved_price_catalog'].includes(document.kind)||!document.source||!document.at||!Array.isArray(document.entries))throw new Error('KNOWLEDGE_SOURCE_REQUIRED');
+    if(['approved_price_catalog','approved_price_schedule'].includes(document.kind))validatePriceCatalog(document,this.company);
+    if(!['instructions','historical_observations','reference','approved_customer_answers','approved_price_catalog','approved_price_schedule'].includes(document.kind)||!document.source||!document.at||!Array.isArray(document.entries))throw new Error('KNOWLEDGE_SOURCE_REQUIRED');
     // Importing observations never converts them into operational policy.
     const hash=createHash('sha256').update(JSON.stringify(document)).digest('hex');
     this.db.prepare('INSERT OR IGNORE INTO knowledge VALUES(?,?,?,?,?)').run(hash,document.kind,this.seal(document),hash,Date.now());
@@ -236,12 +236,12 @@ export class Store {
   approvedCustomerAnswers(){
     return this.db.prepare("SELECT body FROM knowledge WHERE kind='approved_customer_answers' ORDER BY imported,rowid").all().map(row=>this.open(row.body));
   }
-  approvedPriceCatalogs(){return this.db.prepare("SELECT body FROM knowledge WHERE kind='approved_price_catalog' ORDER BY imported,rowid").all().map(row=>this.open(row.body));}
+  approvedPriceCatalogs(){return this.db.prepare("SELECT body FROM knowledge WHERE kind IN ('approved_price_catalog','approved_price_schedule') ORDER BY imported,rowid").all().map(row=>this.open(row.body));}
   savePriceReplyReference(outboxId,reference){this.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('price-reply:'+outboxId,this.seal(reference));}
   priceReplyReference(row){const r=this.db.prepare('SELECT value FROM meta WHERE key=?').get('price-reply:'+row.id);return r?this.open(r.value):null;}
   priceReplyStillValid(row){
     const ref=this.priceReplyReference(row);if(!ref)return true;
-    const selected=selectPrice(ref.context,this.approvedPriceCatalogs());return selected.entry?.id===ref.entryId&&selected.entry.priceCop===ref.priceCop&&this.open(row.body)===ref.finalText;
+    const selected=selectPrice(ref.context,this.approvedPriceCatalogs(),ref.entryId);return selected.entry?.id===ref.entryId&&selected.entry.priceCop===ref.priceCop&&this.open(row.body)===ref.finalText;
   }
   saveApprovedReplyReference(outboxId,reference){
     this.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('approved-reply:'+outboxId,this.seal(reference));

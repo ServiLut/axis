@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
 import {normalize} from './config.mjs';
+import {validateBusinessPriceSchedule,selectBusinessPrice,verifyBusinessPriceEntry} from './business-prices.mjs';
 
 export const PRICE_AUTHORITY='direct-user-chat-20261005-common-quotes-special-cases-and-human-priority';
 const fields=new Set(['service','site','location','locationDetails','area','rooms','roomScale','siteScale','treatmentScope','floors','patio']);
@@ -14,6 +15,7 @@ export function specialQuotation(text,slots={}){
  return /\b(?:edificios?|conjuntos?|unidades? residenciales?|urbanizacion(?:es)?|zonas? comunes?|parqueaderos?|shut|shute|inspeccion|cotizacion formal|cotizacion tecnica formal)\b/.test(t)||/\b(?:\d+|dos|tres|cuatro|cinco|seis)\s+(?:apartamentos?|aptos?|casas?|locales?|torres?)\b/.test(t)||['edificio','unidad residencial','conjunto','parqueadero'].includes(normalize(slots.site));
 }
 export function validatePriceCatalog(doc,company){
+ if(doc.kind==='approved_price_schedule')return validateBusinessPriceSchedule(doc,company);
  if(company!=='fumigacion'||doc.company!==company||doc.kind!=='approved_price_catalog'||doc.authorizationSource!==PRICE_AUTHORITY||doc.approval?.source!==PRICE_AUTHORITY||doc.approval.reviewed!==true||!Number.isFinite(Date.parse(doc.at))||!Array.isArray(doc.entries)||doc.entries.length<1||doc.entries.length>25)throw Error('PRICE_CATALOG_AUTHORITY_REQUIRED');
  const ids=new Set();
  for(const e of doc.entries){
@@ -38,10 +40,21 @@ function fieldEqual(key,expected,actual){
 }
 export function currentPriceEntries(catalogs){
  const entries=new Map();
- for(const d of catalogs){validatePriceCatalog(d,'fumigacion');for(const e of d.entries)entries.set(e.id,e);}
+ for(const d of catalogs){validatePriceCatalog(d,'fumigacion');if(d.kind==='approved_price_catalog')for(const e of d.entries)entries.set(e.id,e);}
  return [...entries.values()].filter(e=>e.active);
 }
-export function selectPrice(slots,catalogs){
+export function selectPrice(slots,catalogs,preferredId=null){
+ // A price already issued for this case keeps its own reviewed source. A new
+ // general table must not silently reprice it or redistribute pending work.
+ if(preferredId&&!preferredId.startsWith('approved-table-')){
+  const previous=selectPrice(slots,catalogs.filter(d=>d.kind==='approved_price_catalog'));
+  if(previous.entry&&previous.entry.id===preferredId)return previous;
+  const exact=currentPriceEntries(catalogs).find(e=>e.id===preferredId&&Object.entries(e.appliesTo).every(([k,v])=>fieldEqual(k,v,slots[k])));
+  if(exact&&previous.entry&&previous.entry.priceCop===exact.priceCop)return {entry:exact,sourceIds:previous.sourceIds};
+  return {reason:'PRIOR_CASE_PRICE_REQUIRES_REVIEW'};
+ }
+ const approved=catalogs.find(d=>d.kind==='approved_price_schedule');
+ if(approved){validateBusinessPriceSchedule(approved,'fumigacion');const selected=selectBusinessPrice(slots);if(selected.entry)return selected;}
  const matches=currentPriceEntries(catalogs).filter(e=>Object.entries(e.appliesTo).every(([k,v])=>fieldEqual(k,v,slots[k]))&&
   // An extra area or count, size qualification, floor or treatment scope cannot
   // be dropped to force a historical quote to fit a different property.
@@ -50,9 +63,15 @@ export function selectPrice(slots,catalogs){
  if(new Set(matches.map(e=>e.priceCop)).size!==1)return {reason:'CONFLICTING_REVIEWED_PRICES'};
  return {entry:matches[0],sourceIds:matches.map(e=>e.source.quoteId)};
 }
-export function priceText(entry){return 'El servicio tiene un valor de $'+new Intl.NumberFormat('es-CO').format(entry.priceCop)+' COP. ¿Deseas continuar con esta cotización?';}
+export function priceText(entry){return (entry.category==='chinches'?'El tratamiento de '+entry.mattresses+' '+(entry.mattresses===1?'colchón':'colchones'):'El servicio')+' tiene un valor de $'+new Intl.NumberFormat('es-CO').format(entry.priceCop)+' COP. ¿Deseas continuar con esta cotización?';}
 export function priceBodyHash(text){return createHash('sha256').update(text).digest('hex');}
 export async function verifyPriceSource(entry,transport){
+ if(entry?.source?.type==='direct_user_approved_schedule'){
+  if(transport.config.company!=='fumigacion')throw Error('PRICE_OWN_LINE_REQUIRED');
+  verifyBusinessPriceEntry(entry);
+  for(const line of transport.config.lines)await transport.verifyLine(line.phone);
+  return true;
+ }
  const line=transport.config.lines.find(l=>l.phone===entry.source.line);if(!line||transport.config.company!=='fumigacion')throw Error('PRICE_OWN_LINE_REQUIRED');
  await transport.verifyLine(line.phone);
  const records=[];

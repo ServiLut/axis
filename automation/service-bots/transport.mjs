@@ -169,7 +169,7 @@ export async function drain(store,config,transport,engine) {
     if(!o.internal&&store.priceReplyReference(o)){
       try{
         if(!store.priceReplyStillValid(o))throw Error('PRICE_REVIEW');
-        const ref=store.priceReplyReference(o),entry=selectPrice(ref.context,store.approvedPriceCatalogs()).entry;
+        const ref=store.priceReplyReference(o),entry=selectPrice(ref.context,store.approvedPriceCatalogs(),ref.entryId).entry;
         await verifyPriceSource(entry,transport);
         // Source verification awaits the provider. Staff may intervene during
         // that read; recheck the persisted hold and revision afterwards.

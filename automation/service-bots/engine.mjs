@@ -15,7 +15,7 @@ function directed(text,name) {
 export function extractSlots(text,company) {
   text=textWithoutLinks(text);
   const t=normalize(text), slots={};
-  const pests={cucarachas:/\bcucarachas?\b/,hormigas:/\bhormigas?\b/,ratones:/\b(?:raton|ratones)\b/,ratas:/\bratas?\b/,chinches:/\bchinches?\b/,mosquitos:/\bmosquitos?\b/,pulgas:/\bpulgas?\b/,zancudos:/\b(?:zancudos?|sancudos?)\b/,'arañas':/\baranas?\b/,moscas:/\bmoscas?\b/,chiripas:/\bchiripas?\b/,prevencion:/\bprevencion\b/,fumigacion:/\bfumigacion\b/};
+  const pests={cucarachas:/\bcucarachas?\b/,hormigas:/\bhormigas?\b/,ratones:/\b(?:raton|ratones)\b/,ratas:/\bratas?\b/,chinches:/\bchinches?\b/,comején:/\bcomejen(?:es)?\b/,avispas:/\bavispas?\b/,roedores:/\broedores?\b/,mosquitos:/\bmosquitos?\b/,pulgas:/\bpulgas?\b/,zancudos:/\b(?:zancudos?|sancudos?)\b/,'arañas':/\baranas?\b/,moscas:/\bmoscas?\b/,chiripas:/\bchiripas?\b/,prevencion:/\bprevencion\b/,fumigacion:/\bfumigacion\b/};
   const found=company==='fumigacion'?Object.keys(pests).filter(s=>pests[s].test(t)):['nevera','lavadora','secadora','estufa','horno','calentador','aire acondicionado'].filter(s=>t.includes(s));
   const specific=company==='fumigacion'?found.filter(s=>!['prevencion','fumigacion'].includes(s)):found;
   slots.service=(specific.length?specific:found).join(' y ')||undefined;
@@ -31,17 +31,18 @@ export function extractSlots(text,company) {
   }
   if(company==='fumigacion'){
     slots.area=text.match(/\b\d{1,5}(?:[.,]\d{1,2})?\s*(?:m\s*(?:²|2|cuadrados?)|metros?\s*cuadrados?)(?=$|[\s.,;:)])/i)?.[0];
-    slots.mattresses=text.match(/\b(?:\d{1,3}|un|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+colchones?\b/i)?.[0];
+    slots.mattresses=text.match(/\b(?:\d{1,3}|un|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+colch[oó](?:n|nes)\b/i)?.[0];
+    slots.affectedFurniture=/\b(?:bases? de cama|sofas?|muebles?)\b/.test(t)?'muebles mencionados; alcance por verificar':undefined;
     slots.roomScale=/\b(?:habitaciones?|cuartos?|piezas?)\s*\(?\s*pequen[oa]s?\b/.test(t)?'pequeños':/\b(?:habitaciones?|cuartos?|piezas?)\s*\(?\s*grandes?\b/.test(t)?'grandes':undefined;
     slots.siteScale=/\b(?:apartamento|apto|casa|local)\s+pequen[oa]\b/.test(t)?'pequeño':/\b(?:apartamento|apto|casa|local)\s+grande\b/.test(t)?'grande':undefined;
     slots.floors=text.match(/\b\d{1,2}(?:er|ro|do|to)?\s+(?:pisos?|niveles?)\b/i)?.[0];
     slots.patio=/\b(?:no (?:tiene|hay|tenemos)|sin) patio\b/.test(t)?'sin patio':/\bpatio\b/.test(t)?'patio':undefined;
     slots.treatmentScope=/\b(?:solo|solamente)\s+(?:el )?interior\b/.test(t)?'solo interior':/\b(?:solo|solamente)\s+(?:en )?(?:la )?cocina\b/.test(t)?'solo cocina':undefined;
-    slots.rooms=text.match(/\b\d{1,3}\s*(?:habitaciones?|cuartos?)\b/i)?.[0];
+    slots.rooms=text.match(/\b\d{1,3}\s*(?:habitaci[oó]n(?:es)?|cuartos?)\b/i)?.[0];
     // Keep an explicit written count as the source said it. Do not normalize it
     // into a digit, choose a count from a range, or adopt a negated description.
     if(!slots.rooms){
-      const room=text.match(/\b(?:una?|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+(?:habitaciones?|cuartos?)\b/i);
+      const room=text.match(/\b(?:una?|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+(?:habitaci[oó]n(?:es)?|cuartos?)\b/i);
       const prefix=room?normalize(text.slice(0,room.index)).trim():'';
       if(room&&!/\b(?:no|sin|entre|o|y)(?:\s+(?:tiene|tenemos|son|hay|cuenta|con|una?|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)){0,4}$/.test(prefix))slots.rooms=room[0];
     }
@@ -170,6 +171,7 @@ export function customerDecision(company,state,e,analysis={}) {
   if(/^(gracias|muchas gracias|muy amable|ok|listo)[.! ]*$/.test(t))return {state:next,reply:'Con gusto.'};
   if(/^(?:hola[, ]+)?(?:con|esta|se encuentra)\s+\p{L}+(?:\s+\p{L}+)?[.!? ]*$/u.test(t))return {state:{...next,slots:{...state.slots}},reviewTopic:'requested-person',review:'La persona pidió hablar con alguien específico. Falta conocer el motivo; no consta una solicitud nueva de servicio.',reviewQuestion:'¿Quién puede atender esta solicitud?',reply:'Tu mensaje quedó pendiente de atención.'};
   if(company==='fumigacion'&&specialQuotation(e.text,next.slots))return {state:next,reviewTopic:'special-quotation',reviewConditions:{kind:'special-property'},review:'Cotización especial de edificio, unidad, varias propiedades o zonas comunes; necesita alcance y precio propios, sin aplicar la tarifa de una vivienda.',reviewQuestion:'¿Qué alcance y cotización corresponden a esta solicitud especial?',reply:'Gracias. Una asesora continuará contigo para preparar la cotización de este inmueble.'};
+  if(company==='fumigacion'&&normalize(next.slots.service).includes('avispas'))return {state:next,reviewTopic:'special-quotation',reviewConditions:{kind:'wasp-inspection'},review:'La cotización de avispas depende del tamaño y la altura del panal; requiere inspección. No hay una tarifa automática aprobada.',reviewQuestion:'¿Qué inspección y cotización corresponden al tamaño y la altura de este panal?',reply:'Para las avispas, la cotización depende del tamaño y la altura del panal y requiere inspección.'};
   if(!next.slots.detail&&state.asked?.at(-1)==='detail'&&!/[?¿]/.test(literalText)&&t.length>3)next.slots.detail=literalText.slice(0,300);
   if(!next.slots.preference&&state.asked?.includes('preference')&&/\b(hoy|mañana|manana|lunes|martes|miercoles|jueves|viernes|sabado|domingo|\d{1,2}[/:]\d{1,2}|tarde|mañana|noche)\b/.test(t))next.slots.preference=literalText.slice(0,300);
   const mattressService=company==='fumigacion'&&normalize(next.slots.service).includes('chinches');
@@ -302,7 +304,7 @@ export class Engine {
       if(pendingQuestion&&decision.review){decision.reviewSource=pendingQuestion.id;decision.pendingQuestion=pendingQuestion.text;}
       let selectedPrice=null;
       const currentQuote=caseState.quotedPrice;
-      const priceNow=currentQuote&&selectPrice(decision.state.slots,s.approvedPriceCatalogs()).entry;
+      const priceNow=currentQuote&&selectPrice(decision.state.slots,s.approvedPriceCatalogs(),currentQuote.entryId).entry;
       const continuingQuote=c.company==='fumigacion'&&currentQuote&&priceNow?.id===currentQuote.entryId&&priceNow.priceCop===currentQuote.priceCop&&
         !decision.review&&!decision.courtesy&&!specialQuotation(e.text,decision.state.slots)&&
         (currentQuote.accepted||/^(?:si(?:[, ]+por favor)?|listo|dale|de acuerdo|acepto|quiero continuar|quiero agendar|deseo agendar)[.! ]*$/.test(normalize(e.text)));
@@ -321,7 +323,7 @@ export class Engine {
       }
       if(c.company==='fumigacion'&&(decision.question?.topic==='cotizacion-verificada'||decision.reviewTopic==='customer-question'&&quotationInquiry(e.text))){
         const selection=selectPrice(decision.state.slots,s.approvedPriceCatalogs());
-        if(selection.entry&&!specialQuotation(e.text,decision.state.slots)){
+        if(selection.entry&&!e.forwarded&&!ambiguousIntake(e.text)&&!specialQuotation(e.text,decision.state.slots)){
           selectedPrice=selection.entry;
           decision={state:{...decision.state,quotedPrice:{entryId:selectedPrice.id,priceCop:selectedPrice.priceCop,slots:{...decision.state.slots},sourceId:e.id}},reply:priceText(selectedPrice)};
           s.audit('REVIEWED_PRICE_SELECTED',e.id,{entryId:selectedPrice.id,priceCop:selectedPrice.priceCop,quoteSources:selection.sourceIds,caseId:caseState.caseId,businessWritten:false});
