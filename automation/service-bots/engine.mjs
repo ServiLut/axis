@@ -13,6 +13,11 @@ function directed(text,name) {
   const aliases=n==='maria angel'?'maria angel|mariangel':n;
   return new RegExp('^[¿¡ ]*(?:(?:hola|buenos dias|buenas tardes|buenas noches)[, :]+)?(?:'+aliases+'|bot)(?:[, :¿?!]|$)').test(t)&&!new RegExp('^(?:'+aliases+'|bot)\\s+(?:dijo|dice|respondio|comento|me dijo|le dijo)\\b').test(t);
 }
+function shortNameStatus(text,name){
+  const short=normalize(name).split(' ')[0];
+  const match=normalize(text).match(new RegExp('^[¿¡ ]*(?:(?:hola|buenos dias|buenas tardes|buenas noches)[, :]+)?'+short+'[, :¿?!]+(.+)$'));
+  return match&&chiefStatusTopic(match[1])?match[1]:null;
+}
 export function extractSlots(text,company) {
   text=textWithoutLinks(text);
   const t=normalize(text), slots={};
@@ -182,7 +187,7 @@ export function customerDecision(company,state,e,analysis={}) {
   if(/[?¿]/.test(literalText)&&/\b(eso|lo anterior|lo que (?:me )?(?:dij|coment|indic|explic)|me habian|me hab[ií]as|mismo (?:precio|horario|servicio)|como qued|que qued)\w*/.test(t))
     return {state:next,reviewTopic:'previous-communication',review:'El cliente pregunta por algo comunicado antes. Hay que relacionar su pregunta con el contexto guardado y el servicio correcto antes de contestar.',reply:'Gracias. Revisaremos lo que ya conversamos para responder tu pregunta con claridad.'};
   if(isCustomerQuestion(e.text)&&!(company==='fumigacion'&&quotationInquiry(e.text)&&!ambiguousIntake(e.text)))
-    return {state:literalIntakeTurn(e)?next:{...next,slots:{...state.slots}},reviewTopic:'customer-question',review:'La persona hizo una pregunta concreta. Hace falta revisar sus antecedentes y confirmar la respuesta para este servicio.',reviewQuestion:'¿Qué respuesta verificada corresponde a esta pregunta?',reply:'Recibí tu pregunta. Tu solicitud sigue pendiente de confirmación.'};
+    return {state:literalIntakeTurn(e)?next:{...next,slots:{...state.slots}},reviewTopic:!e.forwarded&&quotationInquiry(e.text)?'cotizacion-verificada':'customer-question',review:'La persona hizo una pregunta concreta. Hace falta revisar sus antecedentes y confirmar la respuesta para este servicio.',reviewQuestion:'¿Qué respuesta verificada corresponde a esta pregunta?',reply:'Recibí tu pregunta. Tu solicitud sigue pendiente de confirmación.'};
   if(missing&&!next.asked.includes(missing)){next.asked.push(missing);return {state:next,reply:questions[missing]};}
   if(missing){
     const names={service:'la plaga o el servicio solicitado',site:'el tipo de inmueble',size:'las habitaciones o metros cuadrados del lugar',mattresses:'los colchones y muebles afectados',detail:'la falla del equipo',location:'el municipio y barrio'};
@@ -236,8 +241,9 @@ export class Engine {
           s.queue(e.id+':answer-ack',e.phone,e.line,'Gracias. Guardé tu aclaración para esta solicitud.',true,0);finish('CASE_ANSWER');return;
         }
         const ownQuote=e.quotedId&&s.db.prepare("SELECT id FROM outbox WHERE phone=? AND line=? AND mid=? AND internal=1 AND state IN ('DELIVERED','READ')").get(e.phone,e.line,e.quotedId);
-        if(e.kind==='text'&&(directed(e.text,c.bot)||ownQuote)){
-          const body=normalize(e.text).replace(/^[¿¡ ]*(?:(?:hola|buenos dias|buenas tardes|buenas noches)[, :]+)?(?:maria angel|mariangel|miguel angel|bot)[, :¿?!]*/,'').replace(/[¿?!.]+$/,'').trim();
+        const shortStatus=e.kind==='text'&&shortNameStatus(e.text,c.bot);
+        if(e.kind==='text'&&(directed(e.text,c.bot)||ownQuote||shortStatus)){
+          const body=(shortStatus||normalize(e.text).replace(/^[¿¡ ]*(?:(?:hola|buenos dias|buenas tardes|buenas noches)[, :]+)?(?:maria angel|mariangel|miguel angel|bot)[, :¿?!]*/,'' )).replace(/[¿?!.]+$/,'').trim();
           if(/^(?:que (?:funciones )?puedes (?:hacer|realizar)(?: en este momento)?|que sabes hacer|como puedes ayudarme)$/.test(body)){
             s.queue(e.id+':capabilities',e.phone,e.line,capabilitiesReply(c,e.phone,currentPriceEntries(s.approvedPriceCatalogs()).length),true,0);finish('CHIEF_CAPABILITIES');return;
           }
@@ -359,7 +365,7 @@ export class Engine {
         s.audit('CONVERSATION_CONTEXT_REVIEW',e.id,{caseId:caseState.caseId,turns:history.turns.length,storedCoverageComplete:history.completeStoredHistory,fullWhatsAppHistoryRead:false,originalMediaRead:false});
         const request=s.questionToRecipients({phone:e.phone,line:e.line,caseId:caseState.caseId,topic:decision.reviewTopic||'revision:'+e.id,conditions:decision.reviewConditions|| (decision.reviewTopic?{question:normalize(e.text),caseId:caseState.caseId}:{event:e.id,caseId:caseState.caseId}),recipients:questionRecipients(c,decision.reviewTopic||'revision:'+e.id),source:decision.reviewSource||e.id,
           text:c.name+': contacto terminado en '+e.phone.slice(-4)+'. '+decision.review+(decision.pendingQuestion?' Pregunta pendiente: '+questionExcerpt(decision.pendingQuestion)+'.':'')+' Mensaje actual: '+questionExcerpt(e.text)+(context?' Datos de esta solicitud: '+context+'.':'')+' '+(decision.reviewQuestion||'¿Cómo debemos continuar en este caso?')});
-        if(!request.created&&(decision.reviewTopic?.startsWith('missing-intake:')||['common-question','service-documents','service-followup','requested-technician-contact','payment-instructions','existing-quotation','unread-link'].includes(decision.reviewTopic))){
+        if(!request.created&&(decision.reviewTopic?.startsWith('missing-intake:')||['cotizacion-verificada','common-question','service-documents','service-followup','requested-technician-contact','payment-instructions','existing-quotation','unread-link'].includes(decision.reviewTopic))){
           decision.reply=null;
           s.audit('PENDING_CLARIFICATION_REUSED',e.id,{caseId:caseState.caseId,questionId:request.id,topic:decision.reviewTopic,newOutboundCreated:false});
         }

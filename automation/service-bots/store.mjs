@@ -3,7 +3,7 @@ import { randomBytes, createCipheriv, createDecipheriv, createHash } from 'node:
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import {validateApprovedAnswers,selectCommonAnswer} from './faq.mjs';
-import {validatePriceCatalog,selectPrice} from './prices.mjs';
+import {validatePriceCatalog,selectPrice,quotationInquiry} from './prices.mjs';
 import {supersededBusinessPriceSchedule} from './business-prices.mjs';
 
 export class Store {
@@ -174,6 +174,11 @@ export class Store {
     return this.db.prepare("SELECT body FROM events WHERE phone=? AND from_me=0 AND rowid>? AND rowid<=? AND at<=? AND state IN ('PENDING','OBSERVED_SUPERSEDED') ORDER BY at,rowid LIMIT 40").all(phone,previous.rowid,current.rowid,current.at).map(r=>this.open(r.body));
   }
   question({phone,line,caseId,topic,conditions,recipient,text,source}) {
+    if(topic==='cotizacion-verificada'){
+      const candidates=this.db.prepare("SELECT id,state,topic,body FROM questions WHERE phone=? AND case_id=? AND state IN ('PENDING','ANSWER_REVIEW') AND topic IN ('cotizacion-verificada','disponibilidad-y-cotizacion','disponibilidad-y-tecnico','customer-question') ORDER BY rowid").all(phone,caseId);
+      const pending=candidates.find(q=>q.topic!=='customer-question'||quotationInquiry(this.open(q.body).conditions?.question||''));
+      if(pending){this.audit('PENDING_CASE_PRICE_QUESTION_REUSED',source,{caseId,topic,questionId:pending.id,newOutboundCreated:false});return {id:pending.id,state:pending.state,created:false,valid:false};}
+    }
     if(topic.startsWith('missing-intake:')||['cotizacion-verificada','special-quotation','disponibilidad-y-cotizacion','disponibilidad-y-tecnico','service-documents','service-followup','requested-technician-contact','payment-instructions','existing-quotation'].includes(topic)){
       // Further details are retained in the conversation. A pending question for
       // the same case must not be sent again because its details or route changed.
