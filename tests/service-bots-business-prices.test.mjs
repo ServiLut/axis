@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {randomBytes} from 'node:crypto';
+import {randomBytes,createHash} from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -13,6 +13,16 @@ import {approvedBusinessPriceSchedule,validateBusinessPriceSchedule,BUSINESS_PRI
 
 const phone='573001112233';
 const scope={site:'apartamento',location:'medellin'};
+test('the exact superseded 70000 schedule stays encrypted but never blocks status or corrected quotes',()=>{
+ const old=approvedBusinessPriceSchedule();old.chinchesPerMattressCop=70000;delete old.mattressPriceAuthorization;
+ const hash=createHash('sha256').update(JSON.stringify(old)).digest('hex');assert.equal(hash,'e906be8ff20357d7c6c3bdc229a926b610e1008442fb3597b2db6171224b8d9b');
+ const store=new Store(':memory:','fumigacion',randomBytes(32));try{
+  store.db.prepare('INSERT INTO knowledge VALUES(?,?,?,?,?)').run(hash,old.kind,store.seal(old),hash,Date.now()-1000);
+  assert.equal(store.approvedPriceCatalogs().length,0);store.importKnowledge(approvedBusinessPriceSchedule());assert.equal(store.approvedPriceCatalogs().length,1);
+  assert.equal(store.db.prepare('SELECT COUNT(*) n FROM knowledge').get().n,2);
+  assert.equal(selectPrice({...scope,service:'chinches',mattresses:'2 colchones'},store.approvedPriceCatalogs()).entry.priceCop,198000);
+ }finally{store.close();}
+});
 function fixture(){
  const c={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,chiefOnly:true,operatorRouting:OPERATOR_ROUTING,historyCheckRequired:true,activatedAt:Date.now()-10000,lines:BUSINESSES.fumigacion.phones.map((phone,i)=>({phone,instance:'own-'+i}))};
  const s=new Store(':memory:','fumigacion',randomBytes(32)),engine=new Engine(s,c);let seq=0;

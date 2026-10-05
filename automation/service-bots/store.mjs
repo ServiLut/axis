@@ -4,6 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import {validateApprovedAnswers,selectCommonAnswer} from './faq.mjs';
 import {validatePriceCatalog,selectPrice} from './prices.mjs';
+import {supersededBusinessPriceSchedule} from './business-prices.mjs';
 
 export class Store {
   constructor(path, company, key) {
@@ -236,7 +237,7 @@ export class Store {
   approvedCustomerAnswers(){
     return this.db.prepare("SELECT body FROM knowledge WHERE kind='approved_customer_answers' ORDER BY imported,rowid").all().map(row=>this.open(row.body));
   }
-  approvedPriceCatalogs(){return this.db.prepare("SELECT body FROM knowledge WHERE kind IN ('approved_price_catalog','approved_price_schedule') ORDER BY imported,rowid").all().map(row=>this.open(row.body));}
+  approvedPriceCatalogs(){return this.db.prepare("SELECT body FROM knowledge WHERE kind IN ('approved_price_catalog','approved_price_schedule') ORDER BY imported,rowid").all().map(row=>this.open(row.body)).filter(doc=>!supersededBusinessPriceSchedule(doc));}
   savePriceReplyReference(outboxId,reference){this.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('price-reply:'+outboxId,this.seal(reference));}
   priceReplyReference(row){const r=this.db.prepare('SELECT value FROM meta WHERE key=?').get('price-reply:'+row.id);return r?this.open(r.value):null;}
   priceReplyStillValid(row){

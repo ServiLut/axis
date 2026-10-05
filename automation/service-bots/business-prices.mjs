@@ -21,6 +21,8 @@ const schedule={company:'fumigacion',kind:'approved_price_schedule',source:BUSIN
  scope:{properties:['casa','apartamento'],municipalities:['medellin','bello','envigado','itagui','sabaneta','la estrella','copacabana','girardota'],specialProperties:'human-review',multipleProperties:'human-review',travelOutsideMetro:'human-review',mattressVolumeFrom:6,extraAffectedFurniture:'human-review',priceColumn:'valor-de-fumigacion',minimumColumn:'internal-reference-only'}};
 const canonical=JSON.stringify(schedule);
 export const BUSINESS_PRICE_HASH=createHash('sha256').update(canonical).digest('hex');
+// Preserve the exact previous version as evidence, while excluding it from new quotations.
+export function supersededBusinessPriceSchedule(document){return document?.kind==='approved_price_schedule'&&createHash('sha256').update(JSON.stringify(document)).digest('hex')==='e906be8ff20357d7c6c3bdc229a926b610e1008442fb3597b2db6171224b8d9b';}
 export const approvedBusinessPriceSchedule=()=>JSON.parse(canonical);
 export function validateBusinessPriceSchedule(doc,company){
  if(company!=='fumigacion'||JSON.stringify(doc)!==canonical)throw Error('DIRECT_APPROVED_PRICE_SCHEDULE_REQUIRED');
