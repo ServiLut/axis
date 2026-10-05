@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
 import {Store} from '../automation/service-bots/store.mjs';
-import {Engine,customerDecision,extractSlots} from '../automation/service-bots/engine.mjs';
+import {Engine,customerDecision,extractSlots,parseUnderstanding} from '../automation/service-bots/engine.mjs';
 import {BUSINESSES,SANDRA,DIEGO} from '../automation/service-bots/config.mjs';
 
 function fixture(){
@@ -11,6 +11,67 @@ function fixture(){
   const engine=new Engine(store,config);let n=0;
   return {store,async process(text){const event={id:'INTAKEFIX'+(++n),phone:'573001112233',line:config.lines[0].phone,at:Date.now()+n,fromMe:false,kind:'text',text};store.enqueue(event);await engine.process(event);return event;}};
 }
+
+test('unread standalone links are references, not questions or confirmed intake fields',()=>{
+  for(const company of ['fumigacion','servicio-tecnico']){
+    const state={slots:{detail:'dato previo'},asked:['service'],introduced:true};
+    for(const text of ['https://youtube.com/shorts/u_7xAYoSA1k?si=SQbn317LrxRLkDZB','https://example.com/casa/medellin/cucarachas?producto=duracion']){
+      const d=customerDecision(company,state,{kind:'text',text});
+      assert.equal(d.reviewTopic,'unread-link');
+      assert.deepEqual(d.state.slots,state.slots);
+      assert.deepEqual(d.state.asked,state.asked);
+      assert.match(d.review,/no ha sido leído/i);
+      assert.doesNotMatch(d.review,/hizo una pregunta concreta/i);
+      assert.doesNotMatch(d.reply,/pregunta|cotización|confirmado|Sandra|Diego/i);
+      assert.equal(d.question,undefined);
+    }
+  }
+});
+
+test('link query punctuation and path words do not replace literal customer data',()=>{
+  const state={slots:{},asked:[]};
+  const text='Casa con 2 habitaciones en Medellín https://example.com/cucarachas?cuanto=vale';
+  const d=customerDecision('fumigacion',state,{kind:'text',text});
+  assert.equal(d.reviewTopic,undefined);
+  assert.deepEqual(d.state.slots,{site:'casa',rooms:'2 habitaciones',location:'medellin'});
+  assert.match(d.reply,/plaga/i);
+  assert.equal(extractSlots('https://example.com/casa/medellin/cucarachas?metros=50','fumigacion').service,undefined);
+  assert.deepEqual(parseUnderstanding({slots:{location:'medellin'}},'https://example.com/medellin?ref=one'),{});
+  const technical=customerDecision('servicio-tecnico',{slots:{service:'lavadora'},asked:['detail']},{kind:'text',text:'No enciende https://example.com/medellin/lunes?ref=one'});
+  assert.equal(technical.state.slots.detail,'No enciende');
+  assert.equal(technical.state.slots.location,undefined);
+  assert.equal(technical.state.slots.preference,undefined);
+});
+
+test('repeated unread links keep one review and cannot release human attention',async()=>{
+  for(const company of ['fumigacion','servicio-tecnico']){
+    const s=new Store(':memory:',company,randomBytes(32)),c={company,...BUSINESSES[company],enabled:true,chiefOnly:true},engine=new Engine(s,c);
+    const e={id:'LINKFIRST01',phone:'573001112233',line:c.phones[0],at:Date.now(),fromMe:false,kind:'text',text:'https://example.com/video?ref=one'};
+    try{
+      s.enqueue(e);await engine.process(e);
+      const second={...e,id:'LINKSECOND2',at:e.at+1};s.enqueue(second);await engine.process(second);
+      const q=s.db.prepare('SELECT topic,recipient FROM questions').all();
+      assert.deepEqual(q.map(({topic,recipient})=>({topic,recipient})),[{topic:'unread-link',recipient:SANDRA}]);
+      assert.equal(s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get(second.id+':reply').n,0);
+      assert.deepEqual(s.conversation(e.phone).state.slots,{});
+      s.hold(e.phone,'verified-staff');
+      const held={...e,id:'LINKHUMAN03',at:e.at+2,text:'https://example.com/another?ref=two'};s.enqueue(held);await engine.process(held);
+      assert.equal(s.conversation(e.phone).hold,1);
+      assert.equal(s.db.prepare('SELECT state FROM events WHERE id=?').get(held.id).state,'OBSERVED_HUMAN');
+      assert.equal(s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,1);
+      assert.equal(s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get(held.id+':reply').n,0);
+    }finally{s.close();}
+  }
+});
+
+test('a real question outside a link keeps its own review without reading linked content',()=>{
+  for(const company of ['fumigacion','servicio-tecnico']){
+    const d=customerDecision(company,{slots:{},asked:[]},{kind:'text',text:'¿Me puedes confirmar el servicio? https://example.com/video?ref=one'});
+    assert.equal(d.reviewTopic,'customer-question');
+    assert.match(d.reply,/pendiente/i);
+    assert.equal(d.question,undefined);
+  }
+});
 
 test('the observed Sopetran and spelled room count remain literal intake data',async()=>{
   const f=fixture();try{

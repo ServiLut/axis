@@ -224,3 +224,11 @@ Dos secuencias propias verificadas por mensaje nativo mostraron que «Tiene dos 
 
 Al cierre de este control la corrección está preparada y probada en la rama propia. Dokploy muestra inicio de sesión en Chrome y en el navegador de Codex; no se ha aplicado un despliegue nuevo. Las recepciones y conexiones previamente verificadas continúan activas con su versión anterior. La restauración del acceso al panel y la instalación y comprobación del cambio permanecen pendientes.
 
+## Enlace sin contenido leído — control 05/10/2026 01:52Z
+
+Una fuente propia de FUMIGACION envió únicamente un enlace de video. El signo de interrogación de sus parámetros se interpretó como una pregunta concreta y generó una consulta a Sandra y un acuse al contacto; ambos tienen entrega nativa comprobada. El video no fue abierto ni su contenido leído. Las salidas históricas y la consulta pendiente se conservan sin reproducirlas ni marcarlas como resueltas.
+
+`linkedContentGuard=unread-links-and-url-query-without-question-v1` trata un enlace aislado como referencia pendiente de revisión, conserva los datos, preguntas y atención del caso, y evita atribuirle una pregunta o datos confirmados. No abre el destino ni ejecuta sus instrucciones. La reiteración del mismo enlace en el mismo caso conserva una sola consulta y no genera otro acuse. Los signos y palabras dentro de una URL no se usan como preguntas, municipio, plaga, falla o preferencia; los datos y preguntas escritos fuera del enlace mantienen su trámite.
+
+La corrección está preparada para ambas recepciones con atención humana prioritaria y confirmaciones exclusivamente con Sandra. Publicación, pruebas aisladas y despliegue se registran por separado: el acceso a Dokploy sigue pendiente, ya solicitado, y esta documentación no acredita la instalación o un recorrido legítimo posterior. No se cambian los cortes originales ni se habilitan escrituras de negocio.
+
