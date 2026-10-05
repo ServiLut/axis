@@ -2,6 +2,8 @@ import type {Prisma} from '@/prisma/generated/prisma/client';
 import {createAuditLog} from './audit';
 import {normalizeText,phoneDigits,SANDRA_PHONE,PSYCHOLOGY_PHONE,type ReceptionEvent,type ReceptionState,type ReceptionResult,type PatientDraft,type IntakeState} from './psychology-reception';
 import type {Understanding} from './psychology-ai';
+import {requireLuisaOperator} from './psychology-bot-operator';
+import {schedulePatient,type SchedulingQueue} from './psychology-patient-scheduling';
 
 const fields=['firstName','lastName','documentType','document','email','address'] as const;
 const questions:Record<typeof fields[number],string>={firstName:'¿Cuáles son los nombres del paciente?',lastName:'¿Cuáles son sus apellidos?',documentType:'¿El documento es cédula, tarjeta de identidad, cédula de extranjería o pasaporte?',document:'¿Cuál es el número de documento?',email:'¿Cuál es el correo electrónico de contacto?',address:'¿Cuál es la dirección de contacto?'};
@@ -16,7 +18,7 @@ function clean(key:typeof fields[number],value:string){
 function accepted(text:string){return /^(si|si correcto|si esta bien|si estan bien|correcto|correctos|confirmo|confirmo mis datos|todo (esta )?correcto|estan bien|de acuerdo|asi es)[.!\s😊]*$/.test(normalizeText(text));}
 
 /** Drafts never write patient records until the sender confirms the displayed summary. */
-export async function handlePatientIntake(tx:Prisma.TransactionClient,event:ReceptionEvent,stage:string,state:ReceptionState,u:Understanding):Promise<ReceptionResult|null>{
+export async function handlePatientIntake(tx:Prisma.TransactionClient,event:ReceptionEvent,stage:string,state:ReceptionState,u:Understanding,queue?:SchedulingQueue):Promise<ReceptionResult|null>{
  if(event.fromMe||[SANDRA_PHONE,PSYCHOLOGY_PHONE].includes(event.phone)||phoneDigits(event.phone)!==event.phone||event.kind!=='text'||!['DATA','DATA_CONFIRM','PREFERENCES'].includes(stage)||state.service==='alquiler'||['urgent','stop'].includes(u.intent))return null;
  const intake:IntakeState={...state.intake,draft:{...state.intake?.draft}};
  const result=(next:string,messages:string[]):ReceptionResult=>({stage:next,state:{...state,intake},messages});
@@ -55,6 +57,7 @@ export async function handlePatientIntake(tx:Prisma.TransactionClient,event:Rece
     OR regexp_replace(telefono,'[^0-9]','','g') IN (${event.phone},${event.phone.startsWith('57')?event.phone.slice(2):event.phone})
     OR regexp_replace(COALESCE(telefono2,''),'[^0-9]','','g') IN (${event.phone},${event.phone.startsWith('57')?event.phone.slice(2):event.phone})) LIMIT 3`;
   if(existing.length>1)return review('Varios registros coinciden con el teléfono o documento; evitar duplicado');
+  const operator=await requireLuisaOperator(tx);
   let created=false;
   if(existing[0]){
    const c=existing[0];
@@ -65,9 +68,9 @@ export async function handlePatientIntake(tx:Prisma.TransactionClient,event:Rece
    const customer=await tx.cliente.create({data:{tenantId:4,empresaId:3,nombre:draft.firstName,apellido:draft.lastName,numeroDocumento:draft.document,tipoDocumento:draft.documentType,telefono:event.phone,correo:draft.email,direcciones:{create:{tenantId:4,direccion:draft.address}}}});
    intake.clientId=customer.id;created=true;
   }
-  await createAuditLog({tenantId:4,accion:created?'BOT_CLIENT_CREATED':'BOT_CLIENT_MATCHED',entidad:'Cliente',entidadId:intake.clientId,detalles:{sourceEvent:event.id,summaryEvent:intake.summaryEvent,confirmationBySender:true,scope:'tenant4/company3'},tx});
+  await createAuditLog({tenantId:4,usuarioId:operator.id,accion:created?'BOT_CLIENT_CREATED':'BOT_CLIENT_MATCHED',entidad:'Cliente',entidadId:intake.clientId,detalles:{sourceEvent:event.id,summaryEvent:intake.summaryEvent,confirmationBySender:true,scope:'tenant4/company3'},tx});
   delete intake.summaryEvent;
-  const next=preferences();next.messages.unshift(created?'Tu registro quedó guardado 😊':'Identificamos tu registro 😊');return next;
+  const next=await preferences();next.messages.unshift(created?'Tu registro quedó guardado 😊':'Identificamos tu registro 😊');return next;
  }
  if(stage==='DATA_CONFIRM'&&u.intent==='reject'&&!changed){delete intake.summaryEvent;return result('DATA',['Claro 😊 ¿Qué dato debo corregir?']);}
  intake.summaryEvent=event.id;
@@ -75,13 +78,14 @@ export async function handlePatientIntake(tx:Prisma.TransactionClient,event:Rece
   `Confírmame estos datos 😊\nPaciente: ${draft.firstName} ${draft.lastName}\n${draft.documentType}: ${draft.document}\nCorreo: ${draft.email}\nDirección: ${draft.address}\nContacto: +${event.phone} (este chat).\n¿Están correctos para el registro?`,
  ]);
 
- function preferences():ReceptionResult{
+ async function preferences():Promise<ReceptionResult>{
   if(!intake.clientId)return review('Falta identificar el registro antes de agendar');
   if(!intake.preference&&!intake.professionalId)return result('PREFERENCES',['¿Te sentirías más a gusto con un psicólogo o una psicóloga, o no tienes preferencia?']);
   if(!intake.modality)return result('PREFERENCES',['¿Prefieres atención presencial o virtual?']);
   if(!intake.date||!intake.start)return result('PREFERENCES',['¿Qué fecha y hora te quedan mejor? Si tienes varias opciones, cuéntame 😊']);
   const time=new Date(intake.date+'T'+intake.start+':00-05:00').getTime();
   if(!Number.isFinite(time)||time<=Date.now()||time>Date.now()+90*86400000){delete intake.date;delete intake.start;return result('PREFERENCES',['¿Me confirmas la fecha y la hora, por favor? Podemos coordinar citas para los próximos tres meses 😊']);}
+  if(queue)return schedulePatient(tx,event,state,intake,u,queue);
   const d=result('HUMAN',['Gracias. El horario solicitado está pendiente de confirmación; la cita aún no está reservada.']);
   d.handoff=`Coordinar disponibilidad: cliente Axis ${intake.clientId}, ${intake.date} ${intake.start}, ${intake.modality}, ${intake.professionalId?'profesional solicitado Axis '+intake.professionalId:'preferencia '+(intake.preference==='male'?'psicólogo':intake.preference==='female'?'psicóloga':'indiferente')}. Datos ya registrados${intake.returning?'; revisar continuidad, tarifa y saldo del paquete antes de cobrar; servicio anterior '+intake.priorServiceId:''}`;
   return d;

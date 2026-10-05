@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcrypt";
 import { signToken } from "@/lib/auth";
+import {isLuisaServiceUser} from '@/lib/psychology-bot-operator';
 
 export async function POST(request: Request) {
   try {
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
     });
 
     // Si no existe o no está activo (opcional: no revelar cuál falló)
-    if (!user) {
+    if (!user || isLuisaServiceUser(user.username)) {
       return NextResponse.json(
         { message: "Credenciales inválidas" },
         { status: 401 }

@@ -7,6 +7,7 @@ import { getPackagePaymentState } from './package-payment';
 import { phoneDigits, SANDRA_PHONE, type ReceptionEvent } from './psychology-reception';
 import {findBookingCustomer,findBookingProfessional} from './psychology-booking-identity';
 import {bookingPrompts,bookedMessage,type BookingMessageDetails} from './psychology-booking-messages';
+import {requireLuisaOperator} from './psychology-bot-operator';
 type Tx=Prisma.TransactionClient;
 type Queue=(tx:Tx,id:string,phone:string,text:string)=>Promise<void>;
 type Details=BookingMessageDetails&{customerId:number|null;professionalId:number;serviceId:string;professionalName:string};
@@ -36,7 +37,7 @@ async function assertBookingChatsAvailable(tx:Tx,customerPhone:string,profession
 
 export type BookingRequest={rawPhone:string;serviceId:string;professionalId:string;room:string;date:string;start:string;end:string};
 /** Only the chief or the verified professional requesting their own rental can propose. */
-export async function proposeBooking(tx:Tx,event:ReceptionEvent,{rawPhone,serviceId,professionalId,room,date,start,end}:BookingRequest,queue:Queue):Promise<string>{
+export async function proposeBooking(tx:Tx,event:ReceptionEvent,{rawPhone,serviceId,professionalId,room,date,start,end}:BookingRequest,queue:Queue,autonomous?:{requestId:string}):Promise<string>{
     const customerPhone=phoneDigits(rawPhone);if(!customerPhone)throw Error('Número inválido');
     const when=bookingTimes(date,start,end);
     if(when.inicio.getTime()<=Date.now()||when.inicio.getTime()>Date.now()+90*86400000)throw Error('La fecha debe estar en los próximos 90 días.');
@@ -45,7 +46,18 @@ export async function proposeBooking(tx:Tx,event:ReceptionEvent,{rawPhone,servic
     if(!service||!professional?.telefono)throw Error('Servicio o profesional no verificado en Psicólogos.');
     const professionalPhone=phoneDigits(professional.telefono);if(!professionalPhone)throw Error('Teléfono del profesional inválido.');
     const rental=/alquiler/i.test(service.nombre);
-    if(event.fromMe||(event.phone!==SANDRA_PHONE&&(!rental||customerPhone!==event.phone||professionalPhone!==event.phone)))throw Error('Propuesta fuera de la identidad autorizada.');
+    let requestSource:string|null=null;
+    if(autonomous){
+      const verified=await tx.$queryRaw<{sourceEvent:string}[]>`SELECT r."sourceEvent" FROM "PsicologiaBotAppointmentRequest" r
+       JOIN "PsicologiaBotEvent" e ON e.id=r."availabilityEvent" AND e."tenantId"=4 AND e.phone=r."professionalPhone" AND e."fromMe"=false
+       WHERE r.id=${autonomous.requestId} AND r."tenantId"=4 AND r."companyId"=3 AND r.status='READY' AND r."expiresAt">NOW()
+        AND r."customerPhone"=${customerPhone} AND r."professionalPhone"=${professionalPhone}
+        AND r.details->>'serviceId'=${serviceId} AND r.details->>'professionalId'=${professionalId}
+        AND r.details->>'date'=${date} AND r.details->>'start'=${start} AND r.details->>'end'=${end} AND r.details->>'room'=${room} LIMIT 1 FOR UPDATE OF r`;
+      if(verified.length!==1||rental||event.phone!==customerPhone)throw Error('Solicitud autónoma sin fuente y alcance verificados.');requestSource=verified[0].sourceEvent;
+    }
+    if(event.fromMe||(!requestSource&&event.phone!==SANDRA_PHONE&&(!rental||customerPhone!==event.phone||professionalPhone!==event.phone)))throw Error('Propuesta fuera de la identidad autorizada.');
+    const operator=await requireLuisaOperator(tx);
     validateBookingSpecialty(service.categoria,professional.id,rental);
     await assertBookingChatsAvailable(tx,customerPhone,professionalPhone);
     const roomId=room.toUpperCase()==='VIRTUAL'?null:BigInt(room);
@@ -69,7 +81,7 @@ export async function proposeBooking(tx:Tx,event:ReceptionEvent,{rawPhone,servic
     await queue(tx,event.id+':proposal-customer',customerPhone,prompts.customer);
     if(customerPhone!==professionalPhone)await queue(tx,event.id+':proposal-professional',professionalPhone,prompts.professional);
     if(event.phone===SANDRA_PHONE)await queue(tx,event.id+':proposal-chief',SANDRA_PHONE,'El horario quedó pendiente de confirmación.');
-    await createAuditLog({tenantId:4,accion:'BOT_PROPOSAL',entidad:'CitaPropuesta',entidadId:code,detalles:{sourceEvent:event.id,details},tx});
+    await createAuditLog({tenantId:4,usuarioId:operator.id,accion:'BOT_PROPOSAL',entidad:'CitaPropuesta',entidadId:code,detalles:{sourceEvent:event.id,requestSource,appointmentRequest:autonomous?.requestId??null,details},tx});
     return code;
 }
 
@@ -117,6 +129,7 @@ export async function handleBookingMessage(tx:Tx,event:ReceptionEvent,queue:Queu
   return true;
 }
 async function finalizeBooking(tx:Tx,p:Proposal,event:ReceptionEvent,queue:Queue) {
+  const operator=await requireLuisaOperator(tx);
   const d=p.details;
   const when=bookingTimes(d.date,d.start,d.end);
   // Revalidate all authoritative records in the same transaction that creates the appointment.
@@ -143,9 +156,9 @@ async function finalizeBooking(tx:Tx,p:Proposal,event:ReceptionEvent,queue:Queue
     pkg=await tx.paqueteAdquirido.create({data:{tenantId:4,...owner,catalogoId:service.id,sesionesTotales:service.cantidadSesiones,sesionesConsumidas:1,saldoRestante:Math.max(0,service.cantidadSesiones-1),fechaCompra:new Date(),precioPagado:value,estado:'ACTIVO'}});
   }
   const payment=await getPackagePaymentState(tx,4,pkg.id);
-  const cita=await tx.citasPsicologos.create({data:{tenantId:4,empresaId:3,pacienteId:d.customerId,psicologoId:d.professionalId,consultorioId:d.roomId?BigInt(d.roomId):null,fechaCita:when.fecha,horaInicio:when.inicio,horaFin:when.fin,valor:value,paqueteId:pkg.id,comprobantePath:p.evidencePath,observacion:`Recepción WhatsApp; propuesta ${p.code}. Soporte sujeto a verificación bancaria.`,...(payment??{})}});
+  const cita=await tx.citasPsicologos.create({data:{tenantId:4,empresaId:3,creadoPorId:operator.id,pacienteId:d.customerId,psicologoId:d.professionalId,consultorioId:d.roomId?BigInt(d.roomId):null,fechaCita:when.fecha,horaInicio:when.inicio,horaFin:when.fin,valor:value,paqueteId:pkg.id,comprobantePath:p.evidencePath,observacion:`Recepción WhatsApp; propuesta ${p.code}. Soporte sujeto a verificación bancaria.`,...(payment??{})}});
   await tx.$executeRaw`UPDATE "PsicologiaBotProposal" SET status='BOOKED',"citaId"=${cita.id} WHERE code=${p.code}`;
-  await createAuditLog({tenantId:4,accion:'CREATE',entidad:'Cita',entidadId:cita.id.toString(),detalles:{origin:'WhatsApp',proposal:p.code,sourceEvent:event.id,patientConfirmed:true,professionalConfirmed:true,bankVerified:false,packageId:pkg.id.toString(),value},tx});
+  await createAuditLog({tenantId:4,usuarioId:operator.id,accion:'CREATE',entidad:'Cita',entidadId:cita.id.toString(),detalles:{origin:'WhatsApp',proposal:p.code,sourceEvent:event.id,patientConfirmed:true,professionalConfirmed:true,bankVerified:false,packageId:pkg.id.toString(),value},tx});
   const content=bookedMessage(d);
   await queue(tx,'proposal:'+p.code+':booked-customer',p.customerPhone,content);
   if(p.customerPhone!==p.professionalPhone)await queue(tx,'proposal:'+p.code+':booked-professional',p.professionalPhone,bookedMessage(d));

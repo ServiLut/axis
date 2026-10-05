@@ -8,8 +8,9 @@ import type * as Actions from "../app/(protected)/dashboard/usuarios/accesos/act
 const secret="unit-test-only-never-production";
 const base={userId:149,tenantId:4,tenantName:"PSICOLOGOS",username:"unit-test",nombre:"Test",apellido:"Test",role:"ADMIN",aprobado:true};
 function authFixture(){
-  const user={activo:true,aprobado:true,tenantId:4,rol:"ADMIN",authVersion:0};
+  const user={username:'unit-test',activo:true,aprobado:true,tenantId:4,rol:"ADMIN",authVersion:0};
   const module=loadServerModule<typeof Auth>("lib/auth.ts",{
+    './psychology-bot-operator':{isLuisaServiceUser:(v:unknown)=>v==='luisa.fernanda.bot'},
     jsonwebtoken:jwt,"../prisma/generated/prisma/client":{},"./prisma":{usuario:{findUnique:async()=>user}},
   },{JWT_SECRET:secret});
   return {user,module,token:(extra:Record<string,unknown>={})=>jwt.sign({...base,...extra},secret,{expiresIn:"1h"})};
@@ -17,6 +18,9 @@ function authFixture(){
 test("a suspended account loses access with an otherwise valid JWT",async()=>{
   const f=authFixture(),token=f.token();assert.ok(await f.module.verifyToken(token));
   f.user.activo=false;assert.equal(await f.module.verifyToken(token),null);
+});
+test('Luisa service account cannot turn an otherwise valid staff JWT into interactive access',async()=>{
+ const f=authFixture();f.user.username='luisa.fernanda.bot';assert.equal(await f.module.verifyToken(f.token()),null);
 });
 test("password reset and reactivation cannot revive older tokens",async()=>{
   const f=authFixture(),old=f.token();f.user.authVersion=1;

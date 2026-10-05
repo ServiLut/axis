@@ -3,9 +3,10 @@ import {createAuditLog} from './audit';
 import {normalizeText,phoneDigits,SANDRA_PHONE,PSYCHOLOGY_PHONE,type ReceptionEvent,type ReceptionState,type ReceptionResult,type IntakeState} from './psychology-reception';
 import type {Understanding} from './psychology-ai';
 import {handlePatientIntake} from './psychology-patient-intake';
+import type {SchedulingQueue} from './psychology-patient-scheduling';
 
 /** Recognize a returning caller without modifying a patient, appointment or payment. */
-export async function handleReturningPatient(tx:Prisma.TransactionClient,e:ReceptionEvent,stage:string,state:ReceptionState,u:Understanding):Promise<ReceptionResult|null>{
+export async function handleReturningPatient(tx:Prisma.TransactionClient,e:ReceptionEvent,stage:string,state:ReceptionState,u:Understanding,queue?:SchedulingQueue):Promise<ReceptionResult|null>{
  if(e.fromMe||e.kind!=='text'||[SANDRA_PHONE,PSYCHOLOGY_PHONE].includes(e.phone)||phoneDigits(e.phone)!==e.phone||!['NEW','NEED','MENU'].includes(stage)||state.service==='alquiler'||u.confidence<0.9||!['accept','preferences','appointment'].includes(u.intent)||u.service)return null;
  const text=normalizeText(e.text);
  if(!/(?:quiero|decido|deseo|quisiera|me gustaria|voy a)\s+(?:continuar|seguir|retomar)/.test(text)||/\bno\s+(?:quiero|deseo|quisiera|voy a)\b/.test(text))return null;
@@ -39,7 +40,7 @@ export async function handleReturningPatient(tx:Prisma.TransactionClient,e:Recep
  if(u.date)intake.date=u.date;if(u.start)intake.start=u.start;if(u.modality)intake.modality=u.modality;
  await createAuditLog({tenantId:4,accion:'BOT_RETURNING_PATIENT_MATCHED',entidad:'Cliente',entidadId:customers[0].id,detalles:{sourceEvent:e.id,priorAppointmentId:String(last.id),professionalRequested:same?last.professionalId:null,patientChanged:false,appointmentCreated:false},tx});
  // Reuse the same preference collector and final handoff as a confirmed new intake.
- const next=await handlePatientIntake(tx,e,'PREFERENCES',{...state,intake},u);
+ const next=await handlePatientIntake(tx,e,'PREFERENCES',{...state,intake},u,queue);
  if(next?.messages.length&&!next.handoff)next.messages[0]='Claro 😊 '+next.messages[0];
  return next;
 }

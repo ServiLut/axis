@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { Rol } from '../prisma/generated/prisma/client';
 import prisma from './prisma';
+import {isLuisaServiceUser} from './psychology-bot-operator';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'default-secret';
 
@@ -26,11 +27,11 @@ export async function verifyToken(token: string): Promise<TokenPayload | null> {
     if (!payload.aprobado || !Number.isSafeInteger(payload.userId) || payload.userId <= 0) return null;
     const user = await prisma.usuario.findUnique({
       where: { id: payload.userId },
-      select: { activo: true, aprobado: true, tenantId: true, rol: true, authVersion: true },
+      select: { username:true,activo: true, aprobado: true, tenantId: true, rol: true, authVersion: true },
     });
     // Check every request: suspension and password changes also revoke old tokens.
     // Tokens issued before this migration belong to version zero only.
-    if (!user?.activo || !user.aprobado || user.tenantId !== payload.tenantId ||
+    if (!user?.activo || isLuisaServiceUser(user.username) || !user.aprobado || user.tenantId !== payload.tenantId ||
         user.rol !== payload.role || user.authVersion !== (payload.authVersion ?? 0)) return null;
     return payload;
   } catch {

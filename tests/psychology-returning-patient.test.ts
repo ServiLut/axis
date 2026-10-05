@@ -23,7 +23,7 @@ async function fixture(){
  INSERT INTO "TerapiasPsicologos" VALUES (41,4,3,'Terapia individual');`);
  const audit:any[]=[];let reads=0;
  const tx={$queryRaw:async(s:TemplateStringsArray,...v:unknown[])=>{reads++;return (await db.query(s.reduce((q,p,i)=>q+(i?'$'+i:'')+p,''),v)).rows;}};
- const mocks={'./psychology-reception':reception,'./audit':{createAuditLog:async(data:unknown)=>{audit.push(data)}}};
+ const mocks={'./psychology-reception':reception,'./psychology-bot-operator':{requireLuisaOperator:async()=>({id:900})},'./psychology-patient-scheduling':{},'./audit':{createAuditLog:async(data:unknown)=>{audit.push(data)}}};
  const intake=loadServerModule<typeof Intake>('lib/psychology-patient-intake.ts',mocks);
  const api=loadServerModule<typeof Returning>('lib/psychology-returning-patient.ts',{...mocks,'./psychology-patient-intake':intake});
  const run=(u:Partial<Understanding>={},text=event.text,stage='NEW',state:reception.ReceptionState={})=>api.handleReturningPatient(tx as never,{...event,text},stage,state,understand(u));

@@ -31,6 +31,7 @@ async function fixture(rental=false) {
  };
  const identity=loadServerModule<typeof Identity>('lib/psychology-booking-identity.ts',{'./psychology-reception':{phoneDigits}});
  const api=loadServerModule<typeof Booking>('lib/psychology-bot-booking.ts',{
+  './psychology-bot-operator':{requireLuisaOperator:async()=>({id:900,username:'luisa.fernanda.bot'})},
   './psychology-booking-messages':bookingMessages,
   'node:crypto':{createHash},'./psychology-reception':{phoneDigits,SANDRA_PHONE},
   './psychology-booking-identity':identity,

@@ -20,6 +20,7 @@ import {handleRentalIntake} from './psychology-rental-intake';
 import {naturalBookingConfirmation,type ConfirmableProposal} from './psychology-booking-messages';
 import {recordPsychologyStaffTakeover,psychologyStaffSendAllowed,chiefStaffDecision,chiefMessageAddressesBot,chiefPresenceQuestion,chiefOpeningReply} from './psychology-staff-ownership';
 import {psychologyCommunicationIssue} from './psychology-communication';
+import {handlePatientAvailability} from './psychology-patient-scheduling';
 
 type Tx=Prisma.TransactionClient;
 export type AutomationConfig={ enabled:boolean; activatedAt:Date|null; templates:ReceptionTemplates; paymentPolicy:string;staffIdleMinutes?:number };
@@ -146,7 +147,17 @@ async function processOne(config:AutomationConfig,preparedEventId:string) {
       if(code)e.text='CONFIRMAR '+code;
     }
     let bookingHandled=false;
-    if(!e.fromMe&&e.kind==='text'&&/^(RESERVAR|CONFIRMAR|SOPORTE)\s/i.test(e.text)) {
+    await tx.$executeRawUnsafe('SAVEPOINT bot_availability');
+    try{bookingHandled=await handlePatientAvailability(tx,e,understanding,queuePsychologyMessage);}
+    catch(error){
+      await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT bot_availability');
+      bookingHandled=true;
+      await tx.$executeRaw`UPDATE "PsicologiaBotAppointmentRequest" SET status='REVIEW' WHERE "tenantId"=4 AND "professionalPhone"=${e.phone} AND status='WAIT_PROFESSIONAL'`;
+      await queuePsychologyMessage(tx,e.id+':availability-error',SANDRA_PHONE,chiefBookingProblem(e.phone,error,chiefContext));
+      await createAuditLog({tenantId:4,accion:'BOT_AVAILABILITY_REVIEW',entidad:'WhatsAppEvento',entidadId:e.id,detalles:{requiresReview:true,appointmentConfirmed:false,partialWritesRolledBack:true},tx});
+    }
+    await tx.$executeRawUnsafe('RELEASE SAVEPOINT bot_availability');
+    if(!bookingHandled&&!e.fromMe&&e.kind==='text'&&/^(RESERVAR|CONFIRMAR|SOPORTE)\s/i.test(e.text)) {
       await tx.$executeRawUnsafe('SAVEPOINT bot_booking');
       try {bookingHandled=await handleBookingMessage(tx,e,queuePsychologyMessage);}
       catch (error) {
@@ -183,7 +194,7 @@ async function processOne(config:AutomationConfig,preparedEventId:string) {
         let decision=humanLater.length?pauseForStaff(c.stage,c.state,e.at):semanticReception(e,c.stage,c.state,config.templates,config.paymentPolicy,understanding);
         if(!humanLater.length&&!row.analysisError&&understanding&&decision.handoff!=='Atención humana urgente'&&!contextReception(e,c.stage,c.state)){
           await tx.$executeRawUnsafe('SAVEPOINT bot_intake');
-          try{decision=await handleRentalIntake(tx,e,c.stage,c.state,understanding)??await handleReturningPatient(tx,e,c.stage,c.state,understanding)??await handlePatientIntake(tx,e,c.stage,c.state,understanding)??decision;}
+          try{decision=await handleRentalIntake(tx,e,c.stage,c.state,understanding)??await handleReturningPatient(tx,e,c.stage,c.state,understanding,queuePsychologyMessage)??await handlePatientIntake(tx,e,c.stage,c.state,understanding,queuePsychologyMessage)??decision;}
           catch{
             await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT bot_intake');
             decision={stage:'HUMAN',state:{...c.state,reason:'Registro pendiente de revisión'},messages:['Tu registro sigue pendiente de confirmación.'],handoff:'Revisar registro de paciente; operación revertida'};

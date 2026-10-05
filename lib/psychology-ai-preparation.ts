@@ -2,7 +2,7 @@ import prisma from './prisma';
 import {aiConfigured,transcribePsychologyAudio,understandPsychologyMessage} from './psychology-ai';
 import {isFastGreeting,type ReceptionEvent,type ReceptionState} from './psychology-reception';
 import {readReceptionIdentity,hasContinuation} from './psychology-reception-context';
-import {readPsychologyHistory,readChiefReplyReference} from './psychology-chatwoot';
+import {readPsychologyHistory,readOwnReplyReference} from './psychology-chatwoot';
 import {createAuditLog} from './audit';
 import {readChiefKnowledge,readChiefCaseAnswers} from './psychology-knowledge';
 import {classifyReceptionHistory,staffObservation,type BotHistoryReference} from './psychology-staff-observation';
@@ -27,14 +27,14 @@ export async function prepareNextPsychologyEvent(){
    await prisma.$executeRaw`UPDATE "PsicologiaBotEvent" SET transcript=${event.text} WHERE id=${row.id} AND status='PENDING'`;
    event.kind='text';
   }
-  if(row.phone===SANDRA_PHONE&&event.quotedText?.trim()&&!event.quotedOutboxId){
+  if(event.quotedText?.trim()&&!event.quotedOutboxId){
    const candidates=await prisma.$queryRaw<{conversationId:bigint}[]>`SELECT DISTINCT "conversationId" FROM "PsicologiaBotOutbox"
-    WHERE "tenantId"=4 AND phone=${SANDRA_PHONE} AND status='ACCEPTED' AND content=${event.quotedText.trim()}
+    WHERE "tenantId"=4 AND phone=${event.phone} AND status='ACCEPTED' AND content=${event.quotedText.trim()}
      AND "attemptedAt"<=${row.eventAt} AND "conversationId" IS NOT NULL LIMIT 4`;
    for(const candidate of candidates){
-    const reference=await readChiefReplyReference(event,candidate.conversationId);if(!reference)continue;
+    const reference=await readOwnReplyReference(event,candidate.conversationId);if(!reference)continue;
     const matched=await prisma.$queryRaw<{id:string}[]>`SELECT id FROM "PsicologiaBotOutbox"
-     WHERE "tenantId"=4 AND phone=${SANDRA_PHONE} AND status='ACCEPTED' AND "conversationId"=${reference.conversationId}
+     WHERE "tenantId"=4 AND phone=${event.phone} AND status='ACCEPTED' AND "conversationId"=${reference.conversationId}
       AND "messageId"::text=${String(reference.messageId)} AND content=${event.quotedText.trim()} AND "attemptedAt"<=${row.eventAt} LIMIT 2`;
     if(matched.length!==1)continue;
     const outboxId=matched[0].id;

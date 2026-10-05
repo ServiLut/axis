@@ -22,7 +22,7 @@ async function fixture(){
    creates++;const r=await db.query<{id:number}>('INSERT INTO "Cliente" ("tenantId","empresaId",nombre,apellido,"numeroDocumento","tipoDocumento",telefono,correo) VALUES (4,3,$1,$2,$3,$4,$5,$6) RETURNING id',[data.nombre,data.apellido,data.numeroDocumento,data.tipoDocumento,data.telefono,data.correo]);return r.rows[0];
   }},
  };
- const api=loadServerModule<typeof Intake>('lib/psychology-patient-intake.ts',{'./psychology-reception':reception,'./audit':{createAuditLog:async(data:unknown)=>{audit.push(data)}}});
+ const api=loadServerModule<typeof Intake>('lib/psychology-patient-intake.ts',{'./psychology-reception':reception,'./psychology-bot-operator':{requireLuisaOperator:async()=>({id:900,username:'luisa.fernanda.bot'})},'./psychology-patient-scheduling':{},'./audit':{createAuditLog:async(data:unknown)=>{audit.push(data)}}});
  const step=async(data:Partial<Understanding>,text='dato',acceptedSummary=true)=>{
   const event={id:'intake-'+(++seq),phone:'573001111111',kind:'text' as const,text,fromMe:false,at:new Date(Date.now()+10).toISOString()};
   const result=await api.handlePatientIntake(tx as never,event,stage,state,understand(data));

@@ -67,11 +67,15 @@ export async function sendPsychologyMessage(conversationId:number,content:string
 
 /** Read a provider reply edge; matching repeated text alone is never sufficient. */
 export async function readChiefReplyReference(event:ReceptionEvent,conversationId:number|bigint){
+ if(event.phone!==SANDRA_PHONE)return null;
+ return readOwnReplyReference(event,conversationId);
+}
+export async function readOwnReplyReference(event:ReceptionEvent,conversationId:number|bigint){
  const id=Number(conversationId);
- if(event.fromMe||event.phone!==SANDRA_PHONE||event.kind!=='text'||!event.quotedText?.trim()||!Number.isSafeInteger(id)||id<1)return null;
+ if(event.fromMe||phoneDigits(event.phone)!==event.phone||event.kind!=='text'||!event.quotedText?.trim()||!Number.isSafeInteger(id)||id<1)return null;
  const path=account+`/conversations/${id}`;
  const detail=await chatwootRequest(path);
- if(detail.inbox_id!==10||detail.meta?.sender?.phone_number!=='+'+SANDRA_PHONE)throw Error('CW_REPLY_SCOPE');
+ if(detail.inbox_id!==10||detail.meta?.sender?.phone_number!=='+'+event.phone)throw Error('CW_REPLY_SCOPE');
  let before:number|undefined;
  for(let pageNumber=0;pageNumber<3;pageNumber++){
   const page=await chatwootRequest(path+'/messages'+(before?'?before='+before:''));
