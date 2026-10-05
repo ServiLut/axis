@@ -16,7 +16,7 @@ export function extractSlots(text,company) {
   const city=['medellin','bello','envigado','itagui','sabaneta','la estrella','copacabana','girardota','rionegro'].find(s=>new RegExp('\\b'+s+'\\b').test(t));
   if(city)slots.location=city;
   if(company==='fumigacion'){
-    const municipality=text.match(/\b(?:santa\s+fe|santaf[eé])\s+de\s+antioquia\b/i)?.[0];
+    const municipality=text.match(/\b(?:(?:santa\s+fe|santaf[eé])\s+de\s+antioquia|sopetr[aá]n)\b/i)?.[0];
     if(municipality)slots.location=municipality;
     // A locative answer names a café as the place. Coffee drinks or colors
     // alone do not identify an inmueble, and no restaurant type is inferred.
@@ -26,6 +26,13 @@ export function extractSlots(text,company) {
   if(company==='fumigacion'){
     slots.area=text.match(/\b\d{1,5}(?:[.,]\d{1,2})?\s*(?:m\s*(?:²|2|cuadrados?)|metros?\s*cuadrados?)(?=$|[\s.,;:)])/i)?.[0];
     slots.rooms=text.match(/\b\d{1,3}\s*(?:habitaciones?|cuartos?)\b/i)?.[0];
+    // Keep an explicit written count as the source said it. Do not normalize it
+    // into a digit, choose a count from a range, or adopt a negated description.
+    if(!slots.rooms){
+      const room=text.match(/\b(?:una?|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+(?:habitaciones?|cuartos?)\b/i);
+      const prefix=room?normalize(text.slice(0,room.index)).trim():'';
+      if(room&&!/\b(?:no|sin|entre|o|y)(?:\s+(?:tiene|tenemos|son|hay|cuenta|con|una?|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)){0,4}$/.test(prefix))slots.rooms=room[0];
+    }
     // "Piezas" describes rooms only with an explicit property in this text;
     // an equipment part or an unrelated count must not become the home's size.
     if(!slots.rooms&&slots.site)slots.rooms=text.match(/\b\d{1,3}\s*piezas?\b(?!\s+(?:de|del|para|repuestos?|motor|maquina)\b)/i)?.[0];
@@ -78,13 +85,17 @@ function customerCourtesy(text){
   return words.every(word=>permitted.has(word));
 }
 function literalIntakeTurn(e){return e.kind==='text'&&!e.forwarded&&!customerCourtesy(e.text)&&!isCustomerQuestion(e.text)&&!/\b(?:antes|anterior|cancel\w*|reprogram\w*|reclamo|queja|garantia|pague|pago|abono|comprobante|me dijeron|me dijo|otra solicitud|otro servicio|nuevo servicio|otro equipo)\b/.test(normalize(e.text));}
+function promptedSize(e,state){
+  return literalIntakeTurn(e)&&(state.asked?.includes('size')||state.initialIntakeAllRequested)?e.text.match(/\b\d{1,5}(?:[.,]\d{1,2})?\s*metros?(?=[.! ,;]*$)/i)?.[0]:undefined;
+}
 export function customerDecision(company,state,e,analysis={}) {
   if(e.kind==='text'&&customerCourtesy(e.text))return {state:{...state,slots:{...state.slots},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)},courtesy:true,reply:'Con gusto. Estamos para servirte.'};
+  if(e.kind==='text'&&!e.forwarded&&(state.introduced||state.initialIntakeAllRequested||state.asked?.length)&&/^(?:hola|hola buenas noches|buenos dias|buen dia|buenas tardes|buenas noches)[.!¡, ]*$/.test(normalize(e.text)))return {state:{...state,slots:{...state.slots},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)},courtesy:true,greeting:true,reply:/buenas noches/.test(normalize(e.text))?'Buenas noches.':/buenas tardes/.test(normalize(e.text))?'Buenas tardes.':/buen(?:os dias| dia)/.test(normalize(e.text))?'Buen día.':'Hola.'};
   const t=normalize(e.text);const next={...state,slots:{...state.slots,...extractSlots(e.text,company),...parseUnderstanding(analysis,e.text)},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)};
   // Preserve an elliptical answer to our own size prompt literally. Do not invent
   // square metres, convert a linear measurement, or infer size outside that context.
   if(company==='fumigacion'&&!next.slots.area&&!next.slots.rooms&&literalIntakeTurn(e)&&(state.asked?.includes('size')||state.initialIntakeAllRequested)){
-    const size=e.text.match(/\b\d{1,5}(?:[.,]\d{1,2})?\s*metros?(?=[.! ,;]*$)/i)?.[0];
+    const size=promptedSize(e,state);
     if(size){next.slots.area=size;next.intakeSources={...next.intakeSources,area:{sourceId:e.id,at:e.at,context:'prior-size-question',unitExpanded:false}};}
   }
   if(company==='fumigacion'&&literalIntakeTurn(e)&&(state.asked?.at(-1)==='location'||state.initialIntakeAllRequested)&&e.text.length<=240&&/\b(?:villa|barrio|vereda|calle|carrera|unidad|urbanizacion|robledo|medellin|bello|envigado|itagui|sabaneta|santa helena)\b/.test(t))next.slots.locationDetails=e.text;
@@ -190,8 +201,13 @@ export class Engine {
         const firstSource=caseState.caseId.startsWith(c.company+':')?caseState.caseId.slice(c.company.length+1):null;
         const turns=s.customerTurnBatch(e.phone,e.id,caseState.lastHandledSourceId||firstSource);
         caseState.intakeSources={...caseState.intakeSources};
-        for(const turn of turns.filter(literalIntakeTurn))for(const [field,value]of Object.entries(extractSlots(turn.text,c.company))){
-          caseState.slots[field]=value;caseState.intakeSources[field]={sourceId:turn.id,at:turn.at};
+        for(const turn of turns.filter(literalIntakeTurn)){
+          const fields=extractSlots(turn.text,c.company);
+          const contextualSize=c.company==='fumigacion'&&!fields.area?promptedSize(turn,caseState):undefined;
+          if(contextualSize)fields.area=contextualSize;
+          for(const [field,value]of Object.entries(fields)){
+            caseState.slots[field]=value;caseState.intakeSources[field]={sourceId:turn.id,at:turn.at,...(field==='area'&&contextualSize?{context:'prior-size-question',unitExpanded:false}:{})};
+          }
         }
         if(literalIntakeTurn(e)&&Object.keys(extractSlots(e.text,c.company)).length)pendingQuestion=turns.filter(turn=>turn.id!==e.id&&turn.kind==='text'&&!turn.forwarded&&isCustomerQuestion(turn.text)).at(-1)||null;
       }

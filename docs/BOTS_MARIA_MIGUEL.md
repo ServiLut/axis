@@ -214,3 +214,13 @@ En FUMIGACION, `postServiceGuard=reported-recurrence-before-intake-v1` reconoce 
 
 Estas correcciones no confirman una cotización, revisita, horario, técnico, pago o guardado de negocio. Las recepciones permanecen activas por la instrucción vigente y las confirmaciones nuevas se dirigen exclusivamente a Sandra. La siguiente atención legítima con estas guardias debe verificarse en producción.
 
+## Tamaño escrito y saludo de continuación — control 05/10/2026 00:50Z
+
+Dos secuencias propias verificadas por mensaje nativo mostraron que «Tiene dos habitaciones» y Sopetrán no se conservaron como datos ya escritos, y que «Buenas noches» después de la recepción produjo una consulta innecesaria por la plaga. Las consultas históricas mantienen su revisión pendiente; corregir el parser no equivale a responderlas ni autoriza reenviar el caso.
+
+`intakeLiteralFieldsGuard=literal-business-place-and-written-rooms-v3` conserva en FUMIGACION Sopetrán y cantidades explícitas escritas de habitaciones o cuartos con su texto y fuente. No transforma una cantidad negada o un rango en un número confirmado ni traslada estos campos a Servicio Técnico. `intakeContinuationGuard=literal-fields-context-size-and-single-pending-quote-v2` conserva también una respuesta de tamaño del mismo lote después de la pregunta propia, aunque otro mensaje la haya sustituido para procesamiento; «100 metros» no se convierte en metros cuadrados.
+
+`customerGreetingGuard=pure-greeting-preserves-pending-intake-v1` atiende en ambas empresas un saludo puro posterior con un saludo breve y conserva datos, preguntas, contexto pendiente y autoría. No crea una consulta por el campo faltante ni reinicia la recepción. Un saludo acompañado de solicitud, pago o situación personal sigue su trámite correspondiente. La atención humana conserva prioridad y ninguna de estas guardias libera chats, confirma tarifas, agenda o técnicos, o escribe servicios. Pruebas aisladas y publicación se registran por separado de la próxima atención real posterior al despliegue.
+
+Al cierre de este control la corrección está preparada y probada en la rama propia. Dokploy muestra inicio de sesión en Chrome y en el navegador de Codex; no se ha aplicado un despliegue nuevo. Las recepciones y conexiones previamente verificadas continúan activas con su versión anterior. La restauración del acceso al panel y la instalación y comprobación del cambio permanecen pendientes.
+

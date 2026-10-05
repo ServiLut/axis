@@ -12,6 +12,89 @@ function fixture(){
   return {store,async process(text){const event={id:'INTAKEFIX'+(++n),phone:'573001112233',line:config.lines[0].phone,at:Date.now()+n,fromMe:false,kind:'text',text};store.enqueue(event);await engine.process(event);return event;}};
 }
 
+test('the observed Sopetran and spelled room count remain literal intake data',async()=>{
+  const f=fixture();try{
+    await f.process('Hola');
+    const place=await f.process('Buenas noches. Tengo en mi casa una plaga de ratas. Vivo en una casa, primer piso.\nEn Sopetrán Antioquia');
+    const e=await f.process('Tiene dos habitaciones');
+    const state=f.store.conversation(e.phone).state;
+    assert.equal(state.slots.location,'Sopetrán');
+    assert.equal(state.intakeSources.location.sourceId,place.id);
+    assert.equal(state.slots.rooms,'dos habitaciones');
+    assert.equal(state.intakeSources.rooms.sourceId,e.id);
+    assert.equal(f.store.db.prepare('SELECT state FROM events WHERE id=?').get(e.id).state,'WAITING_COORDINATOR');
+    assert.deepEqual(f.store.db.prepare('SELECT topic,recipient FROM questions').all().map(({topic,recipient})=>({topic,recipient})),[{topic:'cotizacion-verificada',recipient:SANDRA}]);
+  }finally{f.store.close();}
+});
+
+test('a superseded literal size answer retains its source without expanding metres',async()=>{
+  const f=fixture();try{
+    const first=await f.process('Hola, cucarachas en mi casa de Sopetrán');
+    const prior={id:'BATCHSIZE01',phone:first.phone,line:first.line,at:first.at+1,fromMe:false,kind:'text',text:'Aproximadamente 100 metros'};
+    const current={...prior,id:'BATCHSIZE02',at:prior.at+1,text:'Tiene dos habitaciones'};
+    f.store.enqueue(prior);f.store.enqueue(current);
+    await new Engine(f.store,{company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,chiefOnly:true}).process(prior);
+    await new Engine(f.store,{company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,chiefOnly:true}).process(current);
+    const state=f.store.conversation(current.phone).state;
+    assert.equal(state.slots.area,'100 metros');
+    assert.equal(state.intakeSources.area.sourceId,prior.id);
+    assert.equal(state.intakeSources.area.unitExpanded,false);
+    assert.equal(state.slots.rooms,'dos habitaciones');
+    assert.equal(f.store.db.prepare('SELECT state FROM events WHERE id=?').get(prior.id).state,'OBSERVED_SUPERSEDED');
+    assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get(prior.id+':reply').n,0);
+  }finally{f.store.close();}
+});
+
+test('a pure greeting after intake does not create a missing-field question or repeat intake',async()=>{
+  for(const company of ['fumigacion','servicio-tecnico']){
+    const s=new Store(':memory:',company,randomBytes(32)),c={company,...BUSINESSES[company],enabled:true,chiefOnly:true},engine=new Engine(s,c);
+    const e={id:'GREETFIRST1',phone:'573001112233',line:c.phones[0],at:Date.now(),fromMe:false,kind:'text',text:'Hola'};
+    try{
+      s.enqueue(e);await engine.process(e);const before=structuredClone(s.conversation(e.phone).state);
+      const next={...e,id:'GREETAGAIN2',at:e.at+1,text:'Buenas noches'};s.enqueue(next);await engine.process(next);
+      const state=s.conversation(e.phone).state;
+      assert.deepEqual(state.asked,before.asked);assert.deepEqual(state.slots,before.slots);
+      assert.equal(s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);
+      const reply=s.open(s.db.prepare('SELECT body FROM outbox WHERE id=?').get(next.id+':reply').body);
+      assert.equal(reply,'Buenas noches.');
+      assert.equal(s.db.prepare('SELECT case_id FROM outbox WHERE id=?').get(next.id+':reply').case_id,null);
+    }finally{s.close();}
+  }
+});
+
+test('a pure greeting cannot release human attention or consume pending quotation context',async()=>{
+  const f=fixture();try{
+    const first=await f.process('Hola, cucarachas en casa de Medellín con 2 habitaciones');
+    const before=structuredClone(f.store.conversation(first.phone).state);
+    await f.process('Buenas noches');
+    assert.deepEqual(f.store.conversation(first.phone).state.slots,before.slots);
+    assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM questions').get().n,1);
+    f.store.hold(first.phone,'verified-staff');const held=await f.process('Buenas noches');
+    assert.equal(f.store.conversation(held.phone).hold,1);
+    assert.equal(f.store.db.prepare('SELECT state FROM events WHERE id=?').get(held.id).state,'OBSERVED_HUMAN');
+    assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get(held.id+':reply').n,0);
+  }finally{f.store.close();}
+});
+
+test('written rooms stay scoped and negated counts or linear pipes do not become size',()=>{
+  assert.equal(extractSlots('Casa con dos habitaciones','fumigacion').rooms,'dos habitaciones');
+  assert.equal(extractSlots('Tiene tres cuartos','fumigacion').rooms,'tres cuartos');
+  for(const text of ['No tiene dos habitaciones','No son tres cuartos','Entre dos y tres habitaciones','Dos piezas del motor'])assert.equal(extractSlots(text,'fumigacion').rooms,undefined);
+  assert.equal(extractSlots('Tiene dos habitaciones en Sopetrán','servicio-tecnico').rooms,undefined);
+  assert.equal(extractSlots('Tiene dos habitaciones en Sopetrán','servicio-tecnico').location,undefined);
+  const d=customerDecision('fumigacion',{slots:{},asked:['size'],introduced:true},{kind:'text',text:'100 metros de tubería'});
+  assert.equal(d.state.slots.area,undefined);
+});
+
+test('mixed greetings still collect facts or review safety and payment',()=>{
+  const state={slots:{},asked:['service'],introduced:true};
+  for(const text of ['Buenas noches, tengo dolor e intoxicación','Buenas noches, ya pagué']){
+    const d=customerDecision('fumigacion',state,{kind:'text',text});assert.ok(d.review);assert.equal(d.greeting,undefined);
+  }
+  const d=customerDecision('fumigacion',state,{kind:'text',text:'Buenas noches, cucarachas en casa de Medellín con dos habitaciones'});
+  assert.equal(d.state.slots.rooms,'dos habitaciones');assert.equal(d.question.topic,'cotizacion-verificada');
+});
+
 test('the observed multiline apartment and room reply does not repeat either intake question',async()=>{
   const f=fixture();try{
     await f.process('Hola');
