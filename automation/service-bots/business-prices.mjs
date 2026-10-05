@@ -15,7 +15,8 @@ const schedule={company:'fumigacion',kind:'approved_price_schedule',source:BUSIN
   {rooms:4,minM2:76,maxM2:100,cucarachas:169000,cucarachasMinimum:159000,roedores:169000,roedoresMinimum:159000},
   {rooms:5,minM2:101,maxM2:150,cucarachas:189000,cucarachasMinimum:179000,roedores:189000,roedoresMinimum:179000},
   {rooms:6,minM2:151,maxM2:200,cucarachas:209000,cucarachasMinimum:199000,roedores:209000,roedoresMinimum:199000}],
- comejenExtraCop:50000,chinchesPerMattressCop:70000,chinchesProposedPriceCop:100000,
+ comejenExtraCop:50000,chinchesPerMattressCop:99000,chinchesProposedPriceCop:100000,
+ mattressPriceAuthorization:'direct-user-20261005-correction-99000-per-mattress',
  automaticDiscounts:false,avispaPrice:'inspection-required',
  scope:{properties:['casa','apartamento'],municipalities:['medellin','bello','envigado','itagui','sabaneta','la estrella','copacabana','girardota'],specialProperties:'human-review',multipleProperties:'human-review',travelOutsideMetro:'human-review',mattressVolumeFrom:6,extraAffectedFurniture:'human-review',priceColumn:'valor-de-fumigacion',minimumColumn:'internal-reference-only'}};
 const canonical=JSON.stringify(schedule);

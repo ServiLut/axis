@@ -303,7 +303,7 @@ La usuaria aportó dos tablas, una aclaración escrita y un audio, y después or
 | 5 | 101–150 | 189.000 | 189.000 |
 | 6 | 151–200 | 209.000 | 209.000 |
 
-Se cotiza la columna **Valor de fumigación**; el mínimo es referencia interna y no se aplica como descuento automático. Comején suma50.000 a la fila correspondiente de cucarachas. Chinches:70.000 por colchón confirmado;100.000 continúa como propuesta y no se activa. Desde6colchones o con bases/otros muebles mencionados, el alcance y un eventual descuento necesitan cotización operativa. Avispas requiere inspección por tamaño y altura del panal, sin precio inventado.
+Se cotiza la columna **Valor de fumigación**; el mínimo es referencia interna y no se aplica como descuento automático. Comején suma50.000 a la fila correspondiente de cucarachas. La corrección directa posterior del 05/10 reemplaza70.000 por **99.000 por colchón confirmado**;100.000 continúa como propuesta histórica y no se activa. Desde6colchones o con bases/otros muebles mencionados, el alcance y un eventual descuento necesitan cotización operativa. Avispas requiere inspección por tamaño y altura del panal, sin precio inventado.
 
 `businessPriceGuard=direct-approved-table-standard-price-and-scoped-extras-v1` exige una tabla exacta, la aprobación directa y los hashes de los cuatro materiales. La importación administrativa guarda cifrada una única tabla; rechaza cambios de cifras, descuentos, otra aprobación o S.TECNICO. No simula una fuente nativa de WhatsApp para los adjuntos del chat de Codex. Antes de cada salida se reevalúan alcance, precio, persistencia, línea propia y atención humana.
 

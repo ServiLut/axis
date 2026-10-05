@@ -43,8 +43,8 @@ test('ordinary selection refuses conflicting sizes, units, extra scope, out of r
  for(const patch of [{rooms:'2 habitaciones'},{area:'60 metros'},{area:'40.5 m²'},{area:'201 m²'},{rooms:'7 habitaciones',area:undefined},{service:'cucarachas y hormigas'},{site:'edificio'},{location:'sopetrán'},{floors:'2 pisos'},{patio:'patio'},{roomScale:'grandes'},{locationDetails:'dos casas en Medellín'}])assert.equal(selectPrice({...good,...patch},[approvedBusinessPriceSchedule()]).entry,undefined);
  assert.equal(selectPrice({...good,service:'avispas'},[approvedBusinessPriceSchedule()]).entry,undefined);
 });
-test('chinches uses 70000 for each confirmed mattress and reviews unspecified furniture or volume discount',()=>{
- for(let n=1;n<=5;n++){const e=selectPrice({...scope,service:'chinches',mattresses:n+' '+(n===1?'colchón':'colchones')},[approvedBusinessPriceSchedule()]).entry;assert.equal(e.priceCop,n*70000);assert.match(priceText(e),/tratamiento de/);}
+test('direct correction uses 99000 per confirmed mattress and retains furniture and volume review',()=>{
+ for(let n=1;n<=5;n++){const e=selectPrice({...scope,service:'chinches',mattresses:n+' '+(n===1?'colchón':'colchones')},[approvedBusinessPriceSchedule()]).entry;assert.equal(e.priceCop,n*99000);assert.equal(e.unitPriceCop,99000);assert.match(priceText(e),/tratamiento de/);}
  for(const patch of [{mattresses:'6 colchones'},{mattresses:'10 colchones'},{mattresses:'2 colchones',affectedFurniture:'base de cama'},{mattresses:'entre 2 y 3 colchones'}])assert.equal(selectPrice({...scope,service:'chinches',...patch},[approvedBusinessPriceSchedule()]).entry,undefined);
  assert.equal(extractSlots('Tengo chinches en un colchón','fumigacion').mattresses,'un colchón');
 });
@@ -52,7 +52,7 @@ test('receives the complete source, quotes the approved table and asks no repeat
  const f=fixture();try{await f.process('TABLEQUOTE01','Tengo cucarachas en un apartamento de 60 m² en Medellín. ¿Cuánto cuesta?');assert.match(f.reply('TABLEQUOTE01').text,/149\.000 COP/);assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);assert.equal(f.s.conversation(phone).state.slots.area,'60 m²');}finally{f.s.close();}
 });
 test('the single mattress and comejen paths use their scoped new prices without assuming a reservation',async()=>{
- for(const [text,amount] of [['Chinches en un colchón en apartamento de Medellín',70000],['Comején en casa de 2 habitaciones en Bello',179000]]){
+ for(const [text,amount] of [['Chinches en un colchón en apartamento de Medellín',99000],['Comején en casa de 2 habitaciones en Bello',179000]]){
   const f=fixture();try{await f.process('NEWPEST001',text);assert.ok(f.reply('NEWPEST001').text.includes(new Intl.NumberFormat('es-CO').format(amount)));assert.doesNotMatch(f.reply('NEWPEST001').text,/reservad|confirmad|programad/i);}finally{f.s.close();}
  }
 });
