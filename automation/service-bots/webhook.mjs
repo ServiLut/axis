@@ -1,4 +1,4 @@
-import {SANDRA,DIEGO} from './config.mjs';
+import {internalRecipients} from './config.mjs';
 export function decodeWebhook(body,config) {
   const line=config.lines.find(l=>l.instance===body.instance);if(!line)return {events:[],deliveries:[]};
   const events=[],deliveries=[];const data=Array.isArray(body.data)?body.data:[body.data];
@@ -6,7 +6,7 @@ export function decodeWebhook(body,config) {
     const key=d?.key;let jid=key?.remoteJid;
     // The own authenticated provider may supply an explicit direct phone alternative.
     // Authority still comes from validateEvent's exact internal roles, never a LID or name.
-    if(/^\d+@lid$/.test(jid||'')&&/^57\d{10}@s\.whatsapp\.net$/.test(key.remoteJidAlt||'')&&(config.enabled||[SANDRA,DIEGO].map(p=>p+'@s.whatsapp.net').includes(key.remoteJidAlt)))jid=key.remoteJidAlt;
+    if(/^\d+@lid$/.test(jid||'')&&/^57\d{10}@s\.whatsapp\.net$/.test(key.remoteJidAlt||'')&&(config.enabled||internalRecipients(config).map(p=>p+'@s.whatsapp.net').includes(key.remoteJidAlt)))jid=key.remoteJidAlt;
     if(/^57\d{10}@s\.whatsapp\.net$/.test(jid||'')&&key.remoteJidAlt?.endsWith('@s.whatsapp.net')&&key.remoteJidAlt!==jid)continue;
     // A LID, display name or participant in a group is insufficient to resolve a direct sender.
     if(!/^57\d{10}@s\.whatsapp\.net$/.test(jid||'')||!key.id||typeof key.fromMe!=='boolean')continue;

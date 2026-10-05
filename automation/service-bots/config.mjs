@@ -6,6 +6,16 @@ export const BUSINESSES = Object.freeze({
 });
 export const SANDRA = '573016803926';
 export const DIEGO = '573233350137';
+export const HILARY = '573043332213';
+export const OPERATOR_ROUTING = 'diego-hilary-20261005';
+export const knownInternalRecipient = phone => [SANDRA,DIEGO,HILARY].includes(phone);
+export const internalRecipients = config => [SANDRA,DIEGO,...(config.company==='fumigacion'&&config.operatorRouting===OPERATOR_ROUTING?[HILARY]:[])];
+export const internalName = phone => phone===SANDRA?'Sandra':phone===HILARY?'Hilary':'Diego';
+export function questionRecipients(config,topic) {
+  const operational=['cotizacion-verificada','special-quotation','disponibilidad-y-cotizacion','disponibilidad-y-tecnico','service-followup','requested-technician-contact','existing-quotation'];
+  if(config.operatorRouting!==OPERATOR_ROUTING||!operational.includes(topic)&&!topic.startsWith('missing-intake:'))return [SANDRA];
+  return config.company==='fumigacion'?[DIEGO,HILARY]:[DIEGO];
+}
 export const digits = value => String(value ?? '').replace(/\D/g, '');
 export const normalize = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
 
@@ -29,7 +39,8 @@ export function configFromEnv(env = process.env) {
       new Set(lines.map(l=>l.apiKey)).size !== 2) throw new Error('DEDICATED_INSTANCE_ACCESS_REQUIRED');
   if((env.BOT_ENABLED==='true'||env.BOT_CHIEF_ONLY==='true')&&!Number.isFinite(Date.parse(env.BOT_ACTIVATED_AT||'')))throw new Error('ACTIVATION_CUTOFF_REQUIRED');
   if(env.BOT_ENABLED==='true'&&env.BOT_PRIOR_HISTORY_CHECK!=='true')throw new Error('PRIOR_HISTORY_GUARD_REQUIRED');
-  return { company, ...business, lines, database, encryptionKey: Buffer.from(env.BOT_DATA_KEY,'hex'),
+  if(env.BOT_OPERATIONAL_ROUTING&&!['sandra',OPERATOR_ROUTING].includes(env.BOT_OPERATIONAL_ROUTING))throw Error('OPERATOR_ROUTING_REQUIRED');
+  return { operatorRouting:env.BOT_OPERATIONAL_ROUTING||'sandra',company, ...business, lines, database, encryptionKey: Buffer.from(env.BOT_DATA_KEY,'hex'),
     authHash: env.BOT_AUTH_TOKEN_HASH, webhookHash:env.BOT_WEBHOOK_TOKEN_HASH, provider: provider.href.replace(/\/$/,''),
     enabled: env.BOT_ENABLED === 'true', chiefOnly:env.BOT_CHIEF_ONLY==='true', activatedAt: Date.parse(env.BOT_ACTIVATED_AT || ''),
     historyCheckRequired:env.BOT_PRIOR_HISTORY_CHECK==='true',
@@ -47,7 +58,7 @@ export function authorized(header, hash) {
 export function validateEvent(body, config, now = Date.now(), recoverChief = false) {
   const line = config.lines.find(l=>l.instance===body.instance && l.phone===body.owner);
   const event = body.event;
-  const internal=event&&[SANDRA,DIEGO].includes(event.phone);
+  const internal=event&&internalRecipients(config).includes(event.phone);
   if (!line || !event || (!config.enabled&&!(config.chiefOnly&&internal)) || !Number.isFinite(config.activatedAt)) return null;
   const at = Date.parse(event.at);
   if (!/^[A-Za-z0-9_-]{8,100}$/.test(event.id || '') || !/^57\d{10}$/.test(event.phone || '') ||
@@ -61,8 +72,8 @@ export function validateEvent(body, config, now = Date.now(), recoverChief = fal
 export function publicTextSafe(text) {
   if(typeof text!=='string'||!text.trim()||text.length>=1500)return false;
   const value=normalize(text);
-  const routing=/\b(?:voy|vamos|debo|debemos|estoy|estamos|necesito|necesitamos|lo|le|te|ya|hemos)\b.{0,65}\b(?:consult\w*|pregunt\w*|avis\w*|inform\w*|escal\w*|notific\w*|pedir apoyo|verific\w*|revis\w*)\b.{0,65}\b(?:diego|sandra|coordinador\w*|equipo|supervisor|personal)\b/s;
-  const directRouting=/\b(?:consultare|consultaremos|preguntare|avisare|informare|verificare|verificaremos|revisare|revisaremos)\b.{0,65}\b(?:diego|sandra|coordinador\w*|equipo|supervisor|personal)\b/s;
+  const routing=/\b(?:voy|vamos|debo|debemos|estoy|estamos|necesito|necesitamos|lo|le|te|ya|hemos)\b.{0,65}\b(?:consult\w*|pregunt\w*|avis\w*|inform\w*|escal\w*|notific\w*|pedir apoyo|verific\w*|revis\w*)\b.{0,65}\b(?:diego|hilary|sandra|coordinador\w*|equipo|supervisor|personal)\b/s;
+  const directRouting=/\b(?:consultare|consultaremos|preguntare|avisare|informare|verificare|verificaremos|revisare|revisaremos)\b.{0,65}\b(?:diego|hilary|sandra|coordinador\w*|equipo|supervisor|personal)\b/s;
   const mediaWork=/\b(?:estoy|estamos|voy a|vamos a|procedere a|procederemos a)\s+(?:transcrib\w*|proces\w*|convert\w*|analiz\w*|escuch\w*)\b.{0,65}\b(?:audio|mensaje de voz|archivo|adjunto|documento)\b/s;
   const transcription=/\b(?:transcribo|transcribimos|transcribire|transcribiremos|transcripcion|transcribiendo)\b.{0,65}\b(?:audio|mensaje de voz)\b/s;
   return !routing.test(value)&&!directRouting.test(value)&&!mediaWork.test(value)&&!transcription.test(value)&&

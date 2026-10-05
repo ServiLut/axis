@@ -17,6 +17,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS outbox(id TEXT PRIMARY KEY,phone TEXT,line TEXT,body TEXT,internal INTEGER,revision INTEGER,state TEXT DEFAULT 'READY',mid TEXT,created INTEGER,updated INTEGER);
       CREATE TABLE IF NOT EXISTS questions(id TEXT PRIMARY KEY,phone TEXT,case_id TEXT,topic TEXT,conditions_hash TEXT,recipient TEXT,body TEXT,answer TEXT,source_id TEXT,answer_at INTEGER,valid_until INTEGER,state TEXT DEFAULT 'PENDING',outbox_id TEXT UNIQUE);
       CREATE UNIQUE INDEX IF NOT EXISTS question_once ON questions(case_id,topic,conditions_hash,recipient);
+      CREATE TABLE IF NOT EXISTS question_routes(question_id TEXT,recipient TEXT,line TEXT,outbox_id TEXT UNIQUE,PRIMARY KEY(question_id,recipient),FOREIGN KEY(question_id) REFERENCES questions(id),FOREIGN KEY(outbox_id) REFERENCES outbox(id));
       CREATE TABLE IF NOT EXISTS knowledge(id TEXT PRIMARY KEY,kind TEXT,body TEXT,hash TEXT,imported INTEGER);
       CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY,at INTEGER,action TEXT,source TEXT,detail TEXT);
       CREATE TABLE IF NOT EXISTS case_authorship(case_id TEXT PRIMARY KEY,phone TEXT,first_outbox TEXT UNIQUE,state TEXT,body TEXT);
@@ -172,7 +173,7 @@ export class Store {
     return this.db.prepare("SELECT body FROM events WHERE phone=? AND from_me=0 AND rowid>? AND rowid<=? AND at<=? AND state IN ('PENDING','OBSERVED_SUPERSEDED') ORDER BY at,rowid LIMIT 40").all(phone,previous.rowid,current.rowid,current.at).map(r=>this.open(r.body));
   }
   question({phone,line,caseId,topic,conditions,recipient,text,source}) {
-    if(['cotizacion-verificada','disponibilidad-y-cotizacion','disponibilidad-y-tecnico','service-followup','requested-technician-contact','payment-instructions','existing-quotation'].includes(topic)){
+    if(topic.startsWith('missing-intake:')||['cotizacion-verificada','special-quotation','disponibilidad-y-cotizacion','disponibilidad-y-tecnico','service-followup','requested-technician-contact','payment-instructions','existing-quotation'].includes(topic)){
       // Further details are retained in the conversation. A pending question for
       // the same case must not be sent again because its details or route changed.
       const pending=this.db.prepare("SELECT id,state FROM questions WHERE phone=? AND case_id=? AND topic=? AND state IN ('PENDING','ANSWER_REVIEW') ORDER BY rowid LIMIT 1").get(phone,caseId,topic);
@@ -197,6 +198,20 @@ export class Store {
     this.db.prepare('INSERT INTO questions(id,phone,case_id,topic,conditions_hash,recipient,body,outbox_id) VALUES(?,?,?,?,?,?,?,?)').run(id,phone,caseId,topic,hash,recipient,this.seal({text,conditions,source}),outboxId);
     this.queue(outboxId,recipient,line,text,true,0); this.audit('INTERNAL_QUESTION',source,{id,caseId,topic});
     return {id,state:'PENDING',created:true};
+  }
+  questionToRecipients({recipients,...request}) {
+    if(!Array.isArray(recipients)||!recipients.length||recipients.length>2||new Set(recipients).size!==recipients.length||recipients.some(p=>!/^57\d{10}$/.test(p)))throw Error('QUESTION_RECIPIENTS_REQUIRED');
+    // question() checks existing case/topic pending records before considering the
+    // new route. Only a question first created now gets a second delivery.
+    const result=this.question({...request,recipient:recipients[0]});
+    if(!result.created)return result;
+    for(const recipient of recipients.slice(1)){
+      const outboxId='question:'+result.id+':'+recipient;
+      this.queue(outboxId,recipient,request.line,request.text,true,0);
+      this.db.prepare('INSERT INTO question_routes VALUES(?,?,?,?)').run(result.id,recipient,request.line,outboxId);
+    }
+    this.audit('OPERATOR_QUESTION_ROUTED',request.source,{question:result.id,caseId:request.caseId,topic:request.topic,recipients,existingPendingResent:false});
+    return result;
   }
   importPendingQuestions(document) {
     if(document.company!==this.company||!Array.isArray(document.entries)||!document.source)throw new Error('LEGACY_SCOPE_REQUIRED');

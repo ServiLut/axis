@@ -1,4 +1,4 @@
-import { SANDRA, DIEGO, publicTextSafe, normalize } from './config.mjs';
+import { SANDRA, DIEGO, HILARY, publicTextSafe, normalize,internalRecipients,knownInternalRecipient } from './config.mjs';
 import {parseChiefDocument} from './chief-document.mjs';
 import {selectPrice,verifyPriceSource} from './prices.mjs';
 
@@ -20,7 +20,8 @@ export class Transport {
   }
   async send(row,text) {
     if(!row.internal&&!this.config.enabled)throw new Error('CUSTOMER_GATE_CLOSED');
-    if(row.internal&&![SANDRA,DIEGO].includes(row.phone))throw new Error('INTERNAL_RECIPIENT_MISMATCH');
+    if(row.internal&&!internalRecipients(this.config).includes(row.phone))throw new Error('INTERNAL_RECIPIENT_MISMATCH');
+    if(!row.internal&&knownInternalRecipient(row.phone))throw new Error('INTERNAL_ROLE_REQUIRED');
     if(!row.internal&&!publicTextSafe(text))throw new Error('EXTERNAL_TEXT_REJECTED');
     if(!/^57\d{10}$/.test(row.phone))throw new Error('GROUP_OR_INVALID_RECIPIENT');
     const line=this.config.lines.find(l=>l.phone===row.line);if(!line)throw new Error('LINE_OUTSIDE_COMPANY');
@@ -106,17 +107,17 @@ export class Transport {
 
 export async function drain(store,config,transport,engine) {
   if(!config.enabled&&!config.chiefOnly)return {enabled:false};
-  const pending=store.db.prepare("SELECT body FROM events WHERE state='PENDING' AND (?=1 OR phone IN (?,?)) ORDER BY from_me DESC,at,rowid LIMIT 30").all(Number(config.enabled),SANDRA,DIEGO);
+  const pending=store.db.prepare("SELECT body FROM events WHERE state='PENDING' AND (?=1 OR phone IN (?,?,?)) ORDER BY from_me DESC,at,rowid LIMIT 30").all(Number(config.enabled),SANDRA,DIEGO,HILARY);
   for(const row of pending) {
     const e=store.open(row.body); let analysis={};
-    if(config.historyCheckRequired&&!e.fromMe&&![SANDRA,DIEGO].includes(e.phone)){
+    if(config.historyCheckRequired&&!e.fromMe&&!knownInternalRecipient(e.phone)){
       const checked=store.priorHistory(e.phone);
       if(checked?.cutoff!==config.activatedAt||(transport instanceof Transport&&checked.guardVersion!=='canonical-and-alternate-phone-v2')){
         try{store.savePriorHistory(e.phone,await transport.priorHistory(e.phone),e.id);}
         catch{store.audit('PRIOR_HISTORY_UNVERIFIED',e.id);store.db.prepare("UPDATE events SET state='HISTORY_REVIEW' WHERE id=? AND state='PENDING'").run(e.id);continue;}
       }
     }
-    if(!e.fromMe&&![SANDRA,DIEGO].includes(e.phone)&&!store.conversation(e.phone)?.hold){
+    if(!e.fromMe&&!knownInternalRecipient(e.phone)&&!store.conversation(e.phone)?.hold){
       // Customer history remains in its company. Observations are explicitly untrusted reference, never policy.
       const knowledge=store.db.prepare('SELECT body FROM knowledge ORDER BY imported DESC LIMIT 10').all().map(k=>store.open(k.body));
       const newCase=/\b(?:otra solicitud|nuevo servicio|otro servicio|otro equipo)\b/.test(normalize(e.text));
@@ -128,9 +129,9 @@ export async function drain(store,config,transport,engine) {
     await engine.process(e,analysis);
   }
   let accepted=0,suppressed=0,uncertain=0;
-  const out=store.db.prepare("SELECT * FROM outbox WHERE state='READY' AND (?=1 OR (internal=1 AND phone IN (?,?))) ORDER BY created,rowid LIMIT 20").all(Number(config.enabled),SANDRA,DIEGO);
+  const out=store.db.prepare("SELECT * FROM outbox WHERE state='READY' AND (?=1 OR (internal=1 AND phone IN (?,?,?))) ORDER BY created,rowid LIMIT 20").all(Number(config.enabled),SANDRA,DIEGO,HILARY);
   for(const o of out) {
-    if(!config.enabled&&!(config.chiefOnly&&o.internal&&[SANDRA,DIEGO].includes(o.phone)))continue;
+    if(!config.enabled&&!(config.chiefOnly&&o.internal&&internalRecipients(config).includes(o.phone)))continue;
     if(o.created<Date.now()-600000){store.db.prepare("UPDATE outbox SET state='EXPIRED_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id);suppressed++;continue;}
     // Reject before any delivery attempt; this is a review, never an uncertain send.
     const text=store.open(o.body);

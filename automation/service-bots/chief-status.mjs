@@ -1,4 +1,4 @@
-import {normalize,SANDRA} from './config.mjs';
+import {normalize,SANDRA,internalName} from './config.mjs';
 import {currentPriceEntries} from './prices.mjs';
 
 export function chiefStatusTopic(text) {
@@ -22,7 +22,7 @@ export function customerActivity(store,config,today=false,now=Date.now()) {
 }
 
 export function chiefStatusReply(store,config,phone,topic,text,now=Date.now()) {
-  const recipient=phone===SANDRA?'Sandra':'Diego';
+  const recipient=internalName(phone);
   const priceReady=config.company==='fumigacion'&&currentPriceEntries(store.approvedPriceCatalogs()).length>0;
   const mode=config.enabled?(priceReady?'La recepción de solicitudes está activa en mis dos líneas. Puedo cotizar servicios que coincidan con tarifas verificadas; los casos especiales y la programación necesitan confirmación. Todavía no creo servicios ni registro pagos.':'La recepción de solicitudes de clientes está activa en mis dos líneas. Las cotizaciones y la programación aún requieren confirmación; todavía no creo servicios ni registro pagos.'):'La atención a clientes está pausada en mis dos líneas. Puedo responderte por aquí; aún falta completar las respuestas y la cotización antes de reanudar.';
   if(topic!=='counts')return (topic==='presence'?'Sí, '+recipient+'. Soy '+config.bot+'. ':recipient+', ')+mode;
