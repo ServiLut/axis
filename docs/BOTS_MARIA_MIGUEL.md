@@ -232,3 +232,11 @@ Una fuente propia de FUMIGACION envió únicamente un enlace de video. El signo 
 
 La corrección está preparada para ambas recepciones con atención humana prioritaria y confirmaciones exclusivamente con Sandra. Publicación, pruebas aisladas y despliegue se registran por separado: el acceso a Dokploy sigue pendiente, ya solicitado, y esta documentación no acredita la instalación o un recorrido legítimo posterior. No se cambian los cortes originales ni se habilitan escrituras de negocio.
 
+## Ubicación escrita en varios mensajes — control 05/10/2026 11:59Z
+
+Una secuencia legítima propia de FUMIGACION aportó Medellín, cinco cuartos, cucarachas, Manrique y casa. Las fuentes y tres respuestas se cotejaron por sus IDs nativos exactos; la única consulta de cotización a Sandra llegó y consta leída. Esa consulta conservó el municipio y las habitaciones, pero omitió la ubicación adicional «Manrique» y la descripción literal del tamaño. La atención posterior del personal mantuvo el chat humano; la pregunta sobre mascotas quedó observada sin respuesta del bot. No se adoptan el precio, los productos o las condiciones de seguridad escritos por el personal.
+
+`intakeLocationGuard=literal-prompted-location-and-batch-sources-v1` conserva las ubicaciones literales solicitadas por la recepción propia, también cuando otro mensaje del mismo lote las sustituye para procesamiento. Mantiene el texto, las fuentes y sus fechas dentro del mismo caso; un barrio aislado no confirma un municipio. La consulta incluye la ubicación adicional sin repetir una cotización ya pendiente. Un caso nuevo, otra empresa o contacto, un mensaje futuro, un reenvío, un medio no leído o una intervención humana no aportan esos datos.
+
+El fallo fue reproducido y la corrección pasó 77 comprobaciones enfocadas de recepción, contexto, deduplicación y atención humana. El cambio queda preparado en la rama propia: Dokploy sigue mostrando inicio de sesión y el acceso ya fue solicitado. La API actual conserva la versión anterior; estas pruebas no acreditan instalación ni atención posterior corregida. No se reproduce la secuencia, se reenvía la consulta o se modifica una cotización, agenda, pago o registro de negocio.
+

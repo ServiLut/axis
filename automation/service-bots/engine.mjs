@@ -94,6 +94,22 @@ function literalIntakeTurn(e){return e.kind==='text'&&!e.forwarded&&!unreadLinkO
 function promptedSize(e,state){
   return literalIntakeTurn(e)&&(state.asked?.includes('size')||state.initialIntakeAllRequested)?textWithoutLinks(e.text).match(/\b\d{1,5}(?:[.,]\d{1,2})?\s*metros?(?=[.! ,;]*$)/i)?.[0]:undefined;
 }
+function retainPromptedLocation(state,e){
+  if(!literalIntakeTurn(e)||!(state.asked?.includes('location')||state.initialIntakeAllRequested))return;
+  const text=textWithoutLinks(e.text).trim(),t=normalize(text);
+  if(!text||text.length>240||/^(?:no|quizas|tal vez|posiblemente)\b/.test(t))return;
+  // Preserve the sender's location words, including a short answer in a rapid
+  // batch. A neighborhood name alone never supplies an inferred municipality.
+  if(!/\b(?:villa|barrio|vereda|calle|carrera|unidad|urbanizacion|robledo|medellin|bello|envigado|itagui|sabaneta|santa helena)\b/.test(t)&&!/^manrique[.! ]*$/.test(t))return;
+  const previous=state.intakeLocationParts|| (state.slots.locationDetails?[{text:state.slots.locationDetails,sourceId:null,at:null}]:[]);
+  const part={text,sourceId:e.id??null,at:Number.isSafeInteger(e.at)?e.at:null};
+  const parts=[...previous.filter(p=>normalize(p.text)!==t),part].slice(-3);
+  state.intakeLocationParts=parts;
+  state.slots.locationDetails=parts.map(p=>p.text).join(' | ');
+  state.intakeSources={...state.intakeSources,locationDetails:{sourceId:part.sourceId,at:part.at,
+    sources:parts.filter(p=>p.sourceId&&p.at!==null).map(({sourceId,at})=>({sourceId,at})),
+    sourceCoverageComplete:parts.every(p=>p.sourceId&&p.at!==null),municipalityInferred:false}};
+}
 export function customerDecision(company,state,e,analysis={}) {
   // A URL's query punctuation and path are not the sender's question or intake
   // answer. Preserve the unread reference without fetching or interpreting it.
@@ -107,7 +123,7 @@ export function customerDecision(company,state,e,analysis={}) {
     const size=promptedSize(e,state);
     if(size){next.slots.area=size;next.intakeSources={...next.intakeSources,area:{sourceId:e.id,at:e.at,context:'prior-size-question',unitExpanded:false}};}
   }
-  if(company==='fumigacion'&&literalIntakeTurn(e)&&(state.asked?.at(-1)==='location'||state.initialIntakeAllRequested)&&literalText.length<=240&&/\b(?:villa|barrio|vereda|calle|carrera|unidad|urbanizacion|robledo|medellin|bello|envigado|itagui|sabaneta|santa helena)\b/.test(t))next.slots.locationDetails=literalText;
+  if(company==='fumigacion')retainPromptedLocation(next,e);
   if(e.kind==='call')return {state:{...next,lastCallEvent:e.id},observed:true};
   if(e.kind!=='text')return {state:next,review:'El cliente envió '+e.kind+'. El contenido original necesita revisión.',reply:e.kind==='audio'?'Recibí tu audio. Te atenderemos en cuanto revisemos su contenido.':'Recibí el archivo. Revisaremos su contenido para continuar contigo.'};
   if(/\b(factura|certificado|seguimiento|posservicio|ya tengo (?:una )?cita|estado de (?:la )?orden)\b/.test(t))return {state:next,review:'El cliente consulta un servicio previo, su estado o un soporte. Hace falta contrastar el registro del programa.',reply:'Gracias. Revisaremos el registro de tu servicio para poder ayudarte.'};
@@ -217,6 +233,7 @@ export class Engine {
           for(const [field,value]of Object.entries(fields)){
             caseState.slots[field]=value;caseState.intakeSources[field]={sourceId:turn.id,at:turn.at,...(field==='area'&&contextualSize?{context:'prior-size-question',unitExpanded:false}:{})};
           }
+          if(c.company==='fumigacion')retainPromptedLocation(caseState,turn);
         }
         if(literalIntakeTurn(e)&&Object.keys(extractSlots(e.text,c.company)).length)pendingQuestion=turns.filter(turn=>turn.id!==e.id&&turn.kind==='text'&&!turn.forwarded&&isCustomerQuestion(turn.text)).at(-1)||null;
       }
