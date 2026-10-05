@@ -8,6 +8,7 @@ import { decodeWebhook } from './webhook.mjs';
 import {validateApprovedAnswers} from './faq.mjs';
 import {customerActivity} from './chief-status.mjs';
 import {queueChiefDocument} from './chief-document.mjs';
+import {validatePriceCatalog,verifyPriceSource,currentPriceEntries} from './prices.mjs';
 
 async function verifyApprovedAnswerSource(document,config,transport){
   validateApprovedAnswers(document,config.company);
@@ -44,8 +45,9 @@ export function createBotServer(config,store,transport,engine) {
         communicationGuard:'private-routing-and-media-work-v2',requestedContactGuard:'explicit-technician-contact-before-intake-v1',confirmationRecipient:'573016803926',chiefDocumentGuard:'fixed-chief-encrypted-hash-and-idempotency-v1',internalConversationGuard:'verified-internal-per-line-v2',chiefStatusGuard:'actual-mode-and-delivered-own-chat-counts-v1',internalConversationEnabled:Boolean(config.chiefOnly),customerResponsesEnabled:config.enabled,
         customerIntakeEnabled:config.enabled,businessWritesEnabled:false,capabilityDisclosure:'runtime-mode-and-implemented-intake-v1',customerCourtesyGuard:'gratitude-only-without-intake-or-ownership-v1',
         commonAnswerGuard:config.company==='fumigacion'?'approved-source-context-and-complete-topics-v1':null,approvedCustomerAnswerDocuments:store.approvedCustomerAnswers().length,customerActivity:customerActivity(store,config),
-        caseOwnershipGuard:'first-reply-source-preserved-v2',conversationContext:'stored-scoped-turns-with-coverage-v2',internalQuestionGuard:'missing-field-and-case-dedup-v1',supervisorContentReview:'explicit-source-ids-readonly-v1',liveAttentionGuard:'own-native-outgoing-before-send-v1',intakeGuard:config.company==='fumigacion'?'full-initial-fields-and-quote-before-schedule-v1':'technical-intake-with-human-review-v1',
-        intakeContinuationGuard:'literal-fields-context-size-and-single-pending-quote-v2',intakeLiteralFieldsGuard:config.company==='fumigacion'?'literal-business-place-and-written-rooms-v3':null,intakeLocationGuard:config.company==='fumigacion'?'literal-prompted-location-and-batch-sources-v1':null,customerGreetingGuard:'pure-greeting-preserves-pending-intake-v1',linkedContentGuard:'unread-links-and-url-query-without-question-v1',serviceFollowupGuard:'existing-service-arrival-before-intake-v1',
+        caseOwnershipGuard:'first-reply-source-preserved-v2',conversationContext:'stored-scoped-turns-with-coverage-v2',internalQuestionGuard:'missing-field-and-case-dedup-v1',supervisorContentReview:'explicit-source-ids-readonly-v1',liveAttentionGuard:'staff-ingestion-freeze-and-own-native-before-send-v2',intakeGuard:config.company==='fumigacion'?'service-specific-intake-and-reviewed-price-before-schedule-v2':'technical-intake-with-human-review-v1',
+        priceCatalogGuard:config.company==='fumigacion'?'exact-reviewed-native-price-and-special-property-review-v1':null,approvedPriceEntries:currentPriceEntries(store.approvedPriceCatalogs()).length,
+        intakeContinuationGuard:'literal-questions-and-first-batch-without-reasking-v3',intakeLiteralFieldsGuard:config.company==='fumigacion'?'literal-business-place-and-written-rooms-v3':null,intakeLocationGuard:config.company==='fumigacion'?'literal-prompted-location-and-batch-sources-v1':null,customerGreetingGuard:'pure-greeting-preserves-pending-intake-v1',linkedContentGuard:'unread-links-and-url-query-without-question-v1',serviceFollowupGuard:'existing-service-arrival-before-intake-v1',
         paymentInquiryGuard:'amount-before-intake-and-no-receipt-v1',existingQuotationGuard:'verified-prior-quote-before-intake-v1',postServiceGuard:config.company==='fumigacion'?'reported-recurrence-and-planned-revisit-before-intake-v2':null,
         caseAuthorship:store.db.prepare('SELECT state,COUNT(*) n FROM case_authorship GROUP BY state').all(),
         unanswered:store.db.prepare("SELECT COUNT(*) n FROM questions WHERE state IN ('PENDING','LEGACY_PENDING','ANSWER_REVIEW')").get().n,
@@ -126,6 +128,10 @@ export function createBotServer(config,store,transport,engine) {
       }
       if(req.url==='/knowledge'){
         if(body.kind==='approved_customer_answers')await verifyApprovedAnswerSource(body,config,transport);
+        if(body.kind==='approved_price_catalog'){
+          validatePriceCatalog(body,config.company);
+          for(const entry of body.entries)await verifyPriceSource(entry,transport);
+        }
         return reply(200,store.importKnowledge(body));
       }
       if(req.url==='/notify-chief-report'){

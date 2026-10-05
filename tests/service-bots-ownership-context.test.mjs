@@ -340,17 +340,18 @@ test('a compound greeting introduces the actual bot once and a named-person requ
   }
 });
 
-test('a question followed rapidly by location data remains the question to answer with its original source',async()=>{
+test('a price question followed by location data retains both and creates one clarification for size already asked',async()=>{
   const f=fixture();
   try {
     await f.process({text:'cucarachas en casa'});
     const question=f.event({id:'BATCHPRICEQ',at:Date.now()+1,text:'¿Cuánto cuesta?'}),city=f.event({id:'AFTERPRICE',at:question.at+1000,text:'Sabaneta'});
     f.s.enqueue(question);f.s.enqueue(city);await drain(f.s,f.c,f.transport,f.engine);
-    const review=f.s.open(f.s.db.prepare('SELECT body FROM questions').get().body);
-    assert.equal(review.source,question.id);assert.match(review.text,/Pregunta pendiente: ¿Cuánto cuesta/);assert.match(review.text,/Mensaje actual: Sabaneta/);
+    const q=f.s.db.prepare('SELECT * FROM questions').get(),review=f.s.open(q.body);
+    assert.equal(q.topic,'missing-intake:size');assert.equal(review.source,question.id);
+    assert.match(review.text,/Pregunta pendiente: ¿Cuánto cuesta/);assert.match(review.text,/Mensaje actual: Sabaneta/);
     assert.equal(f.s.conversation(city.phone).state.slots.location,'sabaneta');
     const response=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(city.id+':reply').body);
-    assert.ok(!response.includes('día y franja'));
+    assert.doesNotMatch(response,/habitaciones o metros cuadrados|inmueble|municipio|día y franja/);
   }finally{f.s.close();}
 });
 
@@ -450,7 +451,7 @@ test('complete quotation facts create one human quotation request before asking 
     assert.match(question.text,/66 m²/);assert.match(question.text,/cucarachas y hormigas/);
     assert.match(question.text,/Robledo/);assert.doesNotMatch(question.text,/139|300|horario disponible/);
     const reply=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(answer.id+':reply').body);
-    assert.match(reply,/cotización sigue pendiente/);assert.doesNotMatch(reply,/día|horaria|confirmada|139|300/i);
+    assert.match(reply,/Una asesora continuará contigo/);assert.doesNotMatch(reply,/día|horaria|confirmada|139|300/i);
     assert.equal(f.s.conversation(answer.phone).state.slots.price,undefined);
     await f.process({id:'SAMEQUOTEFACTS',at:Date.now()+2,text:'Un apartamento de 66 m²'});
     assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,1);
@@ -458,13 +459,14 @@ test('complete quotation facts create one human quotation request before asking 
   }finally{f.s.close();}
 });
 
-test('an initial greeting with a concrete price question keeps the question instead of sending the intake list',async()=>{
+test('an initial price question retains the stated pest and asks only the missing property',async()=>{
   const f=fixture();
   try {
     const first=await f.process({text:'Hola, ¿cuánto cuesta el servicio para ratas?'});
     const reply=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(first.id+':reply').body);
-    assert.match(reply,/Recibí tu pregunta/);assert.doesNotMatch(reply,/cuéntame|habitaciones|metros cuadrados/i);
-    assert.equal(f.s.open(f.s.db.prepare('SELECT body FROM questions').get().body).source,first.id);
+    assert.match(reply,/tipo de inmueble/);assert.doesNotMatch(reply,/cuéntame|habitaciones|metros cuadrados|Qué plaga/i);
+    assert.equal(f.s.conversation(first.phone).state.slots.service,'ratas');
+    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);
   }finally{f.s.close();}
 });
 

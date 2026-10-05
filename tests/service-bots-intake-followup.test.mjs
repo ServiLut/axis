@@ -33,7 +33,7 @@ test('link query punctuation and path words do not replace literal customer data
   const text='Casa con 2 habitaciones en Medellín https://example.com/cucarachas?cuanto=vale';
   const d=customerDecision('fumigacion',state,{kind:'text',text});
   assert.equal(d.reviewTopic,undefined);
-  assert.deepEqual(d.state.slots,{site:'casa',rooms:'2 habitaciones',location:'medellin'});
+  assert.deepEqual(d.state.slots,{site:'casa',rooms:'2 habitaciones',location:'medellin',locationDetails:'Casa con 2 habitaciones en Medellín'});
   assert.match(d.reply,/plaga/i);
   assert.equal(extractSlots('https://example.com/casa/medellin/cucarachas?metros=50','fumigacion').service,undefined);
   assert.deepEqual(parseUnderstanding({slots:{location:'medellin'}},'https://example.com/medellin?ref=one'),{});

@@ -1,5 +1,6 @@
 import { SANDRA, DIEGO, publicTextSafe, normalize } from './config.mjs';
 import {parseChiefDocument} from './chief-document.mjs';
+import {selectPrice,verifyPriceSource} from './prices.mjs';
 
 export class Transport {
   constructor(config, fetcher=fetch){this.config=config;this.fetcher=fetcher;}
@@ -71,7 +72,10 @@ export class Transport {
             const text=message.conversation??message.extendedTextMessage?.text??'';
             const written=typeof text==='string'&&text.trim().length>0;
             const media=Boolean(message.audioMessage||message.imageMessage||message.videoMessage||message.documentMessage);
-            if(written||media)sources.set(line.phone+':'+key.id,{id:key.id,line:line.phone,at,kind:media?'media':'text'});
+            // An authenticated outgoing edit with an unavailable body remains
+            // attention evidence. Read/delivery updates alone are not authorship.
+            const edited=Array.isArray(r.MessageUpdate)&&r.MessageUpdate.some(u=>u.status==='EDITED');
+            if(written||media||edited)sources.set(line.phone+':'+key.id,{id:key.id,line:line.phone,at,kind:media?'media':written?'text':'edited-body-unavailable'});
           }
           if(read===expectedTotal)break;
           if(!result.records.length||page===2||read>expectedTotal)throw new Error('ATTENTION_COVERAGE_UNVERIFIED');
@@ -160,6 +164,19 @@ export async function drain(store,config,transport,engine) {
     if(!o.internal&&!store.approvedReplyStillValid(o)){
       store.db.prepare("UPDATE outbox SET state='APPROVED_ANSWER_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id);
       store.audit('APPROVED_ANSWER_RECHECK_FAILED',o.id,{attemptedSend:false});suppressed++;continue;
+    }
+    if(!o.internal&&store.priceReplyReference(o)){
+      try{
+        if(!store.priceReplyStillValid(o))throw Error('PRICE_REVIEW');
+        const ref=store.priceReplyReference(o),entry=selectPrice(ref.context,store.approvedPriceCatalogs()).entry;
+        await verifyPriceSource(entry,transport);
+        // Source verification awaits the provider. Staff may intervene during
+        // that read; recheck the persisted hold and revision afterwards.
+        const latest=store.conversation(o.phone);
+        if(latest.hold||latest.revision!==o.revision)continue;
+      }catch{
+        store.db.prepare("UPDATE outbox SET state='PRICE_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id);store.audit('PRICE_SOURCE_RECHECK_FAILED',o.id,{attemptedSend:false});suppressed++;continue;
+      }
     }
     if(!store.db.prepare("UPDATE outbox SET state='SENDING',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id).changes)continue;
     try {

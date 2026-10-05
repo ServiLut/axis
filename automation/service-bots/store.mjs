@@ -3,6 +3,7 @@ import { randomBytes, createCipheriv, createDecipheriv, createHash } from 'node:
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import {validateApprovedAnswers,selectCommonAnswer} from './faq.mjs';
+import {validatePriceCatalog,selectPrice} from './prices.mjs';
 
 export class Store {
   constructor(path, company, key) {
@@ -52,6 +53,13 @@ export class Store {
       const revision=this.conversation(e.phone).revision;
       this.db.prepare('INSERT INTO events(id,phone,at,line,from_me,body,revision,received_at) VALUES(?,?,?,?,?,?,?,?)').run(e.id,e.phone,e.at,e.line,Number(e.fromMe),this.seal(e),revision,Date.now());
       this.db.prepare('INSERT INTO event_sources VALUES(?,?)').run(e.id,e.line);
+      if(e.fromMe&&!this.db.prepare('SELECT 1 FROM outbox WHERE mid=? AND phone=? AND line=?').get(e.id,e.phone,e.line)&&!this.db.prepare("SELECT 1 FROM outbox WHERE phone=? AND state='SENDING'").get(e.phone)){
+        // Freeze the customer's prepared replies as soon as authenticated staff
+        // activity is received, before the next worker cycle. Exact bot echoes
+        // and the short unresolved send-receipt window are handled separately.
+        this.noteStaffIntervention(e);this.hold(e.phone,e.id,true);
+        this.audit('STAFF_TAKEOVER_AT_INGESTION',e.id,{line:e.line});
+      }
       return {duplicate:false};
     });
   }
@@ -77,7 +85,10 @@ export class Store {
   hold(phone,source,value=true,invalidatePending=true) {
     this.db.prepare('UPDATE conversations SET hold=?,revision=revision+? WHERE phone=?').run(Number(value),Number(invalidatePending),phone);
     if(value)this.db.prepare("UPDATE outbox SET state='SUPPRESSED_HUMAN',updated=? WHERE phone=? AND internal=0 AND state='READY'").run(Date.now(),phone);
-    if(!value)this.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('chief-release:'+phone,this.seal({source,at:Date.now()}));
+    if(!value){
+      this.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('chief-release:'+phone,this.seal({source,at:Date.now()}));
+      const conv=this.conversation(phone);if(conv?.state.awaitingHumanReview)this.saveConversation(phone,{...conv.state,awaitingHumanReview:false});
+    }
     this.audit(value?'HUMAN_TAKEOVER':'EXPLICIT_RELEASE',source,{phone});
   }
   queue(id,phone,line,text,internal,revision,caseId=null) {
@@ -157,11 +168,11 @@ export class Store {
     const current=this.db.prepare('SELECT rowid,at FROM events WHERE id=? AND phone=? AND from_me=0').get(sourceId,phone);
     if(!current)throw new Error('CUSTOMER_SOURCE_SCOPE_REQUIRED');
     const previous=previousSourceId&&this.db.prepare('SELECT rowid FROM events WHERE id=? AND phone=? AND from_me=0').get(previousSourceId,phone);
-    if(!previous||previous.rowid>=current.rowid)return [this.open(this.db.prepare('SELECT body FROM events WHERE id=?').get(sourceId).body)];
+    if(!previous||previous.rowid>=current.rowid)return this.db.prepare("SELECT body FROM events WHERE phone=? AND from_me=0 AND rowid<=? AND at BETWEEN ? AND ? AND state IN ('PENDING','OBSERVED_SUPERSEDED') ORDER BY at,rowid LIMIT 40").all(phone,current.rowid,current.at-600000,current.at).map(r=>this.open(r.body));
     return this.db.prepare("SELECT body FROM events WHERE phone=? AND from_me=0 AND rowid>? AND rowid<=? AND at<=? AND state IN ('PENDING','OBSERVED_SUPERSEDED') ORDER BY at,rowid LIMIT 40").all(phone,previous.rowid,current.rowid,current.at).map(r=>this.open(r.body));
   }
   question({phone,line,caseId,topic,conditions,recipient,text,source}) {
-    if(['cotizacion-verificada','disponibilidad-y-cotizacion','service-followup','requested-technician-contact','payment-instructions','existing-quotation'].includes(topic)){
+    if(['cotizacion-verificada','disponibilidad-y-cotizacion','disponibilidad-y-tecnico','service-followup','requested-technician-contact','payment-instructions','existing-quotation'].includes(topic)){
       // Further details are retained in the conversation. A pending question for
       // the same case must not be sent again because its details or route changed.
       const pending=this.db.prepare("SELECT id,state FROM questions WHERE phone=? AND case_id=? AND topic=? AND state IN ('PENDING','ANSWER_REVIEW') ORDER BY rowid LIMIT 1").get(phone,caseId,topic);
@@ -175,7 +186,7 @@ export class Store {
     if(alreadyPending)return {...alreadyPending,created:false,valid:false};
     if(topic.startsWith('missing-intake:')){
       const field=topic.slice('missing-intake:'.length);
-      if(!['service','site','size','detail','location','preference'].includes(field))throw new Error('INTAKE_FIELD_REQUIRED');
+      if(!['service','site','size','mattresses','detail','location','preference'].includes(field))throw new Error('INTAKE_FIELD_REQUIRED');
       const pending=this.db.prepare("SELECT q.*,o.state delivery FROM questions q JOIN outbox o ON o.id=q.outbox_id WHERE q.case_id=? AND q.phone=? AND q.recipient=? AND q.state IN ('PENDING','ANSWER_REVIEW') AND o.state IN ('READY','SENDING','UNCERTAIN','ACCEPTED','DELIVERED','READ')").all(caseId,phone,recipient);
       const legacy=pending.find(q=>q.topic===topic||(q.topic.startsWith('revision:')&&this.open(q.body).text.includes('contacto terminado en '+phone.slice(-4)+'. Falta '+field+'. La pregunta ya se hizo;')));
       if(legacy)return {id:legacy.id,state:legacy.state,created:false,valid:false};
@@ -200,7 +211,8 @@ export class Store {
   importKnowledge(document) {
     if(document.company!==this.company)throw new Error('KNOWLEDGE_SCOPE_MISMATCH');
     if(document.kind==='approved_customer_answers')validateApprovedAnswers(document,this.company);
-    if(!['instructions','historical_observations','reference','approved_customer_answers'].includes(document.kind)||!document.source||!document.at||!Array.isArray(document.entries))throw new Error('KNOWLEDGE_SOURCE_REQUIRED');
+    if(document.kind==='approved_price_catalog')validatePriceCatalog(document,this.company);
+    if(!['instructions','historical_observations','reference','approved_customer_answers','approved_price_catalog'].includes(document.kind)||!document.source||!document.at||!Array.isArray(document.entries))throw new Error('KNOWLEDGE_SOURCE_REQUIRED');
     // Importing observations never converts them into operational policy.
     const hash=createHash('sha256').update(JSON.stringify(document)).digest('hex');
     this.db.prepare('INSERT OR IGNORE INTO knowledge VALUES(?,?,?,?,?)').run(hash,document.kind,this.seal(document),hash,Date.now());
@@ -208,6 +220,13 @@ export class Store {
   }
   approvedCustomerAnswers(){
     return this.db.prepare("SELECT body FROM knowledge WHERE kind='approved_customer_answers' ORDER BY imported,rowid").all().map(row=>this.open(row.body));
+  }
+  approvedPriceCatalogs(){return this.db.prepare("SELECT body FROM knowledge WHERE kind='approved_price_catalog' ORDER BY imported,rowid").all().map(row=>this.open(row.body));}
+  savePriceReplyReference(outboxId,reference){this.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('price-reply:'+outboxId,this.seal(reference));}
+  priceReplyReference(row){const r=this.db.prepare('SELECT value FROM meta WHERE key=?').get('price-reply:'+row.id);return r?this.open(r.value):null;}
+  priceReplyStillValid(row){
+    const ref=this.priceReplyReference(row);if(!ref)return true;
+    const selected=selectPrice(ref.context,this.approvedPriceCatalogs());return selected.entry?.id===ref.entryId&&selected.entry.priceCop===ref.priceCop&&this.open(row.body)===ref.finalText;
   }
   saveApprovedReplyReference(outboxId,reference){
     this.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('approved-reply:'+outboxId,this.seal(reference));
