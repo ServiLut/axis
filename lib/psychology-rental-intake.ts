@@ -8,8 +8,8 @@ import {friendlyDay,friendlyTime,confirmationQuestion} from './psychology-bookin
 import {rememberRoomPreferences,roomChoice} from './psychology-room-preferences';
 
 type Tx=Prisma.TransactionClient;
-export type RentalSlot=Omit<RentalRequestInput,'requestIndex'>&{sourceEvent:string;proposalCode?:string;existingCitaId?:string};
-export type RentalDraft={requests:RentalSlot[]};
+export type RentalSlot=Omit<RentalRequestInput,'requestIndex'>&{sourceEvent:string;proposalCode?:string;existingCitaId?:string;roomAlternatives?:string[];lastUpdatedFrom?:string};
+export type RentalDraft={requests:RentalSlot[];requirements?:{people:number|null;chairs:boolean;sourceEvent:string}};
 type Room={id:bigint;nombre:string};
 const roomKey=(s:string)=>normalizeText(s).replace(/^consultorio\s*/,'').trim();
 /** A visible room number is NOT its primary key. */
@@ -18,12 +18,29 @@ export function matchRentalRoom(rooms:Room[],label:string|null){
  const matches=rooms.filter(r=>! /virtual/i.test(r.nombre)&&roomKey(r.nombre)===roomKey(label));
  return matches.length===1?matches[0]:null;
 }
-export function mergeRentalRequests(previous:RentalSlot[],updates:RentalRequestInput[],sourceEvent:string){
+type RentalUpdate=RentalRequestInput&{roomAlternatives?:string[]};
+/** A literal "7 o 10" offers alternatives for one slot, not two reservations. */
+function rentalUpdates(updates:RentalRequestInput[],text:string):RentalUpdate[]{
+ const t=normalizeText(text);
+ const alternative=t.match(/\bconsultorio\s+(\d+)\s+o\s+(?:(?:el|consultorio)\s+)?(\d+)\b/);
+ if(!alternative||/\b(ambos|dos consultorios|los dos consultorios)\b/.test(t))return updates;
+ const labels=alternative.slice(1,3);
+ const selected=updates.filter(u=>u.requestIndex===null&&u.roomLabel&&labels.includes(roomKey(u.roomLabel)));
+ if(selected.length!==2||selected[0].date!==selected[1].date||selected[0].start!==selected[1].start||selected[0].end!==selected[1].end)return updates;
+ const combined:RentalUpdate={...selected[0],roomLabel:null,roomAlternatives:selected.map(u=>u.roomLabel!)};
+ return updates.flatMap(u=>u===selected[0]?[combined]:u===selected[1]?[]:[u]);
+}
+export function mergeRentalRequests(previous:RentalSlot[],updates:RentalRequestInput[],sourceEvent:string,sourceText=''){
  const slots=previous.map(s=>({...s}));
- for(const update of updates){
-  const patch={date:update.date,start:update.start,end:update.end,roomLabel:update.roomLabel};
+ for(const update of rentalUpdates(updates,sourceText)){
+  const patch={date:update.date,start:update.start,end:update.end,roomLabel:update.roomLabel,...(update.roomAlternatives?{roomAlternatives:update.roomAlternatives}:{})};
   if(update.requestIndex===null){
    if(slots.some(s=>s.date===patch.date&&s.start===patch.start&&s.end===patch.end&&roomKey(s.roomLabel||'')===roomKey(patch.roomLabel||'')))continue;
+   // Merge only a uniquely compatible unfinished request for the same explicit day.
+   // Distinct days, contradictory times and an already proposed slot stay separate.
+   const candidates=patch.date?slots.filter(s=>s.date===patch.date&&!s.proposalCode&&!s.existingCitaId&&(!s.start||!s.end||!s.roomLabel)&&(['start','end','roomLabel'] as const).every(k=>!s[k]||!patch[k]||(k==='roomLabel'?roomKey(s[k]!)===roomKey(patch[k]!):s[k]===patch[k]))):[];
+   if(candidates.length>1)throw Error('RENTAL_UPDATE_AMBIGUOUS');
+   if(candidates.length===1){Object.assign(candidates[0],Object.fromEntries(Object.entries(patch).filter(([,v])=>v!==null)),{lastUpdatedFrom:sourceEvent});continue;}
    if(slots.length>=4)throw Error('RENTAL_TOO_MANY');
    slots.push({...patch,sourceEvent});
   }else{
@@ -74,10 +91,26 @@ export async function handleRentalIntake(tx:Tx,event:ReceptionEvent,stage:string
   catch{return review('Aclarar a quién corresponde la preferencia de consultorio y cuál prefiere');}
  }
  const updates=u.rentalRequests||[];
- const requests=mergeRentalRequests(state.rental?.requests||[],updates,event.id);
- if(u.roomPreferenceChanges?.length&&!updates.length)return result({requests},['Gracias por contármelo 😊 Tendré en cuenta tu preferencia cuando busquemos consultorio.']);
+ let requests:RentalSlot[];
+ try{requests=mergeRentalRequests(state.rental?.requests||[],updates,event.id,event.text);}
+ catch{return review('Los datos de alquiler corresponden a más de una solicitud o cambian una propuesta; aclarar antes de reservar');}
+ if(u.roomPreferenceChanges?.length&&!updates.length&&!requests.length)return result({...state.rental,requests},['Gracias por contármelo 😊 Tendré en cuenta tu preferencia cuando busquemos consultorio.']);
  if(!requests.length)return review('Solicitud de alquiler con horarios sin interpretar');
- const rental={requests};
+ const rental:RentalDraft={...state.rental,requests};
+ const text=normalizeText(event.text);
+ // A meeting's capacity and equipment are not verified by an ordinary room price.
+ const group=text.match(/\b(?:con|para|somos|de)\s+(\d{1,3}|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+personas\b/);
+ if(/\b(reunion|taller|capacidad|sillas|asientos)\b/.test(text)||group){
+  const words:Record<string,number>={dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,diez:10};
+  const people=group?(words[group[1]]??Number(group[1])):state.rental?.requirements?.people??null;
+  rental.requirements={people,chairs:/\b(sillas|asientos)\b/.test(text)||!!state.rental?.requirements?.chairs,sourceEvent:event.id};
+ }
+ state={...state,service:'alquiler',rental};
+ if(rental.requirements){
+  const described=requests.map(s=>`${slotLabel(s)}${s.start?' a las '+friendlyTime(s.start):''}${s.roomAlternatives?.length?', '+s.roomAlternatives.join(' o '):s.roomLabel?', '+s.roomLabel:''}`).join('; ');
+  return review(`Reunión${rental.requirements.people?' de '+rental.requirements.people+' personas':''}, ${described}. La capacidad${rental.requirements.chairs?' y las sillas':''} no están verificadas. ¿Podemos ofrecer un espacio con esas condiciones?`,'La disponibilidad del espacio para tu reunión está pendiente de confirmación.');
+ }
+ if(u.roomPreferenceChanges?.length&&!updates.length)return result(rental,['Gracias por contármelo 😊 Tendré en cuenta tu preferencia cuando busquemos consultorio.']);
  // An ambiguous yes must be clarified against the offered booking, not restart unrelated questions.
  if(['confirm','accept'].includes(u.intent)){
   const offered=requests.filter(s=>s.proposalCode&&s.date&&s.start&&s.end&&!s.existingCitaId);

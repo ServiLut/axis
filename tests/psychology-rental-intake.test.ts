@@ -137,3 +137,81 @@ test('an ambiguous confirmation asks which offered booking, without restarting t
  const d=await f.api.handleRentalIntake(f.tx as never,{...e,text:'Confirmar'},'RENTAL_DETAILS',{...state,rental:{requests}},{...u,intent:'confirm',rentalRequests:[]});
  assert.equal(d!.messages.length,1);assert.match(d!.messages[0],/Te reservo/);assert.doesNotMatch(d!.messages[0],/cuántas horas|CONFIRMAR|ABCDEF/);assert.equal(f.proposed.length,0);
 });
+
+test('literal same-day alternatives complete the pending slot without a second missing start',()=>{
+ const first=mergeRentalRequests([],[{requestIndex:null,date,start:null,end:null,roomLabel:null}],'initial');
+ const second=mergeRentalRequests(first,[
+  {requestIndex:null,date,start:'09:00',end:null,roomLabel:'consultorio 7'},
+  {requestIndex:null,date,start:'09:00',end:null,roomLabel:'consultorio 10'},
+ ],'followup','Podría ser para el sábado a las 9 de la mañana, en el consultorio 7 o el 10.');
+ assert.equal(second.length,1);assert.equal(second[0].start,'09:00');assert.equal(second[0].end,null);assert.equal(second[0].roomLabel,null);
+ assert.deepEqual(second[0].roomAlternatives,['consultorio 7','consultorio 10']);assert.equal(second[0].sourceEvent,'initial');assert.equal(second[0].lastUpdatedFrom,'followup');
+ assert.equal(first[0].start,null);
+});
+
+test('without literal alternatives, distinct dates, times and rooms are not consolidated',()=>{
+ const first=mergeRentalRequests([],[{requestIndex:null,date,start:'09:00',end:null,roomLabel:'consultorio 7'}],'initial');
+ for(const patch of [
+  {date:later,start:'09:00',end:null,roomLabel:'consultorio 7'},
+  {date,start:'10:00',end:null,roomLabel:'consultorio 7'},
+  {date,start:'09:00',end:null,roomLabel:'consultorio 10'},
+ ]){
+  const next=mergeRentalRequests(first,[{requestIndex:null,...patch}],'separate','Necesito dos consultorios, el 7 y el 10.');
+  assert.equal(next.length,2);assert.equal(next[0].start,'09:00');assert.equal(next[0].roomLabel,'consultorio 7');
+ }
+});
+
+test('a provided hour completes one unfinished same-day request and asks only the end',async()=>{
+ const f=fixture();const incoming={...e,text:'Podría ser para el sábado a las 9 de la mañana'};
+ const old=mergeRentalRequests([],[{requestIndex:null,date,start:null,end:null,roomLabel:null}],'initial');
+ const d=await f.api.handleRentalIntake(f.tx as never,incoming,'RENTAL_DETAILS',{...state,rental:{requests:old}},
+  {...u,rentalRequests:[{requestIndex:null,date,start:'09:00',end:null,roomLabel:null}]});
+ assert.equal(d!.stage,'RENTAL_DETAILS');assert.equal(d!.state.rental!.requests.length,1);assert.equal(d!.state.rental!.requests[0].start,'09:00');
+ assert.match(d!.messages.join(' '),/hasta qué hora/);assert.doesNotMatch(d!.messages.join(' '),/A qué hora te gustaría/);assert.equal(f.proposed.length,0);
+});
+
+test('meeting capacity is reviewed before any quote or proposal and preserves supplied requirements',async()=>{
+ const f=fixture();const incoming={...e,text:'Necesito el sábado uno de los espacios para una reunión con ocho personas. ¿Sí se podría?'};
+ const d=await f.api.handleRentalIntake(f.tx as never,incoming,'PROFESSIONAL',state,
+  {...u,rentalRequests:[{requestIndex:null,date,start:null,end:null,roomLabel:null}]});
+ assert.equal(d!.stage,'HUMAN');assert.equal(d!.state.rental!.requests[0].date,date);
+ assert.deepEqual({...d!.state.rental!.requirements},{people:8,chairs:false,sourceEvent:e.id});
+ assert.match(d!.handoff!,/Reunión de 8 personas.*capacidad.*no están verificadas.*Podemos ofrecer/s);
+ assert.doesNotMatch(d!.messages.join(' '),/A qué hora|Sandra|equipo|Axis|confirmada|reservada/);assert.equal(f.proposed.length,0);
+});
+
+test('chair inquiry with the observed alternative extraction keeps 09:00 and remains human review',async()=>{
+ const f=fixture();const old=mergeRentalRequests([],[{requestIndex:null,date,start:null,end:null,roomLabel:null}],'initial');
+ const incoming={...e,text:'Podría ser para el sábado a las 9 de la mañana, normalmente la hemos hecho ahí en el consultorio 7 o el 10. Quería saber si había suficientes sillas para la reunión.'};
+ const d=await f.api.handleRentalIntake(f.tx as never,incoming,'RENTAL_DETAILS',{...state,rental:{requests:old}},
+  {...u,rentalRequests:[{requestIndex:null,date,start:'09:00',end:null,roomLabel:'consultorio 7'},{requestIndex:null,date,start:'09:00',end:null,roomLabel:'consultorio 10'}]});
+ assert.equal(d!.stage,'HUMAN');assert.equal(d!.state.rental!.requests.length,1);assert.equal(d!.state.rental!.requests[0].start,'09:00');
+ assert.deepEqual(d!.state.rental!.requests[0].roomAlternatives,['consultorio 7','consultorio 10']);assert.equal(d!.state.rental!.requirements!.chairs,true);
+ assert.match(d!.handoff!,/9.*consultorio 7 o consultorio 10.*sillas/s);assert.doesNotMatch(d!.messages.join(' '),/A qué hora|confirmada|reservada/);assert.equal(f.proposed.length,0);
+});
+
+test('multiple compatible unfinished requests are reviewed without guessing which to update',async()=>{
+ const f=fixture();const old=[
+  {date,start:null,end:null,roomLabel:'consultorio 7',sourceEvent:'one'},
+  {date,start:null,end:null,roomLabel:'consultorio 10',sourceEvent:'two'},
+ ];
+ const d=await f.api.handleRentalIntake(f.tx as never,{...e,text:'El sábado a las 9'},'RENTAL_DETAILS',{...state,rental:{requests:old}},
+  {...u,rentalRequests:[{requestIndex:null,date,start:'09:00',end:null,roomLabel:null}]});
+ assert.equal(d!.stage,'HUMAN');assert.equal(f.proposed.length,0);assert.deepEqual(d!.state.rental!.requests,old);
+});
+
+test('same-day filling never mutates an already proposed slot and human hold stays silent',async()=>{
+ const old=mergeRentalRequests([],[{requestIndex:null,date,start:null,end:null,roomLabel:null}],'initial');old[0].proposalCode='EXISTING';
+ const next=mergeRentalRequests(old,[{requestIndex:null,date,start:'09:00',end:null,roomLabel:null}],'new');
+ assert.equal(next.length,2);assert.equal(next[0].start,null);assert.equal(next[0].proposalCode,'EXISTING');
+ const f=fixture();const d=await f.api.handleRentalIntake(f.tx as never,{...e,text:'El sábado a las 9 para ocho personas'},'HUMAN',{...state,rental:{requests:old}},u);
+ assert.equal(d,null);assert.equal(f.proposed.length,0);assert.equal(old[0].start,null);
+});
+
+test('a room preference alone cannot erase unresolved meeting capacity or bypass its review',async()=>{
+ const f=fixture();const requests=mergeRentalRequests([],[{requestIndex:null,date,start:'09:00',end:null,roomLabel:null}],'initial');
+ const requirements={people:8,chairs:true,sourceEvent:'capacity'};
+ const d=await f.api.handleRentalIntake(f.tx as never,{...e,text:'Prefiero el consultorio 10'},'RENTAL_DETAILS',{...state,rental:{requests,requirements}},
+  {...u,rentalRequests:[],roomPreferenceChanges:[{roomLabel:'10',preference:'prefer',quote:'Prefiero el consultorio 10'}]});
+ assert.equal(d!.stage,'HUMAN');assert.deepEqual({...d!.state.rental!.requirements},requirements);assert.match(d!.handoff!,/8 personas.*sillas/s);assert.equal(f.proposed.length,0);
+});

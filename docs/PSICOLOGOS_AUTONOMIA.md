@@ -157,3 +157,13 @@ La interpretación recibe la pregunta original del bot cuando Sandra la cita y s
 La preparación de IA resuelve la referencia de respuesta de Chatwoot para Sandra, comprobando cuenta 2, inbox 10, teléfono exacto, evento entrante, fecha, mensaje citado saliente y coincidencia con la cola del bot. Guarda `quotedOutboxId` como dato interno auditado; el webhook no admite este campo del remitente. Así una pregunta breve o repetida puede vincularse al mensaje exacto, conservando HUMAN y la autorización de un solo turno. Si Chatwoot aún no publica la cita, la recepción espera hasta dos minutos; una referencia no verificable nunca habilita órdenes.
 
 Aplicar primero `docs/sql/2026-10-01-psychology-chief-reply-reference.sql`. Verificar después del despliegue las capacidades `chiefReplyReference=provider-id-and-outbox`, `chiefOpening=warm-scoped-single-turn` y `chiefAnswerContext=verified-answer-retry-once`. Una clasificación vacía de una respuesta citada se reinterpreta una vez con la misma fuente; si persiste, queda pendiente sin pedir que Sandra repita toda la explicación. Las aperturas completas dirigidas a Luisa reciben reconocimiento breve; no ejecutan tareas ni devuelven el chat globalmente.
+
+## Continuidad de alquiler y reuniones — 05/10/2026
+
+Una aclaración con el mismo día y datos compatibles completa la única solicitud pendiente de horario. Conserva el evento inicial y la fuente de la actualización. Si hay varias solicitudes compatibles, requiere revisión; no adivina a cuál corresponden los datos ni cambia propuestas ya emitidas.
+
+Una alternativa literal como «consultorio 7 o el 10» corresponde a opciones de una solicitud cuando fecha y horas coinciden. No crea dos reservas, no elige una por frecuencia de visitas y no establece una preferencia general. Días, horas o consultorios distintos siguen separados cuando no existe esa alternativa explícita.
+
+Las solicitudes de reunión, capacidad o sillas conservan día, hora, alternativas y número de personas aportado, y pasan a revisión antes de cotizar o crear una propuesta. Un alquiler ordinario y su tarifa no prueban capacidad para una reunión. La respuesta externa comunica únicamente que la disponibilidad está pendiente; la pregunta interna incluye las condiciones concretas sin afirmar que el espacio esté reservado.
+
+Capacidades: `rentalContinuation=same-day-incomplete-and-literal-room-alternatives-v1` y `rentalCapacity=source-preserved-human-review-before-proposal-v1`. Las regresiones aisladas no acreditan un nuevo recorrido completo en producción. Los chats tomados por personal conservan su estado; no se repiten los mensajes históricos para probar la corrección.
