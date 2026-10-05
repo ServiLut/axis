@@ -63,7 +63,7 @@ export function selectPrice(slots,catalogs,preferredId=null){
  if(new Set(matches.map(e=>e.priceCop)).size!==1)return {reason:'CONFLICTING_REVIEWED_PRICES'};
  return {entry:matches[0],sourceIds:matches.map(e=>e.source.quoteId)};
 }
-export function priceText(entry){return (entry.category==='chinches'?'El tratamiento de '+entry.mattresses+' '+(entry.mattresses===1?'colchón':'colchones'):'El servicio')+' tiene un valor de $'+new Intl.NumberFormat('es-CO').format(entry.priceCop)+' COP. ¿Deseas continuar con esta cotización?';}
+export function priceText(entry){return 'Con gusto. '+(entry.category==='chinches'?'El tratamiento de '+entry.mattresses+' '+(entry.mattresses===1?'colchón':'colchones'):'El servicio')+' tiene un valor de $'+new Intl.NumberFormat('es-CO').format(entry.priceCop)+' COP. ¿Deseas continuar con esta cotización?';}
 export function priceBodyHash(text){return createHash('sha256').update(text).digest('hex');}
 export async function verifyPriceSource(entry,transport){
  if(entry?.source?.type==='direct_user_approved_schedule'){

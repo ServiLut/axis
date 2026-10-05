@@ -25,7 +25,7 @@ test('verified post-service document request goes to review before new intake',(
 });
 test('past-service variants preserve facts without confirming documents exist',()=>{
   const state={slots:{site:'casa',rooms:'2 habitaciones',location:'bello'},asked:['service']};
-  for(const text of ['Necesito las fichas de seguridad después del servicio realizado.','Me hicieron una fumigación ayer y necesito los documentos.','Solicito los soportes de la reparación realizada.']){
+  for(const text of ['Necesito las fichas de seguridad después del servicio realizado.','Me hicieron una fumigación ayer y necesito los documentos.','Ya nos fumigaron y necesito los documentos del servicio.','Solicito los soportes de la reparación realizada.']){
     const d=customerDecision('fumigacion',state,{kind:'text',text});
     assert.equal(d.reviewTopic,'service-documents',text);
     assert.deepEqual(d.state.slots,state.slots);assert.deepEqual(d.state.asked,state.asked);
@@ -84,7 +84,7 @@ test('forwarded statements remain a review claim and never establish a saved ser
   assert.match(d.review,/no acredita/i);
 });
 test('prospective and unrelated document mentions do not become post-service requests',()=>{
-  for(const text of ['¿Qué documentos necesito antes de fumigar mi casa?','Estoy vendiendo documentos para empresas.','Nunca me hicieron una fumigación. Necesito cotizar el servicio.']){
+  for(const text of ['¿Qué documentos necesito antes de fumigar mi casa?','Estoy vendiendo documentos para empresas.','Nunca me hicieron una fumigación. Necesito cotizar el servicio.','Nunca nos fumigaron; necesito documentos para cotizar.']){
     assert.notEqual(customerDecision('fumigacion',initial,{kind:'text',text}).reviewTopic,'service-documents');
   }
 });

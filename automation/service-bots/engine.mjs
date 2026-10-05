@@ -2,6 +2,7 @@ import { normalize, SANDRA, DIEGO, publicTextSafe, internalRecipients,knownInter
 import {selectCommonAnswer,commonQuestionTopics,faqNeedsPersonalReview,faqTopicLabel} from './faq.mjs';
 import {chiefStatusTopic,chiefStatusReply} from './chief-status.mjs';
 import {selectPrice,priceText,quotationInquiry,specialQuotation,currentPriceEntries} from './prices.mjs';
+import {adviserReply} from './adviser-tone.mjs';
 
 const externalLinks = text => String(text??'').match(/\b(?:https?:\/\/|www\.)[^\s<>"']+/gi)||[];
 const textWithoutLinks = text => String(text??'').replace(/\b(?:https?:\/\/|www\.)[^\s<>"']+/gi,' ');
@@ -84,8 +85,8 @@ function postServiceDocuments(text){
   const t=normalize(textWithoutLinks(text));
   if(!/\b(?:documentos?|soportes?|fichas de seguridad|certificados?|permisos?|arl)\b/.test(t))return false;
   if(!/\b(?:solicitar|solicito|solicitando|necesito|requiero|requiriendo|requiere|requeridos|enviar|enviarme|entregar|pedir)\b/.test(t))return false;
-  const prior=/\b(?:(?:posterior(?:es)?|despues|tras) (?:a |de |del |la |el )*(?:prestacion del servicio|servicio|fumigacion|reparacion|visita)|(?:me|nos) (?:hicieron|realizaron|prestaron|aplicaron) (?:una |la |el |un )?(?:fumigacion|tratamiento|servicio|reparacion)|(?:servicio|reparacion|fumigacion|visita) realizad[oa])\b/;
-  if(/\b(?:no|nunca) (?:me|nos) (?:hicieron|realizaron|prestaron|aplicaron)\b/.test(t))return false;
+  const prior=/\b(?:(?:posterior(?:es)?|despues|tras) (?:a |de |del |la |el )*(?:prestacion del servicio|servicio|fumigacion|reparacion|visita)|(?:me|nos) (?:hicieron|realizaron|prestaron|aplicaron) (?:una |la |el |un )?(?:fumigacion|tratamiento|servicio|reparacion)|(?:me|nos) fumigaron|(?:servicio|reparacion|fumigacion|visita) realizad[oa])\b/;
+  if(/\b(?:no|nunca) (?:me|nos) (?:hicieron|realizaron|prestaron|aplicaron|fumigaron)\b/.test(t))return false;
   return prior.test(t);
 }
 function postServiceReturn(text){
@@ -376,6 +377,7 @@ export class Engine {
         }
       }
       if(decision.reply){
+        decision.reply=adviserReply(c.company,decision,{firstReply:!conv.state.lastHandledSourceId&&!decision.state.pendingFaqQuestion,approvedAnswer:Boolean(faq?.answer)});
         if(!publicTextSafe(decision.reply))throw new Error('EXTERNAL_TEXT_REJECTED');
         s.queue(e.id+':reply',e.phone,e.line,decision.reply,false,conv.revision,decision.courtesy?null:caseState.caseId);
         if(faq?.answer)s.saveApprovedReplyReference(e.id+':reply',{question:faqQuestion.text,context:caseState.slots,caseId:caseState.caseId,answer:faq.answer,finalText:decision.reply,answerIds:faq.answerIds,sourceIds:faq.sourceIds});
