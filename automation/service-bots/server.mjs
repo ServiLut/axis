@@ -12,6 +12,8 @@ import {validatePriceCatalog,verifyPriceSource,currentPriceEntries} from './pric
 import {BUSINESS_PRICE_GUARD,BUSINESS_PRICE_HASH} from './business-prices.mjs';
 import {ADVISER_TONE_GUARD} from './adviser-tone.mjs';
 import {aiStatus} from './ai-settings.mjs';
+import {restoreOwnAiSetup,installOwnAiSetup} from './ai-setup.mjs';
+import {persistMariaKnowledge,mariaKnowledgeStatus,mariaKnowledgeDocument} from './maria-knowledge.mjs';
 
 async function verifyApprovedAnswerSource(document,config,transport){
   validateApprovedAnswers(document,config.company);
@@ -32,8 +34,10 @@ async function verifyApprovedAnswerSource(document,config,transport){
 }
 
 export function createBotServer(config,store,transport,engine) {
-  let draining=false;
-  const run=async()=>{if(draining)return {busy:true};draining=true;try{return await drain(store,config,transport,engine);}finally{draining=false;}};
+  restoreOwnAiSetup(config,store);
+  persistMariaKnowledge(config,store);
+  let draining=false,settingUpAi=false;
+  const run=async()=>{if(draining||settingUpAi)return {busy:true};draining=true;try{return await drain(store,config,transport,engine);}finally{draining=false;}};
   const server=createServer(async(req,res)=>{
     const reply=(status,body)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store, private'});res.end(JSON.stringify(body));};
     const ingestion=['/event','/delivery','/webhook'].includes(req.url);
@@ -43,7 +47,15 @@ export function createBotServer(config,store,transport,engine) {
       const bodyLimit=req.url==='/notify-chief-document'?720000:20000;
       let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>bodyLimit)return reply(413,{error:'PAYLOAD_TOO_LARGE'});}
       const body=JSON.parse(raw);
-      if(req.url==='/status')return reply(200,{company:config.name,bot:config.bot,enabled:config.enabled,mode:'reception-with-human-review',fullyAutonomous:false,
+      if(req.url==='/ai-setup'){
+        if(draining||settingUpAi)return reply(409,{error:'AI_SETUP_BUSY'});
+        settingUpAi=true;
+        try{return reply(200,await installOwnAiSetup(config,store,body,transport.fetcher));}
+        catch{return reply(409,{error:'AI_SETUP_NOT_APPLIED'});}
+        finally{settingUpAi=false;}
+      }
+      if(req.url==='/ai-knowledge')return config.company==='fumigacion'?reply(200,{status:mariaKnowledgeStatus(config,store),document:mariaKnowledgeDocument()}):reply(403,{error:'MARIA_KNOWLEDGE_OWN_SCOPE'});
+      if(req.url==='/status')return reply(200,{company:config.name,bot:config.bot,enabled:config.enabled,mode:'reception-with-human-review',fullyAutonomous:false,approvedAiKnowledge:mariaKnowledgeStatus(config,store),
         events:store.db.prepare('SELECT state,COUNT(*) n FROM events GROUP BY state').all(),outbox:store.db.prepare('SELECT state,COUNT(*) n FROM outbox GROUP BY state').all(),
         communicationGuard:'private-routing-and-media-work-v2',requestedContactGuard:'explicit-technician-contact-before-intake-v1',confirmationRecipient:questionRecipients(config,'disponibilidad-y-tecnico')[0],operationalConfirmationRecipients:questionRecipients(config,'disponibilidad-y-tecnico'),chiefRecipient:SANDRA,operatorRouting:config.operatorRouting||'sandra',operatorRoutingGuard:'scoped-new-question-fanout-and-exact-line-answer-v1',operatorRoutingActive:config.operatorRouting===OPERATOR_ROUTING,chiefDocumentGuard:'fixed-chief-encrypted-hash-and-idempotency-v1',internalConversationGuard:'verified-internal-per-line-v2',chiefStatusGuard:'exact-directed-status-and-active-mode-v2',quotationQuestionGuard:'scoped-price-followup-and-existing-question-v1',internalConversationEnabled:Boolean(config.chiefOnly),customerResponsesEnabled:config.enabled,
         customerIntakeEnabled:config.enabled,businessWritesEnabled:false,capabilityDisclosure:'runtime-mode-and-implemented-intake-v1',customerCourtesyGuard:'gratitude-only-without-intake-or-ownership-v1',customerAdviserGuard:config.company==='fumigacion'?ADVISER_TONE_GUARD:null,

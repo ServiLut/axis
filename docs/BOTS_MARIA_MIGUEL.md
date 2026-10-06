@@ -1,5 +1,11 @@
 # María Ángel y Miguel Ángel
 
+## Base propia para la IA de María — 06/10/2026
+
+`own-approved-rule-sources-and-current-quotation-v1` reúne nueve reglas vigentes y la tabla aprobada con fuente y hash. La versión queda cifrada y auditada en el volumen propio. El modelo recibe sólo el contexto necesario y las reglas aprobadas; una cotización aporta únicamente su importe verificado. Se conserva $99.000 por colchón, la tabla, cotizaciones previas, pendientes y atención humana. Observaciones históricas, afirmaciones de clientes y ejemplos del personal no se convierten en política.
+
+`/ai-knowledge` es una consulta administrativa autenticada exclusiva de FUMIGACION. La preparación de la base y las pruebas aisladas no acreditan una clave configurada, llamada real del proveedor, entrenamiento de pesos ni cobertura completa. FAQ, fuentes originales de seguridad y programa propio mantienen sus pendientes. La publicación, instalación, conexión real y siguiente turno legítimo se registran por separado. Miguel conserva su despliegue y conocimiento propios.
+
 ## Área con abreviatura cuadrada — 06/10/2026, control 17:23Z
 
 La fuente propia `AC9EF8577437334CE1DD9C481483FAE4` respondió «42 mts2» a la pregunta de tamaño, pero el dato no se conservó y produjo revisión por tamaño faltante. Su acuse histórico `3EB0684AFB906754D11B2E` tiene texto nativo y READ verificados; no se recupera ni reenvía. La corrección admite `mt2`, `mts2`, `mt²` y `mts²` como área cuadrada explícita y conserva el fragmento literal y su fuente. Metros sin exponente, unidades cúbicas, medidas contradictorias y alcances especiales mantienen sus límites.
