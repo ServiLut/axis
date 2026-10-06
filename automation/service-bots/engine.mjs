@@ -272,6 +272,17 @@ export class Engine {
       const newCase=/\b(?:otra solicitud|nuevo servicio|otro servicio|otro equipo)\b/.test(normalize(e.text));
       const caseState=newCase?{slots:{},asked:[],introduced:conv.state.introduced,caseId:c.company+':'+e.id}:conv.state;
       caseState.caseId ||= reportedOrder || c.company+':'+e.id;
+      if(c.company==='fumigacion'&&e.kind==='text'&&!e.forwarded&&/^[¿?\s]+$/.test(e.text)&&/[¿?]/.test(e.text)){
+        // A punctuation-only followup supplies no new question or intake fact.
+        // Preserve pending work on this own line without choosing its meaning,
+        // creating another route, or sending another acknowledgement.
+        const pending=s.db.prepare("SELECT q.id,q.state FROM questions q JOIN outbox o ON o.id=q.outbox_id WHERE q.phone=? AND q.case_id=? AND o.line=? AND q.state IN ('PENDING','ANSWER_REVIEW') AND o.state IN ('READY','SENDING','UNCERTAIN','ACCEPTED','DELIVERED','READ') ORDER BY q.rowid").all(e.phone,caseState.caseId,e.line);
+        if(pending.length){
+          caseState.lastHandledSourceId=e.id;s.saveConversation(e.phone,caseState);
+          s.audit('PENDING_PUNCTUATION_FOLLOWUP_OBSERVED',e.id,{caseId:caseState.caseId,questionIds:pending.map(q=>q.id),newOutboundCreated:false});
+          finish('OBSERVED_PENDING_FOLLOWUP');return;
+        }
+      }
       let pendingQuestion=null,documentRequest=null;
       if(!newCase){
         const firstSource=caseState.caseId.startsWith(c.company+':')?caseState.caseId.slice(c.company.length+1):null;

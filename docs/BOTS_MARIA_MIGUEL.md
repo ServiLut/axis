@@ -1,5 +1,11 @@
 # María Ángel y Miguel Ángel
 
+## Seguimiento con signos de pregunta — 05/10/2026, control 21:00 Bogotá
+
+`pendingFollowupGuard=punctuation-only-own-pending-case-without-repeat-v1` conserva las preguntas pendientes del mismo cliente, caso y línea de María cuando el nuevo texto contiene únicamente signos de pregunta. No interpreta ese mensaje como una pregunta concreta nueva, no crea otra consulta interna ni otro acuse. Las consultas anteriores conservan su destinatario, fuente y entrega; no se redistribuyen ni se borran.
+
+La fuente nativa `3AF628B7C01F4AAED15F` contenía solamente «?» y produjo una consulta adicional a Sandra mientras continuaba pendiente la pregunta de inmueble enviada a Diego y Hilary. El caso fue reproducido en almacenamiento aislado y la corrección pasó 227 comprobaciones. Las solicitudes con palabras, pagos, reprogramaciones y excepciones mantienen su revisión correspondiente. La atención humana conserva prioridad. El cambio está limitado a María; publicación, instalación y siguiente turno legítimo se verifican por separado en el checkpoint del control.
+
 ## Preguntas de estado y cantidad — 03/10/2026
 
 `chiefStatusGuard=exact-directed-status-and-active-mode-v2` responde preguntas dirigidas de los remitentes internos autorizados sobre atención y cantidad de chats usando la configuración actual y la cola propia. Reconoce «María Ángel, ¿estás activa?» y el nombre corto únicamente en una pregunta completa de estado. Una mención en tercera persona, un reenvío o el nombre corto seguido de una orden no confieren autoridad. La presencia bajo pausa dice expresamente que no atiende clientes. El conteo excluye mensajes del personal, salidas internas, salidas suprimidas y entregas sin comprobar; cuenta contactos únicos en ambas líneas y distingue sus subtotales. «Hoy» usa la medianoche de Bogotá; una pregunta sin fecha describe solo los registros propios disponibles, sin atribuir servicios creados o finalizados. No libera chats ni ejecuta órdenes.
