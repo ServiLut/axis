@@ -12,6 +12,8 @@ import {validatePriceCatalog,verifyPriceSource,currentPriceEntries} from './pric
 import {BUSINESS_PRICE_GUARD,BUSINESS_PRICE_HASH} from './business-prices.mjs';
 import {ADVISER_TONE_GUARD} from './adviser-tone.mjs';
 import {aiStatus} from './ai-settings.mjs';
+import {evaluateOwnAi,ownAiUsage} from './conversational-ai.mjs';
+import {MARIA_UNDERSTANDING_GUARD} from './maria-understanding.mjs';
 import {restoreOwnAiSetup,installOwnAiSetup} from './ai-setup.mjs';
 import {persistMariaKnowledge,mariaKnowledgeStatus,mariaKnowledgeDocument} from './maria-knowledge.mjs';
 
@@ -54,8 +56,14 @@ export function createBotServer(config,store,transport,engine) {
         catch{return reply(409,{error:'AI_SETUP_NOT_APPLIED'});}
         finally{settingUpAi=false;}
       }
+      if(req.url==='/ai-evaluate'){
+        if(config.company!=='fumigacion'||!config.conversationalAi?.ready)return reply(409,{error:'AI_SETUP_REQUIRED'});
+        if(Object.keys(body).join(',')!=='caseIds')return reply(400,{error:'AI_EVALUATION_CASE_IDS'});
+        if(draining||settingUpAi)return reply(409,{error:'AI_EVALUATION_BUSY'});
+        settingUpAi=true;try{return reply(200,await evaluateOwnAi(config,store,transport.fetcher,body.caseIds));}finally{settingUpAi=false;}
+      }
       if(req.url==='/ai-knowledge')return config.company==='fumigacion'?reply(200,{status:mariaKnowledgeStatus(config,store),document:mariaKnowledgeDocument()}):reply(403,{error:'MARIA_KNOWLEDGE_OWN_SCOPE'});
-      if(req.url==='/status')return reply(200,{company:config.name,bot:config.bot,enabled:config.enabled,mode:'reception-with-human-review',fullyAutonomous:false,approvedAiKnowledge:mariaKnowledgeStatus(config,store),
+      if(req.url==='/status')return reply(200,{company:config.name,bot:config.bot,enabled:config.enabled,mode:'reception-with-human-review',fullyAutonomous:false,semanticUnderstandingGuard:config.company==='fumigacion'?MARIA_UNDERSTANDING_GUARD:null,aiUsage:ownAiUsage(config,store),approvedAiKnowledge:mariaKnowledgeStatus(config,store),
         events:store.db.prepare('SELECT state,COUNT(*) n FROM events GROUP BY state').all(),outbox:store.db.prepare('SELECT state,COUNT(*) n FROM outbox GROUP BY state').all(),
         communicationGuard:'private-routing-and-media-work-v2',requestedContactGuard:'explicit-technician-contact-before-intake-v1',confirmationRecipient:questionRecipients(config,'disponibilidad-y-tecnico')[0],operationalConfirmationRecipients:questionRecipients(config,'disponibilidad-y-tecnico'),chiefRecipient:SANDRA,operatorRouting:config.operatorRouting||'sandra',operatorRoutingGuard:'scoped-new-question-fanout-and-exact-line-answer-v1',operatorRoutingActive:config.operatorRouting===OPERATOR_ROUTING,chiefDocumentGuard:'fixed-chief-encrypted-hash-and-idempotency-v1',internalConversationGuard:'verified-internal-per-line-v2',chiefStatusGuard:'exact-directed-status-and-active-mode-v2',quotationQuestionGuard:'scoped-price-followup-and-existing-question-v1',internalConversationEnabled:Boolean(config.chiefOnly),customerResponsesEnabled:config.enabled,
         customerIntakeEnabled:config.enabled,businessWritesEnabled:false,capabilityDisclosure:'runtime-mode-and-implemented-intake-v1',customerCourtesyGuard:'gratitude-only-without-intake-or-ownership-v1',customerAdviserGuard:config.company==='fumigacion'?ADVISER_TONE_GUARD:null,

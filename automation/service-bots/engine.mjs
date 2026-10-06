@@ -4,6 +4,7 @@ import {chiefStatusTopic,chiefStatusReply} from './chief-status.mjs';
 import {selectPrice,priceText,quotationInquiry,specialQuotation,currentPriceEntries} from './prices.mjs';
 import {adviserReply} from './adviser-tone.mjs';
 import {CONVERSATIONAL_AI_GUARD} from './ai-settings.mjs';
+import {ownIntent} from './maria-understanding.mjs';
 import {literalPaintingRequest} from './technical-scope.mjs';
 import {afterServiceKind,afterServiceRequest,afterServiceDecision,explicitNewService} from './after-service.mjs';
 
@@ -208,14 +209,15 @@ export function customerDecision(company,state,e,analysis={}) {
   if(e.kind!=='text')return {state:next,review:'El cliente envió '+e.kind+'. El contenido original necesita revisión.',reply:e.kind==='audio'?'Recibí tu audio. Te atenderemos en cuanto revisemos su contenido.':'Recibí el archivo. Revisaremos su contenido para continuar contigo.'};
   if(postServiceDocuments(e.text)&&!faqNeedsPersonalReview(e.text)&&!paymentInquiry(e.text))return {state:{...next,slots:{...state.slots}},reviewTopic:'service-documents',reviewConditions:{kind:'reported-post-service-documents',directCustomerReport:!e.forwarded},review:'La persona solicita documentos de un servicio que relata como realizado. El mensaje no acredita registro, ejecución ni existencia o autorización de documentos; hay que contrastar el servicio y revisar qué soportes pueden entregarse.',reviewQuestion:'¿Qué servicio y soportes autorizados comprobados corresponden a esta solicitud?',reply:'Con gusto. Una asesora continuará contigo para revisar los documentos que necesitas.'};
   if(/\b(factura|certificado|seguimiento|posservicio|ya tengo (?:una )?cita|estado de (?:la )?orden)\b/.test(t))return {state:next,review:'El cliente consulta un servicio previo, su estado o un soporte. Hace falta contrastar el registro del programa.',reply:'Gracias. Revisaremos el registro de tu servicio para poder ayudarte.'};
-  const warrantyClaim=company==='fumigacion'&&['warranty','ambiguous-followup'].includes(afterServiceKind(e.text));
+  const warrantyClaim=company==='fumigacion'&&['warranty','ambiguous-followup'].includes(afterServiceRequest(e,analysis)?.kind);
   if(/\b(cancel|reprogram|reclamo|queja|devolucion|amenaz|abogad|denuncia|dolor|intoxic|embaraz|mascota|bebe|niño|nino)\w*/.test(t)||/\bgarantia\w*/.test(t)&&!warrantyClaim)
     return {state:next,review:'El cliente solicita revisar una excepción o situación que necesita atención personal.',reply:'Gracias por contarnos. Revisaremos tu caso para darte una respuesta clara.'};
   if(/\b(pague|pago|comprobante|transfer|consign|abono)\w*/.test(t)&&(!paymentInquiry(e.text)||/\b(?:pague|comprobante|transferencia|consignacion|abono|(?:hice|realice) (?:el |un )?pago)\b/.test(t)))return {state:next,review:'El cliente informa un pago. Hace falta comprobar el ingreso y su asociación al servicio.',reply:'Gracias. Recibí la información del pago; falta verificarlo para poder confirmarte.'};
   if(paymentInquiry(e.text))return {state:next,reviewTopic:'payment-instructions',reviewConditions:{kind:'amount-and-instructions'},review:'La persona pregunta cuánto enviar o cómo pagar. No informa un ingreso recibido; el importe, medio de pago y asociación al caso requieren una fuente verificable.',reviewQuestion:'¿Qué importe y medio de pago verificados corresponden a esta solicitud?',reply:'Con gusto. Aún falta confirmar cuánto debes enviar y el medio de pago.'};
   if(previousQuotation(e.text))return {state:next,reviewTopic:'existing-quotation',reviewConditions:{kind:'previous-quotation'},review:'La persona dice que ya recibió una cotización. Esa afirmación no confirma precio, aceptación ni reserva; hace falta contrastar el antecedente del mismo caso.',reviewQuestion:'¿Qué cotización previa comprobada corresponde a este caso y cuál es la respuesta vigente?',reply:'Entiendo. La cotización anterior aún necesita verificarse para continuar.'};
-  const followup=company==='fumigacion'&&afterServiceDecision(state,next,e);
+  const followup=company==='fumigacion'&&afterServiceDecision(state,next,e,analysis);
   if(followup)return followup;
+  if(company==='fumigacion'&&ownIntent(analysis,e)?.kind==='general-question')return {state:{...next,slots:{...state.slots}},reviewTopic:'customer-question',reviewConditions:{kind:'general-question'},review:'La persona consulta condiciones generales. Falta una respuesta aprobada aplicable; no es una nueva cotización ni una garantía concedida.',reviewQuestion:'¿Qué respuesta verificada corresponde a esta pregunta?',reply:'Con gusto. Tu pregunta quedó pendiente de revisión.'};
   if(company==='fumigacion'&&(requestedControl(e.text)||state.requestedControlReview)){
     const reference=state.requestedControlReview||{sourceId:e.id,at:e.at,directCustomerReport:!e.forwarded};
     return {state:{...next,requestedControlReview:reference},reviewTopic:'service-followup',reviewConditions:{kind:'requested-control',directCustomerReport:reference.directCustomerReport},reviewSource:reference.sourceId,review:'La persona solicita una visita de control. Debe comprobarse el antecedente y el alcance; la solicitud no acredita un servicio anterior, intervalo aprobado, garantía, reserva ni precio.',reviewQuestion:'¿Qué antecedente y condiciones verificadas corresponden a esta solicitud de control?',reply:'Con gusto. Tu solicitud de control sigue pendiente de confirmación.'};
@@ -323,7 +325,7 @@ export class Engine {
       }
       if(conv.hold){finish('OBSERVED_HUMAN');return;}
       const reportedOrder=/\borden\s*(?:n[ºo°.]?\s*)?([a-f0-9]{8})\b/i.exec(e.text)?.[1]?.toUpperCase();
-      const newCase=c.company==='fumigacion'?explicitNewService(e.text):/\b(?:otra solicitud|nuevo servicio|otro servicio|otro equipo)\b/.test(normalize(e.text));
+      const newCase=c.company==='fumigacion'?explicitNewService(e.text)&&!afterServiceRequest(e,analysis):/\b(?:otra solicitud|nuevo servicio|otro servicio|otro equipo)\b/.test(normalize(e.text));
       const caseState=newCase?{slots:{},asked:[],introduced:conv.state.introduced,caseId:c.company+':'+e.id}:conv.state;
       caseState.caseId ||= reportedOrder || c.company+':'+e.id;
       if(c.company==='fumigacion'&&e.kind==='text'&&!e.forwarded&&/^[¿?\s]+$/.test(e.text)&&/[¿?]/.test(e.text)){
@@ -363,7 +365,7 @@ export class Engine {
       const faqQuestion=pendingQuestion|| (priorFaq&&literalIntakeTurn(e)?priorFaq:e);
       const documentSource=e.kind==='text'&&!faqNeedsPersonalReview(e.text)&&!paymentInquiry(e.text)?(postServiceDocuments(e.text)?e:documentRequest):null;
       const controlSource=c.company==='fumigacion'&&e.kind==='text'&&!faqNeedsPersonalReview(e.text)&&!paymentInquiry(e.text)?(requestedControl(e.text)?e:controlRequest):null;
-      const followupSource=c.company==='fumigacion'&&e.kind==='text'&&!faqNeedsPersonalReview(e.text.replace(/garant[ií]a/gi,''))&&!paymentInquiry(e.text)&&!/\b(?:pague|pago|comprobante|transfer|consign|abono)\w*/.test(normalize(e.text))?(afterServiceRequest(e)?e:followupRequest):null;
+      const followupSource=c.company==='fumigacion'&&e.kind==='text'&&!faqNeedsPersonalReview(e.text.replace(/garant[ií]a/gi,''))&&!paymentInquiry(e.text)&&!/\b(?:pague|pago|comprobante|transfer|consign|abono)\w*/.test(normalize(e.text))?(afterServiceRequest(e,analysis)?e:followupRequest):null;
       const faq=c.company==='fumigacion'&&!documentSource&&!controlSource&&!followupSource&&!caseState.requestedAfterServiceReview&&!caseState.requestedControlReview&&e.kind==='text'&&!e.forwarded&&!unreadLinkOnly(e.text)&&!faqNeedsPersonalReview(e.text)&&!paymentInquiry(e.text)&&!previousQuotation(e.text)&&!postServiceReturn(e.text)&&!plannedRevisit(e.text)&&faqQuestion.kind==='text'?selectCommonAnswer(textWithoutLinks(faqQuestion.text),caseState.slots,s.approvedCustomerAnswers(),caseState.caseId):null;
       let decision;
       if(documentSource){

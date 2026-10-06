@@ -47,7 +47,7 @@ export function mariaKnowledgeStatus(config,store){
 }
 export function mariaModelKnowledge(config,store,phase,row){
  if(config.company!=='fumigacion'||store.company!=='fumigacion'||!['understand','reply'].includes(phase))throw Error('MARIA_KNOWLEDGE_OWN_SCOPE');
- const selected=phase==='understand'?rules.filter(r=>['same-case','human-priority','tone-and-privacy'].includes(r.id)):rules;
+ const selected=phase==='understand'?rules.filter(r=>['same-case','human-priority','post-service','tone-and-privacy'].includes(r.id)):rules;
  const result={company:'FUMIGACION',guard:MARIA_KNOWLEDGE_GUARD,version:MARIA_KNOWLEDGE_HASH,
   approvedRules:structuredClone(selected),complete:false,pendingKnowledgeMustNotBeInvented:true};
  // The approved outbox already contains the result of pricing. Send only that

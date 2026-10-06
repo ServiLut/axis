@@ -20,6 +20,7 @@ function fixture({limit=20,handler}={}){
   const body=JSON.parse(options.body);requests.push({url,options,body});
   const input=JSON.parse(body.input),value=handler?await handler(body,input,s,c):body.text.format.name==='maria_literal_slots'?{slots:slots()}:{choice:1};
   if(value instanceof Error)throw value;
+  if(body.text.format.name==='maria_literal_slots'&&value.slots&&!value.intent)value.intent={kind:'other',evidence:null};
   return {ok:true,json:async()=>({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify(value)}]}],usage:{input_tokens:25,output_tokens:10}})};
  };
  const t=new Transport(c,fetcher);

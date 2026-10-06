@@ -1,4 +1,5 @@
 import {normalize} from './config.mjs';
+import {semanticFollowup} from './maria-understanding.mjs';
 
 export const AFTER_SERVICE_GUARD='literal-followup-kind-and-first-source-before-new-intake-v1';
 const plain=text=>normalize(String(text??'').replace(/\b(?:https?:\/\/|www\.)[^\s<>"']+/gi,' '));
@@ -24,13 +25,15 @@ export function afterServiceKind(text){
   return warranty?'warranty':reinforcement?'reinforcement':'verification';
 }
 export function explicitNewService(text){return affirmed(plain(text),newService)&&!afterServiceKind(text);}
-export function afterServiceRequest(e){
+export function afterServiceRequest(e,analysis={}){
   if(e.kind!=='text')return null;
   const kind=afterServiceKind(e.text);
-  return kind?{kind,sourceId:e.id,at:e.at,directCustomerReport:!e.forwarded}:null;
+  if(kind)return {kind,sourceId:e.id,at:e.at,directCustomerReport:!e.forwarded};
+  const semantic=semanticFollowup(analysis,e);
+  return semantic&&affirmed(plain(e.text),newService)?{...semantic,kind:'ambiguous-followup'}:semantic;
 }
-export function afterServiceDecision(state,next,e){
-  const current=afterServiceRequest(e),prior=state.requestedAfterServiceReview;
+export function afterServiceDecision(state,next,e,analysis={}){
+  const current=afterServiceRequest(e,analysis),prior=state.requestedAfterServiceReview;
   if(!current&&!prior)return null;
   // Keep the first source; a new warranty claim adds its own source and route
   // rather than replacing an earlier operational request or its recipient.
@@ -41,7 +44,7 @@ export function afterServiceDecision(state,next,e){
     if(current.kind==='warranty')reference.warrantySource||=current;
   }
   const active=reference.warrantySource||reference.activeRequest||reference;
-  const labels={reinforcement:'refuerzo',verification:'verificación',warranty:'garantía','ambiguous-followup':'servicio nuevo y seguimiento'};
+  const labels={reinforcement:'refuerzo',verification:'verificación',warranty:'garantía','post-service':'seguimiento del servicio anterior','ambiguous-followup':'servicio nuevo y seguimiento'};
   const label=labels[active.kind],warranty=active.kind==='warranty',ambiguous=active.kind==='ambiguous-followup';
   return {state:{...next,requestedAfterServiceReview:reference},reviewSource:active.sourceId,
     reviewTopic:warranty||ambiguous?'warranty-review':'service-followup',

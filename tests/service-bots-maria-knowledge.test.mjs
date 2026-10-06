@@ -38,7 +38,7 @@ test('other service remains isolated and model context excludes observations, cl
   assert.throws(()=>mariaModelKnowledge({company:'servicio-tecnico'},s,'reply'),/OWN_SCOPE/);
   s.importKnowledge({company:'fumigacion',kind:'historical_observations',source:'unapproved-history',at:'2026-10-06',entries:[{rule:'UNAPPROVED_CLIENT_TEXT'}]});
   const input=mariaModelKnowledge({company:'fumigacion'},s,'understand');
-  assert.equal(input.approvedRules.length,3);assert.equal(input.currentQuotation,undefined);
+  assert.equal(input.approvedRules.length,4);assert.equal(input.currentQuotation,undefined);
   assert.equal(JSON.stringify(input).includes('UNAPPROVED_CLIENT_TEXT'),false);
   assert.equal(input.pendingKnowledgeMustNotBeInvented,true);
  }finally{s.close();other.close();}
