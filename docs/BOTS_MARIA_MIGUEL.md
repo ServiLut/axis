@@ -1,5 +1,11 @@
 # María Ángel y Miguel Ángel
 
+## Problema relatado después de control de plagas — 06/10/2026
+
+María identifica un control de plagas relatado como reciente en el inmueble propio, junto con presencia repetida o cambios en la cantidad de plagas, antes de pedir el tamaño para una cotización nueva. La fuente nativa `3EB02DE84F8F554385BE7B` recibió una pregunta de habitaciones pese a relatar ese antecedente. El relato se conserva para revisión administrativa de Sandra, con una sola consulta por caso; no acredita ejecución anterior, garantía, revisita, precio ni disponibilidad.
+
+La guardia `reported-pest-control-problem-and-planned-revisit-before-intake-v3` conserva las exclusiones de servicios negados, trabajos nuevos, relatos de vecinos, pagos, seguridad y atención humana. El caso histórico ya atendido por personal no se recupera ni se reenvía. Las pruebas aisladas, instalación y siguiente recorrido legítimo se registran por separado. Este cambio se instala únicamente en María; Miguel conserva su ámbito y versión.
+
 ## Solicitudes de control, plagas añadidas y dirección de apartamento — 05/10/2026, control 22:01 Bogotá
 
 María reconoce «visita de control» y «control de 15 días» como solicitudes que requieren verificar antecedente y alcance, antes de abrir una cotización nueva. El relato no acredita un servicio previo, intervalo autorizado, garantía, precio, técnico u horario. Conserva la primera fuente y los datos posteriores del mismo caso; reutiliza una consulta propia pendiente sin cambiar sus destinatarios ni enviar otro acuse. Un servicio nuevo explícito conserva su propio caso. Pagos, riesgos personales y atención humana mantienen prioridad.
