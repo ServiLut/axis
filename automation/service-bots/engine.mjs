@@ -37,7 +37,9 @@ export function extractSlots(text,company) {
     slots.site=Object.keys(properties).find(site=>properties[site].test(t));
   }
   if(company==='fumigacion'){
-    slots.area=text.match(/\b\d{1,5}(?:[.,]\d{1,2})?\s*(?:m\s*(?:²|2|cuadrados?)|metros?\s*cuadrados?)(?=$|[\s.,;:)])/i)?.[0];
+    // An explicit square exponent is required for mt/mts abbreviations. Keep
+    // the literal source; bare metres remain ambiguous for automatic pricing.
+    slots.area=text.match(/\b\d{1,5}(?:[.,]\d{1,2})?\s*(?:m(?:ts?)?\s*(?:²|2)|m\s*cuadrados?|metros?\s*cuadrados?)(?=$|[\s.,;:)])/i)?.[0];
     slots.mattresses=text.match(/\b(?:\d{1,3}|un|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+colch[oó](?:n|nes)\b/i)?.[0];
     slots.affectedFurniture=/\b(?:bases? de cama|sofas?|muebles?)\b/.test(t)?'muebles mencionados; alcance por verificar':undefined;
     slots.roomScale=/\b(?:habitaciones?|cuartos?|piezas?)\s*\(?\s*pequen[oa]s?\b/.test(t)?'pequeños':/\b(?:habitaciones?|cuartos?|piezas?)\s*\(?\s*grandes?\b/.test(t)?'grandes':undefined;

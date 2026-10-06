@@ -34,7 +34,7 @@ function count(value){
  const m=normalize(value).match(/^(\d{1,3}|un|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+(?:habitacion(?:es)?|cuartos?|piezas?|colchon|colchones)$/);
  return m?(words[m[1]]??Number(m[1])):null;
 }
-function squareArea(value){const m=normalize(value).match(/^(\d{1,5}(?:[.,]\d{1,2})?)\s*(?:m\s*(?:2|²)|metros?\s*cuadrados?)$/);return m?Number(m[1].replace(',','.')):null;}
+function squareArea(value){const m=normalize(value).match(/^(\d{1,5}(?:[.,]\d{1,2})?)\s*(?:m(?:ts?)?\s*(?:2|²)|metros?\s*cuadrados?)$/);return m?Number(m[1].replace(',','.')):null;}
 export function selectBusinessPrice(slots){
  if(specialPropertyScope(Object.values(slots).join(' '),slots))return {reason:'BUSINESS_SPECIAL_PROPERTY_REVIEW'};
  if(!schedule.scope.properties.includes(normalize(slots.site))||!schedule.scope.municipalities.includes(normalize(slots.location)))return {reason:'BUSINESS_PRICE_SCOPE_REVIEW'};

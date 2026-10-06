@@ -1,5 +1,11 @@
 # María Ángel y Miguel Ángel
 
+## Área con abreviatura cuadrada — 06/10/2026, control 17:23Z
+
+La fuente propia `AC9EF8577437334CE1DD9C481483FAE4` respondió «42 mts2» a la pregunta de tamaño, pero el dato no se conservó y produjo revisión por tamaño faltante. Su acuse histórico `3EB0684AFB906754D11B2E` tiene texto nativo y READ verificados; no se recupera ni reenvía. La corrección admite `mt2`, `mts2`, `mt²` y `mts²` como área cuadrada explícita y conserva el fragmento literal y su fuente. Metros sin exponente, unidades cúbicas, medidas contradictorias y alcances especiales mantienen sus límites.
+
+El municipio escrito «Itagüía» en el antecedente no se convierte automáticamente en Itagüí. Después de conservar el tamaño se solicita ubicación faltante; sólo un municipio confirmado dentro del alcance permite seleccionar la tabla aprobada. En el recorrido aislado, confirmar Itagüí permite cotizar $129.000 para cucarachas en un apartamento de 42 mts2; no acredita entrega de esa cotización, reserva o servicio real. Tabla, hash y $99.000 por colchón permanecen intactos. Guardia propia `literal-business-place-written-rooms-and-square-units-v4`. Publicación, instalación y siguiente recorrido legítimo se verifican por separado; cambio destinado únicamente a María.
+
 ## Conector de IA propio preparado — 06/10/2026
 
 La instrucción directa de la usuaria autoriza proceder con la conexión de María. El conector OpenAI es exclusivo de FUMIGACION, permanece inactivo sin clave propia/modelo/límite/corte configurados y no traslada accesos a Miguel. Extrae datos literales del turno actual y elige redacciones equivalentes revisadas; conserva precios, fuentes, atención humana y rutas operativas. No se presenta como entrenamiento del modelo, información completa ni conexión verificada por una configuración. Los resultados inciertos de IA y WhatsApp no se reintentan automáticamente. Leer [MARIA_ANGEL_IA.md](MARIA_ANGEL_IA.md) para alcance, configuración segura y verificación técnica/real separadas.
