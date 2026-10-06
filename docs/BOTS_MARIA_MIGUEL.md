@@ -1,5 +1,9 @@
 # María Ángel y Miguel Ángel
 
+## Conector de IA propio preparado — 06/10/2026
+
+La instrucción directa de la usuaria autoriza proceder con la conexión de María. El conector OpenAI es exclusivo de FUMIGACION, permanece inactivo sin clave propia/modelo/límite/corte configurados y no traslada accesos a Miguel. Extrae datos literales del turno actual y elige redacciones equivalentes revisadas; conserva precios, fuentes, atención humana y rutas operativas. No se presenta como entrenamiento del modelo, información completa ni conexión verificada por una configuración. Los resultados inciertos de IA y WhatsApp no se reintentan automáticamente. Leer [MARIA_ANGEL_IA.md](MARIA_ANGEL_IA.md) para alcance, configuración segura y verificación técnica/real separadas.
+
 ## Problema relatado después de control de plagas — 06/10/2026
 
 María identifica un control de plagas relatado como reciente en el inmueble propio, junto con presencia repetida o cambios en la cantidad de plagas, antes de pedir el tamaño para una cotización nueva. La fuente nativa `3EB02DE84F8F554385BE7B` recibió una pregunta de habitaciones pese a relatar ese antecedente. El relato se conserva para revisión administrativa de Sandra, con una sola consulta por caso; no acredita ejecución anterior, garantía, revisita, precio ni disponibilidad.

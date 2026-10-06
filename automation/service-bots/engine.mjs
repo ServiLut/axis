@@ -3,6 +3,7 @@ import {selectCommonAnswer,commonQuestionTopics,faqNeedsPersonalReview,faqTopicL
 import {chiefStatusTopic,chiefStatusReply} from './chief-status.mjs';
 import {selectPrice,priceText,quotationInquiry,specialQuotation,currentPriceEntries} from './prices.mjs';
 import {adviserReply} from './adviser-tone.mjs';
+import {CONVERSATIONAL_AI_GUARD} from './ai-settings.mjs';
 
 const externalLinks = text => String(text??'').match(/\b(?:https?:\/\/|www\.)[^\s<>"']+/gi)||[];
 const textWithoutLinks = text => String(text??'').replace(/\b(?:https?:\/\/|www\.)[^\s<>"']+/gi,' ');
@@ -180,7 +181,17 @@ export function customerDecision(company,state,e,analysis={}) {
   if(e.kind==='text'&&unreadLinkOnly(e.text))return {state:{...state,slots:{...state.slots},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)},reviewTopic:'unread-link',reviewConditions:{kind:'unread-link',links:externalLinks(e.text)},review:'La persona envió únicamente un enlace. El contenido vinculado no ha sido leído; no consta una pregunta, servicio o dato operativo confirmado.',reviewQuestion:'¿Qué atención necesita este mensaje en este caso?',reply:'Recibí tu mensaje. Queda pendiente de revisión.'};
   if(e.kind==='text'&&customerCourtesy(e.text))return {state:{...state,slots:{...state.slots},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)},courtesy:true,reply:'Con gusto. Estamos para servirte.'};
   if(e.kind==='text'&&!e.forwarded&&(state.introduced||state.initialIntakeAllRequested||state.asked?.length)&&/^(?:hola|hola buenas noches|buenos dias|buen dia|buenas tardes|buenas noches)[.!¡, ]*$/.test(normalize(e.text)))return {state:{...state,slots:{...state.slots},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)},courtesy:true,greeting:true,reply:/buenas noches/.test(normalize(e.text))?'Buenas noches.':/buenas tardes/.test(normalize(e.text))?'Buenas tardes.':/buen(?:os dias| dia)/.test(normalize(e.text))?'Buen día.':'Hola.'};
-  const literalText=textWithoutLinks(e.text).trim(),t=normalize(literalText);const next={...state,slots:{...state.slots,...literalFields(state,e,company),...parseUnderstanding(analysis,e.text)},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)};
+  const literalText=textWithoutLinks(e.text).trim(),t=normalize(literalText);
+  const literal=literalFields(state,e,company),existing={...state.slots,...literal};
+  let understood=parseUnderstanding(analysis,e.text);
+  if(analysis?.guard===CONVERSATIONAL_AI_GUARD){
+    // Direct AI may fill a missing literal field, never replace native facts.
+    // Its result belongs to this exact incoming source, not another case/turn.
+    if(company!=='fumigacion'||analysis.eventId!==e.id||analysis.company!=='FUMIGACION'||!literalIntakeTurn(e))understood={};
+    else understood=Object.fromEntries(Object.entries(understood).filter(([k])=>!existing[k]));
+  }
+  const next={...state,slots:{...existing,...understood},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)};
+  if(analysis?.guard===CONVERSATIONAL_AI_GUARD&&Object.keys(understood).length)next.intakeSources={...next.intakeSources,...Object.fromEntries(Object.keys(understood).map(k=>[k,{sourceId:e.id,at:e.at,context:'own-ai-literal-fragment',guard:CONVERSATIONAL_AI_GUARD}]))};
   if(company==='fumigacion'&&literalIntakeTurn(e))rememberFields(next,e,company);
   // Preserve an elliptical answer to our own size prompt literally. Do not invent
   // square metres, convert a linear measurement, or infer size outside that context.

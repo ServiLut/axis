@@ -1,6 +1,7 @@
 import { SANDRA, DIEGO, HILARY, publicTextSafe, normalize,internalRecipients,knownInternalRecipient } from './config.mjs';
 import {parseChiefDocument} from './chief-document.mjs';
 import {selectPrice,verifyPriceSource} from './prices.mjs';
+import {understandOwnCustomer,composeOwnReply,replyCandidates,probeOwnAi} from './conversational-ai.mjs';
 
 export class Transport {
   constructor(config, fetcher=fetch){this.config=config;this.fetcher=fetcher;}
@@ -96,13 +97,17 @@ export class Transport {
     if(result.system!==c.name||String(result.companyId)!==c.expectedProgramCompanyId||result.phone!==phone)throw new Error('PROGRAM_SCOPE_MISMATCH');
     return {...result,verified:true};
   }
-  async understand(event,context,knowledge) {
-    const c=this.config;if(!c.aiUrl||!c.aiToken||event.kind!=='text')return {};
+  async understand(event,context,knowledge,store) {
+    const c=this.config;
+    if(c.conversationalAi?.provider)return understandOwnCustomer(c,store,this.fetcher,event,context);
+    if(!c.aiUrl||!c.aiToken||event.kind!=='text')return {};
     const url=new URL(c.aiUrl);if(url.protocol!=='https:'||url.username||url.password)throw new Error('AI_HTTPS_REQUIRED');
     const r=await this.fetcher(url,{method:'POST',headers:{Authorization:'Bearer '+c.aiToken,'Content-Type':'application/json'},redirect:'error',signal:AbortSignal.timeout(25000),body:JSON.stringify({company:c.name,task:'extract-literal-intake-slots-only',event:{id:event.id,text:event.text},context,knowledge})});
     if(!r.ok)throw new Error('AI_UNAVAILABLE'); const result=await r.json();
     if(result.eventId!==event.id||result.company!==c.name)throw new Error('AI_CONTEXT_MISMATCH');return result;
   }
+  async composeReply(row,text,store){return composeOwnReply(this.config,store,this.fetcher,row,text);}
+  async aiHealth(store){return probeOwnAi(this.config,store,this.fetcher);}
 }
 
 export async function drain(store,config,transport,engine) {
@@ -124,7 +129,7 @@ export async function drain(store,config,transport,engine) {
       const caseAnswers=store.db.prepare("SELECT body,answer,source_id,answer_at,valid_until FROM questions WHERE phone=? AND case_id=? AND state='ANSWERED' AND valid_until>?").all(e.phone,newCase?'':store.conversation(e.phone)?.state.caseId||'',Date.now()).map(q=>({question:store.open(q.body),answer:store.open(q.answer),source:q.source_id,at:q.answer_at,validUntil:q.valid_until,scope:'same-company-and-case-only; recheck before scheduling'}));
       const conversationHistory=store.conversationContext(e.phone,e.at,20,e.id);
       store.audit('CONVERSATION_CONTEXT_CHECKED',e.id,{caseId:conversationHistory.caseId,turns:conversationHistory.turns.length,storedCoverageComplete:conversationHistory.completeStoredHistory,fullWhatsAppHistoryRead:false,originalMediaRead:false});
-      try{analysis=await transport.understand(e,{...(newCase?{slots:{},asked:[]}:store.conversation(e.phone)?.state),requestedNewCase:newCase,caseAnswers,conversationHistory},knowledge);}catch{store.audit('AI_UNAVAILABLE',e.id);}
+      try{analysis=await transport.understand(e,{...(newCase?{slots:{},asked:[]}:store.conversation(e.phone)?.state),requestedNewCase:newCase,caseAnswers,conversationHistory},knowledge,store);}catch{store.audit('AI_UNAVAILABLE',e.id);}
     }
     await engine.process(e,analysis);
   }
@@ -134,13 +139,31 @@ export async function drain(store,config,transport,engine) {
     if(!config.enabled&&!(config.chiefOnly&&o.internal&&internalRecipients(config).includes(o.phone)))continue;
     if(o.created<Date.now()-600000){store.db.prepare("UPDATE outbox SET state='EXPIRED_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id);suppressed++;continue;}
     // Reject before any delivery attempt; this is a review, never an uncertain send.
-    const text=store.open(o.body);
+    let text=store.open(o.body);
     if(!o.internal&&!publicTextSafe(text)){
       store.db.prepare("UPDATE outbox SET state='COMMUNICATION_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id);
       store.hold(o.phone,'communication-review');store.audit('EXTERNAL_TEXT_REJECTED',o.id);suppressed++;continue;
     }
     // Revalidate channel identity before each attempt. A disconnected channel leaves READY without attempting delivery.
     try{await transport.verifyLine(o.line);}catch{store.audit('CHANNEL_CHECK_FAILED',o.id);continue;}
+    if(!o.internal&&config.company==='fumigacion'&&config.conversationalAi?.ready&&typeof transport.composeReply==='function'&&store.approvedReplyStillValid(o)&&store.priceReplyStillValid(o)){
+      try{
+        const composed=await transport.composeReply(o,text,store);
+        if(!replyCandidates(text).includes(composed))throw Error('AI_REPLY_NOT_APPROVED');
+        if(composed!==text)store.tx(()=>{
+          const current=store.conversation(o.phone);
+          if(current?.hold||current?.revision!==o.revision)return;
+          const body=store.seal(composed);
+          if(!store.db.prepare("UPDATE outbox SET body=? WHERE id=? AND state='READY'").run(body,o.id).changes)return;
+          const ref=store.priceReplyReference(o);
+          if(ref)store.savePriceReplyReference(o.id,{...ref,finalText:composed});
+          store.audit('AI_APPROVED_WORDING_SELECTED',o.id,{originalText:text,finalText:composed,caseId:o.case_id,priceCop:ref?.priceCop||null,claimsGenerated:false});
+          o.body=body;text=composed;
+        });
+      }catch{store.audit('AI_WORDING_FALLBACK',o.id,{deterministicReplyRetained:true});}
+    }
+    // Native attention, staff ingestion, current prices and answer references
+    // are checked after every model await and before the delivery reservation.
     if(!o.internal&&config.historyCheckRequired&&typeof transport.currentAttention==='function'){
       try{
         const attention=await transport.currentAttention(o.phone);

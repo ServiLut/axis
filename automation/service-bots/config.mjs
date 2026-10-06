@@ -1,4 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
+import {aiConfiguration} from './ai-settings.mjs';
 
 export const BUSINESSES = Object.freeze({
   fumigacion: { name: 'FUMIGACION', bot: 'María Ángel', phones: ['573126944997','573126938721'] },
@@ -46,7 +47,8 @@ export function configFromEnv(env = process.env) {
     historyCheckRequired:env.BOT_PRIOR_HISTORY_CHECK==='true',
     port: Number(env.PORT || 8080), programContextUrl: env.BOT_PROGRAM_CONTEXT_URL || null,
     programToken: env.BOT_PROGRAM_READ_TOKEN || null, expectedProgramCompanyId: env.BOT_PROGRAM_COMPANY_ID || null,
-    aiUrl: env.BOT_UNDERSTANDING_URL || null, aiToken: env.BOT_UNDERSTANDING_TOKEN || null };
+    aiUrl: env.BOT_UNDERSTANDING_URL || null, aiToken: env.BOT_UNDERSTANDING_TOKEN || null,
+    conversationalAi:aiConfiguration(env,company) };
 }
 
 export function authorized(header, hash) {

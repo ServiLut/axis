@@ -11,6 +11,7 @@ import {queueChiefDocument} from './chief-document.mjs';
 import {validatePriceCatalog,verifyPriceSource,currentPriceEntries} from './prices.mjs';
 import {BUSINESS_PRICE_GUARD,BUSINESS_PRICE_HASH} from './business-prices.mjs';
 import {ADVISER_TONE_GUARD} from './adviser-tone.mjs';
+import {aiStatus} from './ai-settings.mjs';
 
 async function verifyApprovedAnswerSource(document,config,transport){
   validateApprovedAnswers(document,config.company);
@@ -55,9 +56,13 @@ export function createBotServer(config,store,transport,engine) {
         paymentInquiryGuard:'amount-before-intake-and-no-receipt-v1',existingQuotationGuard:'verified-prior-quote-before-intake-v1',serviceDocumentsGuard:'reported-past-service-documents-before-intake-v1',postServiceGuard:config.company==='fumigacion'?'reported-pest-control-problem-and-planned-revisit-before-intake-v3':null,
         caseAuthorship:store.db.prepare('SELECT state,COUNT(*) n FROM case_authorship GROUP BY state').all(),
         unanswered:store.db.prepare("SELECT COUNT(*) n FROM questions WHERE state IN ('PENDING','LEGACY_PENDING','ANSWER_REVIEW')").get().n,
-        knowledge:store.db.prepare('SELECT kind,COUNT(*) n FROM knowledge GROUP BY kind').all(),programConnected:Boolean(config.programContextUrl&&config.programToken),aiConfigured:Boolean(config.aiUrl&&config.aiToken),priorHistoryProtection:Boolean(config.historyCheckRequired)});
+        knowledge:store.db.prepare('SELECT kind,COUNT(*) n FROM knowledge GROUP BY kind').all(),programConnected:Boolean(config.programContextUrl&&config.programToken),aiConfigured:config.conversationalAi?.provider?Boolean(config.conversationalAi.ready):Boolean(config.aiUrl&&config.aiToken),conversationalAi:aiStatus(config),priorHistoryProtection:Boolean(config.historyCheckRequired)});
       if(req.url==='/channel-health'){
         const lines=[];for(const line of config.lines)lines.push(await transport.verifyLine(line.phone));return reply(200,{company:config.name,lines});
+      }
+      if(req.url==='/ai-health'){
+        if(config.company!=='fumigacion'||!config.conversationalAi?.ready)return reply(409,{error:'AI_SETUP_REQUIRED',...aiStatus(config)});
+        return reply(200,await transport.aiHealth(store));
       }
       if(req.url==='/supervision'){
         const after=body.afterEventRow??0,limit=body.limit??50;
