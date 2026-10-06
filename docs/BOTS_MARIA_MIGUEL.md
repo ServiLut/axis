@@ -1,5 +1,15 @@
 # María Ángel y Miguel Ángel
 
+## Solicitudes de control, plagas añadidas y dirección de apartamento — 05/10/2026, control 22:01 Bogotá
+
+María reconoce «visita de control» y «control de 15 días» como solicitudes que requieren verificar antecedente y alcance, antes de abrir una cotización nueva. El relato no acredita un servicio previo, intervalo autorizado, garantía, precio, técnico u horario. Conserva la primera fuente y los datos posteriores del mismo caso; reutiliza una consulta propia pendiente sin cambiar sus destinatarios ni enviar otro acuse. Un servicio nuevo explícito conserva su propio caso. Pagos, riesgos personales y atención humana mantienen prioridad.
+
+Las continuaciones aditivas literales, como «Cucarachas» seguido de «Y hormiga», conservan ambas plagas y sus IDs propios. Una corrección explícita reemplaza el dato; no se mezclan otro contacto, una salida del personal, un mensaje futuro ni un caso nuevo. Una tarifa para una sola plaga no se aplica a la combinación.
+
+«Apto 503 Torre 1 Conjunto …» identifica un apartamento dentro de una dirección; no solicita por sí solo tratar el conjunto. Zonas comunes, edificios completos, varios inmuebles y alcances especiales siguen sujetos a cotización propia. La tarifa automática requiere todavía plaga, tamaño, municipio y demás condiciones aprobadas coincidentes. La tabla y su hash permanecen intactos, incluido $99.000 por colchón.
+
+Fuentes nativas revisadas: `3A74659D51B816C013C9`, `3A427A319FF3F9ABD14C`, `3AE043A77AFE5793A1F2`, `3A2D08CDF192E14050D1` y `3AA59AFDFBBDD53C544F`; las salidas históricas entregadas no se recuperan ni se repiten. Guardias propias: `controlVisitGuard=requested-control-antecedent-before-intake-v1`, `intakePestGuard=literal-additive-pests-and-own-source-union-v1` y `propertyScopeGuard=single-apartment-address-and-explicit-special-scope-v1`. Verificación aislada, instalación y siguiente recorrido legítimo se registran separadamente en el checkpoint. Miguel conserva su despliegue y ámbitos propios.
+
 ## Seguimiento con signos de pregunta — 05/10/2026, control 21:00 Bogotá
 
 `pendingFollowupGuard=punctuation-only-own-pending-case-without-repeat-v1` conserva las preguntas pendientes del mismo cliente, caso y línea de María cuando el nuevo texto contiene únicamente signos de pregunta. No interpreta ese mensaje como una pregunta concreta nueva, no crea otra consulta interna ni otro acuse. Las consultas anteriores conservan su destinatario, fuente y entrega; no se redistribuyen ni se borran.

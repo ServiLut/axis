@@ -174,6 +174,10 @@ export class Store {
     return this.db.prepare("SELECT body FROM events WHERE phone=? AND from_me=0 AND rowid>? AND rowid<=? AND at<=? AND state IN ('PENDING','OBSERVED_SUPERSEDED') ORDER BY at,rowid LIMIT 40").all(phone,previous.rowid,current.rowid,current.at).map(r=>this.open(r.body));
   }
   question({phone,line,caseId,topic,conditions,recipient,text,source}) {
+    if(this.company==='fumigacion'&&topic==='service-followup'&&conditions?.kind==='requested-control'){
+      const pending=this.db.prepare("SELECT q.id,q.state FROM questions q JOIN outbox o ON o.id=q.outbox_id WHERE q.phone=? AND q.case_id=? AND o.line=? AND q.state IN ('PENDING','ANSWER_REVIEW') AND q.topic IN ('service-followup','special-quotation','cotizacion-verificada','disponibilidad-y-cotizacion','disponibilidad-y-tecnico','missing-intake:service') ORDER BY q.rowid LIMIT 1").get(phone,caseId,line);
+      if(pending){this.audit('PENDING_CONTROL_CASE_REVIEW_REUSED',source,{caseId,questionId:pending.id,antecedentStillUnverified:true,newOutboundCreated:false});return {...pending,created:false,valid:false};}
+    }
     if(topic==='cotizacion-verificada'){
       const candidates=this.db.prepare("SELECT id,state,topic,body FROM questions WHERE phone=? AND case_id=? AND state IN ('PENDING','ANSWER_REVIEW') AND topic IN ('cotizacion-verificada','disponibilidad-y-cotizacion','disponibilidad-y-tecnico','customer-question') ORDER BY rowid").all(phone,caseId);
       const pending=candidates.find(q=>q.topic!=='customer-question'||quotationInquiry(this.open(q.body).conditions?.question||''));

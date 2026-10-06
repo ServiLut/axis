@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {normalize} from './config.mjs';
 import {validateBusinessPriceSchedule,selectBusinessPrice,verifyBusinessPriceEntry} from './business-prices.mjs';
+import {specialPropertyScope} from './property-scope.mjs';
 
 export const PRICE_AUTHORITY='direct-user-chat-20261005-common-quotes-special-cases-and-human-priority';
 const fields=new Set(['service','site','location','locationDetails','area','rooms','roomScale','siteScale','treatmentScope','floors','patio']);
@@ -11,8 +12,7 @@ export function quotationInquiry(text){
  return !/\b(?:garantia|productos?|segur\w*|toxic\w*|pago|pague|abono|cuenta|refuerzo|descuento|ya me|me cotizaron)\b/.test(t)&&/\b(?:cotiz\w*|precio|valor|cuanto (?:cuesta|vale|cobran)|costo)\b/.test(t);
 }
 export function specialQuotation(text,slots={}){
- const t=normalize(text);
- return /\b(?:edificios?|conjuntos?|unidades? residenciales?|urbanizacion(?:es)?|zonas? comunes?|parqueaderos?|shut|shute|inspeccion|cotizacion formal|cotizacion tecnica formal)\b/.test(t)||/\b(?:\d+|dos|tres|cuatro|cinco|seis)\s+(?:apartamentos?|aptos?|casas?|locales?|torres?)\b/.test(t)||['edificio','unidad residencial','conjunto','parqueadero'].includes(normalize(slots.site));
+ return specialPropertyScope(text,slots);
 }
 export function validatePriceCatalog(doc,company){
  if(doc.kind==='approved_price_schedule')return validateBusinessPriceSchedule(doc,company);

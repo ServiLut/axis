@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
 import {normalize} from './config.mjs';
+import {specialPropertyScope} from './property-scope.mjs';
 
 export const BUSINESS_PRICE_AUTHORITY='direct-user-chat-20261005-mariangel-prices-and-reception';
 export const BUSINESS_PRICE_GUARD='direct-approved-table-standard-price-and-scoped-extras-v1';
@@ -35,7 +36,7 @@ function count(value){
 }
 function squareArea(value){const m=normalize(value).match(/^(\d{1,5}(?:[.,]\d{1,2})?)\s*(?:m\s*(?:2|²)|metros?\s*cuadrados?)$/);return m?Number(m[1].replace(',','.')):null;}
 export function selectBusinessPrice(slots){
- if(/\b(?:edificios?|conjuntos?|unidades? residenciales?|zonas? comunes?|parqueaderos?|inspeccion|cotizacion formal)\b|\b(?:\d+|dos|tres|cuatro|cinco|seis)\s+(?:apartamentos?|casas?|locales?|torres?)\b/.test(normalize(Object.values(slots).join(' '))))return {reason:'BUSINESS_SPECIAL_PROPERTY_REVIEW'};
+ if(specialPropertyScope(Object.values(slots).join(' '),slots))return {reason:'BUSINESS_SPECIAL_PROPERTY_REVIEW'};
  if(!schedule.scope.properties.includes(normalize(slots.site))||!schedule.scope.municipalities.includes(normalize(slots.location)))return {reason:'BUSINESS_PRICE_SCOPE_REVIEW'};
  if(slots.roomScale||slots.siteScale||slots.treatmentScope||slots.patio&&slots.patio!=='sin patio'||slots.floors&&!/^1(?:er|ro)?\s+(?:piso|nivel)$/.test(normalize(slots.floors)))return {reason:'BUSINESS_PRICE_EXTRA_SCOPE_REVIEW'};
  const service=normalize(slots.service);let amount,row,basis,category;
