@@ -56,6 +56,7 @@ export function createBotServer(config,store,transport,engine) {
         paymentInquiryGuard:'amount-before-intake-and-no-receipt-v1',existingQuotationGuard:'verified-prior-quote-before-intake-v1',serviceDocumentsGuard:'reported-past-service-documents-before-intake-v1',postServiceGuard:config.company==='fumigacion'?'reported-pest-control-problem-and-planned-revisit-before-intake-v3':null,
         caseAuthorship:store.db.prepare('SELECT state,COUNT(*) n FROM case_authorship GROUP BY state').all(),
         technicalScopeGuard:config.company==='servicio-tecnico'?'literal-painting-scope-before-intake-and-pending-question-v1':null,
+        afterServiceKindGuard:config.company==='fumigacion'?'literal-followup-kind-and-first-source-before-new-intake-v1':null,
         unanswered:store.db.prepare("SELECT COUNT(*) n FROM questions WHERE state IN ('PENDING','LEGACY_PENDING','ANSWER_REVIEW')").get().n,
         knowledge:store.db.prepare('SELECT kind,COUNT(*) n FROM knowledge GROUP BY kind').all(),programConnected:Boolean(config.programContextUrl&&config.programToken),aiConfigured:config.conversationalAi?.provider?Boolean(config.conversationalAi.ready):Boolean(config.aiUrl&&config.aiToken),conversationalAi:aiStatus(config),priorHistoryProtection:Boolean(config.historyCheckRequired)});
       if(req.url==='/channel-health'){

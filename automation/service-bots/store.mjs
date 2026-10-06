@@ -181,7 +181,7 @@ export class Store {
       const pending=candidates.find(q=>{const old=this.open(q.body).conditions?.question||'';return topic==='customer-question'?question&&customerQuestionKey(old)===question:technicalAvailabilityQuestion(old);});
       if(pending){this.audit('PENDING_TECHNICAL_CUSTOMER_QUESTION_REUSED',source,{caseId,topic,questionId:pending.id,originalRecipientPreserved:true,newOutboundCreated:false});return {id:pending.id,state:pending.state,created:false,valid:false};}
     }
-    if(this.company==='fumigacion'&&topic==='service-followup'&&conditions?.kind==='requested-control'){
+    if(this.company==='fumigacion'&&topic==='service-followup'&&['requested-control','reinforcement','verification'].includes(conditions?.kind)){
       const pending=this.db.prepare("SELECT q.id,q.state FROM questions q JOIN outbox o ON o.id=q.outbox_id WHERE q.phone=? AND q.case_id=? AND o.line=? AND q.state IN ('PENDING','ANSWER_REVIEW') AND q.topic IN ('service-followup','special-quotation','cotizacion-verificada','disponibilidad-y-cotizacion','disponibilidad-y-tecnico','missing-intake:service') ORDER BY q.rowid LIMIT 1").get(phone,caseId,line);
       if(pending){this.audit('PENDING_CONTROL_CASE_REVIEW_REUSED',source,{caseId,questionId:pending.id,antecedentStillUnverified:true,newOutboundCreated:false});return {...pending,created:false,valid:false};}
     }
@@ -190,7 +190,7 @@ export class Store {
       const pending=candidates.find(q=>q.topic!=='customer-question'||quotationInquiry(this.open(q.body).conditions?.question||''));
       if(pending){this.audit('PENDING_CASE_PRICE_QUESTION_REUSED',source,{caseId,topic,questionId:pending.id,newOutboundCreated:false});return {id:pending.id,state:pending.state,created:false,valid:false};}
     }
-    if(topic.startsWith('missing-intake:')||['cotizacion-verificada','special-quotation','disponibilidad-y-cotizacion','disponibilidad-y-tecnico','service-documents','service-followup','requested-technician-contact','payment-instructions','existing-quotation'].includes(topic)){
+    if(topic.startsWith('missing-intake:')||['cotizacion-verificada','special-quotation','disponibilidad-y-cotizacion','disponibilidad-y-tecnico','service-documents','service-followup','warranty-review','requested-technician-contact','payment-instructions','existing-quotation'].includes(topic)){
       // Further details are retained in the conversation. A pending question for
       // the same case must not be sent again because its details or route changed.
       const pending=this.db.prepare("SELECT id,state FROM questions WHERE phone=? AND case_id=? AND topic=? AND state IN ('PENDING','ANSWER_REVIEW') ORDER BY rowid LIMIT 1").get(phone,caseId,topic);
