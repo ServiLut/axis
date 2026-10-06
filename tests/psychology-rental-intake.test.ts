@@ -215,3 +215,57 @@ test('a room preference alone cannot erase unresolved meeting capacity or bypass
   {...u,rentalRequests:[],roomPreferenceChanges:[{roomLabel:'10',preference:'prefer',quote:'Prefiero el consultorio 10'}]});
  assert.equal(d!.stage,'HUMAN');assert.deepEqual({...d!.state.rental!.requirements},requirements);assert.match(d!.handoff!,/8 personas.*sillas/s);assert.equal(f.proposed.length,0);
 });
+
+test('literal one-hour follow-up completes the stored start when the model omits the end',async()=>{
+ const f=fixture(),requests=mergeRentalRequests([],[{requestIndex:null,date,start:'18:00',end:null,roomLabel:null}],'start');
+ const d=await f.api.handleRentalIntake(f.tx as never,{...e,id:'duration-literal',text:'Una hora'},'RENTAL_DETAILS',{...state,rental:{requests}},
+  {...u,intent:'question',rentalRequests:[{requestIndex:0,date,start:'18:00',end:null,roomLabel:null}]});
+ assert.equal(d!.state.rental!.requests[0].end,'19:00');
+ assert.match(d!.messages.join(' '),/18[.,]900.*consultorio 10/s);assert.doesNotMatch(d!.messages.join(' '),/hasta qué hora/);
+ assert.equal(requests[0].end,null);assert.equal(f.proposed.length,0);
+});
+
+test('an unchanged PM clarification does not repeat the checked price and room choice',async()=>{
+ const f=fixture(),request={requestIndex:null,date,start:'18:00',end:'19:00',roomLabel:null};
+ const first=await f.api.handleRentalIntake(f.tx as never,{...e,id:'range',text:'6:00 a 7:00'},'PROFESSIONAL',state,{...u,rentalRequests:[request]});
+ assert.equal(first!.messages.length,2);
+ const next=await f.api.handleRentalIntake(f.tx as never,{...e,id:'meridiem',text:'PM'},'RENTAL_DETAILS',first!.state,{...u,rentalRequests:[request]});
+ assert.equal(next!.state.rental!.requests.length,1);assert.equal(next!.messages.length,0);assert.equal(f.proposed.length,0);
+});
+
+test('a changed availability result is shown even after an identical PM clarification',async()=>{
+ const f=fixture(),request={requestIndex:null,date,start:'18:00',end:'19:00',roomLabel:null};
+ const first=await f.api.handleRentalIntake(f.tx as never,{...e,text:'6:00 a 7:00'},'PROFESSIONAL',state,{...u,rentalRequests:[request]});
+ f.flags.occupied=true;
+ const next=await f.api.handleRentalIntake(f.tx as never,{...e,id:'meridiem',text:'PM'},'RENTAL_DETAILS',first!.state,{...u,rentalRequests:[request]});
+ assert.equal(next!.messages.length,2);assert.match(next!.messages[1],/consultorio 20/);assert.doesNotMatch(next!.messages[1],/consultorio 10/);
+});
+
+test('literal duration must match extracted end and a unique pending slot',async()=>{
+ for(const variant of ['contradiction','multiple'] as const){
+  const f=fixture(),requests=mergeRentalRequests([],[{requestIndex:null,date,start:'18:00',end:null,roomLabel:null}],'start');
+  if(variant==='multiple')requests.push({date:later,start:'10:00',end:null,roomLabel:null,sourceEvent:'other'});
+  const d=await f.api.handleRentalIntake(f.tx as never,{...e,text:'Una hora'},'RENTAL_DETAILS',{...state,rental:{requests}},
+   {...u,rentalRequests:variant==='contradiction'?[{requestIndex:0,date,start:'18:00',end:'20:00',roomLabel:null}]:[]});
+  assert.equal(d!.stage,'HUMAN');assert.equal(f.proposed.length,0);assert.equal(requests[0].end,null);
+ }
+});
+
+test('literal minutes preserve extra-time review and do not wrap after midnight',async()=>{
+ const f=fixture(),requests=mergeRentalRequests([],[{requestIndex:null,date,start:'18:00',end:null,roomLabel:'10'}],'start');
+ const d=await f.api.handleRentalIntake(f.tx as never,{...e,text:'55 minutos'},'RENTAL_DETAILS',{...state,rental:{requests}},{...u,rentalRequests:[]});
+ assert.equal(d!.stage,'HUMAN');assert.equal(d!.state.rental!.requests[0].end,'18:55');assert.match(d!.handoff!,/minutos adicionales/);assert.equal(f.proposed.length,0);
+ const late=await f.api.handleRentalIntake(f.tx as never,{...e,text:'8 horas'},'RENTAL_DETAILS',{...state,rental:{requests}},{...u,rentalRequests:[]});
+ assert.equal(late!.stage,'HUMAN');assert.equal(f.proposed.length,0);
+});
+
+test('tentative duration is not literal authority and staff or HUMAN stays silent',async()=>{
+ const f=fixture(),requests=mergeRentalRequests([],[{requestIndex:null,date,start:'18:00',end:null,roomLabel:null}],'start');
+ const old={...state,rental:{requests}};
+ const d=await f.api.handleRentalIntake(f.tx as never,{...e,text:'Quizás una hora'},'RENTAL_DETAILS',old,{...u,rentalRequests:[]});
+ assert.equal(d!.state.rental!.requests[0].end,null);assert.match(d!.messages.join(' '),/hasta qué hora/);
+ for(const event of [{...e,text:'Una hora',fromMe:true},{...e,text:'Una hora'}]){
+  assert.equal(await f.api.handleRentalIntake(f.tx as never,event,event.fromMe?'RENTAL_DETAILS':'HUMAN',old,{...u,rentalRequests:[]}),null);
+ }
+ assert.equal(requests[0].end,null);assert.equal(f.proposed.length,0);
+});

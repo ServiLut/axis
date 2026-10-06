@@ -8,8 +8,9 @@ import {friendlyDay,friendlyTime,confirmationQuestion} from './psychology-bookin
 import {rememberRoomPreferences,roomChoice} from './psychology-room-preferences';
 
 type Tx=Prisma.TransactionClient;
+export const PSYCHOLOGY_RENTAL_FOLLOWUP_GUARD='literal-duration-and-rechecked-identical-prompt-v1';
 export type RentalSlot=Omit<RentalRequestInput,'requestIndex'>&{sourceEvent:string;proposalCode?:string;existingCitaId?:string;roomAlternatives?:string[];lastUpdatedFrom?:string};
-export type RentalDraft={requests:RentalSlot[];requirements?:{people:number|null;chairs:boolean;sourceEvent:string}};
+export type RentalDraft={requests:RentalSlot[];requirements?:{people:number|null;chairs:boolean;sourceEvent:string};lastPrompt?:{requestsKey:string;messages:string[];sourceEvent:string}};
 type Room={id:bigint;nombre:string};
 const roomKey=(s:string)=>normalizeText(s).replace(/^consultorio\s*/,'').trim();
 /** A visible room number is NOT its primary key. */
@@ -54,6 +55,25 @@ export function mergeRentalRequests(previous:RentalSlot[],updates:RentalRequestI
 }
 const slotLabel=(s:RentalSlot)=>s.date?`el ${friendlyDay(s.date)}`:'tu reserva';
 const rentalMoney=(value:number)=>new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(value);
+const requestsKey=(requests:RentalSlot[])=>JSON.stringify(requests.map(s=>[s.sourceEvent,s.date,s.start,s.end,s.roomLabel,s.proposalCode??null,s.existingCitaId??null]));
+/** Only a complete literal duration and one stored start may supply a missing end. */
+function completeLiteralDuration(previous:RentalSlot[],requests:RentalSlot[],text:string,sourceEvent:string){
+ const literal=normalizeText(text).replace(/[.!]+$/,'').trim().match(/^(?:(?:por|durante)\s+)?(una?|dos|tres|cuatro|cinco|seis|siete|ocho|\d{1,3})\s+(horas?|h|minutos?|min)$/);
+ if(!literal||!previous.length)return requests;
+ const words:Record<string,number>={un:1,una:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8};
+ const quantity=words[literal[1]]??Number(literal[1]),minutes=/^(hora|h)/.test(literal[2])?quantity*60:quantity;
+ const candidates=previous.filter(s=>!s.proposalCode&&!s.existingCitaId);
+ if(candidates.length!==1||!candidates[0].date||!candidates[0].start||minutes<1||minutes>480)throw Error('RENTAL_DURATION_AMBIGUOUS');
+ const old=candidates[0],start=old.start!.match(/^(\d{2}):(\d{2})$/);
+ if(!start)throw Error('RENTAL_DURATION_AMBIGUOUS');
+ const endMinutes=Number(start[1])*60+Number(start[2])+minutes;
+ if(endMinutes>=1440)throw Error('RENTAL_DURATION_OVERNIGHT');
+ const end=String(Math.floor(endMinutes/60)).padStart(2,'0')+':'+String(endMinutes%60).padStart(2,'0');
+ const matches=requests.filter(s=>s.sourceEvent===old.sourceEvent&&s.date===old.date&&s.start===old.start&&!s.proposalCode&&!s.existingCitaId);
+ if(matches.length!==1||requests.length!==previous.length||matches[0].end&&matches[0].end!==end||old.end&&old.end!==end)throw Error('RENTAL_DURATION_CONTRADICTORY');
+ matches[0].end=end;matches[0].lastUpdatedFrom=sourceEvent;
+ return requests;
+}
 
 /** Read-only availability; proposal creation and final confirmation repeat all checks transactionally. */
 export async function inspectRentalSlot(tx:Tx,professionalId:number,slot:RentalSlot,rooms:Room[],hourlyPrice:string){
@@ -78,7 +98,13 @@ export async function handleRentalIntake(tx:Tx,event:ReceptionEvent,stage:string
  if(event.fromMe||event.kind!=='text'||stage==='HUMAN'||['urgent','stop','courtesy'].includes(u.intent))return null;
  if(u.service&&u.service!=='alquiler')return null;
  if(!isRentalBookingRequest(event,state)&&!(u.service==='alquiler'&&u.rentalRequests?.length)&&!u.roomPreferenceChanges?.length)return null;
- const result=(rental:RentalDraft,messages:string[]):ReceptionResult=>({stage:'RENTAL_DETAILS',state:{...state,service:'alquiler',rental},messages});
+ const priorPrompt=state.rental?.lastPrompt;
+ const result=(rental:RentalDraft,messages:string[]):ReceptionResult=>{
+  const key=requestsKey(rental.requests);
+  const repeated=!!messages.length&&priorPrompt?.requestsKey===key&&JSON.stringify(priorPrompt.messages)===JSON.stringify(messages);
+  const lastPrompt=repeated?priorPrompt:messages.length?{requestsKey:key,messages:[...messages],sourceEvent:event.id}:rental.lastPrompt;
+  return {stage:'RENTAL_DETAILS',state:{...state,service:'alquiler',rental:{...rental,...(lastPrompt?{lastPrompt}:{})}},messages:repeated?[]:messages};
+ };
  const review=(reason:string,message='Tu solicitud está pendiente de confirmación. Gracias por tu paciencia.'):ReceptionResult=>({stage:'HUMAN',state:{...state,reason},messages:[message],handoff:reason});
  if(u.intent==='reject')return review('Cambio o rechazo de alquiler; aclarar cuál horario desea modificar');
  if(u.confidence<.85)return review('Datos de reserva de consultorio ambiguos');
@@ -92,7 +118,10 @@ export async function handleRentalIntake(tx:Tx,event:ReceptionEvent,stage:string
  }
  const updates=u.rentalRequests||[];
  let requests:RentalSlot[];
- try{requests=mergeRentalRequests(state.rental?.requests||[],updates,event.id,event.text);}
+ try{
+  const previous=state.rental?.requests||[];
+  requests=completeLiteralDuration(previous,mergeRentalRequests(previous,updates,event.id,event.text),event.text,event.id);
+ }
  catch{return review('Los datos de alquiler corresponden a más de una solicitud o cambian una propuesta; aclarar antes de reservar');}
  if(u.roomPreferenceChanges?.length&&!updates.length&&!requests.length)return result({...state.rental,requests},['Gracias por contármelo 😊 Tendré en cuenta tu preferencia cuando busquemos consultorio.']);
  if(!requests.length)return review('Solicitud de alquiler con horarios sin interpretar');
