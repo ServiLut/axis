@@ -5,6 +5,7 @@ import { dirname } from 'node:path';
 import {validateApprovedAnswers,selectCommonAnswer} from './faq.mjs';
 import {validatePriceCatalog,selectPrice,quotationInquiry} from './prices.mjs';
 import {supersededBusinessPriceSchedule} from './business-prices.mjs';
+import {customerQuestionKey,technicalAvailabilityQuestion} from './technical-scope.mjs';
 
 export class Store {
   constructor(path, company, key) {
@@ -174,6 +175,12 @@ export class Store {
     return this.db.prepare("SELECT body FROM events WHERE phone=? AND from_me=0 AND rowid>? AND rowid<=? AND at<=? AND state IN ('PENDING','OBSERVED_SUPERSEDED') ORDER BY at,rowid LIMIT 40").all(phone,previous.rowid,current.rowid,current.at).map(r=>this.open(r.body));
   }
   question({phone,line,caseId,topic,conditions,recipient,text,source}) {
+    if(this.company==='servicio-tecnico'&&(topic==='customer-question'||topic==='special-quotation'&&conditions?.kind==='technical-painting')){
+      const question=customerQuestionKey(conditions?.question||'');
+      const candidates=this.db.prepare("SELECT id,state,topic,body FROM questions WHERE phone=? AND case_id=? AND state IN ('PENDING','ANSWER_REVIEW') AND topic='customer-question' ORDER BY rowid").all(phone,caseId);
+      const pending=candidates.find(q=>{const old=this.open(q.body).conditions?.question||'';return topic==='customer-question'?question&&customerQuestionKey(old)===question:technicalAvailabilityQuestion(old);});
+      if(pending){this.audit('PENDING_TECHNICAL_CUSTOMER_QUESTION_REUSED',source,{caseId,topic,questionId:pending.id,originalRecipientPreserved:true,newOutboundCreated:false});return {id:pending.id,state:pending.state,created:false,valid:false};}
+    }
     if(this.company==='fumigacion'&&topic==='service-followup'&&conditions?.kind==='requested-control'){
       const pending=this.db.prepare("SELECT q.id,q.state FROM questions q JOIN outbox o ON o.id=q.outbox_id WHERE q.phone=? AND q.case_id=? AND o.line=? AND q.state IN ('PENDING','ANSWER_REVIEW') AND q.topic IN ('service-followup','special-quotation','cotizacion-verificada','disponibilidad-y-cotizacion','disponibilidad-y-tecnico','missing-intake:service') ORDER BY q.rowid LIMIT 1").get(phone,caseId,line);
       if(pending){this.audit('PENDING_CONTROL_CASE_REVIEW_REUSED',source,{caseId,questionId:pending.id,antecedentStillUnverified:true,newOutboundCreated:false});return {...pending,created:false,valid:false};}
