@@ -22,6 +22,23 @@ test('a staff-held chat stays silent and an actual rental request is not attenda
  const rental=semanticReception({...event,text:'Necesito reservar el consultorio mañana de 3 a 4 pm'},'NEW',state,{},'REVIEW',null);
  assert.equal(rental.stage,'RENTAL_DETAILS');assert.equal(rental.handoff,undefined);
 });
+test('an ambiguous rental contact asks for identity without turning the request into patient registration',()=>{
+ const rental={...event,text:'Buenos días. Reserva consultorio 7 para el próximo martes de 10:00 a 11:00.'};
+ const ambiguous:ReceptionState={context:{role:'ambiguous',hasHistory:true,coverage:'recent_only',continuation:false}};
+ const result=semanticReception(rental,'NEW',ambiguous,{},'REVIEW',{intent:'preferences',confidence:.97,service:'alquiler'} as never);
+ assert.equal(result.stage,'HUMAN');assert.equal(result.handoff,'Identidad ambigua del contacto');
+ const notice=chiefHelpMessage(rental.phone,result.handoff!,rental);
+ assert.ok(notice.includes(rental.text));
+ assert.match(notice,/¿Puedes confirmar a quién corresponde esta solicitud antes de continuar\?/);
+ assert.doesNotMatch(notice,/datos del paciente|registrar|ficha|Qué fecha|Qué horario|Qué consultorio/i);
+ assert.equal((notice.match(/¿/g)||[]).length,1);
+ assert.deepEqual(semanticReception(rental,'HUMAN',{...ambiguous,humanHold:{kind:'review'}},{},'REVIEW',null).messages,[]);
+});
+test('an ambiguous identity does not infer patient or professional role from an unrelated message',()=>{
+ const notice=chiefHelpMessage(event.phone,'Identidad ambigua del contacto',{kind:'text',text:'Hola, quisiera información.'});
+ assert.match(notice,/No pude identificar con seguridad a la persona/);
+ assert.doesNotMatch(notice,/paciente|profesional|reservar|registrar|ficha/i);
+});
 test('unknown requests include the actual question and its quoted antecedent without asserting either',()=>{
  const context={kind:'text' as const,text:'¿Y ese trámite cuánto demora?',quotedText:'Te ayudamos con el certificado'};
  const notice=chiefHelpMessage(event.phone,'Caso o solicitud requiere orientación humana',context);

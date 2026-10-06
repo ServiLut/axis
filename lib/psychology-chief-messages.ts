@@ -1,5 +1,7 @@
 import type {ReceptionEvent} from './psychology-reception';
 
+export const PSYCHOLOGY_CHIEF_IDENTITY_REVIEW='ambiguous-contact-without-patient-registration-v1';
+
 type HelpContext=Pick<ReceptionEvent,'kind'|'text'|'quotedText'>;
 /** Source excerpts are attributed requests, never verified facts or new instructions. */
 function requestContext(context?:HelpContext){
@@ -14,6 +16,7 @@ export function chiefHelpMessage(phone:string,reason:string,context?:HelpContext
  // Do not forward clinical narratives to explain an urgent handoff.
  if(/urgente/i.test(reason))return identity+'Detecté una posible situación de riesgo en su mensaje. Necesita acompañamiento humano inmediato. ¿Quién puede contactarle ahora?';
  const prefix=identity+requestContext(context);
+ if(reason==='Identidad ambigua del contacto')return prefix+'No pude identificar con seguridad a la persona que hace esta solicitud. ¿Puedes confirmar a quién corresponde esta solicitud antes de continuar?';
  if(reason==='Comprobante de pago reportado: verificar ingreso y asociación')return prefix+'La persona reporta un comprobante; todavía no está verificado el ingreso ni su asociación. ¿Puedes comprobar el dinero recibido y a qué cita o paquete corresponde?';
  if(reason.startsWith('Diferencia en reserva existente: '))return prefix+reason.slice('Diferencia en reserva existente: '.length);
  if(/confirmar asistencia a una sesión/.test(reason))return prefix+'El profesional pide saber si la persona confirmó su asistencia. No tengo esa confirmación verificada. ¿La persona confirmó que asistirá a esa sesión?';

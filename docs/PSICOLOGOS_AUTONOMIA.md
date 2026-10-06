@@ -1,5 +1,11 @@
 # Autonomía administrativa de Psicólogos en Colombia
 
+## Identidad ambigua — 6 de octubre de 2026
+
+Una coincidencia del teléfono con varios registros conserva la atención humana. El aviso a Sandra incluye la solicitud y pregunta a quién corresponde antes de continuar. No supone que sea un paciente, no pide crear otra ficha ni vuelve a pedir el horario o consultorio ya aportados. `chiefIdentityReview=ambiguous-contact-without-patient-registration-v1` identifica esta corrección de lenguaje interno.
+
+La solicitud de alquiler revisada tenía dos profesionales activos asociados al teléfono. El bloqueo de identidad funcionó y no se creó una reserva. El aviso anterior, ya entregado, conserva su fuente y no se recupera ni se repite. La corrección de lenguaje y su despliegue no acreditan una identidad resuelta, una reserva guardada ni el siguiente recorrido legítimo.
+
 ## Privacidad y lenguaje — instrucción directa del 30 de septiembre de 2026
 
 Las respuestas externas comunican el resultado útil o la única pregunta necesaria, con respeto y brevedad. No anuncian a quién se informará, qué se preguntará al personal, pasos internos, controles, razonamientos ni nombres de sistemas. Una confirmación pendiente se expresa como pendiente; no se promete una reserva, pago, plazo o decisión. Los datos de otras personas y empresas no se divulgan. Los informes internos autorizados a Sandra conservan el contexto mínimo necesario para resolver la duda.
