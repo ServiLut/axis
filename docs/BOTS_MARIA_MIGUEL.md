@@ -1,5 +1,21 @@
 # María Ángel y Miguel Ángel
 
+## Recepción ordinaria de María y consultas directas — 08/10/2026 22:48Z
+
+La instrucción humana de completar solicitudes ordinarias sin delegar cada dato está instalada sólo en María: runtime `03fb2e2b750e02689d4929a27f49bc062f252fef`, Dokploy DONE en dos segundos, y módulo propio de Tenaxis `b2a3d436f31d1013e9c65010dbe163ae6b000e82`, DONE en 3m13s. La API propia confirmó a las 22:48:45Z `literal-ordinary-intake-without-staff-delegation-v1`, `own-accepted-ordinary-service-literal-fields-and-atomic-receipt-v2` y la aceptación nativa del backend. Las 431 pruebas del runtime y las 97 del módulo son aisladas; no acreditan un servicio real guardado.
+
+Una plantilla con [Plaga], [Empresa/Hogar] o [Municipio] vacíos no aporta esos datos. María conserva la plaga, inmueble, habitaciones, área literal y municipio de la misma solicitud, incluidos `mt`, `mts` y `mts.` cuadrados; una pregunta posterior por el precio no sustituye la plaga por la palabra genérica fumigación. Barrio solo no confirma municipio. Los faltantes ordinarios se piden al cliente, sin preguntas al personal para completar la recepción. Una cama doble no acredita por sí sola cuántos colchones están afectados.
+
+Con precio propio entregado, datos literales completos y aceptación inequívoca del cliente, María prepara el guardado ordinario a su nombre sin aprobación de Sandra por cada caso. Reutiliza nombre y dirección explícitos del mismo caso; acepta «Perfecto», «Sí, agéndame mañana» y aceptación con datos completos en el mismo mensaje. Si los datos llegan después de la primera aceptación o se corrigen, se entrega un resumen y se verifica la confirmación real del cliente. Esa confirmación corresponde a sus datos, no a una segunda aprobación de la jefa.
+
+El recibo propio precede al anuncio de guardado. La solicitud queda NUEVO y pendiente de programación; técnico, disponibilidad y hora se consultan por la ruta TESA vigente, con datos mínimos. El guardado no acredita ejecución, pago ni garantía. Intervención humana, cambios de alcance, identidad ambigua y fuentes sin entrega comprobada conservan controles. La base de nueve reglas aprobadas quedó persistida con hash `7ab2321c28755a3faea542651bd13b6c784bff975aa445662db27f1352a747fe`; no es entrenamiento de pesos ni cobertura de todas las preguntas frecuentes.
+
+La consulta de Sandra dirigida a María sobre llamadas de sus dos líneas se responde en lectura sin otra aprobación ni liberación de su chat. `own-whatsapp-call-observations-without-native-total-v1` comunica sólo registros propios observados de hoy Bogotá y sus límites. Falta historial nativo completo con dirección entrante/saliente: no afirmar cero llamadas, totales completos, llamadas contestadas o duración. La fuente histórica `3EB06396271027EB8440D8` y su acuse READ `3EB03DCD5B5C0C1CD96794` no se recuperan, reproducen ni reenvían.
+
+Estado al corte: María activa, Luna propia y programa conectados, ambas líneas OPEN con propietario exacto, `saved=0`, `uncertain=0`, `review=0`. El primer servicio legítimo y su confirmación entregada siguen pendientes; no liberar casos del personal ni fabricar una prueba con clientes. Tabla vigente y precio de $99.000 por colchón intactos. Token propio vence el 07/11/2026 16:56:52.680Z; no renovar ni ampliar por esta corrección. Miguel, Psicólogos, Abogados e informes mantienen sus estados y fuentes independientes.
+
+Evidencia: `C:/Users/ADMIN/.codex/visualizations/2026/09/18/01a0b62e-d6ca-7f93-bbb1-3718cf4b84b6/maria-autonomia-20261008/checkpoint-private.json`, `health-after-private.json`, pruebas y capturas DONE en ese mismo directorio. Este apartado prevalece sobre las limitaciones históricas de recepción y confirmación posteriores; conserva sus demás controles y pendientes.
+
 ## TESA operativo — instrucción directa e instalación verificadas, 08/10/2026 19:13Z
 
 La usuaria autorizó que María y Miguel revisen **GRUPO SERVICIOS TESA** y hagan allí las consultas de rutas, programaciones y coordinación. El grupo nativo exacto es `573137689392-1545079045@g.us`, con ocho miembros. Este apartado sustituye únicamente los destinos de **consultas operativas nuevas** de los apartados históricos siguientes: ambos bots usan TESA. No mueve pendientes anteriores ni cambia los informes diarios dirigidos a Sandra.
