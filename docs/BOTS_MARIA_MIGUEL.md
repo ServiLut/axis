@@ -1,5 +1,17 @@
 # María Ángel y Miguel Ángel
 
+## Diagnóstico del registro y recepción de María — 08/10/2026 23:19Z
+
+La API propia confirmó acceso vigente al programa, usuario técnico `maria.angel.bot`, IA configurada, recepción activa y dos propietarios OPEN. El usuario no tiene inicio de sesión interactivo por el alcance autorizado; usa la integración propia. Todos los estados del registro son ahora visibles: `prepared=0`, PENDING/SENDING/UNCERTAIN/SAVED/REVIEW=0 y cero recibos persistidos propios al corte. Un estado de conexión válido no prueba una escritura real.
+
+En seis recepciones propias revisadas se observaron trece respuestas entregadas, cero cotizaciones propias y cero aceptaciones propias; tres casos se desviaron prematuramente antes de cotizar. Esa selección no llegó a preparar el guardado. La lectura mantiene cobertura parcial y no atribuye al bot los acuerdos posteriores del personal.
+
+Runtime `17fd9b00a10304b345feead6cf00b31fc916ef63` instalado sólo en María, Dokploy DONE 3s; módulo propio de Tenaxis `84b7a4a26316d6ab708d227b9384ec9ece7a7046`, DONE 2m38s. `processed-customer-turn-before-registration-v1` evita pasar una solicitud a revisión antes de procesar una cortesía entrante pendiente y vuelve a comprobar sus fuentes. `own-single-address-and-ordinary-property-possessive-v2` acepta números de dirección con apartamento singular y «en mi casa/apartamento» sin confundirlos con varias propiedades o municipio. Alcances especiales, correcciones, cancelación, pagos, identidad y atención humana conservan controles. Las 443 pruebas del runtime y 109 del módulo son aisladas: ningún servicio real fue creado por ellas.
+
+Tres mensajes nativos nuevos de la línea azul sólo traen LID sin teléfono verificable y no aparecen en el runtime. Contacto y aliases propios no resuelven esa identidad; el decoder exacto aislado devuelve cero eventos. No inferir un teléfono del LID ni atribuir la ausencia a un hold. `native-private-phone-mapping-observed-without-guessing-v1` registra futuras identidades incompletas cifradas, sin responder, crear casos o reproducir fuentes. Su contador inicial cero no acredita cobertura histórica ni resolución del problema. La vinculación nativa LID→teléfono sigue pendiente.
+
+Evidencia y checkpoint actual: `C:/Users/ADMIN/.codex/visualizations/2026/09/18/01a0b62e-d6ca-7f93-bbb1-3718cf4b84b6/maria-autonomia-20261008/diagnosis-20261008/checkpoint-private.json`. Primer servicio legítimo con orden, recibo, creador, auditoría y confirmación entregada todavía pendiente. No repetir eventos históricos, liberar atención humana, ampliar permisos, renovar el acceso o modificar otros bots. Este apartado prevalece sobre versiones y conteos históricos siguientes; mantiene sus fuentes y límites.
+
 ## Recepción ordinaria de María y consultas directas — 08/10/2026 22:48Z
 
 La instrucción humana de completar solicitudes ordinarias sin delegar cada dato está instalada sólo en María: runtime `03fb2e2b750e02689d4929a27f49bc062f252fef`, Dokploy DONE en dos segundos, y módulo propio de Tenaxis `b2a3d436f31d1013e9c65010dbe163ae6b000e82`, DONE en 3m13s. La API propia confirmó a las 22:48:45Z `literal-ordinary-intake-without-staff-delegation-v1`, `own-accepted-ordinary-service-literal-fields-and-atomic-receipt-v2` y la aceptación nativa del backend. Las 431 pruebas del runtime y las 97 del módulo son aisladas; no acreditan un servicio real guardado.
