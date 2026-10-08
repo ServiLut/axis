@@ -1,5 +1,15 @@
 # María Ángel y Miguel Ángel
 
+## Destinatarios operativos — directriz humana del 08/10/2026, versión preparada
+
+La usuaria cambió los destinatarios de las consultas operativas nuevas: FUMIGACION las dirige únicamente a Hilary `573043332213`; S.TECNICO las dirige únicamente a `573126944997`, la línea azul de FUMIGACION designada expresamente como coordinación de Servicio Técnico. Diego `573233350137` deja de recibir mensajes nuevos. Esta directriz sustituye las rutas anteriores para preguntas nuevas; el código preparado usa `BOT_OPERATIONAL_ROUTING=hilary-and-fumigacion-blue-20261008`. Su publicación, configuración e instalación todavía deben verificarse por separado: este apartado no acredita el cambio en producción.
+
+La ruta operativa comprende cotización, disponibilidad, horario, técnico y seguimiento de llegada cuando `service-followup.kind` es exactamente `arrival`. Sandra `573016803926` conserva dirección general, políticas, documentos, pagos, garantías, refuerzos, controles posteriores, excepciones y devolución expresa de chats. Un seguimiento cuyo tipo no esté determinado también permanece con Sandra. Los reportes diarios conservan exclusivamente su destinataria Sandra y sus claves de deduplicación; esta instrucción no crea otro informe, grupo ni campaña.
+
+Las preguntas históricas conservan empresa, caso, destinatario, fuente, MID y estado de entrega originales. No se redistribuyen ni se reenvían por el cambio de ruta. Bajo la versión nueva, una salida interna `READY` dirigida a Diego queda en `RECIPIENT_RETIRED_REVIEW` antes de enviarse, sin entrega ni migración a otro destinatario; las salidas históricas `DELIVERED`, `READ` y `UNCERTAIN` se preservan sin recuperación automática. Diego sólo puede aportar una respuesta a una pregunta antigua mediante remitente exacto, cita de su propia salida DELIVERED/READ, misma línea y caso, sin reenvío. Se conserva esa fuente sin enviarle otro acuse ni reconocerle autoridad general.
+
+Las cuatro líneas propias se reconocen como internas. María observa en silencio las preguntas procedentes de las dos líneas de S.TECNICO; una respuesta o eco automático entre bots no acredita una explicación operativa verificada. Miguel acepta una aclaración desde su nueva coordinación únicamente cuando cumple la vinculación exacta a la pregunta propia entregada del mismo caso. El destino compartido no traslada datos, claves, tarifas, catálogo, garantías ni permisos entre empresas. Se mantienen la atención humana y los pendientes originales. El parser conserva las versiones anteriores para interpretar su configuración e historial, sin convertir sus destinatarios en la ruta vigente.
+
 ## Base propia para la IA de María — 06/10/2026
 
 `own-approved-rule-sources-and-current-quotation-v1` reúne nueve reglas vigentes y la tabla aprobada con fuente y hash. La versión queda cifrada y auditada en el volumen propio. El modelo recibe sólo el contexto necesario y las reglas aprobadas; una cotización aporta únicamente su importe verificado. Se conserva $99.000 por colchón, la tabla, cotizaciones previas, pendientes y atención humana. Observaciones históricas, afirmaciones de clientes y ejemplos del personal no se convierten en política.
@@ -310,7 +320,9 @@ El estado de preparación anterior quedó superado durante esta sesión. El pane
 
 Al corte 15:18:17Z: sin cola READY/SENDING/UNCERTAIN y 87 chats humanos conservados, frente a 86 antes del despliegue; una nueva toma humana se conserva, sin liberaciones. Programa e IA propios siguen sin adaptador configurado y las escrituras de negocio siguen deshabilitadas. La UI del programa principal muestra inicio de sesión, por lo que no se leyeron auditorías actuales de servicios. La siguiente cotización legítima posterior a la importación, su entrega y continuación permanecen pendientes; instalación y pruebas aisladas no acreditan ese recorrido. Las otras recepciones no fueron desplegadas en este control. Leer el checkpoint de la queja y preservar sus huecos de cobertura y pendientes.
 
- ## Diego e Hilary disponibles — autorización directa del 05/10/2026
+ ## Diego e Hilary disponibles — autorización histórica del 05/10/2026
+
+El reparto descrito en este apartado conserva su evidencia histórica; la directriz del 08/10/2026 lo sustituye para consultas nuevas y retira sin envío las salidas internas READY dirigidas a Diego bajo la versión nueva. No modifica las preguntas o entregas antiguas.
 
 La usuaria confirmó «diego y hilary lo manejan, puedes escribirle a ambos» después de precisar el reparto: Diego para ruta, horario, disponibilidad, técnico y cotizaciones operativas de FUMIGACION/S.TECNICO; Hilary como apoyo solamente de FUMIGACION. Sustituye el destino único Sandra de las secciones anteriores en estos ámbitos. Sandra conserva dirección general, devolución expresa de chats, documentos y revisión de pagos, situaciones de seguridad, excepciones y políticas sin autorización comprobada.
 

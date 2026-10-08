@@ -10,12 +10,27 @@ export const SANDRA = '573016803926';
 export const DIEGO = '573233350137';
 export const HILARY = '573043332213';
 export const OPERATOR_ROUTING = 'diego-hilary-20261005';
-export const knownInternalRecipient = phone => [SANDRA,DIEGO,HILARY].includes(phone);
-export const internalRecipients = config => [SANDRA,DIEGO,...(config.company==='fumigacion'&&config.operatorRouting===OPERATOR_ROUTING?[HILARY]:[])];
-export const internalName = phone => phone===SANDRA?'Sandra':phone===HILARY?'Hilary':'Diego';
-export function questionRecipients(config,topic) {
+export const CURRENT_OPERATOR_ROUTING = 'hilary-and-fumigacion-blue-20261008';
+export const TECHNICAL_COORDINATOR = '573126944997';
+const ownServiceLines = Object.values(BUSINESSES).flatMap(business=>business.phones);
+export const knownInternalRecipient = phone => [SANDRA,DIEGO,HILARY,...ownServiceLines].includes(phone);
+export const operatorRoutingActive = config => [OPERATOR_ROUTING,CURRENT_OPERATOR_ROUTING].includes(config.operatorRouting);
+// Diego is retained only to recognize an exact delivered historical question.
+// The engine/transport guards for the current route block new dialogue/sends to him.
+export const internalRecipients = config => [SANDRA,DIEGO,
+  ...(config.company==='fumigacion'&&operatorRoutingActive(config)?[HILARY]:[]),
+  ...(config.company==='servicio-tecnico'&&config.operatorRouting===CURRENT_OPERATOR_ROUTING?[TECHNICAL_COORDINATOR]:[])];
+export const internalName = phone => phone===SANDRA?'Sandra':phone===HILARY?'Hilary':phone===DIEGO?'Diego':phone===TECHNICAL_COORDINATOR?'Coordinación':'Personal';
+export function questionRecipients(config,topic,conditions={}) {
   const operational=['cotizacion-verificada','special-quotation','disponibilidad-y-cotizacion','disponibilidad-y-tecnico','service-followup','requested-technician-contact','existing-quotation'];
-  if(config.operatorRouting!==OPERATOR_ROUTING||!operational.includes(topic)&&!topic.startsWith('missing-intake:'))return [SANDRA];
+  if(!operatorRoutingActive(config)||!operational.includes(topic)&&!topic.startsWith('missing-intake:'))return [SANDRA];
+  if(config.operatorRouting===CURRENT_OPERATOR_ROUTING){
+    if(!BUSINESSES[config.company])return [SANDRA];
+    if(topic.startsWith('missing-intake:')&&!['service','site','size','mattresses','detail','location','preference'].includes(topic.slice('missing-intake:'.length)))return [SANDRA];
+    // Arrival is operational. Post-service/control/guarantee or unknown kinds keep direction review.
+    if(topic==='service-followup'&&conditions?.kind!=='arrival')return [SANDRA];
+    return config.company==='fumigacion'?[HILARY]:[TECHNICAL_COORDINATOR];
+  }
   return config.company==='fumigacion'?[DIEGO,HILARY]:[DIEGO];
 }
 export const digits = value => String(value ?? '').replace(/\D/g, '');
@@ -41,7 +56,7 @@ export function configFromEnv(env = process.env) {
       new Set(lines.map(l=>l.apiKey)).size !== 2) throw new Error('DEDICATED_INSTANCE_ACCESS_REQUIRED');
   if((env.BOT_ENABLED==='true'||env.BOT_CHIEF_ONLY==='true')&&!Number.isFinite(Date.parse(env.BOT_ACTIVATED_AT||'')))throw new Error('ACTIVATION_CUTOFF_REQUIRED');
   if(env.BOT_ENABLED==='true'&&env.BOT_PRIOR_HISTORY_CHECK!=='true')throw new Error('PRIOR_HISTORY_GUARD_REQUIRED');
-  if(env.BOT_OPERATIONAL_ROUTING&&!['sandra',OPERATOR_ROUTING].includes(env.BOT_OPERATIONAL_ROUTING))throw Error('OPERATOR_ROUTING_REQUIRED');
+  if(env.BOT_OPERATIONAL_ROUTING&&!['sandra',OPERATOR_ROUTING,CURRENT_OPERATOR_ROUTING].includes(env.BOT_OPERATIONAL_ROUTING))throw Error('OPERATOR_ROUTING_REQUIRED');
   return { operatorRouting:env.BOT_OPERATIONAL_ROUTING||'sandra',company, ...business, lines, database, encryptionKey: Buffer.from(env.BOT_DATA_KEY,'hex'),
     authHash: env.BOT_AUTH_TOKEN_HASH, webhookHash:env.BOT_WEBHOOK_TOKEN_HASH, provider: provider.href.replace(/\/$/,''),
     enabled: env.BOT_ENABLED === 'true', chiefOnly:env.BOT_CHIEF_ONLY==='true', activatedAt: Date.parse(env.BOT_ACTIVATED_AT || ''),

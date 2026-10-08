@@ -1,5 +1,5 @@
 import {explicitNewService} from './after-service.mjs';
-import { SANDRA, DIEGO, HILARY, publicTextSafe, normalize,internalRecipients,knownInternalRecipient } from './config.mjs';
+import { SANDRA, DIEGO, HILARY, CURRENT_OPERATOR_ROUTING, publicTextSafe, normalize,internalRecipients,knownInternalRecipient } from './config.mjs';
 import {parseChiefDocument} from './chief-document.mjs';
 import {selectPrice,verifyPriceSource} from './prices.mjs';
 import {understandOwnCustomer,composeOwnReply,replyCandidates,probeOwnAi} from './conversational-ai.mjs';
@@ -185,6 +185,15 @@ export async function flushOutbox(store,config,transport){
   let accepted=0,suppressed=0,uncertain=0;
   const out=store.db.prepare("SELECT * FROM outbox WHERE state='READY' AND (?=1 OR (internal=1 AND phone IN (?,?,?))) ORDER BY created,rowid LIMIT 20").all(Number(config.enabled),SANDRA,DIEGO,HILARY);
   for(const o of out) {
+    if(o.internal&&o.phone===DIEGO&&config.operatorRouting===CURRENT_OPERATOR_ROUTING){
+      // The current direct instruction retires Diego as an outgoing recipient.
+      // Preserve the original question, recipient and encrypted body; never
+      // redirect a historical pending question or touch prior send outcomes.
+      if(store.db.prepare("UPDATE outbox SET state='RECIPIENT_RETIRED_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id).changes){
+        store.audit('INTERNAL_RECIPIENT_RETIRED_BEFORE_SEND',o.id,{company:config.name,recipient:DIEGO,operatorRouting:CURRENT_OPERATOR_ROUTING,caseId:o.case_id,attemptedSend:false,redirected:false});suppressed++;
+      }
+      continue;
+    }
     if(config.company==='fumigacion')recordResponseTiming(store,o);
     if(!config.enabled&&!(config.chiefOnly&&o.internal&&internalRecipients(config).includes(o.phone)))continue;
     if(o.created<Date.now()-600000){store.db.prepare("UPDATE outbox SET state='EXPIRED_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id);suppressed++;continue;}
@@ -194,8 +203,13 @@ export async function flushOutbox(store,config,transport){
       store.db.prepare("UPDATE outbox SET state='COMMUNICATION_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id);
       store.hold(o.phone,'communication-review');store.audit('EXTERNAL_TEXT_REJECTED',o.id);suppressed++;continue;
     }
-    // Revalidate channel identity before each attempt. A disconnected channel leaves READY without attempting delivery.
-    try{await transport.verifyLine(o.line);}catch{store.audit('CHANNEL_CHECK_FAILED',o.id);continue;}
+    // The original currentAttention implementation verifies every own line,
+    // including this outgoing line, before reading both address forms. Reuse
+    // that mandatory check instead of checking the same owner twice. Other
+    // transports, internal replies and routes without native attention retain
+    // their separate channel check.
+    const ownerCheckedByNativeAttention=!o.internal&&config.historyCheckRequired&&transport instanceof Transport&&transport.config===config&&transport.currentAttention===Transport.prototype.currentAttention&&transport.verifyLine===Transport.prototype.verifyLine&&transport.request===Transport.prototype.request&&config.lines.some(line=>line.phone===o.line);
+    if(!ownerCheckedByNativeAttention){try{await transport.verifyLine(o.line);}catch{store.audit('CHANNEL_CHECK_FAILED',o.id);continue;}}
     if(!o.internal&&config.company==='fumigacion'&&config.responseTargetMs!==3000&&config.conversationalAi?.ready&&typeof transport.composeReply==='function'&&store.approvedReplyStillValid(o)&&store.priceReplyStillValid(o)){
       try{
         const composed=await transport.composeReply(o,text,store);
