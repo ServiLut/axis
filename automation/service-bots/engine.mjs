@@ -7,6 +7,7 @@ import {CONVERSATIONAL_AI_GUARD} from './ai-settings.mjs';
 import {ownIntent} from './maria-understanding.mjs';
 import {literalPaintingRequest} from './technical-scope.mjs';
 import {afterServiceKind,afterServiceRequest,afterServiceDecision,explicitNewService} from './after-service.mjs';
+import {programEnabled,registrationTurn} from './maria-program.mjs';
 
 const externalLinks = text => String(text??'').match(/\b(?:https?:\/\/|www\.)[^\s<>"']+/gi)||[];
 const textWithoutLinks = text => String(text??'').replace(/\b(?:https?:\/\/|www\.)[^\s<>"']+/gi,' ');
@@ -347,7 +348,7 @@ export class Engine {
         if(c.company==='fumigacion')controlRequest=turns.filter(turn=>turn.kind==='text'&&requestedControl(turn.text)).at(-1)||null;
         if(c.company==='fumigacion')followupRequest=turns.find(turn=>afterServiceRequest(turn))||null;
         caseState.intakeSources={...caseState.intakeSources};
-        for(const turn of turns.filter(literalIntakeTurn)){
+        for(const turn of turns.filter(turn=>literalIntakeTurn(turn)&&!['name','address','confirm'].includes(caseState.programIntake?.stage))){
           const fields=literalFields(caseState,turn,c.company);
           const contextualSize=c.company==='fumigacion'&&!fields.area?promptedSize(turn,caseState):undefined;
           if(contextualSize)fields.area=contextualSize;
@@ -394,11 +395,14 @@ export class Engine {
       if(continuingQuote){
         const delivered=s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND state IN ('DELIVERED','READ')").get(currentQuote.sourceId+':reply',e.phone,e.line);
         if(delivered&&s.priceReplyStillValid(delivered)){
-          decision.state.quotedPrice={...currentQuote,accepted:true,acceptanceSource:e.id};
+          decision.state.quotedPrice={...currentQuote,accepted:true,acceptanceSource:currentQuote.acceptanceSource||e.id,acceptedAt:currentQuote.acceptedAt||e.at};
           const preference=/\b(?:hoy|manana|lunes|martes|miercoles|jueves|viernes|sabado|domingo|tarde|noche|\d{1,2}[/:]\d{1,2})\b/.test(normalize(e.text))?textWithoutLinks(e.text).slice(0,300):decision.state.slots.preference;
-          if(preference){
+          if(programEnabled(c)&&priceNow.source?.type==='direct_user_approved_schedule'&&decision.state.programIntake?.stage!=='registered'){
+            if(preference)decision.state.slots.preference=preference;
+            decision={state:decision.state};
+          }else if(preference){
             decision.state.slots.preference=preference;
-            decision={state:decision.state,question:{topic:'disponibilidad-y-tecnico',conditions:{...decision.state.slots,quotedPriceCop:currentQuote.priceCop,priceSource:priceNow.source.quoteId}},reply:'Gracias. Una asesora continuará contigo para confirmar el horario del servicio.'};
+            decision={state:decision.state,question:{topic:'disponibilidad-y-tecnico',conditions:{...decision.state.slots,quotedPriceCop:currentQuote.priceCop,priceSource:priceNow.source.quoteId,...(decision.state.programServiceId?{programServiceId:decision.state.programServiceId}:{})}},reply:'Gracias. Una asesora continuará contigo para confirmar el horario del servicio.'};
           }else if(!decision.state.asked.includes('preference')){
             decision.state.asked.push('preference');decision={state:decision.state,reply:'¿Qué día y franja horaria prefieres para el servicio?'};
           }else decision={state:decision.state,reviewTopic:'missing-intake:preference',reviewConditions:{missing:'preference'},review:'La persona aceptó la cotización verificada, pero falta una preferencia de horario clara.',reviewQuestion:'¿Qué día y franja horaria prefiere esta persona?',reply:'Gracias. Una asesora continuará contigo para confirmar el horario del servicio.'};
@@ -418,6 +422,12 @@ export class Engine {
         decision.pendingQuestion=faqQuestion.text;decision.review='Falta una respuesta comprobada sobre '+subjects+' para este servicio.';
         decision.reviewQuestion='¿Qué debemos explicarle sobre '+subjects+' en este caso?';
       }
+      // Replies to a name/address/summary prompt are not new pest/property
+      // descriptions. In particular a street number before "apartamento"
+      // must not become a quantity of apartments for quotation scope.
+      const literalProgramStage=['name','address','confirm','correction'].includes(caseState.programIntake?.stage);
+      const registration=registrationTurn(s,c,caseState,e,literalProgramStage?{...decision,state:{...decision.state,slots:{...caseState.slots}}}:decision);
+      if(registration)decision=registration;
       decision.state.lastHandledSourceId=e.id;
       if(/^[¡! ]*(?:hola\b|buenos dias\b|buen dia\b|buenas tardes\b|buenas noches\b)/.test(normalize(e.text))&&!conv.state.introduced&&decision.reply){
         if(c.company==='fumigacion'&&!selectedPrice&&!quotationInquiry(e.text)&&!decision.courtesy&&!decision.review&&!decision.question&&!decision.observed){
@@ -451,7 +461,7 @@ export class Engine {
         const summary=Object.entries(slots).map(([k,v])=>(labels[k]||k)+': '+questionExcerpt(String(v))).join('; ');
         const quoteOnly=decision.question.topic==='cotizacion-verificada';
         const request=s.questionToRecipients({phone:e.phone,line:e.line,caseId:caseState.caseId,topic:decision.question.topic,conditions:slots,recipients:questionRecipients(c,decision.question.topic),source:pendingQuestion?.id||e.id,
-          text:c.name+': solicitud del contacto terminado en '+e.phone.slice(-4)+'. '+summary+(quoteOnly?'. Falta confirmar el precio y la respuesta aplicable. ¿Qué cotización y texto vigente corresponden a esta solicitud?':decision.question.topic==='disponibilidad-y-tecnico'?'. La cotización fue entregada y aceptada; no hay reserva guardada ni horario o técnico confirmados. ¿Qué disponibilidad y técnico corresponden a este caso?':'. Aún no hay técnico, horario ni precio confirmados. ¿Qué técnico, horario disponible y cotización corresponden a este caso?')});
+          text:c.name+': solicitud del contacto terminado en '+e.phone.slice(-4)+'. '+summary+(quoteOnly?'. Falta confirmar el precio y la respuesta aplicable. ¿Qué cotización y texto vigente corresponden a esta solicitud?':decision.question.topic==='disponibilidad-y-tecnico'?(decision.state.programServiceId?'. La solicitud está guardada en el programa a nombre de María; no hay horario o técnico confirmados. ¿Qué disponibilidad y técnico corresponden a este caso?':'. La cotización fue entregada y aceptada; no hay reserva guardada ni horario o técnico confirmados. ¿Qué disponibilidad y técnico corresponden a este caso?'):'. Aún no hay técnico, horario ni precio confirmados. ¿Qué técnico, horario disponible y cotización corresponden a este caso?')});
         if(!request.created)decision.reply=null;
         else if(c.company==='fumigacion'){
           decision.reply=decision.question.topic==='disponibilidad-y-tecnico'?'Gracias. Una asesora continuará contigo para confirmar el horario del servicio.':'Gracias. Una asesora continuará contigo para completar la cotización.';

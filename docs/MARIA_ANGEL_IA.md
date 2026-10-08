@@ -1,5 +1,9 @@
 # IA propia de María Ángel
 
+## Recepción rápida y registro propio — 08/10/2026
+
+La configuración propia autorizada de Luna y su límite se conservan. La recepción de María preparada en este control prioriza una única comprensión por turno y la respuesta revisada inmediata; no requiere otra llamada de estilo. Toma humana, fuentes reemplazadas y datos de nombre/dirección/resumen de registro no pasan al modelo. Después de un servicio registrado puede volver a usar comprensión ante reclamos nuevos, con contexto minimizado y sin el historial de esos datos. La conexión del programa y el guardado real se describen en [MARIA_REGISTRO_SERVICIOS.md](MARIA_REGISTRO_SERVICIOS.md) y se verifican de forma independiente de la IA.
+
 ## Alcance de esta preparación — 06/10/2026
 
 La usuaria autorizó proceder con la conexión. Se implementó un adaptador exclusivo de FUMIGACION para OpenAI Responses. La cuenta, clave propia, modelo habilitado y límite de uso todavía requieren configuración: preparar o instalar este código no acredita una conexión real ni una conversación nueva atendida por IA.

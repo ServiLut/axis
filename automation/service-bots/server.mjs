@@ -16,6 +16,33 @@ import {evaluateOwnAi,ownAiUsage} from './conversational-ai.mjs';
 import {MARIA_UNDERSTANDING_GUARD} from './maria-understanding.mjs';
 import {restoreOwnAiSetup,installOwnAiSetup} from './ai-setup.mjs';
 import {persistMariaKnowledge,mariaKnowledgeStatus,mariaKnowledgeDocument} from './maria-knowledge.mjs';
+import {restoreProgramSetup,installProgramSetup,registrationStatus} from './maria-program.mjs';
+import {initializeInactivityFollowup,inactivityStatus,responseTimingStatus,recordDeliveryTiming} from './inactivity-followup.mjs';
+
+export function createDrainScheduler(config,store,runner,{blocked=()=>false,setImmediateFn=setImmediate,setIntervalFn=setInterval,clearIntervalFn=clearInterval}={}){
+  const fast=config.company==='fumigacion'&&config.responseTargetMs===3000,key='verified-ingestion-drain-wake-v1';
+  let running=false,scheduled=false,closed=false;
+  const durableWake=()=>store.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key,store.seal({at:Date.now(),source:'authenticated-own-ingestion'}));
+  const pending=()=>Boolean(store.db.prepare("SELECT 1 FROM events WHERE state='PENDING' AND (?=1 OR phone IN (?,?,?)) LIMIT 1").get(Number(config.enabled),SANDRA,'573233350137','573043332213'));
+  const execute=async()=>{
+    scheduled=false;if(closed||running||blocked())return;
+    running=true;store.db.prepare('DELETE FROM meta WHERE key=?').run(key);let result,failed=false;
+    try{result=await runner();}catch{failed=true;durableWake();}
+    finally{
+      running=false;
+      // A source received during model/native awaits leaves a durable wake.
+      // Pending messages are handled one at a time so each response can leave
+      // the outbox before another customer's model request begins.
+      if(!closed&&!failed&&fast&&!blocked()&&(store.db.prepare('SELECT 1 FROM meta WHERE key=?').get(key)||(result?.processed>0&&pending())))schedule();
+    }
+  };
+  const schedule=()=>{if(!closed&&!scheduled&&!running){scheduled=true;setImmediateFn(()=>execute());}};
+  const wake=()=>{if(closed)return;durableWake();if(fast)schedule();};
+  const intervalMs=fast?1000:10000;
+  const timer=setIntervalFn(()=>{if(!closed&&!running&&!blocked()){if(fast)schedule();else execute();}},intervalMs);timer?.unref?.();
+  if(fast&&store.db.prepare('SELECT 1 FROM meta WHERE key=?').get(key))schedule();
+  return {wake,intervalMs,close(){closed=true;clearIntervalFn(timer);},get running(){return running;}};
+}
 
 async function verifyApprovedAnswerSource(document,config,transport){
   validateApprovedAnswers(document,config.company);
@@ -37,10 +64,21 @@ async function verifyApprovedAnswerSource(document,config,transport){
 
 export function createBotServer(config,store,transport,engine) {
   restoreOwnAiSetup(config,store);
+  restoreProgramSetup(config,store);
   persistMariaKnowledge(config,store);
+  initializeInactivityFollowup(config,store);
   let draining=false,settingUpAi=false;
   const run=async()=>{if(draining||settingUpAi)return {busy:true};draining=true;try{return await drain(store,config,transport,engine);}finally{draining=false;}};
+  const scheduler=createDrainScheduler(config,store,run,{blocked:()=>settingUpAi||draining});
   const server=createServer(async(req,res)=>{
+    const serverReceivedAt=Date.now();
+    const ingress=(event)=>{
+      const result=store.enqueue(event);
+      // Enqueue follows owner verification. Keep the actual HTTP receipt time
+      // separately so that channel-check latency is included in measurements.
+      if(config.company==='fumigacion')store.db.prepare('UPDATE events SET received_at=CASE WHEN received_at IS NULL OR received_at>? THEN ? ELSE received_at END WHERE id=?').run(serverReceivedAt,serverReceivedAt,event.id);
+      return result;
+    };
     const reply=(status,body)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store, private'});res.end(JSON.stringify(body));};
     const ingestion=['/event','/delivery','/webhook'].includes(req.url);
     if(!authorized(req.headers.authorization,ingestion?config.webhookHash:config.authHash))return reply(401,{error:'UNAUTHORIZED'});
@@ -49,6 +87,15 @@ export function createBotServer(config,store,transport,engine) {
       const bodyLimit=req.url==='/notify-chief-document'?720000:20000;
       let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>bodyLimit)return reply(413,{error:'PAYLOAD_TOO_LARGE'});}
       const body=JSON.parse(raw);
+      if(req.url==='/program-setup'){
+        if(config.company!=='fumigacion')return reply(403,{error:'MARIA_PROGRAM_OWN_SCOPE_REQUIRED'});
+        if(draining||settingUpAi)return reply(409,{error:'PROGRAM_SETUP_BUSY'});
+        settingUpAi=true;
+        try{return reply(200,await installProgramSetup(config,store,body,transport.fetcher));}
+        catch{return reply(409,{error:'PROGRAM_SETUP_NOT_APPLIED'});}
+        finally{settingUpAi=false;}
+      }
+      if(req.url==='/latency')return reply(200,{company:config.name,responseTiming:responseTimingStatus(config,store)});
       if(req.url==='/ai-setup'){
         if(draining||settingUpAi)return reply(409,{error:'AI_SETUP_BUSY'});
         settingUpAi=true;
@@ -63,10 +110,10 @@ export function createBotServer(config,store,transport,engine) {
         settingUpAi=true;try{return reply(200,await evaluateOwnAi(config,store,transport.fetcher,body.caseIds));}finally{settingUpAi=false;}
       }
       if(req.url==='/ai-knowledge')return config.company==='fumigacion'?reply(200,{status:mariaKnowledgeStatus(config,store),document:mariaKnowledgeDocument()}):reply(403,{error:'MARIA_KNOWLEDGE_OWN_SCOPE'});
-      if(req.url==='/status')return reply(200,{company:config.name,bot:config.bot,enabled:config.enabled,mode:'reception-with-human-review',fullyAutonomous:false,semanticUnderstandingGuard:config.company==='fumigacion'?MARIA_UNDERSTANDING_GUARD:null,aiUsage:ownAiUsage(config,store),approvedAiKnowledge:mariaKnowledgeStatus(config,store),
+      if(req.url==='/status')return reply(200,{company:config.name,bot:config.bot,enabled:config.enabled,mode:'reception-with-human-review',fullyAutonomous:false,programRegistration:registrationStatus(config,store),inactivityFollowup:inactivityStatus(config,store),responseTiming:responseTimingStatus(config,store),drainIntervalMs:scheduler.intervalMs,semanticUnderstandingGuard:config.company==='fumigacion'?MARIA_UNDERSTANDING_GUARD:null,aiUsage:ownAiUsage(config,store),approvedAiKnowledge:mariaKnowledgeStatus(config,store),
         events:store.db.prepare('SELECT state,COUNT(*) n FROM events GROUP BY state').all(),outbox:store.db.prepare('SELECT state,COUNT(*) n FROM outbox GROUP BY state').all(),
         communicationGuard:'private-routing-and-media-work-v2',requestedContactGuard:'explicit-technician-contact-before-intake-v1',confirmationRecipient:questionRecipients(config,'disponibilidad-y-tecnico')[0],operationalConfirmationRecipients:questionRecipients(config,'disponibilidad-y-tecnico'),chiefRecipient:SANDRA,operatorRouting:config.operatorRouting||'sandra',operatorRoutingGuard:'scoped-new-question-fanout-and-exact-line-answer-v1',operatorRoutingActive:config.operatorRouting===OPERATOR_ROUTING,chiefDocumentGuard:'fixed-chief-encrypted-hash-and-idempotency-v1',internalConversationGuard:'verified-internal-per-line-v2',chiefStatusGuard:'exact-directed-status-and-active-mode-v2',quotationQuestionGuard:'scoped-price-followup-and-existing-question-v1',internalConversationEnabled:Boolean(config.chiefOnly),customerResponsesEnabled:config.enabled,
-        customerIntakeEnabled:config.enabled,businessWritesEnabled:false,capabilityDisclosure:'runtime-mode-and-implemented-intake-v1',customerCourtesyGuard:'gratitude-only-without-intake-or-ownership-v1',customerAdviserGuard:config.company==='fumigacion'?ADVISER_TONE_GUARD:null,
+        customerIntakeEnabled:config.enabled,businessWritesEnabled:registrationStatus(config,store).enabled,capabilityDisclosure:'runtime-mode-and-implemented-intake-v1',customerCourtesyGuard:'gratitude-only-without-intake-or-ownership-v1',customerAdviserGuard:config.company==='fumigacion'?ADVISER_TONE_GUARD:null,
         commonAnswerGuard:config.company==='fumigacion'?'approved-source-context-and-complete-topics-v1':null,pendingFollowupGuard:config.company==='fumigacion'?'punctuation-only-own-pending-case-without-repeat-v1':null,approvedCustomerAnswerDocuments:store.approvedCustomerAnswers().length,customerActivity:customerActivity(store,config),
         controlVisitGuard:config.company==='fumigacion'?'requested-control-antecedent-before-intake-v1':null,intakePestGuard:config.company==='fumigacion'?'literal-additive-pests-and-own-source-union-v1':null,propertyScopeGuard:config.company==='fumigacion'?'single-apartment-address-and-explicit-special-scope-v1':null,
         caseOwnershipGuard:'first-reply-source-preserved-v2',conversationContext:'stored-scoped-turns-with-coverage-v2',internalQuestionGuard:'missing-field-and-case-dedup-v1',supervisorContentReview:'explicit-source-ids-readonly-v1',liveAttentionGuard:'staff-ingestion-freeze-and-own-native-before-send-v2',intakeGuard:config.company==='fumigacion'?'service-specific-intake-and-reviewed-price-before-schedule-v2':'technical-intake-with-human-review-v1',
@@ -78,7 +125,7 @@ export function createBotServer(config,store,transport,engine) {
         technicalScopeGuard:config.company==='servicio-tecnico'?'literal-painting-scope-before-intake-and-pending-question-v1':null,
         afterServiceKindGuard:config.company==='fumigacion'?'literal-followup-kind-and-first-source-before-new-intake-v1':null,
         unanswered:store.db.prepare("SELECT COUNT(*) n FROM questions WHERE state IN ('PENDING','LEGACY_PENDING','ANSWER_REVIEW')").get().n,
-        knowledge:store.db.prepare('SELECT kind,COUNT(*) n FROM knowledge GROUP BY kind').all(),programConnected:Boolean(config.programContextUrl&&config.programToken),aiConfigured:config.conversationalAi?.provider?Boolean(config.conversationalAi.ready):Boolean(config.aiUrl&&config.aiToken),conversationalAi:aiStatus(config),priorHistoryProtection:Boolean(config.historyCheckRequired)});
+        knowledge:store.db.prepare('SELECT kind,COUNT(*) n FROM knowledge GROUP BY kind').all(),programConnected:Boolean(config.programContextUrl&&config.programToken)||registrationStatus(config,store).enabled,programContextConnected:Boolean(config.programContextUrl&&config.programToken),aiConfigured:config.conversationalAi?.provider?Boolean(config.conversationalAi.ready):Boolean(config.aiUrl&&config.aiToken),conversationalAi:aiStatus(config),priorHistoryProtection:Boolean(config.historyCheckRequired)});
       if(req.url==='/channel-health'){
         const lines=[];for(const line of config.lines)lines.push(await transport.verifyLine(line.phone));return reply(200,{company:config.name,lines});
       }
@@ -122,7 +169,7 @@ export function createBotServer(config,store,transport,engine) {
       }
       if(req.url==='/event'){
         const event=validateEvent(body,config);if(!event)return reply(202,{accepted:false,reason:'UNSUPPORTED_OR_STALE_OR_OUTSIDE_SCOPE'});
-        await transport.verifyLine(event.line);return reply(202,{accepted:true,...store.enqueue(event)});
+        await transport.verifyLine(event.line);const queued=ingress(event);reply(202,{accepted:true,...queued});if(!queued.duplicate)scheduler.wake();return;
       }
       if(req.url==='/recover-chief-event'){
         if(!config.chiefOnly)return reply(403,{error:'INTERNAL_MODE_REQUIRED'});
@@ -146,15 +193,16 @@ export function createBotServer(config,store,transport,engine) {
         const parsed=decodeWebhook(body,config);let accepted=0,duplicates=0,deliveryUpdates=0;
         const own=config.lines.find(l=>l.instance===body.instance);if(!own)return reply(400,{error:'INSTANCE_OUTSIDE_SCOPE'});
         await transport.verifyLine(own.phone);
-        for(const value of parsed.events){const e=validateEvent(value,config);if(e){const r=store.enqueue(e);accepted++;if(r.duplicate)duplicates++;}}
-        for(const d of parsed.deliveries)deliveryUpdates+=store.delivery(d.mid,own.phone,d.state);
-        return reply(202,{accepted,duplicates,deliveryUpdates});
+        for(const value of parsed.events){const e=validateEvent(value,config);if(e){const r=ingress(e);accepted++;if(r.duplicate)duplicates++;}}
+        for(const d of parsed.deliveries){deliveryUpdates+=store.delivery(d.mid,own.phone,d.state);if(config.company==='fumigacion')recordDeliveryTiming(store,d.mid,own.phone,d.state);}
+        reply(202,{accepted,duplicates,deliveryUpdates});if(accepted>duplicates)scheduler.wake();return;
       }
       if(req.url==='/delivery'){
         const line=config.lines.find(l=>l.instance===body.instance&&l.phone===body.owner);
         if(!line||!['DELIVERED','READ'].includes(body.state)||typeof body.mid!=='string')return reply(400,{error:'DELIVERY_OUTSIDE_SCOPE'});
         await transport.verifyLine(line.phone);
         const n=store.delivery(body.mid,line.phone,body.state);
+        if(config.company==='fumigacion')recordDeliveryTiming(store,body.mid,line.phone,body.state);
         return reply(200,{updated:n});
       }
       if(req.url==='/knowledge'){
@@ -187,7 +235,7 @@ export function createBotServer(config,store,transport,engine) {
       return reply(404,{error:'NOT_FOUND'});
     }catch{return reply(503,{error:'REVIEW_REQUIRED'});}
   });
-  const timer=setInterval(()=>run().catch(()=>{}),10000);timer.unref();server.on('close',()=>clearInterval(timer));return server;
+  server.on('close',()=>scheduler.close());return server;
 }
 
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href) {

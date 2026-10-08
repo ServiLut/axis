@@ -3,6 +3,8 @@ import { SANDRA, DIEGO, HILARY, publicTextSafe, normalize,internalRecipients,kno
 import {parseChiefDocument} from './chief-document.mjs';
 import {selectPrice,verifyPriceSource} from './prices.mjs';
 import {understandOwnCustomer,composeOwnReply,replyCandidates,probeOwnAi} from './conversational-ai.mjs';
+import {drainProgramRegistrations} from './maria-program.mjs';
+import {initializeInactivityFollowup,queueInactivityFollowups,inactivityDeliveryValid,recordResponseTiming} from './inactivity-followup.mjs';
 
 export class Transport {
   constructor(config, fetcher=fetch){this.config=config;this.fetcher=fetcher;}
@@ -98,6 +100,32 @@ export class Transport {
     if(result.system!==c.name||String(result.companyId)!==c.expectedProgramCompanyId||result.phone!==phone)throw new Error('PROGRAM_SCOPE_MISMATCH');
     return {...result,verified:true};
   }
+  async currentCustomerActivity(phone,since){
+    const c=this.config;
+    if(c.company!=='fumigacion'||!/^57\d{10}$/.test(phone)||!Number.isFinite(since)||since<c.activatedAt)throw Error('INACTIVITY_SOURCE_SCOPE_REQUIRED');
+    const through=Date.now(),sources=new Map(),checks=[];
+    for(const line of c.lines){
+      await this.verifyLine(line.phone);
+      for(const addressField of ['remoteJid','remoteJidAlt']){
+        let total=null,read=0;
+        for(let page=1;page<=2;page++){
+          const data=await this.request(line,'/chat/findMessages/'+encodeURIComponent(line.instance),{where:{key:{[addressField]:phone+'@s.whatsapp.net',fromMe:false},messageTimestamp:{gte:new Date(since).toISOString(),lte:new Date(through).toISOString()}},offset:50,page});
+          const result=data.messages;
+          if(!result||!Number.isSafeInteger(result.total)||result.total<0||result.total>100||!Array.isArray(result.records)||result.records.length>50||(total!==null&&total!==result.total))throw Error('INACTIVITY_NATIVE_COVERAGE_UNVERIFIED');
+          total=result.total;read+=result.records.length;
+          for(const record of result.records){
+            const key=record.key,at=Number(record.messageTimestamp)*1000;
+            if(key?.[addressField]!==phone+'@s.whatsapp.net'||key.fromMe!==false||!key.id||!/^57\d{10}@s\.whatsapp\.net$|^\d+@lid$/.test(key.remoteJid||'')||!Number.isFinite(at)||at<since||at>through)throw Error('INACTIVITY_NATIVE_SOURCE_UNVERIFIED');
+            sources.set(line.phone+':'+key.id,{id:key.id,line:line.phone,at});
+          }
+          if(read===total)break;
+          if(!result.records.length||read>total||page===2)throw Error('INACTIVITY_NATIVE_COVERAGE_UNVERIFIED');
+        }
+        checks.push({line:line.phone,addressField,total,read});
+      }
+    }
+    return {complete:true,through,sources:[...sources.values()],checks};
+  }
   async understand(event,context,knowledge,store) {
     const c=this.config;
     if(c.conversationalAi?.provider)return understandOwnCustomer(c,store,this.fetcher,event,context);
@@ -113,9 +141,14 @@ export class Transport {
 
 export async function drain(store,config,transport,engine) {
   if(!config.enabled&&!config.chiefOnly)return {enabled:false};
-  const pending=store.db.prepare("SELECT body FROM events WHERE state='PENDING' AND (?=1 OR phone IN (?,?,?)) ORDER BY from_me DESC,at,rowid LIMIT 30").all(Number(config.enabled),SANDRA,DIEGO,HILARY);
+  initializeInactivityFollowup(config,store);
+  const fastMaria=config.company==='fumigacion'&&config.responseTargetMs===3000;
+  const before=fastMaria?await flushOutbox(store,config,transport):{accepted:0,suppressed:0,uncertain:0};
+  const pending=store.db.prepare("SELECT body,revision FROM events WHERE state='PENDING' AND (?=1 OR phone IN (?,?,?)) ORDER BY from_me DESC,at,rowid LIMIT ?").all(Number(config.enabled),SANDRA,DIEGO,HILARY,fastMaria?1:30);
   for(const row of pending) {
     const e=store.open(row.body); let analysis={};
+    const conversation=store.conversation(e.phone),superseded=!e.fromMe&&!knownInternalRecipient(e.phone)&&(e.at<conversation?.at||row.revision<conversation?.revision);
+    if(superseded){await engine.process(e);continue;}
     if(config.historyCheckRequired&&!e.fromMe&&!knownInternalRecipient(e.phone)){
       const checked=store.priorHistory(e.phone);
       if(checked?.cutoff!==config.activatedAt||(transport instanceof Transport&&checked.guardVersion!=='canonical-and-alternate-phone-v2')){
@@ -123,20 +156,36 @@ export async function drain(store,config,transport,engine) {
         catch{store.audit('PRIOR_HISTORY_UNVERIFIED',e.id);store.db.prepare("UPDATE events SET state='HISTORY_REVIEW' WHERE id=? AND state='PENDING'").run(e.id);continue;}
       }
     }
-    if(!e.fromMe&&!knownInternalRecipient(e.phone)&&!store.conversation(e.phone)?.hold){
+    const newCase=config.company==='fumigacion'?explicitNewService(e.text):/\b(?:otra solicitud|nuevo servicio|otro servicio|otro equipo)\b/.test(normalize(e.text));
+    const intakeStage=store.conversation(e.phone)?.state.programIntake?.stage;
+    if(!e.fromMe&&!knownInternalRecipient(e.phone)&&!store.conversation(e.phone)?.hold&&(!store.conversation(e.phone)?.state.awaitingHumanReview||newCase)&&!['name','address','confirm','correction','pending'].includes(intakeStage)){
       // Customer history remains in its company. Observations are explicitly untrusted reference, never policy.
       const knowledge=store.db.prepare('SELECT body FROM knowledge ORDER BY imported DESC LIMIT 10').all().map(k=>store.open(k.body));
-      const newCase=config.company==='fumigacion'?explicitNewService(e.text):/\b(?:otra solicitud|nuevo servicio|otro servicio|otro equipo)\b/.test(normalize(e.text));
       const caseAnswers=store.db.prepare("SELECT body,answer,source_id,answer_at,valid_until FROM questions WHERE phone=? AND case_id=? AND state='ANSWERED' AND valid_until>?").all(e.phone,newCase?'':store.conversation(e.phone)?.state.caseId||'',Date.now()).map(q=>({question:store.open(q.body),answer:store.open(q.answer),source:q.source_id,at:q.answer_at,validUntil:q.valid_until,scope:'same-company-and-case-only; recheck before scheduling'}));
       const conversationHistory=store.conversationContext(e.phone,e.at,20,e.id);
       store.audit('CONVERSATION_CONTEXT_CHECKED',e.id,{caseId:conversationHistory.caseId,turns:conversationHistory.turns.length,storedCoverageComplete:conversationHistory.completeStoredHistory,fullWhatsAppHistoryRead:false,originalMediaRead:false});
-      try{analysis=await transport.understand(e,{...(newCase?{slots:{},asked:[]}:store.conversation(e.phone)?.state),requestedNewCase:newCase,caseAnswers,conversationHistory},knowledge,store);}catch{store.audit('AI_UNAVAILABLE',e.id);}
+      // A completed registration can receive a new post-service concern after
+      // an express human return. It still needs semantic understanding, but
+      // names, addresses and registration payloads are not model context.
+      const semanticState=intakeStage==='registered'?{slots:conversation?.state.slots,asked:conversation?.state.asked,requestedAfterServiceReview:conversation?.state.requestedAfterServiceReview,lastText:null}:conversation?.state;
+      try{analysis=await transport.understand(e,{...(newCase?{slots:{},asked:[]}:semanticState),requestedNewCase:newCase,caseAnswers,...(intakeStage==='registered'?{}:{conversationHistory})},knowledge,store);}catch{store.audit('AI_UNAVAILABLE',e.id);}
     }
     await engine.process(e,analysis);
   }
+  const after=await flushOutbox(store,config,transport);
+  // Active reception takes precedence over inactivity scans. A fresh reply is
+  // delivered before any optional native-history read for another open case.
+  const followup=pending.length?{enabled:Boolean(config.inactivityFollowupEnabled),queued:0,deferredForActiveReception:true}:await queueInactivityFollowups(store,config,transport);
+  const followed=followup.queued?await flushOutbox(store,config,transport):{accepted:0,suppressed:0,uncertain:0};
+  return {processed:pending.length,accepted:before.accepted+after.accepted+followed.accepted,suppressed:before.suppressed+after.suppressed+followed.suppressed,uncertain:before.uncertain+after.uncertain+followed.uncertain,followup};
+}
+
+export async function flushOutbox(store,config,transport){
+  await drainProgramRegistrations(store,config,transport);
   let accepted=0,suppressed=0,uncertain=0;
   const out=store.db.prepare("SELECT * FROM outbox WHERE state='READY' AND (?=1 OR (internal=1 AND phone IN (?,?,?))) ORDER BY created,rowid LIMIT 20").all(Number(config.enabled),SANDRA,DIEGO,HILARY);
   for(const o of out) {
+    if(config.company==='fumigacion')recordResponseTiming(store,o);
     if(!config.enabled&&!(config.chiefOnly&&o.internal&&internalRecipients(config).includes(o.phone)))continue;
     if(o.created<Date.now()-600000){store.db.prepare("UPDATE outbox SET state='EXPIRED_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id);suppressed++;continue;}
     // Reject before any delivery attempt; this is a review, never an uncertain send.
@@ -147,7 +196,7 @@ export async function drain(store,config,transport,engine) {
     }
     // Revalidate channel identity before each attempt. A disconnected channel leaves READY without attempting delivery.
     try{await transport.verifyLine(o.line);}catch{store.audit('CHANNEL_CHECK_FAILED',o.id);continue;}
-    if(!o.internal&&config.company==='fumigacion'&&config.conversationalAi?.ready&&typeof transport.composeReply==='function'&&store.approvedReplyStillValid(o)&&store.priceReplyStillValid(o)){
+    if(!o.internal&&config.company==='fumigacion'&&config.responseTargetMs!==3000&&config.conversationalAi?.ready&&typeof transport.composeReply==='function'&&store.approvedReplyStillValid(o)&&store.priceReplyStillValid(o)){
       try{
         const composed=await transport.composeReply(o,text,store);
         if(!replyCandidates(text).includes(composed))throw Error('AI_REPLY_NOT_APPROVED');
@@ -182,6 +231,10 @@ export async function drain(store,config,transport,engine) {
     }
     const staffPending=store.db.prepare("SELECT id FROM events WHERE phone=? AND from_me=1 AND state='PENDING'").get(o.phone);
     if(staffPending)continue;
+    if(!o.internal&&o.id.startsWith('inactivity:')){
+      try{if(!await inactivityDeliveryValid(store,config,transport,o))throw Error('INACTIVITY_STATE_CHANGED');}
+      catch{store.db.prepare("UPDATE outbox SET state='INACTIVITY_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id);store.audit('INACTIVITY_BEFORE_SEND_REVIEW',o.id,{attemptedSend:false});suppressed++;continue;}
+    }
     const conv=store.conversation(o.phone);
     if(!o.internal&&(conv?.hold||conv?.revision!==o.revision)){
       store.db.prepare("UPDATE outbox SET state='SUPPRESSED_HUMAN',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id);suppressed++;continue;
@@ -210,8 +263,9 @@ export async function drain(store,config,transport,engine) {
         const sentAt=Date.now();
         store.db.prepare("UPDATE outbox SET mid=?,state='ACCEPTED',updated=? WHERE id=?").run(mid,sentAt,o.id);
         store.recordFirstBotReply(o,mid,config.bot,sentAt);
+        if(config.company==='fumigacion')recordResponseTiming(store,o,sentAt);
       });accepted++;
     } catch {store.db.prepare("UPDATE outbox SET state='UNCERTAIN',updated=? WHERE id=?").run(Date.now(),o.id);uncertain++;}
   }
-  return {processed:pending.length,accepted,suppressed,uncertain};
+  return {accepted,suppressed,uncertain};
 }

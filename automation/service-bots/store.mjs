@@ -139,6 +139,8 @@ export class Store {
     return this.tx(()=>{
       const row=this.db.prepare('SELECT * FROM outbox WHERE mid=? AND line=?').get(mid,line);
       if(!row||!['DELIVERED','READ'].includes(state)||!['SENDING','ACCEPTED','DELIVERED','READ'].includes(row.state))return 0;
+      const deliveryKey='first-delivery:'+row.id;
+      this.db.prepare('INSERT OR IGNORE INTO meta(key,value) VALUES(?,?)').run(deliveryKey,this.seal({verifiedAt:Date.now(),mid,line,state,timestampPrecision:'second'}));
       if(row.state==='READ'||row.state===state)return 0;
       this.db.prepare('UPDATE outbox SET state=?,updated=? WHERE id=?').run(state,Date.now(),row.id);
       const attribution=row.case_id&&this.caseAuthorship(row.case_id);
