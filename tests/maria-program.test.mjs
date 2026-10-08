@@ -85,3 +85,9 @@ test('receipt recovery after human takeover preserves the saved record without s
 test('program token expiry while native checks run prevents registration',async()=>{
  const f=fixture();try{await f.ready();let calls=0;const t=transport(f,async()=>{calls++;throw Error('must not write');});const get=t.currentCustomerActivity;t.currentCustomerActivity=async(phone,at)=>{const r=await get(phone,at);f.config.mariaProgram.expiresAt=Date.now()-1;return r;};await drainProgramRegistrations(f.store,f.config,t);assert.equal(calls,0);}finally{f.store.close();}
 });
+test('an old quote without new delivery evidence keeps its existing continuation instead of falling silent',async()=>{
+ const f=fixture();try{const first=await f.turn('Tengo cucarachas en mi apartamento de 42 mts2 en Itagüí. Cuánto cuesta?');f.delivered(first);f.store.db.prepare('DELETE FROM meta WHERE key=?').run('first-delivery:'+first.id+':reply');const acceptance=await f.turn('Sí');const row=f.store.db.prepare('SELECT body FROM outbox WHERE id=?').get(acceptance.id+':reply');assert.ok(row);assert.match(f.store.open(row.body),/día y franja/);assert.equal(f.store.conversation(acceptance.phone).state.programIntake,undefined);}finally{f.store.close();}
+});
+test('a repeated late delivery acknowledgment cannot renew a quotation older than 24 hours',async()=>{
+ const f=fixture();try{const first=await f.turn('Tengo cucarachas en mi apartamento de 42 mts2 en Itagüí. Cuánto cuesta?');f.delivered(first);f.store.db.prepare('UPDATE outbox SET created=? WHERE id=?').run(Date.now()-86400001,first.id+':reply');const acceptance=await f.turn('Sí');assert.equal(f.store.conversation(acceptance.phone).state.programIntake,undefined);assert.equal(f.store.db.prepare("SELECT COUNT(*) n FROM meta WHERE key LIKE 'maria-registration:%'").get().n,0);}finally{f.store.close();}
+});

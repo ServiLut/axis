@@ -7,7 +7,7 @@ import {CONVERSATIONAL_AI_GUARD} from './ai-settings.mjs';
 import {ownIntent} from './maria-understanding.mjs';
 import {literalPaintingRequest} from './technical-scope.mjs';
 import {afterServiceKind,afterServiceRequest,afterServiceDecision,explicitNewService} from './after-service.mjs';
-import {programEnabled,registrationTurn} from './maria-program.mjs';
+import {programEnabled,registrationQuoteReady,registrationTurn} from './maria-program.mjs';
 
 const externalLinks = text => String(text??'').match(/\b(?:https?:\/\/|www\.)[^\s<>"']+/gi)||[];
 const textWithoutLinks = text => String(text??'').replace(/\b(?:https?:\/\/|www\.)[^\s<>"']+/gi,' ');
@@ -397,7 +397,7 @@ export class Engine {
         if(delivered&&s.priceReplyStillValid(delivered)){
           decision.state.quotedPrice={...currentQuote,accepted:true,acceptanceSource:currentQuote.acceptanceSource||e.id,acceptedAt:currentQuote.acceptedAt||e.at};
           const preference=/\b(?:hoy|manana|lunes|martes|miercoles|jueves|viernes|sabado|domingo|tarde|noche|\d{1,2}[/:]\d{1,2})\b/.test(normalize(e.text))?textWithoutLinks(e.text).slice(0,300):decision.state.slots.preference;
-          if(programEnabled(c)&&priceNow.source?.type==='direct_user_approved_schedule'&&decision.state.programIntake?.stage!=='registered'){
+          if(programEnabled(c)&&priceNow.source?.type==='direct_user_approved_schedule'&&decision.state.programIntake?.stage!=='registered'&&registrationQuoteReady(s,decision.state,e.phone,e.line)){
             if(preference)decision.state.slots.preference=preference;
             decision={state:decision.state};
           }else if(preference){

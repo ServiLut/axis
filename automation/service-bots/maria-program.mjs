@@ -84,10 +84,11 @@ function eligibleQuote(s,state,phone,line){
  if(!q?.accepted||!entry||entry.id!==q.entryId||entry.priceCop!==q.priceCop||entry.source.scheduleHash!==BUSINESS_PRICE_HASH)return null;
  const row=s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND state IN ('DELIVERED','READ') AND mid IS NOT NULL").get(q.sourceId+':reply',phone,line);
  const firstDelivery=row&&get(s,'first-delivery:'+row.id);
- if(!row||!firstDelivery||firstDelivery.mid!==row.mid||!s.priceReplyReference(row)||!s.priceReplyStillValid(row)||firstDelivery.verifiedAt<Date.now()-86400000)return null;
+ if(!row||row.created<Date.now()-86400000||!firstDelivery||firstDelivery.mid!==row.mid||!s.priceReplyReference(row)||!s.priceReplyStillValid(row)||firstDelivery.verifiedAt<Date.now()-86400000)return null;
  row.firstDeliveryAt=Math.floor(firstDelivery.verifiedAt/1000)*1000;
  return {q,entry,row};
 }
+export function registrationQuoteReady(s,state,phone,line){return Boolean(eligibleQuote(s,state,phone,line));}
 function blockedText(text){return /[?¿]|^no\b|\b(?:refuerzo|garantia|verificacion|visita anterior|ya fumig|certificado|documento|cancel|no quiero|no acepto|pague|pago|pagar|transfer|comprobante|consign|descuento|gratis|otra solicitud|nuevo servicio|otro servicio|otro inmueble)\w*/.test(normalize(text));}
 // Called only inside the engine's existing transaction; no network or business write.
 export function registrationTurn(s,c,previous,e,decision){
