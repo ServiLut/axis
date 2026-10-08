@@ -1,4 +1,36 @@
 import {internalRecipients} from './config.mjs';
+import {createHash} from 'node:crypto';
+export const PRIVATE_IDENTITY_GUARD='native-private-phone-mapping-observed-without-guessing-v1';
+const identityPrefix='private-native-identity:';
+const identityKey=(line,id)=>identityPrefix+createHash('sha256').update(line+':'+id).digest('hex');
+// An unmapped LID cannot identify a customer or a chief. Preserve the reception
+// gap as encrypted metadata instead of silently counting the request as handled.
+export function observePrivateIdentity(store,body,config,parsed,now=Date.now()){
+  if(config.company!=='fumigacion'||body.event!=='messages.upsert')return 0;
+  const line=config.lines.find(l=>l.instance===body.instance);if(!line)return 0;
+  let observed=0;
+  store.tx(()=>{
+    for(const value of parsed.events){
+      const key=identityKey(line.phone,value.event.id),prior=store.db.prepare('SELECT value FROM meta WHERE key=?').get(key);
+      if(prior){const saved=store.open(prior.value);if(saved.state==='UNRESOLVED')store.db.prepare('UPDATE meta SET value=? WHERE key=?').run(store.seal({...saved,state:'RESOLVED_NATIVE',resolvedAt:now}),key);}
+    }
+    for(const d of Array.isArray(body.data)?body.data:[body.data]){
+      const k=d?.key;if(!/^\d{5,30}@lid$/.test(k?.remoteJid||'')||typeof k.fromMe!=='boolean'||!/^[A-Za-z0-9_-]{8,100}$/.test(k.id||'')||/^57\d{10}@s\.whatsapp\.net$/.test(k.remoteJidAlt||''))continue;
+      const at=Number(typeof d.messageTimestamp==='object'?d.messageTimestamp.low:d.messageTimestamp)*1000;
+      if(!Number.isFinite(at)||at<config.activatedAt||at>now+60000)continue;
+      const m=d.message?.ephemeralMessage?.message??d.message??{},text=m.conversation??m.extendedTextMessage?.text??m.imageMessage?.caption??m.videoMessage?.caption??'';
+      if(!(typeof text==='string'&&text.trim())&&!['audioMessage','imageMessage','videoMessage','documentMessage'].some(kind=>m[kind]))continue;
+      const key=identityKey(line.phone,k.id);if(store.db.prepare('SELECT 1 FROM meta WHERE key=?').get(key))continue;
+      store.db.prepare('INSERT INTO meta(key,value) VALUES(?,?)').run(key,store.seal({sourceId:k.id,line:line.phone,lid:k.remoteJid,at,fromMe:k.fromMe,state:'UNRESOLVED',observedAt:now,reason:'NATIVE_PHONE_MAPPING_UNAVAILABLE'}));
+      store.audit('PRIVATE_NATIVE_IDENTITY_UNRESOLVED',k.id,{line:line.phone,fromMe:k.fromMe,reason:'NATIVE_PHONE_MAPPING_UNAVAILABLE',customerEventQueued:false,phoneInferred:false});observed++;
+    }
+  });return observed;
+}
+export function privateIdentityStatus(store,config){
+  const rows=config.company==='fumigacion'?store.db.prepare('SELECT value FROM meta WHERE key LIKE ?').all(identityPrefix+'%').map(row=>store.open(row.value)):[];
+  const pending=rows.filter(row=>row.state==='UNRESOLVED');
+  return {guard:PRIVATE_IDENTITY_GUARD,unresolvedSources:pending.length,unresolvedIncomingSources:pending.filter(row=>row.fromMe===false).length,resolvedSources:rows.filter(row=>row.state==='RESOLVED_NATIVE').length,lastObservedAt:rows.length?new Date(Math.max(...rows.map(row=>row.observedAt))).toISOString():null,historicalCoverageComplete:false,phoneInferred:false};
+}
 export function decodeWebhook(body,config) {
   const line=config.lines.find(l=>l.instance===body.instance);if(!line)return {events:[],deliveries:[]};
   const events=[],deliveries=[];const data=Array.isArray(body.data)?body.data:[body.data];

@@ -5,7 +5,7 @@ import { Engine,MARIA_AUTONOMOUS_INTAKE_GUARD } from './engine.mjs';
 import {CHIEF_READ_ONLY_GUARD} from './chief-readonly.mjs';
 import { Transport,drain } from './transport.mjs';
 import { pathToFileURL } from 'node:url';
-import { decodeWebhook } from './webhook.mjs';
+import { decodeWebhook,observePrivateIdentity,privateIdentityStatus } from './webhook.mjs';
 import {validateApprovedAnswers} from './faq.mjs';
 import {customerActivity} from './chief-status.mjs';
 import {queueChiefDocument} from './chief-document.mjs';
@@ -123,7 +123,7 @@ export function createBotServer(config,store,transport,engine) {
         settingUpAi=true;try{return reply(200,await evaluateOwnAi(config,store,transport.fetcher,body.caseIds));}finally{settingUpAi=false;}
       }
       if(req.url==='/ai-knowledge')return config.company==='fumigacion'?reply(200,{status:mariaKnowledgeStatus(config,store),document:mariaKnowledgeDocument()}):reply(403,{error:'MARIA_KNOWLEDGE_OWN_SCOPE'});
-      if(req.url==='/status')return reply(200,{company:config.name,bot:config.bot,enabled:config.enabled,mode:'reception-with-human-review',fullyAutonomous:false,tesaOperations:tesaStatus(store,config),programRegistration:registrationStatus(config,store),inactivityFollowup:inactivityStatus(config,store),responseTiming:responseTimingStatus(config,store),drainIntervalMs:scheduler.intervalMs,semanticUnderstandingGuard:config.company==='fumigacion'?MARIA_UNDERSTANDING_GUARD:null,aiUsage:ownAiUsage(config,store),approvedAiKnowledge:mariaKnowledgeStatus(config,store),
+      if(req.url==='/status')return reply(200,{company:config.name,bot:config.bot,enabled:config.enabled,mode:'reception-with-human-review',fullyAutonomous:false,tesaOperations:tesaStatus(store,config),programRegistration:registrationStatus(config,store),privateNativeIdentity:privateIdentityStatus(store,config),inactivityFollowup:inactivityStatus(config,store),responseTiming:responseTimingStatus(config,store),drainIntervalMs:scheduler.intervalMs,semanticUnderstandingGuard:config.company==='fumigacion'?MARIA_UNDERSTANDING_GUARD:null,aiUsage:ownAiUsage(config,store),approvedAiKnowledge:mariaKnowledgeStatus(config,store),
         events:store.db.prepare('SELECT state,COUNT(*) n FROM events GROUP BY state').all(),outbox:store.db.prepare('SELECT state,COUNT(*) n FROM outbox GROUP BY state').all(),
         communicationGuard:'private-routing-and-media-work-v2',requestedContactGuard:'explicit-technician-contact-before-intake-v1',confirmationRecipient:config.tesaOperations?.enabled?config.tesaOperations.groupJid:questionRecipients(config,'disponibilidad-y-tecnico')[0],operationalConfirmationRecipients:config.tesaOperations?.enabled?[config.tesaOperations.groupJid]:questionRecipients(config,'disponibilidad-y-tecnico'),chiefRecipient:SANDRA,operatorRouting:config.tesaOperations?.enabled?'tesa-group-case-operations-20261008':config.operatorRouting||'sandra',privateHistoricalOperatorRouting:config.operatorRouting||'sandra',operatorRoutingGuard:'scoped-new-question-fanout-and-exact-line-answer-v1',operatorRoutingActive:operatorRoutingActive(config),chiefDocumentGuard:'fixed-chief-encrypted-hash-and-idempotency-v1',internalConversationGuard:'verified-internal-per-line-v2',chiefStatusGuard:'exact-directed-status-and-active-mode-v2',quotationQuestionGuard:'scoped-price-followup-and-existing-question-v1',internalConversationEnabled:Boolean(config.chiefOnly),customerResponsesEnabled:config.enabled,
         socialGreetingGuard:config.company==='fumigacion'?'literal-pure-social-greeting-before-semantic-review-v1':null,internalRoutingGuard:'exact-historical-question-and-no-cross-bot-dialogue-v1',retiredRecipientGuard:'current-route-no-ready-diego-send-v1',
@@ -209,10 +209,11 @@ export function createBotServer(config,store,transport,engine) {
         const parsed=decodeWebhook({...body,data:privateRows},config);let accepted=0,duplicates=0,deliveryUpdates=0;
         const own=config.lines.find(l=>l.instance===body.instance);if(!own)return reply(400,{error:'INSTANCE_OUTSIDE_SCOPE'});
         await transport.verifyLine(own.phone);
+        const unresolvedPrivateIdentity=observePrivateIdentity(store,{...body,data:privateRows},config,parsed);
         const groupOperations=await ingestTesaWebhook(store,config,transport,body);
         for(const value of parsed.events){const e=validateEvent(value,config);if(e){const r=ingress(e);accepted++;if(r.duplicate)duplicates++;}}
         for(const d of parsed.deliveries){deliveryUpdates+=store.delivery(d.mid,own.phone,d.state);if(config.company==='fumigacion')recordDeliveryTiming(store,d.mid,own.phone,d.state);}
-        reply(202,{accepted,duplicates,deliveryUpdates,groupOperations});if(accepted>duplicates||groupOperations.caseAnswers)scheduler.wake();return;
+        reply(202,{accepted,duplicates,deliveryUpdates,groupOperations,unresolvedPrivateIdentity});if(accepted>duplicates||groupOperations.caseAnswers)scheduler.wake();return;
       }
       if(req.url==='/delivery'){
         const line=config.lines.find(l=>l.instance===body.instance&&l.phone===body.owner);

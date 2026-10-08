@@ -1,0 +1,16 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {Store} from '../automation/service-bots/store.mjs';
+import {decodeWebhook,observePrivateIdentity,privateIdentityStatus} from '../automation/service-bots/webhook.mjs';
+const c={company:'fumigacion',enabled:true,activatedAt:Date.now()-60000,lines:[{instance:'own-blue',phone:'573126944997'}]};
+const source=patch=>({instance:'own-blue',event:'messages.upsert',data:{key:{id:'NATIVE_UNMAPPED_001',remoteJid:'12345678909350@lid',fromMe:false,...patch},messageTimestamp:Math.floor(Date.now()/1000),message:{conversation:'Quiero cotizar fumigación para un apartamento'}}});
+const fixture=()=>new Store(':memory:','fumigacion',Buffer.alloc(32,3));
+test('an exact unmapped LID is recorded without inventing a phone or sending a reply',()=>{const s=fixture();try{
+ const b=source(),p=decodeWebhook(b,c);assert.equal(p.events.length,0);assert.equal(observePrivateIdentity(s,b,c,p),1);
+ const status=privateIdentityStatus(s,c);assert.equal(status.unresolvedIncomingSources,1);assert.equal(status.phoneInferred,false);assert.equal(status.historicalCoverageComplete,false);
+ assert.equal(s.db.prepare('SELECT COUNT(*) n FROM events').get().n,0);assert.equal(s.db.prepare('SELECT COUNT(*) n FROM conversations').get().n,0);assert.equal(s.db.prepare('SELECT COUNT(*) n FROM outbox').get().n,0);assert.ok(!JSON.stringify(status).includes('9350'));assert.ok(!JSON.stringify(status).includes('Quiero'));
+}finally{s.close();}});
+test('repeated observations deduplicate by own line and native MID',()=>{const s=fixture();try{const b=source(),p=decodeWebhook(b,c);observePrivateIdentity(s,b,c,p);assert.equal(observePrivateIdentity(s,b,c,p),0);assert.equal(privateIdentityStatus(s,c).unresolvedSources,1);assert.equal(s.db.prepare('SELECT COUNT(*) n FROM audit').get().n,1);}finally{s.close();}});
+test('an explicit phone on a subsequent provider event resolves only its own metadata',()=>{const s=fixture();try{let b=source();observePrivateIdentity(s,b,c,decodeWebhook(b,c));b=source({remoteJidAlt:'573001112233@s.whatsapp.net'});const p=decodeWebhook(b,c);assert.equal(p.events[0].event.phone,'573001112233');observePrivateIdentity(s,b,c,p);assert.equal(privateIdentityStatus(s,c).unresolvedSources,0);assert.equal(privateIdentityStatus(s,c).resolvedSources,1);assert.equal(s.db.prepare('SELECT COUNT(*) n FROM events').get().n,0);}finally{s.close();}});
+test('other company, instance, group, empty protocol and old event do not add observations',()=>{const s=fixture();try{const b=source();for(const [payload,config] of [[b,{...c,company:'servicio-tecnico'}],[{...b,instance:'not-own'},c],[source({remoteJid:'123@g.us'}),c],[{...b,data:{...b.data,message:{protocolMessage:{}}}},c],[{...b,data:{...b.data,messageTimestamp:0}},c]])assert.equal(observePrivateIdentity(s,payload,config,decodeWebhook(payload,config)),0);assert.equal(privateIdentityStatus(s,c).unresolvedSources,0);}finally{s.close();}});
+test('outgoing unmapped metadata is kept separate from incoming customer metadata',()=>{const s=fixture();try{const b=source({fromMe:true});observePrivateIdentity(s,b,c,decodeWebhook(b,c));const status=privateIdentityStatus(s,c);assert.equal(status.unresolvedSources,1);assert.equal(status.unresolvedIncomingSources,0);}finally{s.close();}});
