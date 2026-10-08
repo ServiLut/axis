@@ -1,5 +1,27 @@
 # María Ángel y Miguel Ángel
 
+## TESA operativo — instrucción directa e instalación verificadas, 08/10/2026 19:13Z
+
+La usuaria autorizó que María y Miguel revisen **GRUPO SERVICIOS TESA** y hagan allí las consultas de rutas, programaciones y coordinación. El grupo nativo exacto es `573137689392-1545079045@g.us`, con ocho miembros. Este apartado sustituye únicamente los destinos de **consultas operativas nuevas** de los apartados históricos siguientes: ambos bots usan TESA. No mueve pendientes anteriores ni cambia los informes diarios dirigidos a Sandra.
+
+Instalados sólo en los dos runtimes propios `f1cc25cfe0aa326888726e4375e0ca696fde348d` y su ajuste literal `931a359ea210f829ada70fbdfc4c1374ee738125`, publicados en `codex/maria-miguel-service-bots-20261002`. Dokploy mostró DONE en dos segundos para cada instalación final; las API propias confirmaron la guardia `exact-group-native-human-quoted-case-answer-v1`, TESA habilitado y las cuatro líneas OPEN a las 19:13Z. Son tiempos de despliegue. Las 364 pruebas aisladas pasan; no prueban entrega de una consulta real al grupo.
+
+María envía las consultas nuevas desde 4997 y Miguel desde 1941, conservando la línea original de cada cliente aunque sea 8721 o 9392. Se verifica de nuevo identidad y membresía nativas antes de enviar y aceptar una respuesta. La consulta muestra referencia de caso, últimos cuatro dígitos, servicio y datos operativos mínimos; omite teléfonos completos, direcciones precisas, enlaces y datos de pago. El nombre, rol administrativo o texto del remitente no otorgan autoridad general. Una identidad LID todavía no vinculada a teléfono se conserva sólo como observación.
+
+La entrada grupal usa tablas cifradas independientes y deduplica el MID/participante entre las dos líneas propias. Conserva los mensajes nuevos como fuentes; los reenvíos, ecos de los cuatro bots, medios sin leer y publicaciones sin cita no ejecutan instrucciones ni producen acuses genéricos. Los medios entran como metadatos, sin afirmar original leído o pago recibido. Para reutilizar una explicación operativa se exige respuesta humana verificada citando la consulta propia, prueba nativa DELIVERED/READ exacta, misma empresa, caso y línea emisora. Vigencia de la explicación: treinta minutos; una segunda fuente o edición conflictiva conserva revisión. Quien responde debe usar **Responder** sobre el mensaje del bot para mantener ese vínculo.
+
+Las respuestas admitidas completan únicamente la espera operativa del bot. No liberan un hold del personal, no disparan replays o envíos históricos al cliente, y no guardan pagos, técnicos, garantías o agenda por una conversación grupal. María recibe las explicaciones verificadas en el contexto del mismo caso durante el siguiente turno legítimo; no se incorpora todo el grupo como política o entrenamiento de pesos. Se corrigió además el formato de la pregunta privada que impedía que ciertas explicaciones ANSWERED llegaran al contexto de IA.
+
+Sandra conserva dirección, políticas, documentos, pagos, garantías/refuerzos/controles posteriores, excepciones y devolución expresa de chats. Los pendientes privados y sus destinatarios, cuerpos, MIDs y entregas originales se mantienen; Diego no recibe consultas nuevas ni acuses. Un resultado grupal incierto no se reenvía. No se creó otro job, informe, campaña, usuario, clave o permiso de banco/programa.
+
+Estado propio al corte: María tiene IA Luna y registro ordinario a su nombre habilitados, cero servicios guardados por esa integración; seguimiento único de veinte minutos vigente y acceso limitado sin login hasta 07/11/2026 16:56:52.680Z. Miguel continúa `aiConfigured=false` y programa no conectado; TESA no configura su IA ni traslada la de María. La primera consulta real de cada bot al grupo, su entrega y respuesta citada siguen pendientes.
+
+Evidencia: `C:/Users/ADMIN/.codex/visualizations/2026/09/18/01a0b62e-d6ca-7f93-bbb1-3718cf4b84b6/service-group-tesa-20261008/checkpoint-private.json`, `installed-summary-private.json` y `evidence/checkpoint-native-private.json`. La lectura seleccionada del grupo revisó veinte MIDs únicos, doce textos y tres comprobantes originales; dos audios siguen sin original/transcripción y una identidad nativa sin teléfono. Un comprobante repite el mismo soporte ya revisado: no contar dos ingresos. Ningún comprobante equivale a verificación bancaria ni la selección a historia completa.
+
+Informes 13h del 08/10: FUM `3EB06B6D7CB51E1879F6E7` DELIVERED/native DELIVERY_ACK a Sandra con texto/línea exactos; ST `daily-13h-servicio-tecnico-20261008-sandra-v1` UNCERTAIN sin MID. No reenviar, cambiar clave ni mover ese informe a TESA. Cobertura del programa y medios sigue parcial, con cursores generales intactos.
+
+Los estados y rutas históricos siguientes conservan sus fuentes; este apartado vigente y las instrucciones humanas posteriores prevalecen.
+
 ## Estado vigente verificado — 08/10/2026, 17:22Z
 
 Ambos servicios tienen instalado `c98bd943a42ecb495960610e27e8a17a64d3f51b`: Dokploy DONE en tres segundos para María y dos para Miguel. Sus API propias confirmaron a las 17:22Z la ruta nueva y las guardias correspondientes; los cuatro propietarios exactos están OPEN. Estos tiempos describen el despliegue, no la latencia de respuesta al cliente.
