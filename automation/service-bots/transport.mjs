@@ -3,7 +3,8 @@ import { SANDRA, DIEGO, HILARY, CURRENT_OPERATOR_ROUTING, publicTextSafe, normal
 import {parseChiefDocument} from './chief-document.mjs';
 import {selectPrice,verifyPriceSource} from './prices.mjs';
 import {understandOwnCustomer,composeOwnReply,replyCandidates,probeOwnAi} from './conversational-ai.mjs';
-import {drainProgramRegistrations} from './maria-program.mjs';
+import {drainProgramRegistrations,acceptsOrdinaryQuotation} from './maria-program.mjs';
+import {routeCaseQuestion} from './engine.mjs';
 import {initializeInactivityFollowup,queueInactivityFollowups,inactivityDeliveryValid,recordResponseTiming} from './inactivity-followup.mjs';
 import {tesaCaseAnswers} from './tesa-operations.mjs';
 import {drainTesaGroup} from './tesa-transport.mjs';
@@ -160,7 +161,8 @@ export async function drain(store,config,transport,engine) {
     }
     const newCase=config.company==='fumigacion'?explicitNewService(e.text):/\b(?:otra solicitud|nuevo servicio|otro servicio|otro equipo)\b/.test(normalize(e.text));
     const intakeStage=store.conversation(e.phone)?.state.programIntake?.stage;
-    if(!e.fromMe&&!knownInternalRecipient(e.phone)&&!store.conversation(e.phone)?.hold&&(!store.conversation(e.phone)?.state.awaitingHumanReview||newCase)&&!['name','address','confirm','correction','pending'].includes(intakeStage)){
+    const ownQuotationAcceptance=config.company==='fumigacion'&&Boolean(conversation?.state.quotedPrice)&&acceptsOrdinaryQuotation(e.text);
+    if(!e.fromMe&&!knownInternalRecipient(e.phone)&&!store.conversation(e.phone)?.hold&&(!store.conversation(e.phone)?.state.awaitingHumanReview||newCase)&&!ownQuotationAcceptance&&!['name','address','details','confirm','correction','pending'].includes(intakeStage)){
       // Customer history remains in its company. Observations are explicitly untrusted reference, never policy.
       const knowledge=store.db.prepare('SELECT body FROM knowledge ORDER BY imported DESC LIMIT 10').all().map(k=>store.open(k.body));
       const caseId=newCase?'':store.conversation(e.phone)?.state.caseId||'';
@@ -185,7 +187,7 @@ export async function drain(store,config,transport,engine) {
 }
 
 export async function flushOutbox(store,config,transport){
-  await drainProgramRegistrations(store,config,transport);
+  await drainProgramRegistrations(store,config,transport,routeCaseQuestion);
   let accepted=0,suppressed=0,uncertain=0;
   const out=store.db.prepare("SELECT * FROM outbox WHERE state='READY' AND (?=1 OR (internal=1 AND phone IN (?,?,?))) ORDER BY created,rowid LIMIT 20").all(Number(config.enabled),SANDRA,DIEGO,HILARY);
   for(const o of out) {

@@ -156,7 +156,7 @@ test('mixed greetings still collect facts or review safety and payment',()=>{
   assert.equal(d.state.slots.rooms,'dos habitaciones');assert.equal(d.question.topic,'cotizacion-verificada');
 });
 
-test('the observed multiline apartment and room reply does not repeat either intake question',async()=>{
+test('the multiline apartment and room reply asks only the unconfirmed municipality without a staff clarification',async()=>{
   const f=fixture();try{
     await f.process('Hola');
     const e=await f.process('Cucarachas\nApartamentos con 3 piezas grandes\nBarrio las palmas');
@@ -167,14 +167,17 @@ test('the observed multiline apartment and room reply does not repeat either int
     assert.match(state.slots.locationDetails,/Barrio las palmas/);
     assert.equal(state.intakeSources.site.sourceId,e.id);
     assert.equal(state.intakeSources.rooms.sourceId,e.id);
-    assert.equal(f.store.db.prepare('SELECT state FROM events WHERE id=?').get(e.id).state,'WAITING_COORDINATOR');
+    assert.equal(f.store.db.prepare('SELECT state FROM events WHERE id=?').get(e.id).state,'DONE');
     const reply=f.store.open(f.store.db.prepare('SELECT body FROM outbox WHERE id=?').get(e.id+':reply').body);
-    assert.doesNotMatch(reply,/tipo de inmueble|cuántas habitaciones|metros cuadrados/i);
+    assert.match(reply,/municipio/);assert.doesNotMatch(reply,/barrio|tipo de inmueble|cuántas habitaciones|metros cuadrados|qué plaga/i);
+    assert.equal(state.intakeSources.locationDetails.municipalityInferred,false);
     const detail=await f.process('Para todo el Apartamento donde vivo mi apartamento consta con 3 piezas baño sala pequeña y cocina');
     assert.equal(f.store.conversation(detail.phone).state.slots.rooms,'3 piezas');
-    assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get(detail.id+':reply').n,0);
+    assert.equal(f.store.conversation(detail.phone).state.slots.location,undefined);
+    const followup=f.store.open(f.store.db.prepare('SELECT body FROM outbox WHERE id=?').get(detail.id+':reply').body);
+    assert.match(followup,/municipio/);assert.doesNotMatch(followup,/barrio|tipo de inmueble|cuántas habitaciones|metros cuadrados|qué plaga/i);
     const questions=f.store.db.prepare('SELECT topic,recipient FROM questions').all();
-    assert.deepEqual(questions.map(({topic,recipient})=>({topic,recipient})),[{topic:'cotizacion-verificada',recipient:SANDRA}]);
+    assert.deepEqual(questions,[]);assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM outbox WHERE internal=1').get().n,0);
   }finally{f.store.close();}
 });
 

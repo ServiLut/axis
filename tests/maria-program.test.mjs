@@ -4,7 +4,7 @@ import {randomBytes} from 'node:crypto';
 import {Store} from '../automation/service-bots/store.mjs';
 import {Engine} from '../automation/service-bots/engine.mjs';
 import {BUSINESSES} from '../automation/service-bots/config.mjs';
-import {registrationConfig,installProgramSetup,registrationStatus,registrationHash,drainProgramRegistrations,MARIA_TENANT,MARIA_COMPANY} from '../automation/service-bots/maria-program.mjs';
+import {registrationConfig,installProgramSetup,registrationStatus,registrationHash,drainProgramRegistrations,acceptsOrdinaryQuotation,literalIntakeTextWithoutRegistrationFields,MARIA_TENANT,MARIA_COMPANY} from '../automation/service-bots/maria-program.mjs';
 import {BUSINESS_PRICE_HASH,approvedBusinessPriceSchedule} from '../automation/service-bots/business-prices.mjs';
 const actorId='7508385b-536e-4aa2-8137-d734dfc900ef',orderId='85c47fc8-5314-4f68-a8d6-dde112640f5d';
 const base=()=>Math.floor((Date.now()-30000)/1000)*1000;
@@ -31,6 +31,77 @@ function transport(f,handler){
  },fetcher:handler};
 }
 const receipt=p=>({company:'FUMIGACION',tenantId:MARIA_TENANT,companyId:MARIA_COMPANY,advisorMembershipId:actorId,createdById:actorId,phone:p.phone,persisted:true,orderId,caseId:p.caseId,acceptanceId:p.quote.acceptanceId,requestHash:registrationHash(p),state:'NUEVO',scheduled:false,paymentRecorded:false});
+test('natural quotation acceptance admits scheduling/politeness and explicit facts without granting another scope',()=>{
+ for(const text of ['Sí, agéndame para mañana','Perfecto','Listo, muchas gracias','Sí. Mi nombre es Juan Pérez y mi dirección es Calle 50 # 42-18'])assert.equal(acceptsOrdinaryQuotation(text),true,text);
+ for(const text of ['Gracias','No gracias','Sí, si mañana queda libre','Sí pero si hay descuento','Perfecto, ¿cómo pago?','El técnico dijo sí','Sí, agéndame otro servicio','Sí. Mi nombre es Juan Pérez. El técnico dice que sí','Sí. Mi dirección es Calle 50 # 42-18 pero es un refuerzo','Sí. Mi nombre es Juan Pérez y mi nombre es Juana Pérez'])assert.equal(acceptsOrdinaryQuotation(text),false,text);
+});
+test('registration field removal preserves the service request and any later question, changed scope or complaint',()=>{
+ const text=literalIntakeTextWithoutRegistrationFields('Tengo cucarachas en apartamento de 42 mts2 en Itagüí. Mi nombre es Juan Pérez. Mi dirección es Calle 50 # 42-18 apartamento 301. ¿Cuánto cuesta?');assert.match(text,/cucarachas/);assert.match(text,/42 mts2/);assert.match(text,/Itagüí/);assert.match(text,/¿Cuánto cuesta/);assert.doesNotMatch(text,/Juan Pérez|Calle 50|apartamento 301/);
+ for(const suffix of ['para 2 apartamentos','pero es una garantía','en Soacha','y también una casa','para todo el edificio']){const result=literalIntakeTextWithoutRegistrationFields('Mi dirección es Calle 50 # 42-18 '+suffix);assert.ok(result.includes(suffix),result);}
+ assert.equal(literalIntakeTextWithoutRegistrationFields('Mi nombre es quiero un refuerzo'),'Mi nombre es quiero un refuerzo');
+ assert.equal(literalIntakeTextWithoutRegistrationFields('Mi dirección es no recuerdo'),'Mi dirección es no recuerdo');
+});
+test('asks missing literal fields together and captures both from one delivered response without reasking',async()=>{
+ const f=fixture();try{
+  const first=await f.turn('Tengo cucarachas en mi apartamento de 42 mts2 en Itagüí. Cuánto cuesta?');f.delivered(first);
+  const accept=await f.turn('Sí'),prompt=f.delivered(accept);assert.match(prompt,/nombre completo/);assert.match(prompt,/dirección completa/);
+  const facts=await f.turn('Mi nombre es Juan Pérez y mi dirección es Calle 50 # 42-18 apartamento 301');
+  const preview=f.delivered(facts);assert.match(preview,/Juan Pérez/);assert.match(preview,/Calle 50 # 42-18 apartamento 301/);assert.match(preview,/Confirmas/);
+  await f.turn('Listo, muchas gracias');let payload;
+  await drainProgramRegistrations(f.store,f.config,transport(f,async(url,opts)=>{payload=JSON.parse(opts.body);return {ok:true,json:async()=>receipt(payload)};}));
+  assert.equal(registrationStatus(f.config,f.store).saved,1);assert.equal(payload.sources.customerName.id,facts.id);assert.equal(payload.sources.address.id,facts.id);assert.equal(payload.sources.address.text,facts.text);
+ }finally{f.store.close();}
+});
+test('reuses explicit fields from the same case before delivered price acceptance and confirms only after receipt',async()=>{
+ const f=fixture();try{
+  const first=await f.turn('Tengo cucarachas en mi apartamento de 42 mts2 en Itagüí. Mi nombre es Juan Pérez. Mi dirección es Calle 50 # 42-18 apartamento 301. Cuánto cuesta?');f.delivered(first);
+  const accept=await f.turn('Perfecto');let payload;
+  assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get(accept.id+':reply').n,0);
+  await drainProgramRegistrations(f.store,f.config,transport(f,async(url,opts)=>{payload=JSON.parse(opts.body);assert.equal(f.store.db.prepare("SELECT COUNT(*) n FROM outbox WHERE id LIKE 'program:%'").get().n,0);return {ok:true,json:async()=>receipt(payload)};}));
+  assert.equal(registrationStatus(f.config,f.store).saved,1,JSON.stringify(f.store.conversation(accept.phone).state));assert.equal(payload.customerName,'Juan Pérez');assert.equal(payload.address,'Calle 50 # 42-18 apartamento 301');assert.equal(payload.sources.customerName.id,first.id);assert.equal(payload.quote.acceptanceId,accept.id);assert.equal(payload.sources.acceptance.text,'Perfecto');
+ }finally{f.store.close();}
+});
+test('acceptance and explicitly labelled facts in one turn keep their complete native source',async()=>{
+ const f=fixture();try{
+  const first=await f.turn('Tengo cucarachas en mi apartamento de 42 mts2 en Itagüí. Cuánto cuesta?');f.delivered(first);
+  const accept=await f.turn('Sí. Mi nombre es Juan Pérez y mi dirección es Calle 50 # 42-18 apartamento 301');let payload;
+  await drainProgramRegistrations(f.store,f.config,transport(f,async(url,opts)=>{payload=JSON.parse(opts.body);return {ok:true,json:async()=>receipt(payload)};}));
+  assert.equal(registrationStatus(f.config,f.store).saved,1,JSON.stringify(f.store.conversation(accept.phone).state));for(const source of Object.values(payload.sources)){assert.equal(source.id,accept.id);assert.equal(source.text,accept.text);}assert.equal(payload.quote.acceptanceId,accept.id);
+ }finally{f.store.close();}
+});
+test('a prior different case or forwarded labelled facts cannot supply the new registration',async()=>{
+ const f=fixture();try{
+  const old={id:'OTHERCASE',phone:'573001112233',line:f.config.lines[0].phone,kind:'text',fromMe:false,text:'Mi nombre es Otra Persona y mi dirección es Calle 99 # 10-10',at:base()-1000};f.store.enqueue(old);
+  const first=await f.turn('Tengo cucarachas en mi apartamento de 42 mts2 en Itagüí. Cuánto cuesta?');f.delivered(first);
+  const foreign={...old,id:'FORWARDED',forwarded:true,at:first.at+100};f.store.enqueue(foreign);
+  const accept=await f.turn('Sí'),reply=f.delivered(accept);assert.match(reply,/nombre completo/);assert.match(reply,/dirección completa/);assert.equal(f.store.conversation(accept.phone).state.programIntake.customerName,undefined);assert.equal(f.store.db.prepare("SELECT COUNT(*) n FROM meta WHERE key LIKE 'maria-registration:%'").get().n,0);
+ }finally{f.store.close();}
+});
+test('verified save consults the injected operational router with no address, phone or full name in its text',async()=>{
+ const f=fixture();try{const stages=await f.ready();const conv=f.store.conversation(stages.final.phone);conv.state.slots.preference='mañana en la tarde';f.store.saveConversation(stages.final.phone,conv.state);f.config.tesaOperations={enabled:true};let calls=0;
+  await drainProgramRegistrations(f.store,f.config,transport(f,async(url,opts)=>({ok:true,json:async()=>receipt(JSON.parse(opts.body))})),(store,config,request)=>{calls++;assert.equal(registrationStatus(config,store).saved,1);assert.equal(request.phone,stages.final.phone);assert.equal(request.source,stages.final.id);assert.equal(request.caseId,conv.state.caseId);assert.equal(request.topic,'disponibilidad-y-tecnico');assert.doesNotMatch(request.text,/573001112233|Juan Pérez|Calle 50/);return {id:'TESA-QUESTION',outboxId:'tesa-question:TESA-QUESTION',created:true};});
+  assert.equal(calls,1);assert.equal(f.store.conversation(stages.final.phone).state.pendingTesaQuestionId,'TESA-QUESTION');assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);
+ }finally{f.store.close();}
+});
+test('missing or failed operational routing preserves the saved receipt without a private fallback or business replay',async()=>{
+ for(const router of [null,()=>{throw Error('routing unavailable');}]){const f=fixture();try{const stages=await f.ready();const conv=f.store.conversation(stages.final.phone);conv.state.slots.preference='mañana';f.store.saveConversation(stages.final.phone,conv.state);f.config.tesaOperations={enabled:true};let writes=0;const t=transport(f,async(url,opts)=>{writes++;return {ok:true,json:async()=>receipt(JSON.parse(opts.body))};});await drainProgramRegistrations(f.store,f.config,t,router);await drainProgramRegistrations(f.store,f.config,t,router);assert.equal(registrationStatus(f.config,f.store).saved,1);assert.equal(registrationStatus(f.config,f.store).uncertain,0);assert.equal(writes,1);assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);}finally{f.store.close();}}
+});
+test('a native pure courtesy after final acceptance does not renew acceptance or require another confirmation',async()=>{
+ const f=fixture();try{const stages=await f.ready();await f.turn('Muchas gracias');let payload,writes=0;
+  await drainProgramRegistrations(f.store,f.config,transport(f,async(url,opts)=>{writes++;payload=JSON.parse(opts.body);return {ok:true,json:async()=>receipt(payload)};}));
+  assert.equal(writes,1);assert.equal(registrationStatus(f.config,f.store).saved,1);assert.equal(payload.quote.acceptanceId,stages.final.id);assert.equal(payload.quote.acceptedAt,new Date(stages.final.at).toISOString());assert.equal(payload.sources.acceptance.text,'Confirmo');
+ }finally{f.store.close();}
+});
+test('a courtesy cannot hide a later change, forwarded text, native mismatch or another line before registration',async()=>{
+ for(const kind of ['payment','cancellation','forwarded','native-mismatch','another-line']){const f=fixture();try{const stages=await f.ready();const courtesy=await f.turn('Muchas gracias');let writes=0;const t=transport(f,async()=>{writes++;throw Error('must not write');});
+   if(kind==='payment')await f.turn('Gracias, ¿cómo pago?');
+   if(kind==='cancellation')await f.turn('No quiero el servicio');
+   if(kind==='forwarded'){const row=f.store.db.prepare('SELECT body FROM events WHERE id=?').get(courtesy.id);f.store.db.prepare('UPDATE events SET body=? WHERE id=?').run(f.store.seal({...f.store.open(row.body),forwarded:true}),courtesy.id);}
+   if(kind==='native-mismatch'){const read=t.request;t.request=async(...args)=>{const response=await read(...args);if(args[2].where.key.id===courtesy.id)response.messages.records[0].message.conversation='No acepto';return response;};}
+   if(kind==='another-line'){const read=t.currentCustomerActivity;t.currentCustomerActivity=async(...args)=>{const response=await read(...args);response.sources.push({id:'UNKNOWN_OTHER_LINE',line:f.config.lines[1].phone,at:stages.final.at+1});return response;};}
+   await drainProgramRegistrations(f.store,f.config,t);assert.equal(writes,0,kind);assert.equal(registrationStatus(f.config,f.store).saved,0,kind);
+  }finally{f.store.close();}}
+});
 test('only delivered accepted approved quotation collects literal fields; saved receipt precedes confirmation',async()=>{
  const f=fixture();try{const stages=await f.ready();let writes=0;const t=transport(f,async(url,opts)=>{writes++;const p=JSON.parse(opts.body);assert.equal(p.customerName,'Juan Pérez');assert.equal(p.sources.acceptance.id,stages.final.id);assert.equal(p.quote.scheduleHash,BUSINESS_PRICE_HASH);assert.equal(f.store.db.prepare("SELECT COUNT(*) n FROM outbox WHERE id LIKE 'program:%'").get().n,0);return {ok:true,json:async()=>receipt(p)};});
   const before=f.store.conversation(stages.final.phone).state;assert.equal(before.quotedPrice.acceptanceSource,stages.accept.id);

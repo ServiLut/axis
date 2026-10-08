@@ -207,31 +207,39 @@ test('a delayed earlier staff source requires authorship review without erasing 
   }finally{f.s.close();}
 });
 
-test('different replies about the same missing field create one precise question and one review acknowledgement',async()=>{
+test('different ordinary replies keep the missing property question with the customer and create no staff clarification',async()=>{
   const f=fixture();
   try {
     await f.process({text:'Necesito fumigar cucarachas en Sabaneta'});
     await f.process({id:'MISSINGONE',at:Date.now()+1,text:'Necesito el servicio'});
-    await f.process({id:'MISSINGTWO',at:Date.now()+2,text:'Para mañana'});
-    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,1);
-    const question=f.s.open(f.s.db.prepare('SELECT body FROM questions').get().body);
-    assert.match(question.text,/tipo de inmueble/);
-    assert.match(question.text,/cucarachas/);
-    assert.match(question.text,/sabaneta/);
-    assert.ok(!question.text.includes('Falta site'));
-    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get('MISSINGTWO:reply').n,0);
+    const last=await f.process({id:'MISSINGTWO',at:Date.now()+2,text:'Para mañana'});
+    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);
+    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE internal=1').get().n,0);
+    const state=f.s.conversation(last.phone).state;
+    assert.equal(state.slots.service,'cucarachas');assert.equal(state.slots.location,'sabaneta');assert.equal(state.slots.site,undefined);
+    assert.deepEqual(state.asked,['site']);
+    for(const id of ['MISSINGONE','MISSINGTWO']){
+      const reply=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(id+':reply').body);
+      assert.match(reply,/tipo de inmueble/);assert.doesNotMatch(reply,/qué plaga|municipio|revisaremos|asesora|Sandra|Diego/i);
+    }
+    await f.engine.process(last);assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get('MISSINGTWO:reply').n,1);
   }finally{f.s.close();}
 });
 
-test('an already delivered legacy clarification is reused without a third question or another customer acknowledgement',async()=>{
+test('a delivered legacy clarification stays unchanged while a new turn asks the customer for the missing property',async()=>{
   const f=fixture();
   try {
     const first=await f.process({text:'cucarachas en sabaneta'}),caseId=f.s.conversation(first.phone).state.caseId;
     const old=f.s.question({phone:first.phone,line:first.line,caseId,topic:'revision:OLDREQUEST',conditions:{event:'OLDREQUEST',caseId},recipient:SANDRA,source:'OLDREQUEST',text:'FUMIGACION: contacto terminado en 2233. Falta site. La pregunta ya se hizo; la nueva respuesta no permitió verificar ese dato.'});
     f.s.db.prepare("UPDATE outbox SET state='DELIVERED',mid='OLDQUESTIONMID' WHERE id=?").run('question:'+old.id);
+    const oldQuestion={...f.s.db.prepare('SELECT * FROM questions WHERE id=?').get(old.id)},oldOutbox={...f.s.db.prepare('SELECT * FROM outbox WHERE id=?').get('question:'+old.id)};
     await f.process({id:'AFTERLEGACY',at:Date.now()+1,text:'Lo necesito pronto'});
     assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,1);
-    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get('AFTERLEGACY:reply').n,0);
+    const reply=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get('AFTERLEGACY:reply').body);
+    assert.match(reply,/tipo de inmueble/);assert.doesNotMatch(reply,/revisaremos|asesora|pregunta quedó|qué plaga|municipio/i);
+    assert.deepEqual({...f.s.db.prepare('SELECT * FROM questions WHERE id=?').get(old.id)},oldQuestion);
+    assert.deepEqual({...f.s.db.prepare('SELECT * FROM outbox WHERE id=?').get('question:'+old.id)},oldOutbox);
+    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE internal=1').get().n,1);
     assert.equal(f.s.db.prepare('SELECT state FROM outbox WHERE mid=?').get('OLDQUESTIONMID').state,'DELIVERED');
   }finally{f.s.close();}
 });
@@ -340,18 +348,22 @@ test('a compound greeting introduces the actual bot once and a named-person requ
   }
 });
 
-test('a price question followed by location data retains both and creates one clarification for size already asked',async()=>{
+test('a price question followed by municipality data retains both sources and requests missing size from the customer',async()=>{
   const f=fixture();
   try {
     await f.process({text:'cucarachas en casa'});
     const question=f.event({id:'BATCHPRICEQ',at:Date.now()+1,text:'¿Cuánto cuesta?'}),city=f.event({id:'AFTERPRICE',at:question.at+1000,text:'Sabaneta'});
     f.s.enqueue(question);f.s.enqueue(city);await drain(f.s,f.c,f.transport,f.engine);
-    const q=f.s.db.prepare('SELECT * FROM questions').get(),review=f.s.open(q.body);
-    assert.equal(q.topic,'missing-intake:size');assert.equal(review.source,question.id);
-    assert.match(review.text,/Pregunta pendiente: ¿Cuánto cuesta/);assert.match(review.text,/Mensaje actual: Sabaneta/);
-    assert.equal(f.s.conversation(city.phone).state.slots.location,'sabaneta');
+    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);
+    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE internal=1').get().n,0);
+    assert.equal(f.s.open(f.s.db.prepare('SELECT body FROM events WHERE id=?').get(question.id).body).text,'¿Cuánto cuesta?');
+    assert.equal(f.s.open(f.s.db.prepare('SELECT body FROM events WHERE id=?').get(city.id).body).text,'Sabaneta');
+    const state=f.s.conversation(city.phone).state;
+    assert.equal(state.slots.location,'sabaneta');assert.equal(state.slots.site,'casa');assert.equal(state.slots.service,'cucarachas');
+    assert.equal(state.slots.area,undefined);assert.equal(state.slots.rooms,undefined);assert.equal(state.slots.price,undefined);
+    assert.equal(state.intakeSources.location.sourceId,city.id);
     const response=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(city.id+':reply').body);
-    assert.doesNotMatch(response,/habitaciones o metros cuadrados|inmueble|municipio|día y franja/);
+    assert.match(response,/habitaciones o metros cuadrados/);assert.doesNotMatch(response,/qué plaga|inmueble|municipio|día y franja|asesora|\d/i);
   }finally{f.s.close();}
 });
 
@@ -441,45 +453,61 @@ test('a property and town without size cannot skip the room or area requirement'
   }finally{f.s.close();}
 });
 
-test('complete quotation facts create one human quotation request before asking availability or inventing a price',async()=>{
+test('neighborhood quotation facts request the municipality before a single quotation review without an invented price',async()=>{
   const f=fixture();
   try {
     await f.process({text:'Buenos días'});
     const answer=await f.process({id:'FULLQUOTEFACTS',at:Date.now()+1,text:'Cucarachas y hormigas, apartamento de 66 m², Villa Suramericana, Robledo'});
+    const incomplete=f.s.conversation(answer.phone).state;
+    assert.equal(incomplete.slots.location,undefined);assert.match(incomplete.slots.locationDetails,/Robledo/);
+    assert.equal(incomplete.slots.service,'cucarachas y hormigas');assert.equal(incomplete.slots.area,'66 m²');assert.equal(incomplete.slots.site,'apartamento');
+    assert.equal(incomplete.intakeSources.locationDetails.municipalityInferred,false);
+    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);
+    const missingReply=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(answer.id+':reply').body);
+    assert.match(missingReply,/municipio/);assert.doesNotMatch(missingReply,/barrio|tipo de inmueble|habitaciones|metros cuadrados|qué plaga|horaria|139|300/i);
+    const municipality=await f.process({id:'QUOTEOWNMUNICIPALITY',at:Date.now()+2,text:'Medellín'});
     const row=f.s.db.prepare('SELECT * FROM questions').get(),question=f.s.open(row.body);
     assert.equal(row.topic,'cotizacion-verificada');assert.equal(row.recipient,SANDRA);
     assert.match(question.text,/66 m²/);assert.match(question.text,/cucarachas y hormigas/);
     assert.match(question.text,/Robledo/);assert.doesNotMatch(question.text,/139|300|horario disponible/);
-    const reply=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(answer.id+':reply').body);
+    const reply=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(municipality.id+':reply').body);
     assert.match(reply,/Una asesora continuará contigo/);assert.doesNotMatch(reply,/día|horaria|confirmada|139|300/i);
     assert.equal(f.s.conversation(answer.phone).state.slots.price,undefined);
-    await f.process({id:'SAMEQUOTEFACTS',at:Date.now()+2,text:'Un apartamento de 66 m²'});
+    assert.equal(f.s.conversation(answer.phone).state.slots.location,'medellin');
+    assert.equal(f.s.conversation(answer.phone).state.intakeSources.location.sourceId,municipality.id);
+    await f.process({id:'SAMEQUOTEFACTS',at:Date.now()+3,text:'Un apartamento de 66 m²'});
     assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,1);
     assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get('SAMEQUOTEFACTS:reply').n,0);
   }finally{f.s.close();}
 });
 
-test('an initial price question retains the stated pest and asks only the missing property',async()=>{
+test('an initial price question retains the stated pest and groups the other missing intake fields for the customer',async()=>{
   const f=fixture();
   try {
     const first=await f.process({text:'Hola, ¿cuánto cuesta el servicio para ratas?'});
     const reply=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(first.id+':reply').body);
-    assert.match(reply,/tipo de inmueble/);assert.doesNotMatch(reply,/cuéntame|habitaciones|metros cuadrados|Qué plaga/i);
+    assert.match(reply,/tipo de inmueble/);assert.match(reply,/habitaciones o metros cuadrados/);assert.match(reply,/municipio y barrio o vereda/);
+    assert.doesNotMatch(reply,/Qué plaga|precio|\d|asesora|Sandra|Diego/i);
     assert.equal(f.s.conversation(first.phone).state.slots.service,'ratas');
+    assert.equal(f.s.conversation(first.phone).state.initialIntakeAllRequested,true);
     assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);
   }finally{f.s.close();}
 });
 
-test('an unanswered size requirement is a precise single pending clarification rather than an error or repeated customer acknowledgement',async()=>{
+test('an unanswered ordinary size requirement stays with the customer and preserves rooms or area as alternatives',async()=>{
   const f=fixture();
   try {
     await f.process({text:'Cucarachas en una casa en Bello'});
     await f.process({id:'SIZEUNKNOWN1',at:Date.now()+1,text:'No sé cuánto mide'});
-    await f.process({id:'SIZEUNKNOWN2',at:Date.now()+2,text:'No tengo ese dato'});
-    const row=f.s.db.prepare('SELECT * FROM questions').get();
-    assert.equal(row.topic,'missing-intake:size');assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,1);
-    assert.match(f.s.open(row.body).text,/habitaciones o metros cuadrados/);
-    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get('SIZEUNKNOWN2:reply').n,0);
+    const last=await f.process({id:'SIZEUNKNOWN2',at:Date.now()+2,text:'No tengo ese dato'});
+    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE internal=1').get().n,0);
+    for(const id of ['SIZEUNKNOWN1','SIZEUNKNOWN2']){
+      const reply=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(id+':reply').body);
+      assert.match(reply,/habitaciones o metros cuadrados/);assert.doesNotMatch(reply,/qué plaga|inmueble|municipio|revisaremos|asesora|precio|\d/i);
+      assert.equal(f.s.db.prepare('SELECT state FROM events WHERE id=?').get(id).state,'DONE');
+    }
+    const state=f.s.conversation(last.phone).state;assert.equal(state.slots.area,undefined);assert.equal(state.slots.rooms,undefined);assert.equal(state.slots.site,'casa');assert.equal(state.slots.location,'bello');assert.equal(state.slots.price,undefined);
+    await f.engine.process(last);assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get('SIZEUNKNOWN2:reply').n,1);
   }finally{f.s.close();}
 });
 

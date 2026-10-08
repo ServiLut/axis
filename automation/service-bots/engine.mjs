@@ -1,16 +1,19 @@
 import { normalize, SANDRA, DIEGO, CURRENT_OPERATOR_ROUTING,TECHNICAL_COORDINATOR,publicTextSafe, internalRecipients,knownInternalRecipient,internalName,questionRecipients } from './config.mjs';
 import {selectCommonAnswer,commonQuestionTopics,faqNeedsPersonalReview,faqTopicLabel} from './faq.mjs';
 import {chiefStatusTopic,chiefStatusReply} from './chief-status.mjs';
+import {chiefReadOnlyTopic,chiefReadOnlyReply} from './chief-readonly.mjs';
 import {selectPrice,priceText,quotationInquiry,specialQuotation,currentPriceEntries} from './prices.mjs';
 import {adviserReply} from './adviser-tone.mjs';
 import {CONVERSATIONAL_AI_GUARD} from './ai-settings.mjs';
 import {ownIntent} from './maria-understanding.mjs';
 import {literalPaintingRequest} from './technical-scope.mjs';
 import {afterServiceKind,afterServiceRequest,afterServiceDecision,explicitNewService} from './after-service.mjs';
-import {programEnabled,registrationQuoteReady,registrationTurn} from './maria-program.mjs';
+import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,literalIntakeTextWithoutRegistrationFields} from './maria-program.mjs';
 import {createHash} from 'node:crypto';
 import {tesaOperationalTopic} from './tesa-config.mjs';
 import {prepareTesaQuestion,initializeTesaStore} from './tesa-operations.mjs';
+
+export const MARIA_AUTONOMOUS_INTAKE_GUARD='literal-ordinary-intake-without-staff-delegation-v1';
 
 const groupField=value=>String(value??'').replace(/https?:\/\/\S+|www\.\S+|[\w.+-]+@[\w.-]+/g,'[referencia reservada]').replace(/\b(?:57)?3\d{9}\b/g,'[teléfono reservado]').replace(/\b(?:calle|carrera|avenida|transversal|diagonal|cl|cra|cr|kr|av|trv|tv|dg)\.?\s*\d[^;\n]*|#\s*\d[^;\n]*/gi,'[dirección reservada]').replace(/\b\d{6,}\b/g,'[referencia reservada]').slice(0,130);
 export function routeCaseQuestion(store,config,request){
@@ -26,7 +29,7 @@ export function routeCaseQuestion(store,config,request){
 }
 
 const externalLinks = text => String(text??'').match(/\b(?:https?:\/\/|www\.)[^\s<>"']+/gi)||[];
-const textWithoutLinks = text => String(text??'').replace(/\b(?:https?:\/\/|www\.)[^\s<>"']+/gi,' ');
+const textWithoutLinks = text => String(text??'').replace(/\b(?:https?:\/\/|www\.)[^\s<>"']+/gi,' ').replace(/\[\s*(?:plaga|empresa\s*\/\s*hogar|municipio|barrio|tipo de inmueble)\s*\]/gi,' ');
 const unreadLinkOnly = text => externalLinks(text).length>0&&!textWithoutLinks(text).trim();
 
 function directed(text,name) {
@@ -40,7 +43,7 @@ function shortNameStatus(text,name){
   return match&&chiefStatusTopic(match[1])?match[1]:null;
 }
 export function extractSlots(text,company) {
-  text=textWithoutLinks(text);
+  text=textWithoutLinks(company==='fumigacion'?literalIntakeTextWithoutRegistrationFields(text):text);
   const t=normalize(text), slots={};
   const pests={cucarachas:/\bcucarachas?\b/,hormigas:/\bhormigas?\b/,ratones:/\b(?:raton|ratones)\b/,ratas:/\bratas?\b/,chinches:/\bchinches?\b/,comején:/\bcomejen(?:es)?\b/,avispas:/\bavispas?\b/,roedores:/\broedores?\b/,mosquitos:/\bmosquitos?\b/,pulgas:/\bpulgas?\b/,zancudos:/\b(?:zancudos?|sancudos?)\b/,'arañas':/\baranas?\b/,moscas:/\bmoscas?\b/,chiripas:/\bchiripas?\b/,prevencion:/\bprevencion\b/,fumigacion:/\bfumigacion\b/};
   const found=company==='fumigacion'?Object.keys(pests).filter(s=>pests[s].test(t)):['nevera','lavadora','secadora','estufa','horno','calentador','aire acondicionado'].filter(s=>t.includes(s));
@@ -59,7 +62,7 @@ export function extractSlots(text,company) {
   if(company==='fumigacion'){
     // An explicit square exponent is required for mt/mts abbreviations. Keep
     // the literal source; bare metres remain ambiguous for automatic pricing.
-    slots.area=text.match(/\b\d{1,5}(?:[.,]\d{1,2})?\s*(?:m(?:ts?)?\s*(?:²|2)|m\s*cuadrados?|metros?\s*cuadrados?)(?=$|[\s.,;:)])/i)?.[0];
+    slots.area=text.match(/\b\d{1,5}(?:[.,]\d{1,2})?\s*(?:m(?:ts?)?\s*(?:²|2)|m(?:ts?)?\.?\s*cuadrados?|metros?\s*cuadrados?)(?=$|[\s.,;:)])/i)?.[0];
     slots.mattresses=text.match(/\b(?:\d{1,3}|un|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+colch[oó](?:n|nes)\b/i)?.[0];
     slots.affectedFurniture=/\b(?:bases? de cama|sofas?|muebles?)\b/.test(t)?'muebles mencionados; alcance por verificar':undefined;
     slots.roomScale=/\b(?:habitaciones?|cuartos?|piezas?)\s*\(?\s*pequen[oa]s?\b/.test(t)?'pequeños':/\b(?:habitaciones?|cuartos?|piezas?)\s*\(?\s*grandes?\b/.test(t)?'grandes':undefined;
@@ -83,6 +86,9 @@ export function extractSlots(text,company) {
 }
 function literalFields(state,e,company){
   const fields=extractSlots(e.text,company);
+  // A price followup naming the generic procedure does not replace the pest
+  // already supplied in this case ("cuánto vale la fumigación").
+  if(company==='fumigacion'&&fields.service==='fumigacion'&&state.slots.service&&!['fumigacion','prevencion'].includes(normalize(state.slots.service))&&quotationInquiry(e.text))delete fields.service;
   if(company==='fumigacion'&&fields.service&&state.slots.service&&/^(?:y|tambien|ademas)(?:\s+|[, :])/.test(normalize(e.text)))
     fields.service=[...new Set((state.slots.service+' y '+fields.service).split(' y '))].join(' y ');
   return fields;
@@ -100,17 +106,18 @@ function rememberFields(state,e,company,fields=literalFields(state,e,company)){
 }
 export function parseUnderstanding(value,customerText) {
   if(!value||typeof value!=='object'||Array.isArray(value))return {};
-  customerText=textWithoutLinks(customerText);
+  customerText=textWithoutLinks(literalIntakeTextWithoutRegistrationFields(customerText));
   const fields=['service','location','site','detail','preference'];const result={};
   for(const key of fields) {
     const v=value.slots?.[key];
     // Extract only literal spans. An inferred price, schedule, diagnosis or instruction has no authority.
-    if(typeof v==='string'&&v.length>=2&&v.length<=300&&normalize(customerText).includes(normalize(v)))result[key]=v;
+    if(typeof v==='string'&&v.length>=2&&v.length<=300&&!/[\[\]]/.test(v)&&normalize(customerText).includes(normalize(v)))result[key]=v;
   }
   return result;
 }
 export function capabilitiesReply(config,phone,verifiedPrices=0) {
   const recipient=phone===SANDRA?'Doña Sandra':internalName(phone);
+  if(programEnabled(config))return recipient+', soy '+config.bot+'. Puedo recibir y cotizar solicitudes ordinarias con la tabla aprobada y registrar el servicio aceptado a mi nombre cuando tenga los datos completos. Consulto al equipo por técnico, disponibilidad y hora. No registro pagos ni concedo garantías.';
   if(config.enabled&&config.company==='fumigacion'&&verifiedPrices)return recipient+', soy '+config.bot+'. Puedo recibir solicitudes, conservar lo que ya me indicaron y cotizar cuando el servicio coincide con una tarifa verificada. Los inmuebles especiales, horarios y técnicos necesitan confirmación. Todavía no creo servicios en el programa ni registro pagos.';
   if(config.enabled)return recipient+', soy '+config.bot+'. Puedo recibir solicitudes, preguntar los datos que faltan y guardar cada solicitud para revisión. La cotización, el horario y el técnico siguen pendientes de confirmación para cada caso. Todavía no creo servicios en el programa ni registro pagos.';
   return recipient+', por ahora soy '+config.bot+' y sigo en aprendizaje. Puedo revisar chats, guardar aclaraciones verificadas y consultar las confirmaciones con Sandra. Todavía no tengo consulta automática del programa y no atiendo clientes, confirmo horarios, creo servicios ni registro pagos.';
@@ -163,6 +170,11 @@ function requestedTechnicalContact(text){
     /\b(?:podrias?|podrian|puedes?|pueden|compartir|compartes|comparte|comparteme|pasar|pasas|pasa|pasame|enviar|envias|envia|enviame|dame|darme|necesito|quiero|quisiera|cual (?:es|seria))\b/.test(t);
 }
 function isCustomerQuestion(text){text=textWithoutLinks(text);return /[?¿]/.test(text)||postServiceDocuments(text)||serviceFollowup(text)||paymentInquiry(text)||previousQuotation(text)||postServiceReturn(text)||plannedRevisit(text)||requestedTechnicalContact(text)||commonQuestionTopics(text).length>0||/\b(?:cuanto (?:cuesta|vale|cobran|dura)|cual es (?:el|la)|como funciona|que incluye|me puedes (?:decir|confirmar)|pueden (?:venir|atender)|a que horas? (?:me |nos )?(?:puedes|pueden|podrias) (?:colaborar|atender|ayudar|venir))\b/.test(normalize(text));}
+function ordinaryAvailabilityRequest(text){
+  const t=normalize(textWithoutLinks(text));
+  return !faqNeedsPersonalReview(text)&&!commonQuestionTopics(text).length&&!paymentInquiry(text)&&!previousQuotation(text)&&!serviceFollowup(text)&&!postServiceReturn(text)&&!plannedRevisit(text)&&!afterServiceKind(text)&&
+    /\b(?:pueden (?:venir|atender|fumigar)|tienen disponibilidad|(?:puedo|quiero|quisiera|necesito) (?:agendar|programar)|a que hora (?:pueden|podrian) (?:venir|atender|fumigar))\b/.test(t);
+}
 function customerCourtesy(text){
   const value=normalize(text).replace(/\s+/g,' ');
   if(/[?¿\d]/.test(value)||!/^(?:(?:hola|buenos dias|buen dia|buenas tardes|buenas noches)[,.! ]+)?(?:(?:muchas|muchisimas|mil)\s+)?gracias\b/.test(value))return false;
@@ -183,7 +195,7 @@ function promptedSize(e,state){
 }
 function retainPromptedLocation(state,e){
   if(!literalIntakeTurn(e)||!(state.asked?.includes('location')||state.initialIntakeAllRequested||state.slots.location||extractSlots(e.text,'fumigacion').location))return;
-  const text=textWithoutLinks(e.text).trim(),t=normalize(text);
+  const text=textWithoutLinks(literalIntakeTextWithoutRegistrationFields(e.text)).trim(),t=normalize(text);
   if(!text||text.length>240||/^(?:no|quizas|tal vez|posiblemente)\b/.test(t))return;
   // Preserve the sender's location words, including a short answer in a rapid
   // batch. A neighborhood name alone never supplies an inferred municipality.
@@ -207,7 +219,7 @@ export function customerDecision(company,state,e,analysis={}) {
   // words, media and forwarded messages keep their normal guarded route.
   if(company==='fumigacion'&&e.kind==='text'&&!e.forwarded&&/^(?:(?:hola|buenos dias|buen dia|buenas tardes|buenas noches)[,!. ]+)?[¿¡ ]*como esta(?:s|n)?[?!.,! ]*$/.test(normalize(e.text)))return {state:{...state,slots:{...state.slots},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)},courtesy:true,socialGreeting:true,reply:'Gracias por preguntar. Estoy aquí para ayudarte.'};
   if(e.kind==='text'&&!e.forwarded&&(state.introduced||state.initialIntakeAllRequested||state.asked?.length)&&/^(?:hola|hola buenas noches|buenos dias|buen dia|buenas tardes|buenas noches)[.!¡, ]*$/.test(normalize(e.text)))return {state:{...state,slots:{...state.slots},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)},courtesy:true,greeting:true,reply:/buenas noches/.test(normalize(e.text))?'Buenas noches.':/buenas tardes/.test(normalize(e.text))?'Buenas tardes.':/buen(?:os dias| dia)/.test(normalize(e.text))?'Buen día.':'Hola.'};
-  const literalText=textWithoutLinks(e.text).trim(),t=normalize(literalText);
+  const literalText=textWithoutLinks(company==='fumigacion'?literalIntakeTextWithoutRegistrationFields(e.text):e.text).trim(),t=normalize(literalText);
   const literal=literalFields(state,e,company),existing={...state.slots,...literal};
   let understood=parseUnderstanding(analysis,e.text);
   if(analysis?.guard===CONVERSATIONAL_AI_GUARD){
@@ -238,7 +250,10 @@ export function customerDecision(company,state,e,analysis={}) {
   if(previousQuotation(e.text))return {state:next,reviewTopic:'existing-quotation',reviewConditions:{kind:'previous-quotation'},review:'La persona dice que ya recibió una cotización. Esa afirmación no confirma precio, aceptación ni reserva; hace falta contrastar el antecedente del mismo caso.',reviewQuestion:'¿Qué cotización previa comprobada corresponde a este caso y cuál es la respuesta vigente?',reply:'Entiendo. La cotización anterior aún necesita verificarse para continuar.'};
   const followup=company==='fumigacion'&&afterServiceDecision(state,next,e,analysis);
   if(followup)return followup;
-  if(company==='fumigacion'&&ownIntent(analysis,e)?.kind==='general-question')return {state:{...next,slots:{...state.slots}},reviewTopic:'customer-question',reviewConditions:{kind:'general-question'},review:'La persona consulta condiciones generales. Falta una respuesta aprobada aplicable; no es una nueva cotización ni una garantía concedida.',reviewQuestion:'¿Qué respuesta verificada corresponde a esta pregunta?',reply:'Con gusto. Tu pregunta quedó pendiente de revisión.'};
+  const ordinaryAvailability=company==='fumigacion'&&ordinaryAvailabilityRequest(e.text);
+  // A semantic label cannot erase a literal intake answer or turn an ordinary
+  // availability request into a generic approval question.
+  if(company==='fumigacion'&&ownIntent(analysis,e)?.kind==='general-question'&&!(literalIntakeTurn(e)&&Object.keys(literal).length)&&!ordinaryAvailability)return {state:{...next,slots:{...state.slots}},reviewTopic:'customer-question',reviewConditions:{kind:'general-question'},review:'La persona consulta condiciones generales. Falta una respuesta aprobada aplicable; no es una nueva cotización ni una garantía concedida.',reviewQuestion:'¿Qué respuesta verificada corresponde a esta pregunta?',reply:'Con gusto. Tu pregunta quedó pendiente de revisión.'};
   if(company==='fumigacion'&&(requestedControl(e.text)||state.requestedControlReview)){
     const reference=state.requestedControlReview||{sourceId:e.id,at:e.at,directCustomerReport:!e.forwarded};
     return {state:{...next,requestedControlReview:reference},reviewTopic:'service-followup',reviewConditions:{kind:'requested-control',directCustomerReport:reference.directCustomerReport},reviewSource:reference.sourceId,review:'La persona solicita una visita de control. Debe comprobarse el antecedente y el alcance; la solicitud no acredita un servicio anterior, intervalo aprobado, garantía, reserva ni precio.',reviewQuestion:'¿Qué antecedente y condiciones verificadas corresponden a esta solicitud de control?',reply:'Con gusto. Tu solicitud de control sigue pendiente de confirmación.'};
@@ -253,20 +268,25 @@ export function customerDecision(company,state,e,analysis={}) {
     if(painting)return {state:{...next,technicalPaintingRequest:painting},reviewTopic:'special-quotation',reviewConditions:{kind:'technical-painting',requestSource:painting.sourceId},reviewSource:painting.sourceId,review:'La persona solicita pintura de una nevera. No consta que ofrezcamos ese trabajo; hay que confirmar el alcance y disponibilidad antes de preguntar por una avería o por horario.',reviewQuestion:'¿Ofrecemos el servicio de pintura solicitado y qué respuesta comprobada corresponde a este caso?',reply:'Con gusto. Aún falta confirmar si ofrecemos el servicio de pintura que necesitas.'};
   }
   if(/^(?:hola[, ]+)?(?:con|esta|se encuentra)\s+\p{L}+(?:\s+\p{L}+)?[.!? ]*$/u.test(t))return {state:{...next,slots:{...state.slots}},reviewTopic:'requested-person',review:'La persona pidió hablar con alguien específico. Falta conocer el motivo; no consta una solicitud nueva de servicio.',reviewQuestion:'¿Quién puede atender esta solicitud?',reply:'Tu mensaje quedó pendiente de atención.'};
-  if(company==='fumigacion'&&specialQuotation(e.text,next.slots))return {state:next,reviewTopic:'special-quotation',reviewConditions:{kind:'special-property'},review:'Cotización especial de edificio, unidad, varias propiedades o zonas comunes; necesita alcance y precio propios, sin aplicar la tarifa de una vivienda.',reviewQuestion:'¿Qué alcance y cotización corresponden a esta solicitud especial?',reply:'Gracias. Una asesora continuará contigo para preparar la cotización de este inmueble.'};
+  if(company==='fumigacion'&&specialQuotation(literalText,next.slots))return {state:next,reviewTopic:'special-quotation',reviewConditions:{kind:'special-property'},review:'Cotización especial de edificio, unidad, varias propiedades o zonas comunes; necesita alcance y precio propios, sin aplicar la tarifa de una vivienda.',reviewQuestion:'¿Qué alcance y cotización corresponden a esta solicitud especial?',reply:'Gracias. Una asesora continuará contigo para preparar la cotización de este inmueble.'};
   if(company==='fumigacion'&&normalize(next.slots.service).includes('avispas'))return {state:next,reviewTopic:'special-quotation',reviewConditions:{kind:'wasp-inspection'},review:'La cotización de avispas depende del tamaño y la altura del panal; requiere inspección. No hay una tarifa automática aprobada.',reviewQuestion:'¿Qué inspección y cotización corresponden al tamaño y la altura de este panal?',reply:'Para las avispas, la cotización depende del tamaño y la altura del panal y requiere inspección.'};
   if(!next.slots.detail&&state.asked?.at(-1)==='detail'&&!/[?¿]/.test(literalText)&&t.length>3)next.slots.detail=literalText.slice(0,300);
   if(!next.slots.preference&&state.asked?.includes('preference')&&/\b(hoy|mañana|manana|lunes|martes|miercoles|jueves|viernes|sabado|domingo|\d{1,2}[/:]\d{1,2}|tarde|mañana|noche)\b/.test(t))next.slots.preference=literalText.slice(0,300);
+  if(ordinaryAvailability){
+    const preference=literalText.match(/\b(?:hoy|mañana|manana|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\b[^.!?]*/i)?.[0];
+    if(preference){next.slots.preference=preference;next.intakeSources={...next.intakeSources,preference:{sourceId:e.id,at:e.at,context:'literal-request-not-confirmed-availability'}};}
+  }
   const mattressService=company==='fumigacion'&&normalize(next.slots.service).includes('chinches');
   const fields=company==='fumigacion'?['service','site',mattressService?'mattresses':'size','location']:['service','detail','location'];
-  const missing=fields.find(f=>f==='size'?!next.slots.area&&!next.slots.rooms:f==='location'&&company==='fumigacion'?!next.slots.location&&!next.slots.locationDetails:!next.slots[f]);
+  const missing=fields.find(f=>f==='size'?!next.slots.area&&!next.slots.rooms:!next.slots[f]);
   const questions={service:company==='fumigacion'?'¿Qué plaga deseas tratar o buscas un servicio preventivo?':'¿Qué equipo necesitas revisar?',site:'¿En qué tipo de inmueble necesitas el servicio?',size:'¿Cuántas habitaciones o metros cuadrados tiene el lugar?',mattresses:'¿Cuántos colchones están afectados? Cuéntame también si hay chinches en bases de cama u otros muebles.',detail:'¿Qué falla presenta el equipo?',location:'¿En qué municipio y barrio necesitas el servicio?'};
   if(/[?¿]/.test(literalText)&&/\b(eso|lo anterior|lo que (?:me )?(?:dij|coment|indic|explic)|me habian|me hab[ií]as|mismo (?:precio|horario|servicio)|como qued|que qued)\w*/.test(t))
     return {state:next,reviewTopic:'previous-communication',review:'El cliente pregunta por algo comunicado antes. Hay que relacionar su pregunta con el contexto guardado y el servicio correcto antes de contestar.',reply:'Gracias. Revisaremos lo que ya conversamos para responder tu pregunta con claridad.'};
-  if(isCustomerQuestion(e.text)&&!(company==='fumigacion'&&quotationInquiry(e.text)&&!ambiguousIntake(e.text)))
+  if(isCustomerQuestion(e.text)&&!(company==='fumigacion'&&(quotationInquiry(e.text)||ordinaryAvailability)&&!ambiguousIntake(e.text)))
     return {state:literalIntakeTurn(e)?next:{...next,slots:{...state.slots}},reviewTopic:!e.forwarded&&quotationInquiry(e.text)?'cotizacion-verificada':'customer-question',review:'La persona hizo una pregunta concreta. Hace falta revisar sus antecedentes y confirmar la respuesta para este servicio.',reviewQuestion:'¿Qué respuesta verificada corresponde a esta pregunta?',reply:'Recibí tu pregunta. Tu solicitud sigue pendiente de confirmación.'};
-  if(missing&&!next.asked.includes(missing)){next.asked.push(missing);return {state:next,reply:questions[missing]};}
+  if(missing&&!next.asked.includes(missing)){next.asked.push(missing);return {state:next,reply:company==='fumigacion'&&missing==='location'&&next.slots.locationDetails?'¿En qué municipio necesitas el servicio? Ya conservé la ubicación que me indicaste.':questions[missing]};}
   if(missing){
+    if(company==='fumigacion')return {state:next,reply:missing==='location'&&next.slots.locationDetails?'Me falta confirmar el municipio para cotizarte; ya conservé la ubicación que me indicaste.':missing==='mattresses'?'Para cotizar esa cama, confirma cuántos colchones están afectados y si también hay chinches en la base u otros muebles.':questions[missing]};
     const names={service:'la plaga o el servicio solicitado',site:'el tipo de inmueble',size:'las habitaciones o metros cuadrados del lugar',mattresses:'los colchones y muebles afectados',detail:'la falla del equipo',location:'el municipio y barrio'};
     return {state:next,reviewTopic:'missing-intake:'+missing,reviewConditions:{missing},review:'Ya preguntamos por '+names[missing]+', pero la respuesta no permite confirmarlo.',reviewQuestion:'¿Qué dato podemos confirmar sobre '+names[missing]+' para esta solicitud?',reply:'Gracias. Revisaremos los detalles que nos compartiste para continuar.'};
   }
@@ -327,6 +347,9 @@ export class Engine {
         const shortStatus=e.kind==='text'&&shortNameStatus(e.text,c.bot);
         if(e.kind==='text'&&(directed(e.text,c.bot)||ownQuote||shortStatus)){
           const body=(shortStatus||normalize(e.text).replace(/^[¿¡ ]*(?:(?:hola|buenos dias|buenas tardes|buenas noches)[, :]+)?(?:maria angel|mariangel|miguel angel|bot)[, :¿?!]*/,'' )).replace(/[¿?!.]+$/,'').trim();
+          const readOnlyTopic=e.phone===SANDRA&&chiefReadOnlyTopic(body);
+          const readOnlyReply=readOnlyTopic&&chiefReadOnlyReply(s,c,e.phone,readOnlyTopic,body);
+          if(readOnlyReply){s.queue(e.id+':readonly',SANDRA,e.line,readOnlyReply,true,0);finish('CHIEF_READONLY');return;}
           if(/^(?:que (?:funciones )?puedes (?:hacer|realizar)(?: en este momento)?|que sabes hacer|como puedes ayudarme)$/.test(body)){
             s.queue(e.id+':capabilities',e.phone,e.line,capabilitiesReply(c,e.phone,currentPriceEntries(s.approvedPriceCatalogs()).length),true,0);finish('CHIEF_CAPABILITIES');return;
           }
@@ -374,7 +397,7 @@ export class Engine {
         if(c.company==='fumigacion')controlRequest=turns.filter(turn=>turn.kind==='text'&&requestedControl(turn.text)).at(-1)||null;
         if(c.company==='fumigacion')followupRequest=turns.find(turn=>afterServiceRequest(turn))||null;
         caseState.intakeSources={...caseState.intakeSources};
-        for(const turn of turns.filter(turn=>literalIntakeTurn(turn)&&!['name','address','confirm'].includes(caseState.programIntake?.stage))){
+        for(const turn of turns.filter(turn=>literalIntakeTurn(turn)&&!['name','address','details','confirm'].includes(caseState.programIntake?.stage))){
           const fields=literalFields(caseState,turn,c.company);
           const contextualSize=c.company==='fumigacion'&&!fields.area?promptedSize(turn,caseState):undefined;
           if(contextualSize)fields.area=contextualSize;
@@ -415,9 +438,10 @@ export class Engine {
       let selectedPrice=null;
       const currentQuote=caseState.quotedPrice;
       const priceNow=currentQuote&&selectPrice(decision.state.slots,s.approvedPriceCatalogs(),currentQuote.entryId).entry;
+      const naturalAcceptance=acceptsOrdinaryQuotation(e.text);
       const continuingQuote=c.company==='fumigacion'&&currentQuote&&priceNow?.id===currentQuote.entryId&&priceNow.priceCop===currentQuote.priceCop&&
-        !decision.review&&!decision.courtesy&&!specialQuotation(e.text,decision.state.slots)&&
-        (currentQuote.accepted||/^(?:si(?:[, ]+por favor)?|listo|dale|de acuerdo|acepto|quiero continuar|quiero agendar|deseo agendar)[.! ]*$/.test(normalize(e.text)));
+        ((!decision.review&&!decision.courtesy)||(naturalAcceptance&&(decision.courtesy||decision.reviewTopic==='customer-question')))&&!specialQuotation(textWithoutLinks(literalIntakeTextWithoutRegistrationFields(e.text)),decision.state.slots)&&
+        (currentQuote.accepted||naturalAcceptance);
       if(continuingQuote){
         const delivered=s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND state IN ('DELIVERED','READ')").get(currentQuote.sourceId+':reply',e.phone,e.line);
         if(delivered&&s.priceReplyStillValid(delivered)){
@@ -436,7 +460,7 @@ export class Engine {
       }
       if(c.company==='fumigacion'&&(decision.question?.topic==='cotizacion-verificada'||decision.reviewTopic==='customer-question'&&quotationInquiry(e.text))){
         const selection=selectPrice(decision.state.slots,s.approvedPriceCatalogs());
-        if(selection.entry&&!e.forwarded&&!ambiguousIntake(e.text)&&!specialQuotation(e.text,decision.state.slots)){
+        if(selection.entry&&!e.forwarded&&!ambiguousIntake(e.text)&&!specialQuotation(textWithoutLinks(literalIntakeTextWithoutRegistrationFields(e.text)),decision.state.slots)){
           selectedPrice=selection.entry;
           decision={state:{...decision.state,quotedPrice:{entryId:selectedPrice.id,priceCop:selectedPrice.priceCop,slots:{...decision.state.slots},sourceId:e.id}},reply:priceText(selectedPrice)};
           s.audit('REVIEWED_PRICE_SELECTED',e.id,{entryId:selectedPrice.id,priceCop:selectedPrice.priceCop,quoteSources:selection.sourceIds,caseId:caseState.caseId,businessWritten:false});
@@ -451,19 +475,19 @@ export class Engine {
       // Replies to a name/address/summary prompt are not new pest/property
       // descriptions. In particular a street number before "apartamento"
       // must not become a quantity of apartments for quotation scope.
-      const literalProgramStage=['name','address','confirm','correction'].includes(caseState.programIntake?.stage);
+      const literalProgramStage=['name','address','details','confirm','correction'].includes(caseState.programIntake?.stage);
       const registration=registrationTurn(s,c,caseState,e,literalProgramStage?{...decision,state:{...decision.state,slots:{...caseState.slots}}}:decision);
       if(registration)decision=registration;
       decision.state.lastHandledSourceId=e.id;
       if(/^[¡! ]*(?:hola\b|buenos dias\b|buen dia\b|buenas tardes\b|buenas noches\b)/.test(normalize(e.text))&&!conv.state.introduced&&decision.reply){
-        if(c.company==='fumigacion'&&!selectedPrice&&!quotationInquiry(e.text)&&!decision.courtesy&&!decision.review&&!decision.question&&!decision.observed){
+        if(c.company==='fumigacion'&&!selectedPrice&&!decision.courtesy&&!decision.review&&!decision.question&&!decision.observed){
           const missing=decision.state.slots,requests=[];
           if(!missing.service)requests.push('Qué plaga deseas tratar o si buscas prevención.');
           if(normalize(missing.service).includes('chinches')){
             if(!missing.site)requests.push('Qué tipo de inmueble es.');
             if(!missing.mattresses)requests.push('Cuántos colchones están afectados y si también hay chinches en bases de cama u otros muebles.');
           }else if(!missing.site||!missing.area&&!missing.rooms)requests.push(!missing.site&&!missing.area&&!missing.rooms?'Qué tipo de inmueble es y cuántas habitaciones o metros cuadrados tiene.':!missing.site?'Qué tipo de inmueble es.':'Cuántas habitaciones o metros cuadrados tiene.');
-          if(!missing.location&&!missing.locationDetails)requests.push('El municipio y barrio o vereda donde necesitas el servicio.');
+          if(!missing.location)requests.push(missing.locationDetails?'El municipio donde necesitas el servicio; ya conservé la ubicación indicada.':'El municipio y barrio o vereda donde necesitas el servicio.');
           if(requests.length){decision.reply='Para ayudarte con la cotización, cuéntame:\n'+requests.map(x=>'• '+x).join('\n');decision.state.initialIntakeAllRequested=true;}
         }
         decision.reply='Hola, soy '+c.bot+'. '+decision.reply;decision.state.introduced=true;

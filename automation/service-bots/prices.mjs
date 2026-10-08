@@ -9,7 +9,7 @@ const counts={un:1,una:1,uno:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho
 export function numericCount(value){const t=normalize(value).match(/^(\d{1,4}|un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)(?:er|ro|do|to)?\b/);return t?(counts[t[1]]??Number(t[1])):null;}
 export function quotationInquiry(text){
  const t=normalize(text);
- return !/\b(?:garantia|productos?|segur\w*|toxic\w*|pago|pague|abono|cuenta|refuerzo|descuento|ya me|me cotizaron)\b/.test(t)&&/\b(?:cotiz\w*|precio|valor|cuanto (?:cuesta|vale|cobran)|costo)\b/.test(t);
+ return !/\b(?:garantia|productos?|segur\w*|toxic\w*|pago|pague|abono|cuenta|refuerzo|descuento|ya me|me cotizaron)\b/.test(t)&&/\b(?:cotiz\w*|precio|valor|cuanto (?:(?:me|nos|les) )?(?:cuesta|vale|cobran)|costo)\b/.test(t);
 }
 export function specialQuotation(text,slots={}){
  return specialPropertyScope(text,slots);
