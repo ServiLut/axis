@@ -10,6 +10,8 @@ El backend candidato de Tenaxis ofrece POST `/integrations/maria-service-registr
 
 POST `/program-setup` del runtime propio, autenticado con su token administrativo existente, acepta únicamente `enabled`, `url`, `token`, `actorId`, `startsAt` y `expiresAt`. Comprueba `/status` antes de guardar la configuración cifrada. Los estados públicos no exponen el token. La configuración de entorno equivalente usa `BOT_MARIA_PROGRAM_ENABLED`, `BOT_MARIA_PROGRAM_URL`, `BOT_MARIA_PROGRAM_TOKEN`, `BOT_MARIA_PROGRAM_ACTOR_ID`, `BOT_MARIA_PROGRAM_STARTS_AT_UTC` y `BOT_MARIA_PROGRAM_EXPIRES_AT_UTC`.
 
+El destino está limitado a la URL HTTPS propia verificada `https://tenaxis-backend-0zeuja.servilutioncrm.cloud/integrations/maria-service-registration`; no se envía la credencial a otro host. Una cotización histórica sin evidencia de entrega suficiente conserva su continuación previa y no queda en silencio por intentar iniciar un guardado.
+
 ## Guardado y confirmación
 
 Sólo una cotización propia de la tabla directa vigente, entregada y aceptada dentro de 24 horas, habilita la recepción de datos. Las cuatro cotizaciones nativas excepcionales conservan su alcance y no habilitan esta escritura. La tabla mantiene $99.000 por colchón y sus demás condiciones verificadas.

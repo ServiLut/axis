@@ -5,6 +5,7 @@ import {BUSINESS_PRICE_HASH,selectBusinessPrice} from './business-prices.mjs';
 export const MARIA_PROGRAM_GUARD='own-accepted-new-service-summary-and-atomic-receipt-v1';
 export const MARIA_TENANT='9ffea9df-1e06-4590-acec-0e5cde715ba9';
 export const MARIA_COMPANY='35a19d89-15d1-4c32-8353-3471b6d9f0ff';
+export const MARIA_PROGRAM_URL='https://tenaxis-backend-0zeuja.servilutioncrm.cloud/integrations/maria-service-registration';
 const setupKey='maria-program-setup',prefix='maria-registration:';
 const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const iso=v=>new Date(v).toISOString();
@@ -13,8 +14,8 @@ const put=(s,key,value)=>s.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) O
 export function canonical(value){return Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonical(value[k])])):value;}
 export const registrationHash=value=>createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 function validated(body,company){
- if(company!=='fumigacion'||body?.enabled!==true||!uuid.test(body.actorId||'')||typeof body.token!=='string'||! /^[A-Za-z0-9_-]{40,150}$/.test(body.token))throw Error('OWN_PROGRAM_CONFIGURATION_REQUIRED');
- const u=new URL(body.url);if(u.protocol!=='https:'||u.username||u.password||u.search||u.hash||!u.pathname.endsWith('/integrations/maria-service-registration'))throw Error('OWN_PROGRAM_HTTPS_REQUIRED');
+ if(company!=='fumigacion'||body?.enabled!==true||!uuid.test(body.actorId||'')||typeof body.token!=='string'||! /^[A-Za-z0-9_-]{43,128}$/.test(body.token))throw Error('OWN_PROGRAM_CONFIGURATION_REQUIRED');
+ const u=new URL(body.url);if(u.href.replace(/\/$/,'')!==MARIA_PROGRAM_URL)throw Error('OWN_PROGRAM_HTTPS_REQUIRED');
  const startsAt=Date.parse(body.startsAt),expiresAt=Date.parse(body.expiresAt);
  if(!Number.isFinite(startsAt)||!Number.isFinite(expiresAt)||startsAt>=expiresAt)throw Error('OWN_PROGRAM_CUTOFF_REQUIRED');
  return {enabled:true,url:u.href.replace(/\/$/,''),token:body.token,actorId:body.actorId.toLowerCase(),startsAt,expiresAt,tenantId:MARIA_TENANT,companyId:MARIA_COMPANY};
@@ -136,7 +137,7 @@ export function registrationTurn(s,c,previous,e,decision){
  s.audit('OWN_SERVICE_REGISTRATION_PREPARED',e.id,{caseId:state.caseId,requestHash:hash,priceCop:own.entry.priceCop,businessWritten:false,summaryOutboxId:pi.promptId});
  return {state,observed:true,observedState:'PROGRAM_REGISTRATION_PENDING'};
 }
-function receiptValid(c,entry,r){return ownScope(c,r)&&r.persisted===true&&uuid.test(r.orderId||'')&&r.caseId===entry.payload.caseId&&r.acceptanceId===entry.payload.quote.acceptanceId&&r.requestHash===entry.requestHash&&r.state==='NUEVO'&&r.scheduled===false&&r.paymentRecorded===false;}
+function receiptValid(c,entry,r){return ownScope(c,r)&&r.createdById===c.mariaProgram.actorId&&r.phone===entry.payload.phone&&r.persisted===true&&uuid.test(r.orderId||'')&&r.caseId===entry.payload.caseId&&r.acceptanceId===entry.payload.quote.acceptanceId&&r.requestHash===entry.requestHash&&r.state==='NUEVO'&&r.scheduled===false&&r.paymentRecorded===false;}
 async function nativeMessage(t,c,id,phone,line){
  const l=c.lines.find(x=>x.phone===line);if(!l||typeof t.request!=='function')throw Error('PROGRAM_NATIVE_RECHECK_REQUIRED');
  const response=await t.request(l,'/chat/findMessages/'+encodeURIComponent(l.instance),{where:{key:{id}},offset:10,page:1});

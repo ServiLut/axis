@@ -11,7 +11,7 @@ const base=()=>Math.floor((Date.now()-30000)/1000)*1000;
 function fixture(){
  const start=base(),store=new Store(':memory:','fumigacion',randomBytes(32));
  store.importKnowledge(approvedBusinessPriceSchedule());
- const config={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,activatedAt:start-60000,lines:BUSINESSES.fumigacion.phones.map((phone,i)=>({phone,instance:'own-'+i})),mariaProgram:{enabled:true,url:'https://own.example/integrations/maria-service-registration',token:'a'.repeat(43),actorId,tenantId:MARIA_TENANT,companyId:MARIA_COMPANY,startsAt:start-60000,expiresAt:start+86400000}};
+ const config={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,activatedAt:start-60000,lines:BUSINESSES.fumigacion.phones.map((phone,i)=>({phone,instance:'own-'+i})),mariaProgram:{enabled:true,url:'https://tenaxis-backend-0zeuja.servilutioncrm.cloud/integrations/maria-service-registration',token:'a'.repeat(43),actorId,tenantId:MARIA_TENANT,companyId:MARIA_COMPANY,startsAt:start-60000,expiresAt:start+86400000}};
  const engine=new Engine(store,config);let counter=0;
  const event=text=>({id:'SOURCE'+ ++counter,phone:'573001112233',at:start+counter*1000,line:config.lines[0].phone,fromMe:false,kind:'text',text});
  const delivered=e=>{const row=store.db.prepare('SELECT * FROM outbox WHERE id=?').get(e.id+':reply');assert.ok(row,'response '+e.text);store.db.prepare("UPDATE outbox SET mid=?,state='ACCEPTED' WHERE id=?").run('MID'+e.id,row.id);store.recordFirstBotReply({...row,mid:'MID'+e.id},'MID'+e.id,config.bot,e.at);store.delivery('MID'+e.id,e.line,'DELIVERED');store.db.prepare('UPDATE meta SET value=? WHERE key=?').run(store.seal({verifiedAt:e.at,mid:'MID'+e.id,line:e.line,state:'DELIVERED'}),'first-delivery:'+row.id);return store.open(row.body);};
@@ -30,7 +30,7 @@ function transport(f,handler){
   return {messages:{records:[]}};
  },fetcher:handler};
 }
-const receipt=p=>({company:'FUMIGACION',tenantId:MARIA_TENANT,companyId:MARIA_COMPANY,advisorMembershipId:actorId,persisted:true,orderId,caseId:p.caseId,acceptanceId:p.quote.acceptanceId,requestHash:registrationHash(p),state:'NUEVO',scheduled:false,paymentRecorded:false});
+const receipt=p=>({company:'FUMIGACION',tenantId:MARIA_TENANT,companyId:MARIA_COMPANY,advisorMembershipId:actorId,createdById:actorId,phone:p.phone,persisted:true,orderId,caseId:p.caseId,acceptanceId:p.quote.acceptanceId,requestHash:registrationHash(p),state:'NUEVO',scheduled:false,paymentRecorded:false});
 test('only delivered accepted approved quotation collects literal fields; saved receipt precedes confirmation',async()=>{
  const f=fixture();try{const stages=await f.ready();let writes=0;const t=transport(f,async(url,opts)=>{writes++;const p=JSON.parse(opts.body);assert.equal(p.customerName,'Juan Pérez');assert.equal(p.sources.acceptance.id,stages.final.id);assert.equal(p.quote.scheduleHash,BUSINESS_PRICE_HASH);assert.equal(f.store.db.prepare("SELECT COUNT(*) n FROM outbox WHERE id LIKE 'program:%'").get().n,0);return {ok:true,json:async()=>receipt(p)};});
   const before=f.store.conversation(stages.final.phone).state;assert.equal(before.quotedPrice.acceptanceSource,stages.accept.id);
@@ -90,4 +90,12 @@ test('an old quote without new delivery evidence keeps its existing continuation
 });
 test('a repeated late delivery acknowledgment cannot renew a quotation older than 24 hours',async()=>{
  const f=fixture();try{const first=await f.turn('Tengo cucarachas en mi apartamento de 42 mts2 en Itagüí. Cuánto cuesta?');f.delivered(first);f.store.db.prepare('UPDATE outbox SET created=? WHERE id=?').run(Date.now()-86400001,first.id+':reply');const acceptance=await f.turn('Sí');assert.equal(f.store.conversation(acceptance.phone).state.programIntake,undefined);assert.equal(f.store.db.prepare("SELECT COUNT(*) n FROM meta WHERE key LIKE 'maria-registration:%'").get().n,0);}finally{f.store.close();}
+});
+test('program configuration rejects an unverified destination before transmitting its credential',async()=>{
+ const f=fixture();try{const body={enabled:true,url:'https://another.example/integrations/maria-service-registration',token:'a'.repeat(43),actorId,startsAt:new Date(f.config.mariaProgram.startsAt).toISOString(),expiresAt:new Date(f.config.mariaProgram.expiresAt).toISOString()};let requests=0;await assert.rejects(()=>installProgramSetup(f.config,f.store,body,async()=>{requests++;throw Error('must not transmit');}));assert.equal(requests,0);}finally{f.store.close();}
+});
+test('receipt with a contradictory creator or phone never confirms a service',async()=>{
+ for(const mismatch of [{createdById:'e62d789d-79ed-465c-8457-1551c62a9a09'},{phone:'573009998877'}]){
+  const f=fixture();try{await f.ready();await drainProgramRegistrations(f.store,f.config,transport(f,async(url,opts)=>({ok:true,json:async()=>({...receipt(JSON.parse(opts.body)),...mismatch})})));assert.equal(registrationStatus(f.config,f.store).saved,0);assert.equal(f.store.db.prepare("SELECT COUNT(*) n FROM outbox WHERE id LIKE 'program:%'").get().n,0);}finally{f.store.close();}
+ }
 });
