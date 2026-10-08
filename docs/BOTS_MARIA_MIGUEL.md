@@ -1,8 +1,18 @@
 # María Ángel y Miguel Ángel
 
-## Destinatarios operativos — directriz humana del 08/10/2026, versión preparada
+## Estado vigente verificado — 08/10/2026, 17:22Z
 
-La usuaria cambió los destinatarios de las consultas operativas nuevas: FUMIGACION las dirige únicamente a Hilary `573043332213`; S.TECNICO las dirige únicamente a `573126944997`, la línea azul de FUMIGACION designada expresamente como coordinación de Servicio Técnico. Diego `573233350137` deja de recibir mensajes nuevos. Esta directriz sustituye las rutas anteriores para preguntas nuevas; el código preparado usa `BOT_OPERATIONAL_ROUTING=hilary-and-fumigacion-blue-20261008`. Su publicación, configuración e instalación todavía deben verificarse por separado: este apartado no acredita el cambio en producción.
+Ambos servicios tienen instalado `c98bd943a42ecb495960610e27e8a17a64d3f51b`: Dokploy DONE en tres segundos para María y dos para Miguel. Sus API propias confirmaron a las 17:22Z la ruta nueva y las guardias correspondientes; los cuatro propietarios exactos están OPEN. Estos tiempos describen el despliegue, no la latencia de respuesta al cliente.
+
+María tiene `programConnected=true`, `businessWritesEnabled=true` y seguimiento de inactividad habilitado. El registro ordinario se atribuye al actor propio `25b2e265-e463-4592-bab1-86b7b1687eae`, usuario `maria.angel.bot` sin acceso interactivo, tras la aprobación específica y configuración de su credencial de treinta días. Al corte hay cero servicios guardados por esta integración y cero intentos inciertos; sigue pendiente la primera escritura legítima, su recibo, autoría y confirmación entregada. Ver [MARIA_REGISTRO_SERVICIOS.md](MARIA_REGISTRO_SERVICIOS.md) para alcance y controles. El objetivo de respuesta en menos de tres segundos tampoco está acreditado con conversaciones legítimas.
+
+La API propia de Miguel devuelve `aiConfigured=false` y programa sin conexión. La instalación compartida de estas guardias y la conexión de sus líneas no acreditan IA propia ni registro de servicios en S.TECNICO. No se le trasladan credenciales, tabla de precios o permisos de María.
+
+Evidencia privada de aprobación/instalación y estado vigente: `C:/Users/ADMIN/.codex/visualizations/2026/09/18/01a0b62e-d6ca-7f93-bbb1-3718cf4b84b6/maria-operacion-20261008/own-program-install-private.json` y `current-routes-status-private.json`. Las secciones anteriores al 08/10 conservan sus fuentes y límites históricos; sus referencias a preparación, pausa, programa cerrado o destinatarios anteriores no sustituyen este estado vigente.
+
+## Destinatarios operativos — directriz humana del 08/10/2026, instalada y verificada
+
+La usuaria cambió los destinatarios de las consultas operativas nuevas: FUMIGACION las dirige únicamente a Hilary `573043332213`; S.TECNICO las dirige únicamente a `573126944997`, la línea azul de FUMIGACION designada expresamente como coordinación de Servicio Técnico. Diego `573233350137` deja de recibir mensajes nuevos. Esta directriz sustituye las rutas anteriores para preguntas nuevas; ambos servicios verificaron `BOT_OPERATIONAL_ROUTING=hilary-and-fumigacion-blue-20261008` con el despliegue y API propios anteriores. La siguiente consulta legítima, su entrega y respuesta vinculada siguen pendientes de comprobación.
 
 La ruta operativa comprende cotización, disponibilidad, horario, técnico y seguimiento de llegada cuando `service-followup.kind` es exactamente `arrival`. Sandra `573016803926` conserva dirección general, políticas, documentos, pagos, garantías, refuerzos, controles posteriores, excepciones y devolución expresa de chats. Un seguimiento cuyo tipo no esté determinado también permanece con Sandra. Los reportes diarios conservan exclusivamente su destinataria Sandra y sus claves de deduplicación; esta instrucción no crea otro informe, grupo ni campaña.
 
