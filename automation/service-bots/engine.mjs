@@ -8,6 +8,19 @@ import {ownIntent} from './maria-understanding.mjs';
 import {literalPaintingRequest} from './technical-scope.mjs';
 import {afterServiceKind,afterServiceRequest,afterServiceDecision,explicitNewService} from './after-service.mjs';
 import {programEnabled,registrationQuoteReady,registrationTurn} from './maria-program.mjs';
+import {createHash} from 'node:crypto';
+import {tesaOperationalTopic} from './tesa-config.mjs';
+import {prepareTesaQuestion,initializeTesaStore} from './tesa-operations.mjs';
+
+const groupField=value=>String(value??'').replace(/https?:\/\/\S+|www\.\S+|[\w.+-]+@[\w.-]+/g,'[referencia reservada]').replace(/\b(?:57)?3\d{9}\b/g,'[teléfono reservado]').replace(/\b(?:calle|carrera|avenida|transversal|diagonal|cl|cra|cr|kr|av|trv|tv|dg)\.?\s*\d[^;\n]*|#\s*\d[^;\n]*/gi,'[dirección reservada]').replace(/\b\d{6,}\b/g,'[referencia reservada]').slice(0,130);
+export function routeCaseQuestion(store,config,request){
+  if(!config.tesaOperations?.enabled||!tesaOperationalTopic(request.topic,request.conditions)||questionRecipients(config,request.topic,request.conditions).every(phone=>phone===SANDRA))return store.questionToRecipients(request);
+  const reference=createHash('sha256').update(config.company+':'+request.caseId).digest('hex').slice(0,12).replace(/[0-9]/g,d=>String.fromCharCode(65+Number(d)));
+  const labels={service:'Servicio',location:'Municipio',site:'Inmueble',area:'Área',rooms:'Habitaciones',mattresses:'Colchones',detail:'Falla',preference:'Horario solicitado',question:'Petición literal'};
+  const facts=Object.entries(request.conditions??{}).filter(([key,value])=>labels[key]&&typeof value==='string').map(([key,value])=>labels[key]+': '+groupField(value)).join('; ').slice(0,700);
+  const question=['cotizacion-verificada','special-quotation','existing-quotation'].includes(request.topic)?'¿Qué cotización corresponde a este caso?':request.topic==='requested-technician-contact'?'¿Qué contacto del técnico está autorizado para este caso?':request.topic==='service-followup'?'¿Cuál es el estado de llegada de este servicio?':request.topic.startsWith('missing-intake:')?'¿Qué dato verificado falta para continuar este caso?':'¿Qué disponibilidad, ruta y técnico corresponden a este caso?';
+  return prepareTesaQuestion(store,config,{...request,text:config.bot+' · '+config.name+'. Ref '+reference+'; cliente …'+request.phone.slice(-4)+'; línea …'+request.line.slice(-4)+'. '+(facts?facts+'. ':'')+question});
+}
 
 const externalLinks = text => String(text??'').match(/\b(?:https?:\/\/|www\.)[^\s<>"']+/gi)||[];
 const textWithoutLinks = text => String(text??'').replace(/\b(?:https?:\/\/|www\.)[^\s<>"']+/gi,' ');
@@ -261,7 +274,7 @@ export function customerDecision(company,state,e,analysis={}) {
 }
 
 export class Engine {
-  constructor(store,config){this.store=store;this.config=config;}
+  constructor(store,config){this.store=store;this.config=config;initializeTesaStore(store);}
   async process(e,analysis={}) {
     const s=this.store,c=this.config;
     return s.tx(()=>{
@@ -459,8 +472,9 @@ export class Engine {
         if(decision.reviewTopic==='service-documents'||c.company==='fumigacion'&&decision.reviewTopic==='special-quotation'){decision.state.awaitingHumanReview=true;s.saveConversation(e.phone,decision.state);}
         const history=s.conversationContext(e.phone,e.at,20,e.id);
         s.audit('CONVERSATION_CONTEXT_REVIEW',e.id,{caseId:caseState.caseId,turns:history.turns.length,storedCoverageComplete:history.completeStoredHistory,fullWhatsAppHistoryRead:false,originalMediaRead:false});
-        const request=s.questionToRecipients({phone:e.phone,line:e.line,caseId:caseState.caseId,topic:decision.reviewTopic||'revision:'+e.id,conditions:decision.reviewConditions|| (decision.reviewTopic?{question:normalize(e.text),caseId:caseState.caseId}:{event:e.id,caseId:caseState.caseId}),recipients:questionRecipients(c,decision.reviewTopic||'revision:'+e.id,decision.reviewConditions||{}),source:decision.reviewSource||e.id,
+        const request=routeCaseQuestion(s,c,{phone:e.phone,line:e.line,caseId:caseState.caseId,topic:decision.reviewTopic||'revision:'+e.id,conditions:decision.reviewConditions|| (decision.reviewTopic?{question:normalize(e.text),caseId:caseState.caseId}:{event:e.id,caseId:caseState.caseId}),recipients:questionRecipients(c,decision.reviewTopic||'revision:'+e.id,decision.reviewConditions||{}),source:decision.reviewSource||e.id,
           text:c.name+': contacto terminado en '+e.phone.slice(-4)+'. '+decision.review+(decision.pendingQuestion?' Pregunta pendiente: '+questionExcerpt(decision.pendingQuestion)+'.':'')+' Mensaje actual: '+questionExcerpt(e.text)+(context?' Datos de esta solicitud: '+context+'.':'')+' '+(decision.reviewQuestion||'¿Cómo debemos continuar en este caso?')});
+        if(request.created&&request.outboxId?.startsWith('tesa-question:')){decision.state.pendingTesaQuestionId=request.id;s.saveConversation(e.phone,decision.state);}
         if(!request.created&&(decision.reviewTopic?.startsWith('missing-intake:')||c.company==='servicio-tecnico'&&['customer-question','special-quotation'].includes(decision.reviewTopic)||['cotizacion-verificada','common-question','service-documents','service-followup','warranty-review','requested-technician-contact','payment-instructions','existing-quotation','unread-link'].includes(decision.reviewTopic))){
           decision.reply=null;
           s.audit('PENDING_CLARIFICATION_REUSED',e.id,{caseId:caseState.caseId,questionId:request.id,topic:decision.reviewTopic,newOutboundCreated:false});
@@ -470,8 +484,9 @@ export class Engine {
         const slots=decision.question.conditions;
         const summary=Object.entries(slots).map(([k,v])=>(labels[k]||k)+': '+questionExcerpt(String(v))).join('; ');
         const quoteOnly=decision.question.topic==='cotizacion-verificada';
-        const request=s.questionToRecipients({phone:e.phone,line:e.line,caseId:caseState.caseId,topic:decision.question.topic,conditions:slots,recipients:questionRecipients(c,decision.question.topic),source:pendingQuestion?.id||e.id,
+        const request=routeCaseQuestion(s,c,{phone:e.phone,line:e.line,caseId:caseState.caseId,topic:decision.question.topic,conditions:slots,recipients:questionRecipients(c,decision.question.topic),source:pendingQuestion?.id||e.id,
           text:c.name+': solicitud del contacto terminado en '+e.phone.slice(-4)+'. '+summary+(quoteOnly?'. Falta confirmar el precio y la respuesta aplicable. ¿Qué cotización y texto vigente corresponden a esta solicitud?':decision.question.topic==='disponibilidad-y-tecnico'?(decision.state.programServiceId?'. La solicitud está guardada en el programa a nombre de María; no hay horario o técnico confirmados. ¿Qué disponibilidad y técnico corresponden a este caso?':'. La cotización fue entregada y aceptada; no hay reserva guardada ni horario o técnico confirmados. ¿Qué disponibilidad y técnico corresponden a este caso?'):'. Aún no hay técnico, horario ni precio confirmados. ¿Qué técnico, horario disponible y cotización corresponden a este caso?')});
+        if(request.created&&request.outboxId?.startsWith('tesa-question:')){decision.state.pendingTesaQuestionId=request.id;s.saveConversation(e.phone,decision.state);}
         if(!request.created)decision.reply=null;
         else if(c.company==='fumigacion'){
           decision.reply=decision.question.topic==='disponibilidad-y-tecnico'?'Gracias. Una asesora continuará contigo para confirmar el horario del servicio.':'Gracias. Una asesora continuará contigo para completar la cotización.';

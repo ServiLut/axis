@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import {aiConfiguration} from './ai-settings.mjs';
 import {registrationConfig} from './maria-program.mjs';
+import {tesaConfiguration} from './tesa-config.mjs';
 
 export const BUSINESSES = Object.freeze({
   fumigacion: { name: 'FUMIGACION', bot: 'María Ángel', phones: ['573126944997','573126938721'] },
@@ -66,6 +67,7 @@ export function configFromEnv(env = process.env) {
     aiUrl: env.BOT_UNDERSTANDING_URL || null, aiToken: env.BOT_UNDERSTANDING_TOKEN || null,
     responseTargetMs:company==='fumigacion'?3000:null,
     inactivityFollowupEnabled:company==='fumigacion'&&env.BOT_CUSTOMER_INACTIVITY_FOLLOWUP==='true',
+    tesaOperations:tesaConfiguration(env,company,lines,Date.parse(env.BOT_ACTIVATED_AT || '')),
     mariaProgram:registrationConfig(env,company),
     conversationalAi:aiConfiguration(env,company) };
 }

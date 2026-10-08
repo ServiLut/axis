@@ -18,6 +18,8 @@ import {restoreOwnAiSetup,installOwnAiSetup} from './ai-setup.mjs';
 import {persistMariaKnowledge,mariaKnowledgeStatus,mariaKnowledgeDocument} from './maria-knowledge.mjs';
 import {restoreProgramSetup,installProgramSetup,registrationStatus} from './maria-program.mjs';
 import {initializeInactivityFollowup,inactivityStatus,responseTimingStatus,recordDeliveryTiming} from './inactivity-followup.mjs';
+import {initializeTesaStore,tesaStatus,reviewTesaSources} from './tesa-operations.mjs';
+import {ingestTesaWebhook,refreshTesaMembership} from './tesa-transport.mjs';
 
 export function createDrainScheduler(config,store,runner,{blocked=()=>false,setImmediateFn=setImmediate,setIntervalFn=setInterval,clearIntervalFn=clearInterval}={}){
   const fast=config.company==='fumigacion'&&config.responseTargetMs===3000,key='verified-ingestion-drain-wake-v1';
@@ -63,6 +65,8 @@ async function verifyApprovedAnswerSource(document,config,transport){
 }
 
 export function createBotServer(config,store,transport,engine) {
+  initializeTesaStore(store);
+  store.db.prepare("UPDATE tesa_outbox SET state='UNCERTAIN',updated=? WHERE state='SENDING'").run(Date.now());
   restoreOwnAiSetup(config,store);
   restoreProgramSetup(config,store);
   persistMariaKnowledge(config,store);
@@ -96,6 +100,14 @@ export function createBotServer(config,store,transport,engine) {
         finally{settingUpAi=false;}
       }
       if(req.url==='/latency')return reply(200,{company:config.name,responseTiming:responseTimingStatus(config,store)});
+      if(req.url==='/tesa-health'){
+        try{await refreshTesaMembership(config,transport,{force:true});return reply(200,{company:config.name,checkedAt:new Date().toISOString(),...tesaStatus(store,config)});}
+        catch{return reply(409,{company:config.name,error:'TESA_MEMBERSHIP_REVIEW',...tesaStatus(store,config)});}
+      }
+      if(req.url==='/tesa-review'){
+        if(body.company!==config.company)return reply(400,{error:'TESA_OWN_COMPANY_REQUIRED'});
+        return reply(200,reviewTesaSources(store,body));
+      }
       if(req.url==='/ai-setup'){
         if(draining||settingUpAi)return reply(409,{error:'AI_SETUP_BUSY'});
         settingUpAi=true;
@@ -110,9 +122,9 @@ export function createBotServer(config,store,transport,engine) {
         settingUpAi=true;try{return reply(200,await evaluateOwnAi(config,store,transport.fetcher,body.caseIds));}finally{settingUpAi=false;}
       }
       if(req.url==='/ai-knowledge')return config.company==='fumigacion'?reply(200,{status:mariaKnowledgeStatus(config,store),document:mariaKnowledgeDocument()}):reply(403,{error:'MARIA_KNOWLEDGE_OWN_SCOPE'});
-      if(req.url==='/status')return reply(200,{company:config.name,bot:config.bot,enabled:config.enabled,mode:'reception-with-human-review',fullyAutonomous:false,programRegistration:registrationStatus(config,store),inactivityFollowup:inactivityStatus(config,store),responseTiming:responseTimingStatus(config,store),drainIntervalMs:scheduler.intervalMs,semanticUnderstandingGuard:config.company==='fumigacion'?MARIA_UNDERSTANDING_GUARD:null,aiUsage:ownAiUsage(config,store),approvedAiKnowledge:mariaKnowledgeStatus(config,store),
+      if(req.url==='/status')return reply(200,{company:config.name,bot:config.bot,enabled:config.enabled,mode:'reception-with-human-review',fullyAutonomous:false,tesaOperations:tesaStatus(store,config),programRegistration:registrationStatus(config,store),inactivityFollowup:inactivityStatus(config,store),responseTiming:responseTimingStatus(config,store),drainIntervalMs:scheduler.intervalMs,semanticUnderstandingGuard:config.company==='fumigacion'?MARIA_UNDERSTANDING_GUARD:null,aiUsage:ownAiUsage(config,store),approvedAiKnowledge:mariaKnowledgeStatus(config,store),
         events:store.db.prepare('SELECT state,COUNT(*) n FROM events GROUP BY state').all(),outbox:store.db.prepare('SELECT state,COUNT(*) n FROM outbox GROUP BY state').all(),
-        communicationGuard:'private-routing-and-media-work-v2',requestedContactGuard:'explicit-technician-contact-before-intake-v1',confirmationRecipient:questionRecipients(config,'disponibilidad-y-tecnico')[0],operationalConfirmationRecipients:questionRecipients(config,'disponibilidad-y-tecnico'),chiefRecipient:SANDRA,operatorRouting:config.operatorRouting||'sandra',operatorRoutingGuard:'scoped-new-question-fanout-and-exact-line-answer-v1',operatorRoutingActive:operatorRoutingActive(config),chiefDocumentGuard:'fixed-chief-encrypted-hash-and-idempotency-v1',internalConversationGuard:'verified-internal-per-line-v2',chiefStatusGuard:'exact-directed-status-and-active-mode-v2',quotationQuestionGuard:'scoped-price-followup-and-existing-question-v1',internalConversationEnabled:Boolean(config.chiefOnly),customerResponsesEnabled:config.enabled,
+        communicationGuard:'private-routing-and-media-work-v2',requestedContactGuard:'explicit-technician-contact-before-intake-v1',confirmationRecipient:config.tesaOperations?.enabled?config.tesaOperations.groupJid:questionRecipients(config,'disponibilidad-y-tecnico')[0],operationalConfirmationRecipients:config.tesaOperations?.enabled?[config.tesaOperations.groupJid]:questionRecipients(config,'disponibilidad-y-tecnico'),chiefRecipient:SANDRA,operatorRouting:config.tesaOperations?.enabled?'tesa-group-case-operations-20261008':config.operatorRouting||'sandra',privateHistoricalOperatorRouting:config.operatorRouting||'sandra',operatorRoutingGuard:'scoped-new-question-fanout-and-exact-line-answer-v1',operatorRoutingActive:operatorRoutingActive(config),chiefDocumentGuard:'fixed-chief-encrypted-hash-and-idempotency-v1',internalConversationGuard:'verified-internal-per-line-v2',chiefStatusGuard:'exact-directed-status-and-active-mode-v2',quotationQuestionGuard:'scoped-price-followup-and-existing-question-v1',internalConversationEnabled:Boolean(config.chiefOnly),customerResponsesEnabled:config.enabled,
         socialGreetingGuard:config.company==='fumigacion'?'literal-pure-social-greeting-before-semantic-review-v1':null,internalRoutingGuard:'exact-historical-question-and-no-cross-bot-dialogue-v1',retiredRecipientGuard:'current-route-no-ready-diego-send-v1',
         customerIntakeEnabled:config.enabled,businessWritesEnabled:registrationStatus(config,store).enabled,capabilityDisclosure:'runtime-mode-and-implemented-intake-v1',customerCourtesyGuard:'gratitude-only-without-intake-or-ownership-v1',customerAdviserGuard:config.company==='fumigacion'?ADVISER_TONE_GUARD:null,
         commonAnswerGuard:config.company==='fumigacion'?'approved-source-context-and-complete-topics-v1':null,pendingFollowupGuard:config.company==='fumigacion'?'punctuation-only-own-pending-case-without-repeat-v1':null,approvedCustomerAnswerDocuments:store.approvedCustomerAnswers().length,customerActivity:customerActivity(store,config),
@@ -191,12 +203,15 @@ export function createBotServer(config,store,transport,engine) {
         return reply(200,{accepted:true,...queued});
       }
       if(req.url==='/webhook'){
-        const parsed=decodeWebhook(body,config);let accepted=0,duplicates=0,deliveryUpdates=0;
+        // Group delivery metadata belongs to the separate native group proof path.
+        const privateRows=(Array.isArray(body.data)?body.data:[body.data]).filter(row=>!row?.key?.remoteJid?.endsWith('@g.us'));
+        const parsed=decodeWebhook({...body,data:privateRows},config);let accepted=0,duplicates=0,deliveryUpdates=0;
         const own=config.lines.find(l=>l.instance===body.instance);if(!own)return reply(400,{error:'INSTANCE_OUTSIDE_SCOPE'});
         await transport.verifyLine(own.phone);
+        const groupOperations=await ingestTesaWebhook(store,config,transport,body);
         for(const value of parsed.events){const e=validateEvent(value,config);if(e){const r=ingress(e);accepted++;if(r.duplicate)duplicates++;}}
         for(const d of parsed.deliveries){deliveryUpdates+=store.delivery(d.mid,own.phone,d.state);if(config.company==='fumigacion')recordDeliveryTiming(store,d.mid,own.phone,d.state);}
-        reply(202,{accepted,duplicates,deliveryUpdates});if(accepted>duplicates)scheduler.wake();return;
+        reply(202,{accepted,duplicates,deliveryUpdates,groupOperations});if(accepted>duplicates||groupOperations.caseAnswers)scheduler.wake();return;
       }
       if(req.url==='/delivery'){
         const line=config.lines.find(l=>l.instance===body.instance&&l.phone===body.owner);

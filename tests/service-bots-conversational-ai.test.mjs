@@ -62,6 +62,34 @@ test('provider request uses structured Responses, disables response storage and 
  }finally{f.s.close();}
 });
 
+test('drain gives the model the actual private question and explanation from this case, excluding another case',async()=>{
+ const f=fixture();try{
+  await f.run('AI_CLARIFY_BASE01','Tengo cucarachas en Medellín');
+  const caseId=f.s.conversation(phone).state.caseId,line=f.c.lines[0].phone;
+  const facts=[
+   {caseId,text:'¿Se trata de una solicitud nueva o de una revisión del servicio anterior?',answer:'Es una solicitud nueva; conserva lo que el cliente ya informó.',sourceId:'AI_CLARIFY_ANSWER1',mid:'ISOLATED_QUESTION1'},
+   {caseId:'fumigacion:OTHER_CASE_01',text:'PREGUNTA_EXCLUSIVA_OTRO_CASO',answer:'EXPLICACION_EXCLUSIVA_OTRO_CASO',sourceId:'AI_CLARIFY_ANSWER2',mid:'ISOLATED_QUESTION2'},
+  ];
+  for(const fact of facts){
+   const question=f.s.question({phone,line,caseId:fact.caseId,topic:'common-question',conditions:{caseId:fact.caseId},recipient:SANDRA,text:fact.text,source:'AI_CLARIFY_BASE01'});
+   // Exact delivered own questions and native quoted replies are isolated fixtures.
+   f.s.db.prepare("UPDATE outbox SET mid=?,state='READ' WHERE id=?").run(fact.mid,'question:'+question.id);
+   f.s.enqueue({id:fact.sourceId,phone:SANDRA,line,at:Date.now(),fromMe:false,kind:'text',text:fact.answer,quotedId:fact.mid});
+   await drain(f.s,f.c,f.t,f.engine);
+   assert.equal(f.s.db.prepare('SELECT state,source_id FROM questions WHERE id=?').get(question.id).state,'ANSWERED');
+  }
+  const before=f.requests.length;
+  await f.run('AI_CLARIFY_NEXT01','Apartamento');
+  const request=f.requests.slice(before).find(value=>value.body.text.format.name==='maria_literal_slots');
+  assert.ok(request,'the current customer turn reached the mock model through drain');
+  const input=JSON.parse(request.body.input);
+  assert.deepEqual(input.context.sameCaseClarifications,[{question:facts[0].text,answer:facts[0].answer,
+   scope:'verified-stored-answer-for-this-case-only; not-general-policy-or-action-permission'}]);
+  assert.equal(request.body.input.includes(facts[1].text),false);
+  assert.equal(request.body.input.includes(facts[1].answer),false);
+ }finally{f.s.close();}
+});
+
 test('extraction never replaces current literal pest combinations or prior case facts',()=>{
  const e={id:'AI_FACT001',at:Date.now(),kind:'text',text:'Cucarachas y hormigas en apartamento en Medellín',fromMe:false};
  const analysis={guard:CONVERSATIONAL_AI_GUARD,company:'FUMIGACION',eventId:e.id,slots:{service:'Cucarachas',site:'apartamento',location:'Medellín'}};

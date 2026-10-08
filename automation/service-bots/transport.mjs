@@ -5,6 +5,8 @@ import {selectPrice,verifyPriceSource} from './prices.mjs';
 import {understandOwnCustomer,composeOwnReply,replyCandidates,probeOwnAi} from './conversational-ai.mjs';
 import {drainProgramRegistrations} from './maria-program.mjs';
 import {initializeInactivityFollowup,queueInactivityFollowups,inactivityDeliveryValid,recordResponseTiming} from './inactivity-followup.mjs';
+import {tesaCaseAnswers} from './tesa-operations.mjs';
+import {drainTesaGroup} from './tesa-transport.mjs';
 
 export class Transport {
   constructor(config, fetcher=fetch){this.config=config;this.fetcher=fetcher;}
@@ -161,7 +163,8 @@ export async function drain(store,config,transport,engine) {
     if(!e.fromMe&&!knownInternalRecipient(e.phone)&&!store.conversation(e.phone)?.hold&&(!store.conversation(e.phone)?.state.awaitingHumanReview||newCase)&&!['name','address','confirm','correction','pending'].includes(intakeStage)){
       // Customer history remains in its company. Observations are explicitly untrusted reference, never policy.
       const knowledge=store.db.prepare('SELECT body FROM knowledge ORDER BY imported DESC LIMIT 10').all().map(k=>store.open(k.body));
-      const caseAnswers=store.db.prepare("SELECT body,answer,source_id,answer_at,valid_until FROM questions WHERE phone=? AND case_id=? AND state='ANSWERED' AND valid_until>?").all(e.phone,newCase?'':store.conversation(e.phone)?.state.caseId||'',Date.now()).map(q=>({question:store.open(q.body),answer:store.open(q.answer),source:q.source_id,at:q.answer_at,validUntil:q.valid_until,scope:'same-company-and-case-only; recheck before scheduling'}));
+      const caseId=newCase?'':store.conversation(e.phone)?.state.caseId||'';
+      const caseAnswers=store.db.prepare("SELECT body,answer,source_id,answer_at,valid_until FROM questions WHERE phone=? AND case_id=? AND state='ANSWERED' AND valid_until>?").all(e.phone,caseId,Date.now()).map(q=>({question:store.open(q.body).text,answer:store.open(q.answer),source:q.source_id,at:q.answer_at,validUntil:q.valid_until,scope:'same-company-and-case-only; recheck before scheduling'})).concat(tesaCaseAnswers(store,config,{caseId,customerPhone:e.phone}));
       const conversationHistory=store.conversationContext(e.phone,e.at,20,e.id);
       store.audit('CONVERSATION_CONTEXT_CHECKED',e.id,{caseId:conversationHistory.caseId,turns:conversationHistory.turns.length,storedCoverageComplete:conversationHistory.completeStoredHistory,fullWhatsAppHistoryRead:false,originalMediaRead:false});
       // A completed registration can receive a new post-service concern after
@@ -177,7 +180,8 @@ export async function drain(store,config,transport,engine) {
   // delivered before any optional native-history read for another open case.
   const followup=pending.length?{enabled:Boolean(config.inactivityFollowupEnabled),queued:0,deferredForActiveReception:true}:await queueInactivityFollowups(store,config,transport);
   const followed=followup.queued?await flushOutbox(store,config,transport):{accepted:0,suppressed:0,uncertain:0};
-  return {processed:pending.length,accepted:before.accepted+after.accepted+followed.accepted,suppressed:before.suppressed+after.suppressed+followed.suppressed,uncertain:before.uncertain+after.uncertain+followed.uncertain,followup};
+  const groupOperations=await drainTesaGroup(store,config,transport);
+  return {processed:pending.length,accepted:before.accepted+after.accepted+followed.accepted,suppressed:before.suppressed+after.suppressed+followed.suppressed,uncertain:before.uncertain+after.uncertain+followed.uncertain,followup,groupOperations};
 }
 
 export async function flushOutbox(store,config,transport){
