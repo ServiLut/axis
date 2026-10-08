@@ -108,3 +108,12 @@ test('a group question omits full phone, address abbreviations and URLs from cus
   for(const sensitive of ['45 #32','43A','573001112233','https://private.example'])assert.equal(text.includes(sensitive),false);
  }finally{f.store.close();}
 });
+
+test('special work reaches the group with its literal request and own case facts before a price question',()=>{
+ const f=fixture('servicio-tecnico');try{
+  const e={...f.source,id:'CUSTOMER_PAINTING_002',text:'Necesito pintar una nevera'};f.store.enqueue(e);
+  const prepared=routeCaseQuestion(f.store,f.config,{...f.request,topic:'special-quotation',conditions:{kind:'technical-painting',requestSource:e.id},source:e.id});
+  assert.equal(prepared.created,true);const text=f.store.open(f.store.db.prepare('SELECT body FROM tesa_outbox').get().body);
+  assert.match(text,/Necesito pintar una nevera/);assert.match(text,/¿Ofrecemos la pintura solicitada/);assert.doesNotMatch(text,/¿Qué cotización corresponde/);
+ }finally{f.store.close();}
+});
