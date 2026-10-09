@@ -52,6 +52,32 @@ test('asks missing literal fields together and captures both from one delivered 
   assert.equal(registrationStatus(f.config,f.store).saved,1);assert.equal(payload.sources.customerName.id,facts.id);assert.equal(payload.sources.address.id,facts.id);assert.equal(payload.sources.address.text,facts.text);
  }finally{f.store.close();}
 });
+test('unlabelled name and address on separate lines answer the delivered joint request without contaminating either field',async()=>{
+ const f=fixture();try{
+  const first=await f.turn('Tengo cucarachas en mi apartamento de 42 mts2 en Itagüí. Cuánto cuesta?');f.delivered(first);f.delivered(await f.turn('Sí'));
+  const facts=await f.turn('Juliana arango pérez\nCarrera 74b número 94-110interior 201 castilla sector la esperanza');
+  const preview=f.delivered(facts),pi=f.store.conversation(facts.phone).state.programIntake;
+  assert.equal(pi.customerName,'Juliana arango pérez');assert.equal(pi.address,'Carrera 74b número 94-110interior 201 castilla sector la esperanza');assert.match(preview,/Confirmas/);assert.doesNotMatch(preview,/Me falta/);
+  const final=await f.turn('Sí');let payload,writes=0;
+  await drainProgramRegistrations(f.store,f.config,transport(f,async(url,opts)=>{writes++;payload=JSON.parse(opts.body);return {ok:true,json:async()=>receipt(payload)};}));
+  assert.equal(writes,1);assert.equal(payload.customerName,'Juliana arango pérez');assert.equal(payload.address,pi.address);assert.equal(payload.sources.customerName.id,facts.id);assert.equal(payload.sources.address.id,facts.id);assert.equal(payload.sources.customerName.text,facts.text);assert.equal(payload.sources.address.text,facts.text);assert.equal(payload.sources.acceptance.id,final.id);
+ }finally{f.store.close();}
+});
+test('a conversational prefix in a prompted name reply stays in the native source and out of the customer name',async()=>{
+ const f=fixture();try{
+  const first=await f.turn('Tengo cucarachas en mi apartamento de 42 mts2 en Itagüí. Cuánto cuesta?');f.delivered(first);f.delivered(await f.turn('Sí'));f.delivered(await f.turn('Calle 50 # 42-18 apartamento 301'));
+  const facts=await f.turn('Aquí te lo mandé\nJuliana arango pérez'),preview=f.delivered(facts),pi=f.store.conversation(facts.phone).state.programIntake;
+  assert.equal(pi.customerName,'Juliana arango pérez');assert.match(preview,/a nombre de Juliana arango pérez/);assert.doesNotMatch(preview,/Aquí te lo mandé/);assert.equal(pi.nameSource.text,facts.text);
+ }finally{f.store.close();}
+});
+test('ambiguous unlabelled multiline facts cannot become a registerable name or a combined address',async()=>{
+ for(const text of ['Juliana Arango\nCarmen Pérez\nCalle 50 # 42-18','Juliana Arango\nCalle 50 # 42-18\nCarrera 40 # 20-10','Juliana Arango\nCalle 50 # 42-18\nOtra casa también','Aquí te lo mandé','Aquí te lo mandé Juliana Arango Pérez']){
+  const f=fixture();try{const first=await f.turn('Tengo cucarachas en mi apartamento de 42 mts2 en Itagüí. Cuánto cuesta?');f.delivered(first);f.delivered(await f.turn('Sí'));const facts=await f.turn(text);const pi=f.store.conversation(facts.phone).state.programIntake;assert.equal(pi.customerName,undefined,text);assert.equal(pi.address,undefined,text);f.delivered(facts);await f.turn('Sí');assert.equal(f.store.db.prepare("SELECT COUNT(*) n FROM meta WHERE key LIKE 'maria-registration:%'").get().n,0,text);}finally{f.store.close();}
+ }
+});
+test('unlabelled multiline facts require a delivered field request and summary confirmation remains mandatory',async()=>{
+ const f=fixture();try{const first=await f.turn('Tengo cucarachas en mi apartamento de 42 mts2 en Itagüí. Cuánto cuesta?');f.delivered(first);const acceptance=await f.turn('Sí');const before=await f.turn('Juliana Arango\nCalle 50 # 42-18 apartamento 301');let pi=f.store.conversation(before.phone).state.programIntake;assert.equal(pi.customerName,undefined);assert.equal(pi.address,undefined);f.delivered(acceptance);const facts=await f.turn('Juliana Arango\nCalle 50 # 42-18 apartamento 301');pi=f.store.conversation(facts.phone).state.programIntake;assert.equal(pi.stage,'confirm');await f.turn('Sí');assert.equal(f.store.db.prepare("SELECT COUNT(*) n FROM meta WHERE key LIKE 'maria-registration:%'").get().n,0);}finally{f.store.close();}
+});
 test('reuses explicit fields from the same case before delivered price acceptance and confirms only after receipt',async()=>{
  const f=fixture();try{
   const first=await f.turn('Tengo cucarachas en mi apartamento de 42 mts2 en Itagüí. Mi nombre es Juan Pérez. Mi dirección es Calle 50 # 42-18 apartamento 301. Cuánto cuesta?');f.delivered(first);

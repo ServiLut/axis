@@ -4,6 +4,7 @@ import {BUSINESS_PRICE_HASH,selectBusinessPrice} from './business-prices.mjs';
 
 export const MARIA_PROGRAM_GUARD='own-accepted-ordinary-service-literal-fields-and-atomic-receipt-v2';
 export const MARIA_PROGRAM_PIPELINE_GUARD='processed-customer-turn-before-registration-v1';
+export const MARIA_PROGRAM_LITERAL_FIELDS_GUARD='own-prompted-separate-name-address-and-native-source-v1';
 export const MARIA_TENANT='9ffea9df-1e06-4590-acec-0e5cde715ba9';
 export const MARIA_COMPANY='35a19d89-15d1-4c32-8353-3471b6d9f0ff';
 export const MARIA_PROGRAM_URL='https://tenaxis-backend-0zeuja.servilutioncrm.cloud/integrations/maria-service-registration';
@@ -57,7 +58,7 @@ export function registrationStatus(c,s){
  const safeReason=reason=>['CASE_CHANGED_BEFORE_WRITE','NATIVE_CONTEXT_NOT_VERIFIED','UNCERTAIN_WRITE_NOT_FOUND','UNCERTAIN_RECEIPT_REQUIRES_REVIEW'].includes(reason)?reason:'OTHER_REVIEW';
  const reviewed=entries.filter(entry=>entry.status==='REVIEW').sort((a,b)=>(Number(b.reviewAt)||0)-(Number(a.reviewAt)||0));
  const reasons=new Map();for(const entry of reviewed){const reason=safeReason(entry.reason);reasons.set(reason,(reasons.get(reason)||0)+1);}
- return {guard:MARIA_PROGRAM_GUARD,pipelineGuard:MARIA_PROGRAM_PIPELINE_GUARD,configured:c.company==='fumigacion'&&c.mariaProgram?.enabled===true,enabled:programEnabled(c),company:'FUMIGACION',tenantId:c.mariaProgram?.enabled?MARIA_TENANT:null,companyId:c.mariaProgram?.enabled?MARIA_COMPANY:null,advisorMembershipId:c.mariaProgram?.actorId||null,registrationKind:'new-service-pending-scheduling',prepared:states.PENDING,states,saved:states.SAVED,uncertain:states.UNCERTAIN+states.SENDING,review:states.REVIEW,lastReviewReason:reviewed.length?safeReason(reviewed[0].reason):null,reviewReasons:[...reasons].sort(([a],[b])=>a.localeCompare(b)).map(([reason,count])=>({reason,count})),scheduled:false,paymentsEnabled:false,fullyAutonomous:false};
+ return {guard:MARIA_PROGRAM_GUARD,pipelineGuard:MARIA_PROGRAM_PIPELINE_GUARD,literalFieldsGuard:MARIA_PROGRAM_LITERAL_FIELDS_GUARD,configured:c.company==='fumigacion'&&c.mariaProgram?.enabled===true,enabled:programEnabled(c),company:'FUMIGACION',tenantId:c.mariaProgram?.enabled?MARIA_TENANT:null,companyId:c.mariaProgram?.enabled?MARIA_COMPANY:null,advisorMembershipId:c.mariaProgram?.actorId||null,registrationKind:'new-service-pending-scheduling',prepared:states.PENDING,states,saved:states.SAVED,uncertain:states.UNCERTAIN+states.SENDING,review:states.REVIEW,lastReviewReason:reviewed.length?safeReason(reviewed[0].reason):null,reviewReasons:[...reasons].sort(([a],[b])=>a.localeCompare(b)).map(([reason,count])=>({reason,count})),scheduled:false,paymentsEnabled:false,fullyAutonomous:false};
 }
 // Only an affirmative from the customer is authority to create an ordinary,
 // unscheduled order. Courtesy, a preference or a quoted third-party "yes" alone
@@ -113,13 +114,31 @@ export function literalIntakeTextWithoutRegistrationFields(text){
 function literalName(text,prompted){
  const explicit=text.match(/^(?:mi nombre (?:es|completo es)|me llamo|a nombre de|nombre completo)\s*[: ,]*\s+(.+)$/i);
  const name=(explicit?.[1]||(prompted?text:'' )).trim().replace(/[.!]+$/,'').trim();
- if(!/^[\p{L}][\p{L}'’-]*(?:\s+[\p{L}][\p{L}'’-]*){1,9}$/u.test(name)||/\b(?:quiero|necesito|gracias|servicio|manana|hoy|cucarachas|refuerzo|garantia|no|si|nombre)\b/.test(normalize(name)))return null;return name;
+ if(/[\r\n]/.test(name)||registrationPreface.test(normalize(name))||! /^[\p{L}][\p{L}'’-]*(?:[^\S\r\n]+[\p{L}][\p{L}'’-]*){1,9}$/u.test(name)||/\b(?:quiero|necesito|gracias|servicio|manana|hoy|cucarachas|refuerzo|garantia|no|si|nombre)\b/.test(normalize(name)))return null;return name;
 }
 function literalAddress(text,prompted){
  const explicit=text.match(/^(?:(?:mi|la) direcci[oó]n(?: completa)?(?: es)?|direcci[oó]n(?: completa)?)\s*[: ,]+(.+)$/i);
  const address=(explicit?.[1]||(prompted?text:'')).trim();
- if(address.length<5||address.length>500||/[?¿]|https?:|\b(?:cambiar|no se|todavia|no recuerdo|otra direccion)\b/i.test(address))return null;
- if(!/\b(?:calle|carrera|cra|cr|cl|cll|avenida|av|diagonal|transversal|dg|tv)\b.*\d.*\d/i.test(address)&&!(/\b(?:vereda|finca)\b/i.test(address)&&address.split(/\s+/).length>=4))return null;return address;
+ if(address.length<5||address.length>500||/[\r\n?¿]|https?:|\b(?:cambiar|no se|todavia|no recuerdo|otra direccion)\b/i.test(address))return null;
+ const streets=[...address.matchAll(/\b(?:calle|carrera|cra|cr|cl|cll|avenida|av|diagonal|transversal|dg|tv)\b\.?\s*\d/gi)];
+ if(streets.length>1)return null;
+ if(!/^(?:calle|carrera|cra|cr|cl|cll|avenida|av|diagonal|transversal|dg|tv)\b.*\d.*\d/i.test(address)&&!(/^(?:vereda|finca)\b/i.test(address)&&address.split(/\s+/).length>=4))return null;return address;
+}
+const registrationPreface=/^(?:(?:aqui|ahi) (?:te |se )?lo (?:mande|envie|mando|envio|comparti)|ya (?:te |se )?lo (?:mande|envie|comparti)|(?:te |se )?lo (?:mande|envie|comparti) (?:arriba|antes)|estos son mis datos)\b/;
+function registrationSourcePreface(text){const t=normalize(text),match=t.match(registrationPreface);return Boolean(match&&/^[.!¡, ]*$/.test(t.slice(match[0].length)));}
+function promptedLiteralFields(text,requested){
+ const lines=text.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+ if(lines.length<2)return {};
+ const values={};
+ for(const line of lines){
+  if(registrationSourcePreface(line))continue;
+  const labelled=explicitFields(line),name=labelled.name||(requested.includes('name')&&literalName(line,true)),address=labelled.address||(requested.includes('address')&&literalAddress(line,true));
+  if(labelled.conflict||(!name&&!address)||(name&&address))return {};
+  const key=name?'name':'address',value=name||address;
+  if(values[key]&&values[key]!==value)return {};
+  values[key]=value;
+ }
+ return values;
 }
 function changedAddressScope(text,slots){
  const t=normalize(text),city=normalize(slots.location);
@@ -186,7 +205,9 @@ export function registrationTurn(s,c,previous,e,decision){
    }
   }
  }
- const explicit=explicitFields(e.text),name=explicit.name||(!confirms(e.text)&&literalName(e.text,pi.stage==='name'&&Boolean(prompt))),address=explicit.address||literalAddress(e.text,(['address','confirm','correction'].includes(pi.stage)||pi.requestedFields?.includes('address'))&&Boolean(prompt));
+ const explicit=explicitFields(e.text),requested=pi.requestedFields||(['name','address'].includes(pi.stage)?[pi.stage]:['name','address']);
+ const separated=prompt&&!confirms(e.text)?promptedLiteralFields(e.text,requested):{};
+ const name=explicit.name||separated.name||(!confirms(e.text)&&literalName(e.text,pi.stage==='name'&&Boolean(prompt))),address=explicit.address||separated.address||literalAddress(e.text,(['address','confirm','correction'].includes(pi.stage)||pi.requestedFields?.includes('address'))&&Boolean(prompt));
  const scopedAddress=address||pi.address;
  if(scopedAddress&&changedAddressScope(scopedAddress,state.slots)){
   pi.stage='review';pi.preview=null;return {state,reviewTopic:'special-quotation',reviewConditions:{kind:'registration-address-scope-changed',caseId:state.caseId},review:'La dirección o su texto añaden un municipio o alcance diferente a la cotización aceptada. No se creó un servicio ni se conservó ese precio para otro alcance.',reviewQuestion:'¿Qué municipio y alcance comprobados corresponden a esta solicitud?',reply:'Los datos que compartiste cambian el alcance de la cotización. Tu solicitud necesita revisión antes de confirmarla.'};
