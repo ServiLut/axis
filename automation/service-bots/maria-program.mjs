@@ -126,12 +126,13 @@ function literalAddress(text,prompted){
 }
 const registrationPreface=/^(?:(?:aqui|ahi) (?:te |se )?lo (?:mande|envie|mando|envio|comparti)|ya (?:te |se )?lo (?:mande|envie|comparti)|(?:te |se )?lo (?:mande|envie|comparti) (?:arriba|antes)|estos son mis datos)\b/;
 function registrationSourcePreface(text){const t=normalize(text),match=t.match(registrationPreface);return Boolean(match&&/^[.!¡, ]*$/.test(t.slice(match[0].length)));}
-function promptedLiteralFields(text,requested){
+const correctionFieldReference=text=>/^(?:(?:mi|el) nombre(?: completo)?|(?:mi|la) direccion(?: completa)?|(?:mi|el) apellido|(?:mis|los) datos|(?:ese|este|el) dato|(?:esta|estan|es|son) (?:mal|incorrect[oa]s?|equivocad[oa]s?))[.! ]*$/.test(normalize(text));
+function promptedLiteralFields(text,requested,correction=false){
  const lines=text.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
  if(lines.length<2)return {};
  const values={};
  for(const line of lines){
-  if(registrationSourcePreface(line))continue;
+  if(registrationSourcePreface(line)||correction&&correctionFieldReference(line))continue;
   const labelled=explicitFields(line),name=labelled.name||(requested.includes('name')&&literalName(line,true)),address=labelled.address||(requested.includes('address')&&literalAddress(line,true));
   if(labelled.conflict||(!name&&!address)||(name&&address))return {};
   const key=name?'name':'address',value=name||address;
@@ -188,7 +189,7 @@ export function registrationTurn(s,c,previous,e,decision){
   return {state,reply:'Entendido. No registraré el servicio. Gracias por avisarme.'};
  }
  if(/^no\b/.test(normalize(e.text))&&['confirm','correction'].includes(prior.stage)){
-  pi.stage='correction';pi.preview=null;pi.promptId=e.id+':reply';return {state,reply:'¿Qué dato debemos corregir antes de registrar tu solicitud?'};
+  pi.stage='correction';pi.requestedFields=['name','address'];pi.preview=null;pi.promptId=e.id+':reply';return {state,reply:'¿Qué dato debemos corregir antes de registrar tu solicitud?'};
  }
  if(blockedText(e.text))return null;
  // Reuse explicitly labelled facts from this native case window. Bare text is
@@ -206,8 +207,8 @@ export function registrationTurn(s,c,previous,e,decision){
   }
  }
  const explicit=explicitFields(e.text),requested=pi.requestedFields||(['name','address'].includes(pi.stage)?[pi.stage]:['name','address']);
- const separated=prompt&&!confirms(e.text)?promptedLiteralFields(e.text,requested):{};
- const name=explicit.name||separated.name||(!confirms(e.text)&&literalName(e.text,pi.stage==='name'&&Boolean(prompt))),address=explicit.address||separated.address||literalAddress(e.text,(['address','confirm','correction'].includes(pi.stage)||pi.requestedFields?.includes('address'))&&Boolean(prompt));
+ const separated=prompt&&!confirms(e.text)?promptedLiteralFields(e.text,requested,pi.stage==='correction'):{};
+ const name=explicit.name||separated.name||(!confirms(e.text)&&literalName(e.text,(pi.stage==='name'||pi.stage==='correction'&&!correctionFieldReference(e.text))&&Boolean(prompt))),address=explicit.address||separated.address||literalAddress(e.text,(['address','confirm','correction'].includes(pi.stage)||pi.requestedFields?.includes('address'))&&Boolean(prompt));
  const scopedAddress=address||pi.address;
  if(scopedAddress&&changedAddressScope(scopedAddress,state.slots)){
   pi.stage='review';pi.preview=null;return {state,reviewTopic:'special-quotation',reviewConditions:{kind:'registration-address-scope-changed',caseId:state.caseId},review:'La dirección o su texto añaden un municipio o alcance diferente a la cotización aceptada. No se creó un servicio ni se conservó ese precio para otro alcance.',reviewQuestion:'¿Qué municipio y alcance comprobados corresponden a esta solicitud?',reply:'Los datos que compartiste cambian el alcance de la cotización. Tu solicitud necesita revisión antes de confirmarla.'};

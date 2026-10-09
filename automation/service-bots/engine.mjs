@@ -397,7 +397,7 @@ export class Engine {
         if(c.company==='fumigacion')controlRequest=turns.filter(turn=>turn.kind==='text'&&requestedControl(turn.text)).at(-1)||null;
         if(c.company==='fumigacion')followupRequest=turns.find(turn=>afterServiceRequest(turn))||null;
         caseState.intakeSources={...caseState.intakeSources};
-        for(const turn of turns.filter(turn=>literalIntakeTurn(turn)&&!['name','address','details','confirm'].includes(caseState.programIntake?.stage))){
+        for(const turn of turns.filter(turn=>literalIntakeTurn(turn)&&!['name','address','details','confirm'].includes(caseState.programIntake?.stage)&&!(c.company==='fumigacion'&&caseState.programIntake?.stage==='correction'))){
           const fields=literalFields(caseState,turn,c.company);
           const contextualSize=c.company==='fumigacion'&&!fields.area?promptedSize(turn,caseState):undefined;
           if(contextualSize)fields.area=contextualSize;
