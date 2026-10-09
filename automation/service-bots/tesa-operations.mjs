@@ -4,6 +4,7 @@ import {getTesaConfig} from './tesa-config.mjs';
 import {TESA_GROUP_JID,validateTesaGroupEvent} from './tesa-webhook.mjs';
 import {quotationInquiry} from './prices.mjs';
 import {customerQuestionKey,technicalAvailabilityQuestion} from './technical-scope.mjs';
+import {assertOperationalLineScope,operationalLineAllowed,operationalCoverage} from './line-scope.mjs';
 
 export const TESA_OPERATIONS_GUARD='exact-group-native-human-quoted-case-answer-v1';
 const sha=value=>createHash('sha256').update(value).digest('hex');
@@ -35,6 +36,26 @@ function pendingPrivateQuestion(store,{phone,caseId,topic,conditions}){
   const pending=rows.find(q=>['cotizacion-verificada','disponibilidad-y-cotizacion','disponibilidad-y-tecnico','customer-question'].includes(q.topic)&&(q.topic!=='customer-question'||quotationInquiry(store.open(q.body).conditions?.question||'')));if(pending)return pending;
  }
  return rows.find(q=>q.topic===topic)||null;
+}
+
+// Scoped continuity applies to the customer's actual source, not merely the
+// blue group sender. An old or shared/red case never becomes a new blue case.
+export function tesaOperationalScopeSafe(store,config,{phone,line,source,senderLine,created}={}){
+ const scope=assertOperationalLineScope(config);if(!scope)return true;
+ const cutoff=Date.parse(scope.authorizedAt);
+ if(!operationalLineAllowed(config,line)||!operationalLineAllowed(config,senderLine)||
+   !Number.isFinite(created)||created<cutoff||typeof store.hasSourcesOutsideLine!=='function'||
+   store.hasSourcesOutsideLine(phone,line))return false;
+ const row=store.db.prepare('SELECT * FROM events WHERE id=? AND phone=? AND from_me=0').get(source,phone);
+ return Boolean(row&&row.line===line&&row.at>=cutoff);
+}
+
+export function tesaOutboxScopeSafe(store,config,row){
+ if(!assertOperationalLineScope(config))return true;
+ const question=store.db.prepare('SELECT * FROM tesa_questions WHERE id=? AND company=?').get(row?.question_id,store.company);
+ if(!question||question.source_line!==row.source_line||question.sender_line!==row.sender_line||question.customer_phone!==row.customer_phone||question.case_id!==row.case_id)return false;
+ const body=store.open(question.body);
+ return tesaOperationalScopeSafe(store,config,{phone:row.customer_phone,line:row.source_line,source:body.source,senderLine:row.sender_line,created:row.created});
 }
 
 export function initializeTesaStore(store){
@@ -76,6 +97,10 @@ export function prepareTesaQuestion(store,config,request){
   // Existing private questions retain their destinations, sources and delivery.
   const prior=pendingPrivateQuestion(store,{phone,caseId,topic,conditions});
   if(prior)return {...stateResult(prior,false,store),valid:false,privateQuestionPreserved:true};
+  if(!tesaOperationalScopeSafe(store,config,{phone,line,source,senderLine:t.senderLine,created:now})){
+   store.audit('TESA_OPERATIONAL_SCOPE_QUESTION_REVIEW',source,{caseId,topic,sourceLine:line,coverage:operationalCoverage(config),outboundCreated:false,migrated:false});
+   return {id:null,state:'TESA_OPERATIONAL_SCOPE_REVIEW',created:false,valid:false};
+  }
   const recipients=questionRecipients(config,topic,conditions);
   if(!recipients.some(p=>p!==SANDRA)||forbidden(topic)||forbidden(JSON.stringify(conditions)))return {id:null,state:'TESA_DIRECTION_REVIEW_REQUIRED',created:false,valid:false};
   const sourceRow=store.db.prepare('SELECT * FROM events WHERE id=? AND phone=? AND from_me=0').get(source,phone);
@@ -116,11 +141,13 @@ export function acceptTesaQuotedAnswer(store,config,event){
  return atomic(store,()=>{
   const finish=state=>{store.db.prepare('UPDATE tesa_events SET state=? WHERE id=?').run(state,sourceKey);return {accepted:false,id:sourceKey,state};};
   if(['CASE_ANSWER','ANSWER_REVIEW','OBSERVATION_CONFLICT_REVIEW'].includes(observed.state))return {accepted:false,id:sourceKey,state:observed.state,duplicate:true};
+  const scope=assertOperationalLineScope(config);if(scope&&e.at<Date.parse(scope.authorizedAt))return finish('OBSERVED_OPERATIONAL_SCOPE_REVIEW');
   const phone=e.participant?.phone,human=t.allowedParticipantPhones.includes(phone)&&t.verifiedMembership.participantPhones.includes(phone)&&!ownBots.includes(phone);
   if(!human||e.fromMe||e.forwarded||e.kind!=='text'||e.media||!e.text.trim()||e.at<t.activatedAt||e.at<now-freshSourceMs||e.at>now+60000)return finish('OBSERVED');
   const quote=e.quote;if(!quote?.mid||quote.groupJid!==t.groupJid||quote.participantJid!==t.senderLine+'@s.whatsapp.net'||e.receivingLine!==t.senderLine)return finish('OBSERVED_UNSCOPED_QUOTE');
-  const q=store.db.prepare("SELECT q.*,o.state delivery,o.mid,o.native_proof FROM tesa_questions q JOIN tesa_outbox o ON o.id=q.outbox_id WHERE q.company=? AND q.group_jid=? AND q.sender_line=? AND o.mid=? AND o.state IN ('DELIVERED','READ') AND q.state IN ('PENDING','ANSWERED','ANSWER_REVIEW')").get(store.company,t.groupJid,e.receivingLine,quote.mid);
+  const q=store.db.prepare("SELECT q.*,o.state delivery,o.mid,o.native_proof,o.created outbox_created FROM tesa_questions q JOIN tesa_outbox o ON o.id=q.outbox_id WHERE q.company=? AND q.group_jid=? AND q.sender_line=? AND o.mid=? AND o.state IN ('DELIVERED','READ') AND q.state IN ('PENDING','ANSWERED','ANSWER_REVIEW')").get(store.company,t.groupJid,e.receivingLine,quote.mid);
   if(!q||!q.native_proof||e.caseId&&e.caseId!==q.case_id||e.customerPhone&&e.customerPhone!==q.customer_phone)return finish('OBSERVED_UNSCOPED_QUOTE');
+  if(!tesaOperationalScopeSafe(store,config,{phone:q.customer_phone,line:q.source_line,source:store.open(q.body).source,senderLine:q.sender_line,created:q.outbox_created}))return finish('OBSERVED_OPERATIONAL_SCOPE_REVIEW');
   const nativeProof=store.open(q.native_proof);if(!nativeProof.nativeVerified||nativeProof.mid!==quote.mid)return finish('OBSERVED_UNSCOPED_QUOTE');
   if(forbidden(e.text))return finish('OBSERVED_DIRECTION_REVIEW');
   if(q.state!=='PENDING'){
@@ -138,7 +165,7 @@ export function acceptTesaQuotedAnswer(store,config,event){
 
 export function tesaCaseAnswers(store,config,{caseId,customerPhone}){
  scoped(store,config);initializeTesaStore(store);if(!freshMembership(config))return [];
- return store.db.prepare("SELECT * FROM tesa_questions WHERE company=? AND case_id=? AND customer_phone=? AND state='ANSWERED' AND valid_until>? ORDER BY answer_at").all(store.company,caseId,customerPhone,Date.now()).map(q=>{const body=store.open(q.body),answer=store.open(q.answer);return {question:body.text,answer:answer.text,source:q.source_id,at:q.answer_at,validUntil:q.valid_until,scope:'same-company-and-case-only; recheck before scheduling',groupJid:q.group_jid,sourceLine:q.source_line,senderLine:q.sender_line,participant:answer.participant,questionMid:answer.questionMid};});
+ return store.db.prepare("SELECT q.*,o.created outbox_created FROM tesa_questions q JOIN tesa_outbox o ON o.id=q.outbox_id WHERE q.company=? AND q.case_id=? AND q.customer_phone=? AND q.state='ANSWERED' AND q.valid_until>? ORDER BY q.answer_at").all(store.company,caseId,customerPhone,Date.now()).filter(q=>tesaOperationalScopeSafe(store,config,{phone:q.customer_phone,line:q.source_line,source:store.open(q.body).source,senderLine:q.sender_line,created:q.outbox_created})).map(q=>{const body=store.open(q.body),answer=store.open(q.answer);return {question:body.text,answer:answer.text,source:q.source_id,at:q.answer_at,validUntil:q.valid_until,scope:'same-company-and-case-only; recheck before scheduling',groupJid:q.group_jid,sourceLine:q.source_line,senderLine:q.sender_line,participant:answer.participant,questionMid:answer.questionMid};});
 }
 
 export function tesaStatus(store,config){scoped(store,config);initializeTesaStore(store);const t=freshMembership(config);return {guard:TESA_OPERATIONS_GUARD,enabled:Boolean(t),groupJid:t?.groupJid||null,senderLine:t?.senderLine||null,events:store.db.prepare('SELECT state,COUNT(*) n FROM tesa_events GROUP BY state').all(),questions:store.db.prepare('SELECT state,COUNT(*) n FROM tesa_questions GROUP BY state').all(),outbox:store.db.prepare('SELECT state,COUNT(*) n FROM tesa_outbox GROUP BY state').all(),businessWritesEnabled:false,humanHoldsModified:false};}

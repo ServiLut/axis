@@ -12,6 +12,7 @@ import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQu
 import {createHash} from 'node:crypto';
 import {tesaOperationalTopic} from './tesa-config.mjs';
 import {prepareTesaQuestion,initializeTesaStore} from './tesa-operations.mjs';
+import {assertOperationalLineScope,operationalLineAllowed} from './line-scope.mjs';
 
 export const MARIA_AUTONOMOUS_INTAKE_GUARD='literal-ordinary-intake-without-staff-delegation-v1';
 
@@ -374,6 +375,10 @@ export class Engine {
         finish('OBSERVED_INTERNAL');return;
       }
       if(conv.hold){finish('OBSERVED_HUMAN');return;}
+      const lineScope=assertOperationalLineScope(c);
+      if(lineScope&&(!operationalLineAllowed(c,e.line)||e.at<Date.parse(lineScope.authorizedAt)||s.hasSourcesOutsideLine(e.phone,e.line))){
+        finish('OBSERVED_TEMPORARY_LINE_SCOPE');return;
+      }
       const reportedOrder=/\borden\s*(?:n[ºo°.]?\s*)?([a-f0-9]{8})\b/i.exec(e.text)?.[1]?.toUpperCase();
       const newCase=c.company==='fumigacion'?explicitNewService(e.text)&&!afterServiceRequest(e,analysis):/\b(?:otra solicitud|nuevo servicio|otro servicio|otro equipo)\b/.test(normalize(e.text));
       const caseState=newCase?{slots:{},asked:[],introduced:conv.state.introduced,caseId:c.company+':'+e.id}:conv.state;

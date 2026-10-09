@@ -74,6 +74,23 @@ export class Store {
     const row=this.db.prepare('SELECT value FROM meta WHERE key=?').get('prior-history:'+phone);
     return row?this.open(row.value):null;
   }
+  hasSourcesOutsideLine(phone,line) {
+    // Read lineage before refreshing scoped history. A later blue message
+    // cannot erase a red source, shared MID or uncertain delivery.
+    if(typeof line!=='string'||!/^57\d{10}$/.test(line))return true;
+    const outside='(line IS NULL OR line<>?)';
+    if(this.db.prepare('SELECT 1 FROM events WHERE phone=? AND '+outside+' LIMIT 1').get(phone,line)||
+      this.db.prepare('SELECT 1 FROM event_sources x JOIN events e ON e.id=x.event_id WHERE e.phone=? AND (x.line IS NULL OR x.line<>?) LIMIT 1').get(phone,line)||
+      this.db.prepare('SELECT 1 FROM conversations WHERE phone=? AND '+outside+' LIMIT 1').get(phone,line)||
+      this.db.prepare('SELECT 1 FROM outbox WHERE phone=? AND internal=0 AND '+outside+' LIMIT 1').get(phone,line)||
+      this.db.prepare('SELECT 1 FROM questions q LEFT JOIN outbox o ON o.id=q.outbox_id WHERE q.phone=? AND (o.line IS NULL OR o.line<>?) LIMIT 1').get(phone,line)||
+      this.db.prepare('SELECT 1 FROM question_routes r JOIN questions q ON q.id=r.question_id WHERE q.phone=? AND (r.line IS NULL OR r.line<>?) LIMIT 1').get(phone,line))return true;
+    if(this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='tesa_questions'").get()&&
+      this.db.prepare('SELECT 1 FROM tesa_questions WHERE customer_phone=? AND (source_line IS NULL OR source_line<>?) LIMIT 1').get(phone,line))return true;
+    const prior=this.priorHistory(phone);
+    if(prior&&!Array.isArray(prior.checks))return true;
+    return Boolean(prior?.checks.some(check=>!check||!Number.isInteger(check.total)||check.total<0||check.total>0&&check.line!==line));
+  }
   savePriorHistory(phone,check,source) {
     this.tx(()=>{
       this.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('prior-history:'+phone,this.seal(check));

@@ -2,6 +2,7 @@ import {createHash} from 'node:crypto';
 import {normalize} from './config.mjs';
 import {validateBusinessPriceSchedule,selectBusinessPrice,verifyBusinessPriceEntry} from './business-prices.mjs';
 import {specialPropertyScope} from './property-scope.mjs';
+import {operationalLines} from './line-scope.mjs';
 
 export const PRICE_AUTHORITY='direct-user-chat-20261005-common-quotes-special-cases-and-human-priority';
 const fields=new Set(['service','site','location','locationDetails','area','rooms','roomScale','siteScale','treatmentScope','floors','patio']);
@@ -69,7 +70,7 @@ export async function verifyPriceSource(entry,transport){
  if(entry?.source?.type==='direct_user_approved_schedule'){
   if(transport.config.company!=='fumigacion')throw Error('PRICE_OWN_LINE_REQUIRED');
   verifyBusinessPriceEntry(entry);
-  for(const line of transport.config.lines)await transport.verifyLine(line.phone);
+  for(const line of operationalLines(transport.config))await transport.verifyLine(line.phone);
   return true;
  }
  const line=transport.config.lines.find(l=>l.phone===entry.source.line);if(!line||transport.config.company!=='fumigacion')throw Error('PRICE_OWN_LINE_REQUIRED');

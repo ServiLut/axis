@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import {aiConfiguration} from './ai-settings.mjs';
 import {registrationConfig} from './maria-program.mjs';
 import {tesaConfiguration} from './tesa-config.mjs';
+import {assertOperationalLineScope,operationalLineAllowed} from './line-scope.mjs';
 
 export const BUSINESSES = Object.freeze({
   fumigacion: { name: 'FUMIGACION', bot: 'María Ángel', phones: ['573126944997','573126938721'] },
@@ -45,6 +46,7 @@ export function configFromEnv(env = process.env) {
   if (lines.length !== 2 || new Set(lines.map(l=>l.phone)).size !== 2 || new Set(lines.map(l=>l.instance)).size !== 2 ||
       lines.some(l=>!business.phones.includes(l.phone) || !/^[a-z0-9][a-z0-9_-]{1,80}$/i.test(l.instance) ||
       ['abogados','psicologos-en-colombia'].includes(l.instance))) throw new Error('OWN_LINES_REQUIRED');
+  const operationalLineScope=assertOperationalLineScope({company,lines,activatedAt:Date.parse(env.BOT_ACTIVATED_AT||''),operationalLineScope:env.BOT_OPERATIONAL_LINE_SCOPE_JSON?JSON.parse(env.BOT_OPERATIONAL_LINE_SCOPE_JSON):null});
   if (!/^[a-f0-9]{64}$/.test(env.BOT_AUTH_TOKEN_HASH || '') || !/^[a-f0-9]{64}$/.test(env.BOT_WEBHOOK_TOKEN_HASH || '') ||
       env.BOT_AUTH_TOKEN_HASH===env.BOT_WEBHOOK_TOKEN_HASH || !/^[a-f0-9]{64}$/.test(env.BOT_DATA_KEY || '')) throw new Error('DEDICATED_KEYS_REQUIRED');
   const database = env.BOT_DATABASE_PATH;
@@ -58,7 +60,7 @@ export function configFromEnv(env = process.env) {
   if((env.BOT_ENABLED==='true'||env.BOT_CHIEF_ONLY==='true')&&!Number.isFinite(Date.parse(env.BOT_ACTIVATED_AT||'')))throw new Error('ACTIVATION_CUTOFF_REQUIRED');
   if(env.BOT_ENABLED==='true'&&env.BOT_PRIOR_HISTORY_CHECK!=='true')throw new Error('PRIOR_HISTORY_GUARD_REQUIRED');
   if(env.BOT_OPERATIONAL_ROUTING&&!['sandra',OPERATOR_ROUTING,CURRENT_OPERATOR_ROUTING].includes(env.BOT_OPERATIONAL_ROUTING))throw Error('OPERATOR_ROUTING_REQUIRED');
-  return { operatorRouting:env.BOT_OPERATIONAL_ROUTING||'sandra',company, ...business, lines, database, encryptionKey: Buffer.from(env.BOT_DATA_KEY,'hex'),
+  return { operatorRouting:env.BOT_OPERATIONAL_ROUTING||'sandra',company, ...business, lines, operationalLineScope, database, encryptionKey: Buffer.from(env.BOT_DATA_KEY,'hex'),
     authHash: env.BOT_AUTH_TOKEN_HASH, webhookHash:env.BOT_WEBHOOK_TOKEN_HASH, provider: provider.href.replace(/\/$/,''),
     enabled: env.BOT_ENABLED === 'true', chiefOnly:env.BOT_CHIEF_ONLY==='true', activatedAt: Date.parse(env.BOT_ACTIVATED_AT || ''),
     historyCheckRequired:env.BOT_PRIOR_HISTORY_CHECK==='true',
@@ -82,8 +84,9 @@ export function validateEvent(body, config, now = Date.now(), recoverChief = fal
   const line = config.lines.find(l=>l.instance===body.instance && l.phone===body.owner);
   const event = body.event;
   const internal=event&&internalRecipients(config).includes(event.phone);
-  if (!line || !event || (!config.enabled&&!(config.chiefOnly&&internal)) || !Number.isFinite(config.activatedAt)) return null;
+  if (!line || !event || !operationalLineAllowed(config,line.phone) || (!config.enabled&&!(config.chiefOnly&&internal)) || !Number.isFinite(config.activatedAt)) return null;
   const at = Date.parse(event.at);
+  if(config.operationalLineScope&&at<Date.parse(config.operationalLineScope.authorizedAt))return null;
   if (!/^[A-Za-z0-9_-]{8,100}$/.test(event.id || '') || !/^57\d{10}$/.test(event.phone || '') ||
       typeof event.fromMe !== 'boolean' || !Number.isFinite(at) || at < config.activatedAt || at > now+60000 || at < now-(recoverChief&&internal&&!event.fromMe?86400000:600000) ||
       !['text','audio','image','document','video','call'].includes(event.kind) || typeof event.text !== 'string' || event.text.length > 6000 ||

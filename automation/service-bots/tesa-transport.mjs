@@ -1,7 +1,8 @@
 import {createHash} from 'node:crypto';
 import {getTesaConfig} from './tesa-config.mjs';
 import {decodeTesaGroupWebhook} from './tesa-webhook.mjs';
-import {observeTesaGroupEvent,acceptTesaQuotedAnswer,bindTesaQuestionDelivery} from './tesa-operations.mjs';
+import {observeTesaGroupEvent,acceptTesaQuotedAnswer,bindTesaQuestionDelivery,tesaOutboxScopeSafe} from './tesa-operations.mjs';
+import {operationalCoverage} from './line-scope.mjs';
 
 const nativeText=r=>{const m=r.message?.ephemeralMessage?.message??r.message??{};return m.conversation??m.extendedTextMessage?.text??null;};
 const phoneJid=j=>/^57\d{10}@s\.whatsapp\.net$/.test(j??'')?j.split('@')[0]:null;
@@ -85,7 +86,14 @@ export async function drainTesaGroup(store,config,transport){
   if(!config.tesaOperations?.enabled)return {enabled:false,accepted:0,uncertain:0};
   let t;try{t=await refreshTesaMembership(config,transport);}catch{return {enabled:true,membershipReview:true,accepted:0,uncertain:0};}
   if(!t)return {enabled:true,membershipReview:true,accepted:0,uncertain:0};
-  let accepted=0,uncertain=0;
+  let accepted=0,uncertain=0,scopeReviewed=0;
+  const scopedReady=o=>{
+    if(tesaOutboxScopeSafe(store,config,o))return true;
+    if(store.db.prepare("UPDATE tesa_outbox SET state='OPERATIONAL_SCOPE_REVIEW',updated=? WHERE id=? AND state IN ('READY','SENDING')").run(Date.now(),o.id).changes){
+      store.audit('TESA_OPERATIONAL_SCOPE_BEFORE_SEND_REVIEW',o.id,{caseId:o.case_id,sourceLine:o.source_line,senderLine:o.sender_line,coverage:operationalCoverage(config),attemptedSend:false,migrated:false});scopeReviewed++;
+    }
+    return false;
+  };
   const deliveries=store.db.prepare("SELECT * FROM tesa_outbox WHERE state='ACCEPTED' AND mid IS NOT NULL AND created>? ORDER BY created LIMIT 10").all(Date.now()-86400000);
   for(const o of deliveries){
     const key='tesa-native-check:'+o.id,prior=store.db.prepare('SELECT value FROM meta WHERE key=?').get(key);
@@ -95,6 +103,7 @@ export async function drainTesaGroup(store,config,transport){
   }
   const ready=store.db.prepare("SELECT * FROM tesa_outbox WHERE state='READY' ORDER BY created LIMIT 5").all();
   for(const o of ready){
+    if(!scopedReady(o))continue;
     const conv=store.conversation(o.customer_phone);
     // A takeover between preparing the question and sending it also stops group questions.
     if(!config.enabled||!conv||conv.hold||conv.state.caseId!==o.case_id){
@@ -106,11 +115,13 @@ export async function drainTesaGroup(store,config,transport){
       await transport.verifyLine(t.senderLine);
       t=getTesaConfig(config);if(!t)continue;
     }catch{store.audit('TESA_MEMBERSHIP_BEFORE_SEND_REVIEW',o.id,{attemptedSend:false});continue;}
+    if(!scopedReady(o))continue;
     if(o.company!==config.company||o.group_jid!==t.groupJid||o.sender_line!==t.senderLine||!config.lines.some(l=>l.phone===o.source_line))throw Error('TESA_OUTBOX_SCOPE_MISMATCH');
     if(!store.db.prepare("UPDATE tesa_outbox SET state='SENDING',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id).changes)continue;
     try{
       const latest=store.conversation(o.customer_phone);
       if(latest?.hold||latest?.state.caseId!==o.case_id){store.db.prepare("UPDATE tesa_outbox SET state='ATTENTION_REVIEW',updated=? WHERE id=? AND state='SENDING'").run(Date.now(),o.id);continue;}
+      if(!scopedReady(o))continue;
       const line=config.lines.find(l=>l.phone===t.senderLine),text=store.open(o.body);
       const sent=await transport.request(line,'/message/sendText/'+encodeURIComponent(line.instance),{number:t.groupJid,text,linkPreview:false});
       if(typeof sent.key?.id!=='string'||!/^[A-Za-z0-9_-]{8,100}$/.test(sent.key.id)||sent.key.remoteJid&&sent.key.remoteJid!==t.groupJid)throw Error('TESA_SEND_WITHOUT_EXACT_RECEIPT');
@@ -121,5 +132,5 @@ export async function drainTesaGroup(store,config,transport){
       store.audit('TESA_GROUP_SEND_UNCERTAIN',o.id,{cause:/^[A-Z_0-9]+$/.test(error.message??'')?error.message:'SEND_RESULT_UNCERTAIN',resend:false});uncertain++;
     }
   }
-  return {enabled:true,accepted,uncertain};
+  return {enabled:true,accepted,uncertain,scopeReviewed};
 }

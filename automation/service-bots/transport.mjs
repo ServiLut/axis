@@ -8,22 +8,36 @@ import {routeCaseQuestion} from './engine.mjs';
 import {initializeInactivityFollowup,queueInactivityFollowups,inactivityDeliveryValid,recordResponseTiming} from './inactivity-followup.mjs';
 import {tesaCaseAnswers} from './tesa-operations.mjs';
 import {drainTesaGroup} from './tesa-transport.mjs';
+import {assertOperationalLineScope,operationalLines,operationalLineAllowed,operationalHistoryGuard,operationalCoverage} from './line-scope.mjs';
 
 export class Transport {
   constructor(config, fetcher=fetch){this.config=config;this.fetcher=fetcher;}
   async request(line,path,body) {
     if(!this.config.lines.includes(line)||!line.apiKey)throw new Error('INSTANCE_ACCESS_REQUIRED');
+    if(!operationalLineAllowed(this.config,line.phone)){
+      // A suspended line may still supply authenticated staff evidence. These
+      // exact provider routes are reads, never sending or reconnecting.
+      const bindingRead=!body&&path==='/instance/fetchInstances?instanceName='+encodeURIComponent(line.instance);
+      const messageRead=body&&path==='/chat/findMessages/'+encodeURIComponent(line.instance);
+      if(!bindingRead&&!messageRead)throw Error('LINE_SUSPENDED_BY_AUTHORIZED_SCOPE');
+    }
     const response=await this.fetcher(this.config.provider+path,{method:body?'POST':'GET',headers:{apikey:line.apiKey,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),redirect:'error',signal:AbortSignal.timeout(20000)});
     if(!response.ok)throw new Error('CHANNEL_HTTP_'+response.status); return response.json();
   }
-  async verifyLine(phone) {
+  async verifyLineBinding(phone) {
     const line=this.config.lines.find(l=>l.phone===phone);if(!line)throw new Error('LINE_OUTSIDE_COMPANY');
     const data=await this.request(line,'/instance/fetchInstances?instanceName='+encodeURIComponent(line.instance));
     const scope=Array.isArray(data)?data:[data];
     const own=scope.filter(x=>(x.name??x.instance?.instanceName??x.instanceName)===line.instance);
     if(scope.length!==1||own.length!==1||own[0].ownerJid?.split('@')[0]!==phone)throw new Error('CHANNEL_OWNER_MISMATCH');
-    if(String(own[0].connectionStatus).toLowerCase()!=='open')throw new Error('CHANNEL_NOT_OPEN');
-    return {phone,instance:line.instance,open:true,ownerVerified:true,checkedAt:new Date().toISOString()};
+    return {phone,instance:line.instance,open:String(own[0].connectionStatus).toLowerCase()==='open',ownerVerified:true,checkedAt:new Date().toISOString()};
+  }
+  async verifyLine(phone) {
+    if(!this.config.lines.some(line=>line.phone===phone))throw new Error('LINE_OUTSIDE_COMPANY');
+    if(!operationalLineAllowed(this.config,phone))throw Error('LINE_SUSPENDED_BY_AUTHORIZED_SCOPE');
+    const binding=await this.verifyLineBinding(phone);
+    if(!binding.open)throw new Error('CHANNEL_NOT_OPEN');
+    return binding;
   }
   async send(row,text) {
     if(!row.internal&&!this.config.enabled)throw new Error('CUSTOMER_GATE_CLOSED');
@@ -45,7 +59,7 @@ export class Transport {
     const c=this.config;
     if(!/^57\d{10}$/.test(phone)||!Number.isFinite(c.activatedAt))throw new Error('HISTORY_SCOPE_REQUIRED');
     const checks=[];
-    for(const line of c.lines){
+    for(const line of operationalLines(c)){
       await this.verifyLine(line.phone);
       for(const addressField of ['remoteJid','remoteJidAlt']){
       const data=await this.request(line,'/chat/findMessages/'+encodeURIComponent(line.instance),{
@@ -59,12 +73,12 @@ export class Transport {
       checks.push({line:line.phone,instance:line.instance,addressField,total:value.total,lastSourceId:r?.key.id??null,lastAt:r?Number(r.messageTimestamp)*1000:null});
       }
     }
-    return {cutoff:c.activatedAt,checkedAt:Date.now(),guardVersion:'canonical-and-alternate-phone-v2',priorOutgoing:checks.some(x=>x.total>0),checks,scope:'own-two-lines-and-explicit-phone-alternatives; metadata-only; historical-author-unattributed'};
+    return {cutoff:c.activatedAt,checkedAt:Date.now(),guardVersion:operationalHistoryGuard(c),priorOutgoing:checks.some(x=>x.total>0),checks,coverage:operationalCoverage(c),scope:assertOperationalLineScope(c)?'authorized-own-blue-line-and-explicit-phone-alternatives; red-history-not-read; metadata-only; historical-author-unattributed':'own-two-lines-and-explicit-phone-alternatives; metadata-only; historical-author-unattributed'};
   }
   async currentAttention(phone) {
     const c=this.config;if(!/^57\d{10}$/.test(phone)||!Number.isFinite(c.activatedAt))throw new Error('ATTENTION_SCOPE_REQUIRED');
     const through=Date.now(),sources=new Map(),checks=[];
-    for(const line of c.lines){
+    for(const line of operationalLines(c)){
       await this.verifyLine(line.phone);
       for(const addressField of ['remoteJid','remoteJidAlt']){
         let expectedTotal=null,read=0;
@@ -91,7 +105,7 @@ export class Transport {
         checks.push({line:line.phone,addressField,total:expectedTotal,read});
       }
     }
-    return {sources:[...sources.values()],checks,through,complete:true,scope:'own-two-lines-and-explicit-phone-alternatives; written-or-media-outgoing'};
+    return {sources:[...sources.values()],checks,through,complete:true,coverage:operationalCoverage(c),scope:assertOperationalLineScope(c)?'authorized-own-blue-line-and-explicit-phone-alternatives; red-attention-not-read; written-or-media-outgoing':'own-two-lines-and-explicit-phone-alternatives; written-or-media-outgoing'};
   }
   async programContext(phone) {
     const c=this.config;
@@ -107,7 +121,7 @@ export class Transport {
     const c=this.config;
     if(c.company!=='fumigacion'||!/^57\d{10}$/.test(phone)||!Number.isFinite(since)||since<c.activatedAt)throw Error('INACTIVITY_SOURCE_SCOPE_REQUIRED');
     const through=Date.now(),sources=new Map(),checks=[];
-    for(const line of c.lines){
+    for(const line of operationalLines(c)){
       await this.verifyLine(line.phone);
       for(const addressField of ['remoteJid','remoteJidAlt']){
         let total=null,read=0;
@@ -127,7 +141,7 @@ export class Transport {
         checks.push({line:line.phone,addressField,total,read});
       }
     }
-    return {complete:true,through,sources:[...sources.values()],checks};
+    return {complete:true,through,sources:[...sources.values()],checks,coverage:operationalCoverage(c),scope:assertOperationalLineScope(c)?'authorized-own-blue-line-and-explicit-phone-alternatives; red-customer-activity-not-read':'own-two-lines-and-explicit-phone-alternatives'};
   }
   async understand(event,context,knowledge,store) {
     const c=this.config;
@@ -150,14 +164,31 @@ export async function drain(store,config,transport,engine) {
   const pending=store.db.prepare("SELECT body,revision FROM events WHERE state='PENDING' AND (?=1 OR phone IN (?,?,?)) ORDER BY from_me DESC,at,rowid LIMIT ?").all(Number(config.enabled),SANDRA,DIEGO,HILARY,fastMaria?1:30);
   for(const row of pending) {
     const e=store.open(row.body); let analysis={};
+    const lineScope=assertOperationalLineScope(config);
+    if(lineScope&&!e.fromMe&&!knownInternalRecipient(e.phone)&&
+      (e.at<Date.parse(lineScope.authorizedAt)||
+        !operationalLineAllowed(config,e.line)||
+        typeof store.hasSourcesOutsideLine!=='function'||store.hasSourcesOutsideLine(e.phone,e.line))){
+      store.db.prepare("UPDATE events SET state='OPERATIONAL_SCOPE_REVIEW' WHERE id=? AND state='PENDING'").run(e.id);
+      store.audit('OPERATIONAL_SCOPE_EVENT_BLOCKED',e.id,{line:e.line,coverage:operationalCoverage(config),replayed:false,migrated:false});continue;
+    }
+    if(!e.fromMe&&!operationalLineAllowed(config,e.line)){
+      store.db.prepare("UPDATE events SET state='SUSPENDED_LINE_REVIEW' WHERE id=? AND state='PENDING'").run(e.id);
+      store.audit('SUSPENDED_LINE_EVENT_BLOCKED',e.id,{line:e.line,coverage:operationalCoverage(config),replayed:false,migrated:false});continue;
+    }
     const conversation=store.conversation(e.phone),superseded=!e.fromMe&&!knownInternalRecipient(e.phone)&&(e.at<conversation?.at||row.revision<conversation?.revision);
     if(superseded){await engine.process(e);continue;}
     if(config.historyCheckRequired&&!e.fromMe&&!knownInternalRecipient(e.phone)){
       const checked=store.priorHistory(e.phone);
-      if(checked?.cutoff!==config.activatedAt||(transport instanceof Transport&&checked.guardVersion!=='canonical-and-alternate-phone-v2')){
+      if(checked?.cutoff!==config.activatedAt||((transport instanceof Transport||assertOperationalLineScope(config))&&checked.guardVersion!==operationalHistoryGuard(config))){
         try{store.savePriorHistory(e.phone,await transport.priorHistory(e.phone),e.id);}
         catch{store.audit('PRIOR_HISTORY_UNVERIFIED',e.id);store.db.prepare("UPDATE events SET state='HISTORY_REVIEW' WHERE id=? AND state='PENDING'").run(e.id);continue;}
       }
+    }
+    if(lineScope&&!e.fromMe&&!knownInternalRecipient(e.phone)&&
+      (typeof store.hasSourcesOutsideLine!=='function'||store.hasSourcesOutsideLine(e.phone,e.line))){
+      store.db.prepare("UPDATE events SET state='OPERATIONAL_SCOPE_REVIEW' WHERE id=? AND state='PENDING'").run(e.id);
+      store.audit('OPERATIONAL_SCOPE_CHANGED_BEFORE_MODEL',e.id,{line:e.line,coverage:operationalCoverage(config),replayed:false,migrated:false});continue;
     }
     const newCase=config.company==='fumigacion'?explicitNewService(e.text):/\b(?:otra solicitud|nuevo servicio|otro servicio|otro equipo)\b/.test(normalize(e.text));
     const intakeStage=store.conversation(e.phone)?.state.programIntake?.stage;
@@ -191,6 +222,20 @@ export async function flushOutbox(store,config,transport){
   let accepted=0,suppressed=0,uncertain=0;
   const out=store.db.prepare("SELECT * FROM outbox WHERE state='READY' AND (?=1 OR (internal=1 AND phone IN (?,?,?))) ORDER BY created,rowid LIMIT 20").all(Number(config.enabled),SANDRA,DIEGO,HILARY);
   for(const o of out) {
+    const lineScope=assertOperationalLineScope(config);
+    if(lineScope&&(o.created<Date.parse(lineScope.authorizedAt)||
+      (!o.internal&&(typeof store.hasSourcesOutsideLine!=='function'||store.hasSourcesOutsideLine(o.phone,o.line))))){
+      if(store.db.prepare("UPDATE outbox SET state='OPERATIONAL_SCOPE_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id).changes){
+        store.audit('OPERATIONAL_SCOPE_OUTBOX_BLOCKED',o.id,{line:o.line,coverage:operationalCoverage(config),attemptedSend:false,migrated:false});suppressed++;
+      }
+      continue;
+    }
+    if(!operationalLineAllowed(config,o.line)){
+      if(store.db.prepare("UPDATE outbox SET state='SUSPENDED_LINE_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id).changes){
+        store.audit('SUSPENDED_LINE_OUTBOX_BLOCKED',o.id,{line:o.line,coverage:operationalCoverage(config),attemptedSend:false,migrated:false});suppressed++;
+      }
+      continue;
+    }
     if(o.internal&&o.phone===DIEGO&&config.operatorRouting===CURRENT_OPERATOR_ROUTING){
       // The current direct instruction retires Diego as an outgoing recipient.
       // Preserve the original question, recipient and encrypted body; never
@@ -214,7 +259,7 @@ export async function flushOutbox(store,config,transport){
     // that mandatory check instead of checking the same owner twice. Other
     // transports, internal replies and routes without native attention retain
     // their separate channel check.
-    const ownerCheckedByNativeAttention=!o.internal&&config.historyCheckRequired&&transport instanceof Transport&&transport.config===config&&transport.currentAttention===Transport.prototype.currentAttention&&transport.verifyLine===Transport.prototype.verifyLine&&transport.request===Transport.prototype.request&&config.lines.some(line=>line.phone===o.line);
+    const ownerCheckedByNativeAttention=!o.internal&&config.historyCheckRequired&&transport instanceof Transport&&transport.config===config&&transport.currentAttention===Transport.prototype.currentAttention&&transport.verifyLine===Transport.prototype.verifyLine&&transport.verifyLineBinding===Transport.prototype.verifyLineBinding&&transport.request===Transport.prototype.request&&operationalLineAllowed(config,o.line);
     if(!ownerCheckedByNativeAttention){try{await transport.verifyLine(o.line);}catch{store.audit('CHANNEL_CHECK_FAILED',o.id);continue;}}
     if(!o.internal&&config.company==='fumigacion'&&config.responseTargetMs!==3000&&config.conversationalAi?.ready&&typeof transport.composeReply==='function'&&store.approvedReplyStillValid(o)&&store.priceReplyStillValid(o)){
       try{
@@ -243,7 +288,7 @@ export async function flushOutbox(store,config,transport){
           store.hold(o.phone,unknown.id,true);
           store.audit('NATIVE_PRIOR_ATTENTION_BLOCKED_REPLY',unknown.id,{phone:o.phone,line:unknown.line,at:unknown.at,outboxId:o.id,authorUnverified:true,firstBotEvidencePreserved:true});suppressed++;continue;
         }
-        store.audit('NATIVE_ATTENTION_CHECKED',o.id,{through:attention.through,checks:attention.checks,knownOutgoing:attention.sources.length});
+        store.audit('NATIVE_ATTENTION_CHECKED',o.id,{through:attention.through,checks:attention.checks,knownOutgoing:attention.sources.length,coverage:attention.coverage??operationalCoverage(config)});
       }catch{
         store.db.prepare("UPDATE outbox SET state='ATTENTION_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id);
         store.hold(o.phone,'attention-review:'+o.id,true);store.audit('NATIVE_ATTENTION_UNVERIFIED',o.id,{attemptedSend:false});suppressed++;continue;
@@ -275,6 +320,13 @@ export async function flushOutbox(store,config,transport){
       }catch{
         store.db.prepare("UPDATE outbox SET state='PRICE_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id);store.audit('PRICE_SOURCE_RECHECK_FAILED',o.id,{attemptedSend:false});suppressed++;continue;
       }
+    }
+    if(lineScope&&(o.created<Date.parse(lineScope.authorizedAt)||!operationalLineAllowed(config,o.line)||
+      (!o.internal&&(typeof store.hasSourcesOutsideLine!=='function'||store.hasSourcesOutsideLine(o.phone,o.line))))){
+      if(store.db.prepare("UPDATE outbox SET state='OPERATIONAL_SCOPE_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id).changes){
+        store.audit('OPERATIONAL_SCOPE_CHANGED_BEFORE_SEND',o.id,{line:o.line,coverage:operationalCoverage(config),attemptedSend:false,migrated:false});suppressed++;
+      }
+      continue;
     }
     if(!store.db.prepare("UPDATE outbox SET state='SENDING',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id).changes)continue;
     try {

@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {normalize,questionRecipients} from './config.mjs';
 import {BUSINESS_PRICE_HASH,selectBusinessPrice} from './business-prices.mjs';
+import {operationalLineAllowed,operationalCoverage} from './line-scope.mjs';
 
 export const MARIA_PROGRAM_GUARD='own-accepted-ordinary-service-literal-fields-and-atomic-receipt-v2';
 export const MARIA_PROGRAM_PIPELINE_GUARD='processed-customer-turn-before-registration-v1';
@@ -55,10 +56,10 @@ export async function installProgramSetup(c,s,body,fetcher){
 export function registrationStatus(c,s){
  const entries=c.company==='fumigacion'?s.db.prepare('SELECT value FROM meta WHERE key LIKE ?').all(prefix+'%').map(r=>s.open(r.value)):[];
  const states=Object.fromEntries(['PENDING','SENDING','UNCERTAIN','SAVED','REVIEW'].map(state=>[state,entries.filter(entry=>entry.status===state).length]));
- const safeReason=reason=>['CASE_CHANGED_BEFORE_WRITE','NATIVE_CONTEXT_NOT_VERIFIED','UNCERTAIN_WRITE_NOT_FOUND','UNCERTAIN_RECEIPT_REQUIRES_REVIEW'].includes(reason)?reason:'OTHER_REVIEW';
+ const safeReason=reason=>['CASE_CHANGED_BEFORE_WRITE','NATIVE_CONTEXT_NOT_VERIFIED','UNCERTAIN_WRITE_NOT_FOUND','UNCERTAIN_RECEIPT_REQUIRES_REVIEW','OPERATIONAL_LINE_SCOPE_REVIEW'].includes(reason)?reason:'OTHER_REVIEW';
  const reviewed=entries.filter(entry=>entry.status==='REVIEW').sort((a,b)=>(Number(b.reviewAt)||0)-(Number(a.reviewAt)||0));
  const reasons=new Map();for(const entry of reviewed){const reason=safeReason(entry.reason);reasons.set(reason,(reasons.get(reason)||0)+1);}
- return {guard:MARIA_PROGRAM_GUARD,pipelineGuard:MARIA_PROGRAM_PIPELINE_GUARD,literalFieldsGuard:MARIA_PROGRAM_LITERAL_FIELDS_GUARD,configured:c.company==='fumigacion'&&c.mariaProgram?.enabled===true,enabled:programEnabled(c),company:'FUMIGACION',tenantId:c.mariaProgram?.enabled?MARIA_TENANT:null,companyId:c.mariaProgram?.enabled?MARIA_COMPANY:null,advisorMembershipId:c.mariaProgram?.actorId||null,registrationKind:'new-service-pending-scheduling',prepared:states.PENDING,states,saved:states.SAVED,uncertain:states.UNCERTAIN+states.SENDING,review:states.REVIEW,lastReviewReason:reviewed.length?safeReason(reviewed[0].reason):null,reviewReasons:[...reasons].sort(([a],[b])=>a.localeCompare(b)).map(([reason,count])=>({reason,count})),scheduled:false,paymentsEnabled:false,fullyAutonomous:false};
+ return {guard:MARIA_PROGRAM_GUARD,pipelineGuard:MARIA_PROGRAM_PIPELINE_GUARD,literalFieldsGuard:MARIA_PROGRAM_LITERAL_FIELDS_GUARD,operationalCoverage:operationalCoverage(c),configured:c.company==='fumigacion'&&c.mariaProgram?.enabled===true,enabled:programEnabled(c),company:'FUMIGACION',tenantId:c.mariaProgram?.enabled?MARIA_TENANT:null,companyId:c.mariaProgram?.enabled?MARIA_COMPANY:null,advisorMembershipId:c.mariaProgram?.actorId||null,registrationKind:'new-service-pending-scheduling',prepared:states.PENDING,states,saved:states.SAVED,uncertain:states.UNCERTAIN+states.SENDING,review:states.REVIEW,lastReviewReason:reviewed.length?safeReason(reviewed[0].reason):null,reviewReasons:[...reasons].sort(([a],[b])=>a.localeCompare(b)).map(([reason,count])=>({reason,count})),scheduled:false,paymentsEnabled:false,fullyAutonomous:false};
 }
 // Only an affirmative from the customer is authority to create an ordinary,
 // unscheduled order. Courtesy, a preference or a quoted third-party "yes" alone
@@ -178,6 +179,8 @@ function blockedText(text){return /[?¿]|^no\b|\b(?:refuerzo|garantia|verificaci
 // Called only inside the engine's existing transaction; no network or business write.
 export function registrationTurn(s,c,previous,e,decision){
  if(!programEnabled(c)||e.fromMe||e.forwarded||e.kind!=='text'||e.at<c.mariaProgram.startsAt)return null;
+ if(!operationalLineAllowed(c,e.line)||c.operationalLineScope&&e.at<Date.parse(c.operationalLineScope.authorizedAt))return null;
+ if(c.operationalLineScope&&(typeof s.hasSourcesOutsideLine!=='function'||s.hasSourcesOutsideLine(e.phone,e.line)))return null;
  const state=decision.state,own=eligibleQuote(s,state,e.phone,e.line);
  if(!own||state.requestedAfterServiceReview||state.requestedControlReview||state.requestedDocumentReview||(decision.courtesy&&!confirms(e.text)))return null;
  const prior=state.programIntake||{stage:'name',originalQuoteAcceptanceId:own.q.acceptanceSource};
@@ -253,6 +256,18 @@ async function nativeMessage(t,c,id,phone,line){
  if(matches.length!==1)throw Error('PROGRAM_NATIVE_SOURCE_NOT_UNIQUE');return matches[0];
 }
 function nativeText(r){const m=r.message?.ephemeralMessage?.message??r.message??{};return m.conversation??m.extendedTextMessage?.text;}
+// A temporary line scope permits only a new, explicit acceptance on that line.
+// Earlier literal facts and a delivered price remain reusable in the same case,
+// but every original source still has to be stored and rechecked on the blue line.
+function registrationOperationalScope(s,c,entry){
+ const p=entry.payload;if(!operationalLineAllowed(c,p.line))return false;
+ if(!c.operationalLineScope)return true;
+ if(typeof s.hasSourcesOutsideLine!=='function'||s.hasSourcesOutsideLine(p.phone,p.line))return false;
+ const acceptanceAt=Date.parse(p.sources?.acceptance?.at);
+ if(!Number.isFinite(acceptanceAt)||acceptanceAt<Date.parse(c.operationalLineScope.authorizedAt)||p.sources?.acceptance?.line!==p.line)return false;
+ return Object.values(p.sources||{}).every(src=>Boolean(s.db.prepare('SELECT 1 FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(src.id,p.phone,p.line)))&&
+  Boolean(s.db.prepare('SELECT 1 FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(p.quote.sourceId,p.phone,p.line));
+}
 const neutralCourtesy=text=>/^(?:gracias|muchas gracias|mil gracias|muy amable|gracias muy amable)[.!¡, ]*$/.test(normalize(text));
 function storedCourtesy(s,p,id){
  const row=s.db.prepare("SELECT * FROM events WHERE id=? AND phone=? AND line=? AND from_me=0 AND state NOT IN ('PENDING','PROCESSING')").get(id,p.phone,p.line);
@@ -260,6 +275,7 @@ function storedCourtesy(s,p,id){
  return event.kind==='text'&&!event.fromMe&&!event.forwarded&&event.at>Date.parse(p.sources.acceptance.at)&&neutralCourtesy(event.text)?event:null;
 }
 async function verifyNative(s,c,t,entry){
+ if(!registrationOperationalScope(s,c,entry))throw Error('OPERATIONAL_LINE_SCOPE_REVIEW');
  const p=entry.payload,own=eligibleQuote(s,s.conversation(p.phone).state,p.phone,p.line);if(!own||own.q.sourceId!==p.quote.sourceId)throw Error('PROGRAM_PRICE_CHANGED');
  await t.verifyLine(p.line);
  const attention=await t.currentAttention(p.phone);if(!attention.complete)throw Error('PROGRAM_ATTENTION_UNVERIFIED');
@@ -306,20 +322,20 @@ function awaitsOwnCustomerTurn(s,c,entry){
  const phones=c.lines.map(line=>line.phone);
  return Boolean(s.db.prepare("SELECT 1 FROM events WHERE phone=? AND from_me=0 AND state='PENDING' AND line IN (?,?) LIMIT 1").get(p.phone,phones[0],phones[1]));
 }
-function review(s,c,key,entry,reason){s.tx(()=>{
+function review(s,c,key,entry,reason,notify=true){s.tx(()=>{
  const p=entry.payload;put(s,key,{...entry,status:'REVIEW',reason,reviewAt:Date.now()});const conv=s.conversation(p.phone);
  if(conv?.state.caseId===p.caseId){conv.state.programIntake={...conv.state.programIntake,stage:'review'};conv.state.awaitingHumanReview=true;s.saveConversation(p.phone,conv.state);}
  s.audit('OWN_SERVICE_REGISTRATION_REVIEW',p.sourceId,{caseId:p.caseId,reason,businessWritten:entry.status==='SAVED'});
  // A new technical exception goes to direction once, with its own persisted question.
  // A takeover itself needs no duplicate notification or customer interruption.
- if(conv&&!conv.hold&&conv.state.caseId===p.caseId){
+ if(notify&&conv&&!conv.hold&&conv.state.caseId===p.caseId){
   s.questionToRecipients({phone:p.phone,line:p.line,caseId:p.caseId,topic:'program-registration-review',conditions:{caseId:p.caseId,requestHash:entry.requestHash},recipients:questionRecipients(c,'program-registration-review'),source:p.sourceId,text:c.name+': solicitud aceptada del contacto '+p.phone+', precio $'+p.quote.priceCop+'. El guardado necesita revisión ('+reason+'); no se reintentó la escritura. No hay horario ni pago confirmados. ¿Cómo debemos continuar con este registro?'});
   s.queue('program:'+p.caseId+':review',p.phone,p.line,'Gracias. Tu solicitud queda pendiente de confirmación.',false,conv.revision,p.caseId);
  }
 });}
 function saved(s,c,key,entry,r,routeQuestion){
  s.tx(()=>{
-  const p=entry.payload,active=sameCurrent(s,entry);put(s,key,{...entry,status:'SAVED',receipt:r,savedAt:Date.now()});
+  const p=entry.payload,active=sameCurrent(s,entry)&&registrationOperationalScope(s,c,entry);put(s,key,{...entry,status:'SAVED',receipt:r,savedAt:Date.now()});
   const conv=s.conversation(p.phone);if(conv?.state.caseId===p.caseId){conv.state.programIntake={...conv.state.programIntake,stage:'registered'};conv.state.programServiceId=r.orderId;s.saveConversation(p.phone,conv.state);}
   const authorship=s.caseAuthorship(p.caseId);if(authorship)s.db.prepare('UPDATE case_authorship SET body=? WHERE case_id=?').run(s.seal({...authorship,creatorCreditWritten:true,programServiceId:r.orderId,programCreatorMembershipId:r.advisorMembershipId,programReceiptHash:r.requestHash,serviceCompleted:false}),p.caseId);
   s.audit('OWN_SERVICE_REGISTRATION_SAVED',p.sourceId,{caseId:p.caseId,orderId:r.orderId,createdById:r.advisorMembershipId,requestHash:r.requestHash,scheduled:false,paymentRecorded:false,confirmationSuppressed:!active});
@@ -351,11 +367,13 @@ export async function drainProgramRegistrations(s,c,t,routeQuestion=null){
    try{const r=await request(c,'/receipt',{caseId:entry.payload.caseId,acceptanceId:entry.payload.quote.acceptanceId},t.fetcher);if(receiptValid(c,entry,r)){saved(s,c,row.key,entry,r,routeQuestion);persisted++;}else if(ownScope(c,r)&&r.persisted===false){review(s,c,row.key,entry,'UNCERTAIN_WRITE_NOT_FOUND');reviewed++;}else throw Error('PROGRAM_RECEIPT_SCOPE_UNVERIFIED');}
    catch{const failures=(entry.receiptFailures||0)+1;entry={...entry,receiptFailures:failures,nextReceiptAt:Date.now()+60000};put(s,row.key,entry);s.audit('OWN_REGISTRATION_RECEIPT_UNAVAILABLE',entry.payload.sourceId,{caseId:entry.payload.caseId,writeRetried:false});if(failures>=3){review(s,c,row.key,entry,'UNCERTAIN_RECEIPT_REQUIRES_REVIEW');reviewed++;}}continue;
   }
+  if(!registrationOperationalScope(s,c,entry)){review(s,c,row.key,entry,'OPERATIONAL_LINE_SCOPE_REVIEW',false);reviewed++;continue;}
   // Fast response flush runs before Engine processes the next input. Leave
   // preparation intact until that authenticated source has been classified.
   if(awaitsOwnCustomerTurn(s,c,entry)){deferred++;continue;}
   if(!sameCurrent(s,entry)){review(s,c,row.key,entry,'CASE_CHANGED_BEFORE_WRITE');reviewed++;continue;}
-  try{await verifyNative(s,c,t,entry);if(!sameCurrent(s,entry)||!programEnabled(c))throw Error('CASE_CHANGED_BEFORE_WRITE');}catch{
+  try{await verifyNative(s,c,t,entry);if(!registrationOperationalScope(s,c,entry))throw Error('OPERATIONAL_LINE_SCOPE_REVIEW');if(!sameCurrent(s,entry)||!programEnabled(c))throw Error('CASE_CHANGED_BEFORE_WRITE');}catch(error){
+   if(error.message==='OPERATIONAL_LINE_SCOPE_REVIEW'||!registrationOperationalScope(s,c,entry)){review(s,c,row.key,entry,'OPERATIONAL_LINE_SCOPE_REVIEW',false);reviewed++;continue;}
    // Ingestion can also occur during the native reads. Do not turn that short
    // unprocessed interval into irreversible review or attempt a business write.
    if(awaitsOwnCustomerTurn(s,c,entry)){deferred++;continue;}

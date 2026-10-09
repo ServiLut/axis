@@ -27,6 +27,26 @@ function fixture(){
  return {now,sourceAt,config,store,event,caseId,outId,transport};
 }
 
+test('temporary blue scope never creates a followup from an old source or a red-shared case',()=>{
+ for(const kind of ['old','shared','new']){const f=fixture();try{
+  f.config.operationalLineScope={version:'authorized-fumigacion-blue-only-v1',company:'fumigacion',activeLines:[f.event.line],suspendedLines:[f.config.lines[1].phone],authorizedAt:new Date(kind==='old'?f.sourceAt+1000:f.sourceAt-1000).toISOString(),authorizationSource:'direct-user-20261009-red-block-24h'};
+  f.store.savePriorHistory(f.event.phone,{cutoff:f.config.activatedAt,priorOutgoing:false,checks:[{line:f.event.line,total:0}]},f.event.id);
+  if(kind==='shared')f.store.enqueue({...f.event,line:f.config.lines[1].phone});
+  assert.equal(Boolean(inactivityCandidate(f.config,f.store,f.event.phone,f.now)),kind==='new');
+ }finally{f.store.close();}}
+});
+
+test('a red-shared MID arriving during a program read prevents a queued blue followup',async()=>{
+ const f=fixture();try{
+  f.config.operationalLineScope={version:'authorized-fumigacion-blue-only-v1',company:'fumigacion',activeLines:[f.event.line],suspendedLines:[f.config.lines[1].phone],authorizedAt:new Date(f.sourceAt-1000).toISOString(),authorizationSource:'direct-user-20261009-red-block-24h'};
+  f.store.savePriorHistory(f.event.phone,{cutoff:f.config.activatedAt,priorOutgoing:false,checks:[{line:f.event.line,total:0}]},f.event.id);
+  assert.equal((await queueInactivityFollowups(f.store,f.config,f.transport,f.now)).queued,1);
+  const row=f.store.db.prepare("SELECT * FROM outbox WHERE id LIKE 'inactivity:%'").get(),read=f.transport.fetcher;
+  f.transport.fetcher=async(...args)=>{const result=await read(...args);f.store.enqueue({...f.event,line:f.config.lines[1].phone});return result;};
+  assert.equal(await inactivityDeliveryValid(f.store,f.config,f.transport,row),false);
+ }finally{f.store.close();}
+});
+
 test('only an open own delivered case is followed once with a missing-field question',async()=>{
  const f=fixture();try{
   const candidate=inactivityCandidate(f.config,f.store,f.event.phone,f.now);assert.ok(candidate);assert.match(candidate.text,/qué plaga/);
