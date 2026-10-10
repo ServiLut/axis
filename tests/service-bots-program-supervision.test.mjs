@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {randomBytes} from 'node:crypto';
+import test from 'node:test';import assert from 'node:assert/strict';import {randomBytes,createHash} from 'node:crypto';
 import {Store} from '../automation/service-bots/store.mjs';import {BUSINESSES} from '../automation/service-bots/config.mjs';
 import {MARIA_TENANT,MARIA_COMPANY,MARIA_PROGRAM_URL} from '../automation/service-bots/maria-program.mjs';
 import {initializeIntakeJournal,recordIntakeWebhook} from '../automation/service-bots/intake-journal.mjs';
@@ -22,3 +22,6 @@ test('normalized current phones alone cannot certify a missing service after com
   assert.equal(searches,1);assert.equal(r.contacts.length,1);assert.equal(r.contacts[0].completeContactSearch,false);assert.notEqual(r.contacts[0].comparison,'NO_RECORD_AFTER_COMPLETE_CONTACT_SEARCH');assert.equal(r.contacts[0].missingServiceVerified,false);
  }finally{s.close();}
 });
+test('technical runtime reports no Fumigacion supervision guard or program actor',()=>{const r=programSupervisionStatus({company:'servicio-tecnico'});assert.equal(r.guard,null);assert.equal(r.companyId,null);assert.equal(r.actorId,null);assert.equal(r.configured,false);});
+test('supervision is invalidated when registration is disabled or its actor/window changes',()=>{const {c,s,b}=fixture();try{c.programSupervision={...b,startsAt:Date.parse(b.startsAt),expiresAt:Date.parse(b.expiresAt)};assert.equal(programSupervisionStatus(c).enabled,true);for(const mariaProgram of [{...c.mariaProgram,enabled:false},{...c.mariaProgram,actorId:'other'},{...c.mariaProgram,expiresAt:c.programSupervision.expiresAt-1},{...c.mariaProgram,startsAt:c.programSupervision.startsAt+1},{...c.mariaProgram,token:b.token}])assert.equal(programSupervisionStatus({...c,mariaProgram}).enabled,false);}finally{s.close();}});
+test('admin, webhook and proof grants cannot become general audit credentials',async()=>{const {c,s,b}=fixture();try{const hashed=createHash('sha256').update(b.token).digest('hex');for(const patch of [{authHash:hashed},{webhookHash:hashed},{retentionProofAccess:{tokenHash:hashed}}])await assert.rejects(installProgramSupervision({...c,...patch},s,b,()=>{throw Error('must not connect');}));s.company='servicio-tecnico';await assert.rejects(installProgramSupervision(c,s,b,()=>{}));assert.throws(()=>restoreProgramSupervision(c,s));}finally{s.close();}});

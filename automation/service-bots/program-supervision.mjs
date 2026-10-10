@@ -1,20 +1,27 @@
 import {MARIA_COMPANY,MARIA_TENANT,MARIA_PROGRAM_URL} from './maria-program.mjs';
+import {createHash} from 'node:crypto';
 import {intakeAudit} from './intake-journal.mjs';
 import {evaluateDailyOperationalAudit,bogotaDayWindow} from './daily-operational-audit.mjs';
 
 export const PROGRAM_SUPERVISION_GUARD='own-fumigacion-readonly-daily-program-cross-and-separate-access-v1';
 const key='maria-operational-audit-setup';
+const digest=v=>createHash('sha256').update(v).digest('hex');
 const get=(s)=>{const r=s.db.prepare('SELECT value FROM meta WHERE key=?').get(key);return r?s.open(r.value):null;};
 function validated(c,b){
  const p=c.mariaProgram;
- if(c.company!=='fumigacion'||p?.enabled!==true||!b||Object.keys(b).sort().join(',')!=='actorId,expiresAt,startsAt,token,url'||b.actorId!==p.actorId||b.url!==MARIA_PROGRAM_URL+'/operational-audit'||! /^[A-Za-z0-9_-]{43,128}$/.test(b.token??'')||b.token===p.token)throw Error('OWN_SEPARATE_AUDIT_ACCESS_REQUIRED');
+ if(c.company!=='fumigacion'||p?.enabled!==true||!b||Object.keys(b).sort().join(',')!=='actorId,expiresAt,startsAt,token,url'||b.actorId!==p.actorId||b.url!==MARIA_PROGRAM_URL+'/operational-audit'||! /^[A-Za-z0-9_-]{43,128}$/.test(b.token??'')||b.token===p.token||[c.authHash,c.webhookHash,c.retentionProofAccess?.tokenHash].includes(digest(b.token??'')))throw Error('OWN_SEPARATE_AUDIT_ACCESS_REQUIRED');
  const startsAt=Date.parse(b.startsAt),expiresAt=Date.parse(b.expiresAt);
  if(!Number.isFinite(startsAt)||!Number.isFinite(expiresAt)||startsAt< p.startsAt||expiresAt>p.expiresAt||startsAt>=expiresAt)throw Error('OWN_AUDIT_CUTOFF_REQUIRED');
  return {...b,startsAt,expiresAt};
 }
-export function restoreProgramSupervision(c,s){const b=get(s);if(b)c.programSupervision=validated(c,{...b,startsAt:new Date(b.startsAt).toISOString(),expiresAt:new Date(b.expiresAt).toISOString()});}
-function ready(c,now=Date.now()){const p=c.programSupervision;return c.company==='fumigacion'&&p&&p.startsAt<=now&&p.expiresAt>now;}
-export function programSupervisionStatus(c){return {guard:PROGRAM_SUPERVISION_GUARD,configured:Boolean(c.programSupervision),enabled:Boolean(ready(c)),readOnly:true,tenantId:c.programSupervision?MARIA_TENANT:null,companyId:c.programSupervision?MARIA_COMPANY:null,actorId:c.programSupervision?.actorId??null,expiresAt:c.programSupervision?new Date(c.programSupervision.expiresAt).toISOString():null,customerNotesWritesEnabled:false,retentionSendingEnabled:false};}
+export function restoreProgramSupervision(c,s){if(s.company!==c.company)throw Error('OWN_AUDIT_STORE_REQUIRED');const b=get(s);if(b)c.programSupervision=validated(c,{...b,startsAt:new Date(b.startsAt).toISOString(),expiresAt:new Date(b.expiresAt).toISOString()});}
+function ready(c,now=Date.now()){
+ const p=c.programSupervision,r=c.mariaProgram;
+ return Boolean(c.company==='fumigacion'&&r?.enabled===true&&p&&p.actorId===r.actorId&&p.url===MARIA_PROGRAM_URL+'/operational-audit'&&
+  /^[A-Za-z0-9_-]{43,128}$/.test(p.token??'')&&p.token!==r.token&&![c.authHash,c.webhookHash,c.retentionProofAccess?.tokenHash].includes(digest(p.token))&&
+  Number.isFinite(p.startsAt)&&Number.isFinite(p.expiresAt)&&p.startsAt>=r.startsAt&&p.expiresAt<=r.expiresAt&&p.startsAt<p.expiresAt&&p.startsAt<=now&&p.expiresAt>now);
+}
+export function programSupervisionStatus(c){return {guard:c.company==='fumigacion'?PROGRAM_SUPERVISION_GUARD:null,configured:Boolean(c.programSupervision),enabled:Boolean(ready(c)),readOnly:true,tenantId:c.programSupervision?MARIA_TENANT:null,companyId:c.programSupervision?MARIA_COMPANY:null,actorId:c.programSupervision?.actorId??null,expiresAt:c.programSupervision?new Date(c.programSupervision.expiresAt).toISOString():null,customerNotesWritesEnabled:false,retentionSendingEnabled:false};}
 async function request(c,fetcher,path,body){
  if(!ready(c))throw Error('OWN_PROGRAM_SUPERVISION_NOT_CONNECTED');
  const r=await fetcher(c.programSupervision.url+path,{method:'POST',redirect:'error',headers:{Authorization:'Bearer '+c.programSupervision.token,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(20000)});
@@ -24,6 +31,7 @@ async function request(c,fetcher,path,body){
  return data;
 }
 export async function installProgramSupervision(c,s,body,fetcher){
+ if(s.company!==c.company)throw Error('OWN_AUDIT_STORE_REQUIRED');
  const candidate=validated(c,body),temporary={...c,programSupervision:candidate};
  if(!ready(temporary))throw Error('OWN_AUDIT_CUTOFF_REQUIRED');
  const today=new Date(Date.now()-5*3600000).toISOString().slice(0,10),proof=await request(temporary,fetcher,'',{day:today});

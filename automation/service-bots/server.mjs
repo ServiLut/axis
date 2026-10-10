@@ -29,6 +29,8 @@ import {operationalLines,operationalLineAllowed,operationalCoverage} from './lin
 import {initializeIntakeJournal,recordIntakeWebhook,recordIntakeBinding,recordIntakeIngressGap,intakeAudit,intakeJournalStatus} from './intake-journal.mjs';
 import {restoreProgramSupervision,programSupervisionStatus,installProgramSupervision,dailyProgramCross,readRetentionCandidates} from './program-supervision.mjs';
 import {PREVENTIVE_RETENTION_GUARD} from './preventive-retention.mjs';
+import {restoreRetentionProofAccess,installRetentionProofAccess,retentionProofAccessStatus,retentionProofAuthorized} from './retention-proof-access.mjs';
+import {createRetentionDeliveryRuntime} from './retention-delivery.mjs';
 
 export function createDrainScheduler(config,store,runner,{blocked=()=>false,setImmediateFn=setImmediate,setIntervalFn=setInterval,clearIntervalFn=clearInterval}={}){
   const fast=config.company==='fumigacion'&&config.responseTargetMs===3000,key='verified-ingestion-drain-wake-v1';
@@ -80,6 +82,10 @@ export function createBotServer(config,store,transport,engine) {
   restoreOwnAiSetup(config,store);
   restoreProgramSetup(config,store);
   restoreProgramSupervision(config,store);
+  restoreRetentionProofAccess(config,store);
+  // General customer history is not implied by own registration access. The
+  // delivery proof remains closed until an authenticated complete reader exists.
+  const retentionDelivery=config.company==='fumigacion'?createRetentionDeliveryRuntime(config,store,transport):null;
   persistMariaKnowledge(config,store);
   initializeInactivityFollowup(config,store);
   let draining=false,settingUpAi=false;
@@ -107,13 +113,23 @@ export function createBotServer(config,store,transport,engine) {
     };
     const reply=(status,body)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store, private'});res.end(JSON.stringify(body));};
     const ingestion=['/event','/delivery','/webhook'].includes(req.url);
-    if(!authorized(req.headers.authorization,ingestion?config.webhookHash:config.authHash))return reply(401,{error:'UNAUTHORIZED'});
+    const retentionProof=req.url==='/retention-delivery-proof';
+    if(!(retentionProof?retentionProofAuthorized(config,req.headers.authorization):authorized(req.headers.authorization,ingestion?config.webhookHash:config.authHash)))return reply(401,{error:'UNAUTHORIZED'});
     if(req.method!=='POST')return reply(405,{error:'POST_REQUIRED'});
     try {
       const bodyLimit=req.url==='/notify-chief-document'?720000:20000;
       const journalGap=kind=>{if(req.url==='/webhook')recordIntakeIngressGap(store,config,{kind,receivedAt:serverReceivedAt,payloadHash:createHash('sha256').update(raw.slice(0,bodyLimit)).digest('hex'),byteLength:Buffer.byteLength(raw)});};
       let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>bodyLimit){journalGap('PAYLOAD_TOO_LARGE');return reply(413,{error:'PAYLOAD_TOO_LARGE'});}}
       let body;try{body=JSON.parse(raw);}catch{journalGap('INVALID_JSON');return reply(400,{error:'INVALID_JSON'});}
+      if(retentionProof){
+        if(!retentionDelivery)return reply(403,{error:'OWN_FUMIGACION_RETENTION_REQUIRED'});
+        return reply(200,await retentionDelivery.deliveryProof(body));
+      }
+      if(req.url==='/retention-proof-setup'){
+        if(config.company!=='fumigacion')return reply(403,{error:'OWN_FUMIGACION_RETENTION_REQUIRED'});
+        if(draining||settingUpAi)return reply(409,{error:'OWN_RETENTION_PROOF_SETUP_BUSY'});
+        try{return reply(200,installRetentionProofAccess(config,store,body));}catch{return reply(409,{error:'OWN_RETENTION_PROOF_SETUP_NOT_APPLIED'});}
+      }
       if(req.url==='/intake-audit'){
         if(body.company!==config.company||Object.keys(body).some(k=>!['company','day','includeStaff','includeOutgoing','afterRow','limit'].includes(k)))return reply(400,{error:'INTAKE_AUDIT_SCOPED_DAY_REQUIRED'});
         try{return reply(200,intakeAudit(store,config,body));}catch{return reply(400,{error:'INTAKE_AUDIT_SCOPED_DAY_REQUIRED'});}
@@ -164,7 +180,7 @@ export function createBotServer(config,store,transport,engine) {
         settingUpAi=true;try{return reply(200,await evaluateOwnAi(config,store,transport.fetcher,body.caseIds));}finally{settingUpAi=false;}
       }
       if(req.url==='/ai-knowledge')return config.company==='fumigacion'?reply(200,{status:mariaKnowledgeStatus(config,store),document:mariaKnowledgeDocument()}):reply(403,{error:'MARIA_KNOWLEDGE_OWN_SCOPE'});
-      if(req.url==='/status')return reply(200,{company:config.name,bot:config.bot,enabled:config.enabled,mode:'reception-with-human-review',operationalCoverage:operationalCoverage(config),fullyAutonomous:false,intakeJournal:intakeJournalStatus(store,config),programSupervision:programSupervisionStatus(config),preventiveRetention:config.company==='fumigacion'?{guard:PREVENTIVE_RETENTION_GUARD,prepared:true,sendsEnabled:false,notesEnabled:false,required:'own-both-line-history-and-native-delivery-note-adapter'}:null,tesaOperations:tesaStatus(store,config),programRegistration:registrationStatus(config,store),privateNativeIdentity:privateIdentityStatus(store,config),inactivityFollowup:inactivityStatus(config,store),responseTiming:responseTimingStatus(config,store),drainIntervalMs:scheduler.intervalMs,semanticUnderstandingGuard:config.company==='fumigacion'?MARIA_UNDERSTANDING_GUARD:MIGUEL_UNDERSTANDING_GUARD,ownQuoteClarificationGuard:config.company==='fumigacion'?OWN_QUOTE_CLARIFICATION_GUARD:null,aiUsage:ownAiUsage(config,store),approvedAiKnowledge:mariaKnowledgeStatus(config,store),
+      if(req.url==='/status')return reply(200,{company:config.name,bot:config.bot,enabled:config.enabled,mode:'reception-with-human-review',operationalCoverage:operationalCoverage(config),fullyAutonomous:false,intakeJournal:intakeJournalStatus(store,config),programSupervision:programSupervisionStatus(config),preventiveRetention:config.company==='fumigacion'?{guard:PREVENTIVE_RETENTION_GUARD,prepared:true,sendsEnabled:false,notesEnabled:false,required:'own-both-line-history-and-native-delivery-note-adapter',proofAccess:retentionProofAccessStatus(config),deliveryProof:retentionDelivery.status()}:null,tesaOperations:tesaStatus(store,config),programRegistration:registrationStatus(config,store),privateNativeIdentity:privateIdentityStatus(store,config),inactivityFollowup:inactivityStatus(config,store),responseTiming:responseTimingStatus(config,store),drainIntervalMs:scheduler.intervalMs,semanticUnderstandingGuard:config.company==='fumigacion'?MARIA_UNDERSTANDING_GUARD:MIGUEL_UNDERSTANDING_GUARD,ownQuoteClarificationGuard:config.company==='fumigacion'?OWN_QUOTE_CLARIFICATION_GUARD:null,aiUsage:ownAiUsage(config,store),approvedAiKnowledge:mariaKnowledgeStatus(config,store),
         events:store.db.prepare('SELECT state,COUNT(*) n FROM events GROUP BY state').all(),outbox:store.db.prepare('SELECT state,COUNT(*) n FROM outbox GROUP BY state').all(),
         communicationGuard:'private-routing-and-media-work-v2',requestedContactGuard:'explicit-technician-contact-before-intake-v1',confirmationRecipient:config.tesaOperations?.enabled?config.tesaOperations.groupJid:questionRecipients(config,'disponibilidad-y-tecnico')[0],operationalConfirmationRecipients:config.tesaOperations?.enabled?[config.tesaOperations.groupJid]:questionRecipients(config,'disponibilidad-y-tecnico'),chiefRecipient:SANDRA,operatorRouting:config.tesaOperations?.enabled?'tesa-group-case-operations-20261008':config.operatorRouting||'sandra',privateHistoricalOperatorRouting:config.operatorRouting||'sandra',operatorRoutingGuard:'scoped-new-question-fanout-and-exact-line-answer-v1',operatorRoutingActive:operatorRoutingActive(config),chiefDocumentGuard:'fixed-chief-encrypted-hash-and-idempotency-v1',internalConversationGuard:'verified-internal-per-line-v2',chiefStatusGuard:'exact-directed-status-and-active-mode-v2',quotationQuestionGuard:'scoped-price-followup-and-existing-question-v1',internalConversationEnabled:Boolean(config.chiefOnly),customerResponsesEnabled:config.enabled,
         socialGreetingGuard:'literal-pure-social-greeting-before-semantic-review-v1',internalRoutingGuard:'exact-historical-question-and-no-cross-bot-dialogue-v1',retiredRecipientGuard:'current-route-no-ready-diego-send-v1',
