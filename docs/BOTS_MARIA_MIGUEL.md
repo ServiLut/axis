@@ -1,5 +1,15 @@
 # María Ángel y Miguel Ángel
 
+## Estado vigente: María continúa sólo por la azul — 09/10/2026 21:46Z
+
+La usuaria informó que la roja está bloqueada por 24 horas y ordenó continuar con la línea disponible. Sólo María instaló `92eb9150ae0e807cfb29af5de9bd4134bcce63c8`, Dokploy DONE en 4 s. La configuración autorizada `authorized-fumigacion-blue-only-v1` activa `573126944997` y suspende `573126938721`, desde `2026-10-09T21:43:05.250Z`. Las 24 horas son un relato de la usuaria: no acreditan fecha de desbloqueo del proveedor ni disparan reactivación automática.
+
+La verificación propia de las 21:46:58.991Z comprobó propietario azul exacto OPEN y canal ready con cobertura explícita sólo de la azul. La roja deja de bloquear las comprobaciones de los casos nuevos exclusivos de la azul. Se verifican fuentes nativas, atención humana y mensajes posteriores en esa línea; los antecedentes rojos, compartidos o incompletos mantienen revisión. No se trasladan casos históricos, salidas pendientes ni registros de la roja. Las consultas TESA y el seguimiento existente usan los mismos límites de línea, caso y corte.
+
+María permanece activa con OpenAI Luna propio configurado (límite de 10.000 llamadas/mes) y registro ordinario propio habilitado en Tenaxis. No hubo prueba nueva del modelo ni servicio nuevo en este control. `maria.angel.bot`, el token limitado y su vencimiento del 07/11/2026 permanecen iguales; SAVED=1 y recibos propios=1 conservan el primer servicio y sus correcciones. Pasaron 178 pruebas aisladas de transporte, recepción, precio, registro, seguimiento, atención humana y TESA. Falta comprobar la siguiente conversación y alta legítimas posteriores al ajuste.
+
+Este estado sustituye la dependencia global de la roja y los pedidos de QR de los apartados históricos siguientes. No acredita operación de ambas líneas, cobertura histórica completa o autonomía integral. No pedir de nuevo el teléfono rojo ni el login humano que la usuaria no tiene disponibles. Miguel y los otros bots conservan sus estados independientes. Evidencia y checkpoint: `C:/Users/ADMIN/.codex/visualizations/2026/09/18/01a0b62e-d6ca-7f93-bbb1-3718cf4b84b6/maria-blue-only-20261009/`.
+
 ## Primer registro real de María y correcciones — 09/10/2026
 
 La orden propia `BF23DF14` fue creada por `maria.angel.bot` el 08/10 a las 20:56 de Bogotá: recibo, auditoría y confirmación propia entregada/READ verificados. Runtime `SAVED=1`, módulo `persistedOwnReceipts=1`; los conteos históricos cero siguientes están superados por este hecho. La solicitud sigue NUEVO, pendiente de programación, sin técnico ni pago acreditados. Precio aceptado propio $129.000 y tabla vigente de $99.000 por colchón conservados.

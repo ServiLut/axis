@@ -1,5 +1,15 @@
 # Registro propio de servicios nuevos de María
 
+## Alcance vigente: altas nuevas exclusivas de la azul — 09/10/2026 21:46Z
+
+La instrucción directa de continuar por la línea disponible mientras la roja está bloqueada está instalada sólo en María, commit `92eb9150ae0e807cfb29af5de9bd4134bcce63c8`, Dokploy DONE en 4 s. `authorized-fumigacion-blue-only-v1` activa azul `573126944997`, suspende roja `573126938721` y conserva el corte explícito `2026-10-09T21:43:05.250Z`. No reactiva la roja por un temporizador de 24 horas ni migra sus pendientes.
+
+Las comprobaciones nativas de atención y fuentes del recorrido nuevo exclusivo de la azul ya no dependen de que la roja esté OPEN. Nombre, dirección, cotización propia entregada, aceptación y ausencia de intervención humana siguen verificándose antes de registrar. Datos anteriores de la azul en el mismo caso pueden reutilizarse tras revalidación; una aceptación anterior al corte, fuentes rojas/compartidas o linaje incompleto mantienen revisión. Las solicitudes SAVED y recibos existentes se conservan; un resultado incierto anterior sólo admite consulta de recibo, sin una segunda escritura ni nueva confirmación histórica.
+
+API propia 21:46:58.991Z: azul OPEN/propietario exacto, canal ready con cobertura sólo azul, registro habilitado, SAVED=1 y recibos propios=1. OpenAI Luna propio continúa configurado; no se llamó al modelo para esta prueba. Usuario `maria.angel.bot` y token limitado con vencimiento 07/11/2026 intactos. Pasaron 178 pruebas aisladas. Siguiente aceptación, alta y confirmación entregada legítimas posteriores quedan pendientes; no fabricar servicio, reproducir conversaciones ni liberar atención humana.
+
+Este apartado sustituye los bloqueos globales por la roja y las solicitudes de QR históricas siguientes. No acredita atención de ambas líneas ni cobertura integral. Evidencia: `C:/Users/ADMIN/.codex/visualizations/2026/09/18/01a0b62e-d6ca-7f93-bbb1-3718cf4b84b6/maria-blue-only-20261009/checkpoint-private.json`.
+
 ## Primer servicio real y corrección de datos — 09/10/2026
 
 El primer servicio legítimo sí fue guardado por `maria.angel.bot`: orden `BF23DF14`, creada el 08/10 a las 20:56 de Bogotá, con recibo, auditoría y confirmación propia entregada/READ comprobados en la fuente nativa. El runtime y el módulo muestran `SAVED=1` y `persistedOwnReceipts=1`. Este hecho sustituye los conteos cero de los apartados históricos siguientes; no acredita programación, técnico, ejecución ni pago.
