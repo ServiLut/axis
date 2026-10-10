@@ -27,6 +27,7 @@ export function retentionCycleKey(phone,lastCompletedOrderId){
 }
 export function retentionOutboxId(key){if(!cyclePattern.test(key??''))fail('RETENTION_CYCLE_KEY_REQUIRED');return key+':retention';}
 export function retentionCaseId(key){if(!cyclePattern.test(key??''))fail('RETENTION_CYCLE_KEY_REQUIRED');return 'fumigacion:retention:'+key;}
+export const retentionOutboxContextKey=key=>'retention-outbox-context:'+retentionOutboxId(key);
 
 function scope(config,store){
   if(config.company!=='fumigacion'||store.company!==config.company||!Array.isArray(config.lines)||config.lines.length!==2||new Set(config.lines.map(l=>l.phone)).size!==2||config.lines.some(l=>!BUSINESSES.fumigacion.phones.includes(l.phone)))fail('RETENTION_OWN_RUNTIME_SCOPE_REQUIRED');
@@ -49,11 +50,16 @@ function localState(config,store,candidate,expectedRevision=null){
   if(config.enabled!==true||!operationalLineAllowed(config,candidate.line))fail('RETENTION_ORIGIN_LINE_UNAVAILABLE');
   const conv=store.conversation(candidate.phone);
   if(!conv||conv.line!==candidate.line||conv.hold||conv.state.awaitingHumanReview||conv.state.humanHold||conv.state.doNotContact||conv.state.optOutGlobal)fail('RETENTION_LOCAL_HOLD_OR_IDENTITY_REVIEW');
-  if(conv.state.caseId!==retentionCaseId(candidate.dedupKey)||expectedRevision!==null&&conv.revision!==expectedRevision)fail('RETENTION_LOCAL_CASE_CHANGED');
+  const contextRow=store.db.prepare('SELECT value FROM meta WHERE key=?').get(retentionOutboxContextKey(candidate.dedupKey)),context=contextRow?store.open(contextRow.value):null;
+  if(context){
+    if(context.guard!==RETENTION_DELIVERY_PROOF_GUARD||context.company!==config.company||context.cycleKey!==candidate.dedupKey||context.outboxId!==retentionOutboxId(candidate.dedupKey)||context.caseId!==retentionCaseId(candidate.dedupKey)||context.phone!==candidate.phone||context.line!==candidate.line||context.textHash!==candidate.textHash||context.revision!==conv.revision||(conv.state.caseId??null)!==context.conversationCaseId)fail('RETENTION_LOCAL_CASE_CHANGED');
+  }else if(conv.state.caseId!==retentionCaseId(candidate.dedupKey))fail('RETENTION_LOCAL_CASE_CHANGED');
+  if(expectedRevision!==null&&conv.revision!==expectedRevision)fail('RETENTION_LOCAL_CASE_CHANGED');
   if(store.db.prepare("SELECT 1 FROM events WHERE phone=? AND from_me=0 AND state IN ('PENDING','PROCESSING') LIMIT 1").get(candidate.phone))fail('RETENTION_LOCAL_CUSTOMER_TURN_PENDING');
+  if(store.db.prepare("SELECT 1 FROM events WHERE phone=? AND from_me=1 AND state IN ('PENDING','PROCESSING') LIMIT 1").get(candidate.phone))fail('RETENTION_LOCAL_STAFF_TURN_PENDING');
   const outbox=store.db.prepare('SELECT * FROM outbox WHERE id=?').get(retentionOutboxId(candidate.dedupKey));
   if(!outbox||outbox.phone!==candidate.phone||outbox.line!==candidate.line||outbox.internal!==0||outbox.case_id!==retentionCaseId(candidate.dedupKey)||outbox.revision!==conv.revision||store.open(outbox.body)!==candidate.text||hash(candidate.text)!==candidate.textHash)fail('RETENTION_OWN_OUTBOX_ASSOCIATION_REQUIRED');
-  if(store.db.prepare("SELECT 1 FROM outbox WHERE phone=? AND internal=0 AND id<>? AND state IN ('READY','SENDING','ACCEPTED','UNCERTAIN') LIMIT 1").get(candidate.phone,outbox.id))fail('RETENTION_OTHER_CUSTOMER_OUTBOX_PENDING');
+  if(store.db.prepare("SELECT 1 FROM outbox WHERE phone=? AND internal=0 AND id<>? AND state IN ('READY','RETENTION_STAGED','SENDING','ACCEPTED','UNCERTAIN') LIMIT 1").get(candidate.phone,outbox.id))fail('RETENTION_OTHER_CUSTOMER_OUTBOX_PENDING');
   return {conv,outbox};
 }
 
@@ -63,14 +69,15 @@ function candidateValid(c){
 }
 
 // loadEligibility is an injected, authenticated server-side reader, never a
-// deserialized HTTP claim. The production default has no adapter and fails
-// closed. Its fresh plannerInput is reevaluated here on preparation and proof.
+// deserialized HTTP claim. Pending history never becomes an eligibility claim.
+// Its fresh plannerInput is reevaluated here on preparation and proof.
 async function eligibleSource(config,candidate,loadEligibility,clock,{cycle=null,outbox=null}={}){
   if(typeof loadEligibility!=='function')fail('RETENTION_ELIGIBILITY_ADAPTER_REQUIRED');
   const requestedAt=clock();
   const source=await loadEligibility({company:'fumigacion',phone:candidate.phone,cycleKey:candidate.dedupKey,lastCompletedOrderId:candidate.sourceAnchorId,now:requestedAt});
   const now=clock();
   const actor=config.mariaProgram?.actorId;
+  if(source?.pending===true&&source.guard===RETENTION_SOURCE_GUARD&&source.company==='fumigacion'&&source.tenantId===MARIA_TENANT&&source.companyId===MARIA_COMPANY&&source.actorId===actor&&source.phone===candidate.phone&&source.lastCompletedOrderId===candidate.sourceAnchorId&&fresh(millis(source.checkedAt),now)&&/^RETENTION_[A-Z0-9_]{1,100}$/.test(source.reason??''))fail(source.reason);
   if(source?.guard!==RETENTION_SOURCE_GUARD||source.company!=='fumigacion'||source.tenantId!==MARIA_TENANT||source.companyId!==MARIA_COMPANY||!identifier.test(actor??'')||source.actorId!==actor||!identifier.test(source.clientId??'')||source.phone!==candidate.phone||source.lastCompletedOrderId!==candidate.sourceAnchorId||source.anchorKind!=='COMPLETED_SERVICE'||millis(source.anchorAt)!==millis(candidate.sourceAnchorAt)||source.canonicalRecipientUniqueVerified!==true||!fresh(millis(source.checkedAt),now))fail('RETENTION_FRESH_OWN_SOURCE_REQUIRED');
   const input=source.plannerInput;
   if(!input||!Array.isArray(input.contacts)||input.contacts.length!==1||input.contacts[0].phone!==candidate.phone||!Array.isArray(input.history))fail('RETENTION_COMPLETE_SOURCE_INPUT_REQUIRED');
@@ -91,7 +98,11 @@ async function eligibleSource(config,candidate,loadEligibility,clock,{cycle=null
   });
   const replanned=planPreventiveRetention({company:'fumigacion',day:day(now),now,coverage:input.coverage,contacts:input.contacts,history});
   const approved=replanned.prepared.find(c=>c.dedupKey===candidate.dedupKey);
-  if(replanned.crossedCoverageComplete!==true||!approved||!same(candidateIdentity(approved),candidateIdentity(candidate)))fail('RETENTION_CURRENT_ELIGIBILITY_NOT_VERIFIED');
+  // A later delivery proof keeps the actually prepared message literal. Its
+  // current age can cross the wording's rounded month boundary after sending;
+  // eligibility still uses today's 60–90 days and the exact original anchor.
+  const identity=c=>{const value=candidateIdentity(c);if(ownCycle){delete value.text;delete value.textHash;}return value;};
+  if(replanned.crossedCoverageComplete!==true||!approved||!same(identity(approved),identity(candidate)))fail('RETENTION_CURRENT_ELIGIBILITY_NOT_VERIFIED');
   return {source,approved,wholeSourceEligibility:{complete:true,noFutureBooking:true,noRecentAgenda:true,noRejectionOrOptOut:true,noHumanHold:true,originalLineVerified:true,canonicalRecipientUniqueVerified:true,bothLinesHistoryComplete:true}};
 }
 
@@ -110,7 +121,7 @@ function providedAckIdentityMatches(update,mid,phone,addresses,line){
   for(const info of [update,update.key??{}]){
     if(info===update.key&&info.id!==undefined&&info.id!==mid)return false;
     if(info.fromMe!==undefined&&info.fromMe!==null&&info.fromMe!==true)return false;
-    for(const field of ['remoteJid','remoteJidAlt','participant']){
+    for(const field of ['remoteJid','remoteJidAlt','participant','participantAlt']){
       const value=info[field];if(value===undefined||value===null)continue;
       if(typeof value!=='string'||!/^57\d{10}@s\.whatsapp\.net$|^\d+@lid$/.test(value)||(/^57\d{10}@s\.whatsapp\.net$/.test(value)?value!==jid:!addresses.includes(value)))return false;
     }
@@ -191,5 +202,27 @@ export function createRetentionDeliveryRuntime(config,store,transport,{loadEligi
       ledger(store,cycle,'PROVEN','EXACT_FRESH_NATIVE_DELIVERY',{proof,businessWrites:0,sends:0},checkedAt);return proof;
     }catch(error){const reason=reasonOf(error);ledger(store,cycle,'PROOF_PENDING',reason,{businessWrites:0,sends:0},clock());return pending(reason,body.key);}
   };
-  return {prepareCycle,deliveryProof,status:()=>retentionDeliveryStatus(config,store,{eligibilityAdapterConnected:connected()})};
+  // Internal dispatch guard. It never queues, sends, accepts HTTP facts or
+  // omits a previous attempt. Only an unsent, staged durable cycle can pass.
+  const dispatchGuard=async(body)=>{
+    const at=clock();scope(config,store);
+    if(!body||Object.keys(body).sort().join(',')!=='company,key'||body.company!=='fumigacion'||!cyclePattern.test(body.key??''))return pending('RETENTION_PROOF_KEY_ONLY_REQUIRED');
+    const cycle=entry(store,body.key);if(!cycle)return pending('RETENTION_OWN_CYCLE_NOT_FOUND',body.key);
+    try{
+      const candidate=cycle.value.candidate;
+      if(!candidateValid(candidate)||cycle.value.company!==config.company||cycle.state!=='PREPARED')fail('RETENTION_DISPATCH_CYCLE_NOT_PREPARED');
+      const before=localState(config,store,candidate,cycle.value.revision);
+      if(before.outbox.state!=='RETENTION_STAGED'||before.outbox.mid!==null)fail('RETENTION_EXISTING_ATTEMPT_PRESERVED');
+      const source=await eligibleSource(config,candidate,loadEligibility,clock);
+      if(candidate.day!==source.approved.day||candidate.ageDays!==source.approved.ageDays)fail('RETENTION_CURRENT_DISPATCH_PLAN_REQUIRED');
+      if(source.source.clientId!==cycle.value.clientId||source.source.actorId!==cycle.value.actorId)fail('RETENTION_OWN_CLIENT_CHANGED');
+      if(transport?.config!==config||typeof transport.verifyLine!=='function')fail('RETENTION_OWN_NATIVE_TRANSPORT_REQUIRED');
+      const binding=await transport.verifyLine(candidate.line),line=config.lines.find(l=>l.phone===candidate.line);
+      if(binding?.ownerVerified!==true||binding.open!==true||binding.phone!==candidate.line||binding.instance!==line.instance)fail('RETENTION_NATIVE_OWNER_REQUIRED');
+      const after=localState(config,store,candidate,cycle.value.revision),checkedAt=clock();
+      if(after.outbox.state!=='RETENTION_STAGED'||after.outbox.mid!==null||config.mariaProgram?.actorId!==cycle.value.actorId||!fresh(millis(source.source.checkedAt),checkedAt)||!fresh(at,checkedAt))fail('RETENTION_PROOF_RECHECK_CHANGED');
+      return {guard:RETENTION_DELIVERY_PROOF_GUARD,company:config.company,cycleKey:body.key,eligible:true,outboxId:after.outbox.id,phone:candidate.phone,line:candidate.line,caseId:after.outbox.case_id,revision:after.conv.revision,conversationCaseId:after.conv.state.caseId??null,textHash:candidate.textHash,checkedAt:iso(checkedAt),sourceCheckedAt:source.source.checkedAt,wholeSourceEligibility:source.wholeSourceEligibility};
+    }catch(error){return pending(reasonOf(error),body.key);}
+  };
+  return {prepareCycle,deliveryProof,dispatchGuard,status:()=>retentionDeliveryStatus(config,store,{eligibilityAdapterConnected:connected()})};
 }

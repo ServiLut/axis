@@ -1,5 +1,19 @@
 # María Ángel y Miguel Ángel
 
+## Supervisión y reactivación preventiva — 10/10/2026
+
+Estado propio verificado a las 15:54:46–47Z: runtimes `a92824b638dbefd55cfdc69b5e4e4cfe765b25a4` instalados, Dokploy DONE en dos segundos cada uno. María conserva recepción, Luna propia, registro ordinario y un recibo real BF23DF14. Azul 4997 activa; roja 8721 suspendida por instrucción humana, sin restauración ni traslado automático de clientes. Miguel mantiene recepción y ambas líneas OPEN, pero IA propia y registro del programa siguen sin configurar. No atribuirle los accesos o resultados de María.
+
+Tenaxis Backend instaló `2ffdd1d23cc4d795dc8bb02f43deb41dcc5744b2`, DONE en 3 min 46 s. El módulo adicional de lectura y notas está deshabilitado por defecto. La SQL permanece candidata: desplegar código o generar Prisma no crea la tabla, aplica una migración ni concede permisos nuevos.
+
+El diario cifrado conserva futuras entradas antes del decodificador, incluidos avisos observados de edición/eliminación e identidades pendientes. Su cobertura empieza el 10/10/2026 a las 15:27:09Z en Fumigación y 15:26:16Z en Servicio Técnico. No acredita la recepción de todo WhatsApp, historia anterior, autor de borrados ni robo. Los cursores generales parciales y fuentes anteriores permanecen intactos.
+
+Rutinas nuevas de este chat: cierre del día anterior a las **00:05 de Bogotá**, con teléfonos por línea, cruce con Tenaxis y meta seis técnicos × cinco servicios; reactivación preventiva a las **08:00**, sujeta a ambas historias completas, exclusiones y entrega nativa comprobada antes de la nota. Son heartbeats dependientes de Codex/equipo/conexiones, no nuevos jobs autónomos del servidor. Ver [MARIA_REACTIVACION_PREVENTIVA.md](MARIA_REACTIVACION_PREVENTIVA.md).
+
+**No hay campaña ni notas reales nuevas.** Lectura general, acceso de prueba y escritura de la nota exacta necesitan concesiones propias separadas, vencimiento máximo del 07/11/2026 y confirmación específica antes de crearlas en consola. El adaptador completo de elegibilidad/envío y el historial de ambas líneas siguen pendientes. El contrato inicial de notas sólo cubre finalización real; agendamiento como única fuente conserva el pendiente. Los rechazos, citas futuras, toma humana, medios sin revisar, identidad ambigua e intentos de resultado incierto bloquean contacto. La nota no se registra por ACCEPTED o SERVER_ACK.
+
+Gates aislados de la versión instalada: 615 pruebas runtime, 49 API de lectura/notas y siete de la vista; TypeScript y lint enfocados aprobados. No equivalen a mensajes, clientes, servicios, ejecución física o pagos. Evidencia y checkpoint vigentes en `.tmp/services-live-review-20261010/`; otras empresas, informes, destinatarios y credenciales permanecen independientes.
+
 ## Estado vigente: correcciones propias y diagnóstico de conexión — 10/10/2026 14:41Z
 
 Ambos runtimes instalaron `d5f7775116717de9b067b4716fe5078a5e656377`, publicados únicamente en `codex/maria-miguel-service-bots-20261002`. Dokploy DONE: María nueve segundos, Miguel dos segundos. Las 523 comprobaciones del conjunto de servicios son aisladas; no hubo llamadas del supervisor al modelo, mensajes de prueba, replays ni escrituras de negocio. Las API propias revalidaron guardias y canal ready a las 14:41:30Z y 14:41:31Z. Main y los otros bots conservan sus versiones.

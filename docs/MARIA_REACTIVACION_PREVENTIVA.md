@@ -34,10 +34,18 @@ Texto exacto: **Mensaje de seguimiento 2-3 meses enviado**. Se deduplica por cic
 
 - Diario cifrado de futuras entradas y lecturas de supervisión instalados en ambos runtimes mediante `9978234ee308d77175b58a27c3d00d9252a51b19`; Dokploy DONE y API propia comprobados. No reconstruye entradas o eliminaciones anteriores ni garantiza que WhatsApp notifique todos los borrados.
 - María conserva Luna propio, registro ordinario conectado y un recibo real BF23DF14. La línea azul está habilitada; la roja permanece suspendida por instrucción humana.
-- Filtro preventivo, ledger, prueba de entrega y notas se verifican con pruebas aisladas. El adaptador completo de elegibilidad y la habilitación de envíos permanecen pendientes. No hubo campaña, contactos ni notas reales nuevos en esta implementación.
+- Filtro preventivo, lectura cruzada de elegibilidad, staging cifrado, envío único y nota están implementados. Las fuentes internas se revalidan antes de cada acción; los cuerpos HTTP sólo admiten empresa, día y cursor o clave del ciclo. El recorrido está apagado por defecto; tener el adaptador instalado no prueba cobertura histórica completa. No hubo campaña, contactos ni notas reales nuevos en esta implementación.
 - El acceso actual de registro no incluye historia general ni escritura de notas. Las concesiones adicionales son distintas, propias de FUMIGACIÓN, con vencimiento máximo del 07/11/2026; necesitan confirmación específica antes de crearlas en la consola.
 - SQL de notas candidato, con respaldo/restauración e historia productiva como requisitos antes de aplicarlo. La tabla no se declara instalada por generar Prisma o desplegar código.
 - La vista del perfil muestra únicamente notas propias de FUMIGACIÓN comprobadas. Un acceso o tabla faltante muestra historia no disponible; no equivale a cero notas.
+
+## Cola y controles de ejecución
+
+`/preventive-retention-prepare` crea únicamente registros `RETENTION_STAGED`, que no puede enviar el drenaje general. Conserva la revisión y caso anteriores del contacto. `/preventive-retention-dispatch` exige nuevamente datos actuales y propietario de línea, reserva un intento durable antes del proveedor y nunca reintenta resultados inciertos. `/preventive-retention-notes` revisa también entregas pendientes de días anteriores, sin reenviar esos mensajes, y sólo escribe tras comprobar el MID nativo y la elegibilidad vigente.
+
+El token independiente de notas se limita al cuerpo `cycleKey`, mismo actor y vencimiento original; no puede reutilizar secretos administrativos, de ingreso, registro, lectura o prueba. La activación de envíos no se acepta desde un cuerpo de solicitud. Las concesiones, historia de ambas líneas, tabla productiva y prueba real permanecen como requisitos previos.
+
+El ensayo PostgreSQL 16.15 en una base aislada aprobó 36 comprobaciones: aislamiento por empresa, claves únicas, nota/auditoría atómicas, concurrencia, reversión de fallo y respaldo/restauración. Usó únicamente datos sintéticos; no sustituye el respaldo y la inspección de migraciones de producción.
 
 ## Evidencia
 

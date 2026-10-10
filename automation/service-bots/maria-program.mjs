@@ -47,6 +47,8 @@ export async function programFollowupEligible(c,s,transport,phone){
 }
 export async function installProgramSetup(c,s,body,fetcher){
  if(!body||Object.keys(body).sort().join(',')!=='actorId,enabled,expiresAt,startsAt,token,url')throw Error('PROGRAM_SETUP_FIELDS_REQUIRED');
+ const hash=typeof body.token==='string'?createHash('sha256').update(body.token).digest('hex'):null;
+ if(hash&&[c.authHash,c.webhookHash,c.retentionProofAccess?.tokenHash,...[c.programSupervision?.token,c.retentionNoteAccess?.token].filter(x=>typeof x==='string').map(x=>createHash('sha256').update(x).digest('hex'))].includes(hash))throw Error('OWN_SEPARATE_PROGRAM_ACCESS_REQUIRED');
  const candidate=validated(body,c.company),test={...c,mariaProgram:candidate};
  const status=await request(test,'/status',{},fetcher);
  if(!ownScope(test,status)||status.username!=='maria.angel.bot'||status.enabled!==true||status.businessWritesEnabled!==true||status.registrationKind!=='new-service-pending-scheduling'||status.priceScheduleHash!==BUSINESS_PRICE_HASH||Date.parse(status.startsAt)!==candidate.startsAt||Date.parse(status.expiresAt)!==candidate.expiresAt)throw Error('PROGRAM_SCOPE_NOT_VERIFIED');

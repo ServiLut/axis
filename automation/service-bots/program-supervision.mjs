@@ -9,7 +9,7 @@ const digest=v=>createHash('sha256').update(v).digest('hex');
 const get=(s)=>{const r=s.db.prepare('SELECT value FROM meta WHERE key=?').get(key);return r?s.open(r.value):null;};
 function validated(c,b){
  const p=c.mariaProgram;
- if(c.company!=='fumigacion'||p?.enabled!==true||!b||Object.keys(b).sort().join(',')!=='actorId,expiresAt,startsAt,token,url'||b.actorId!==p.actorId||b.url!==MARIA_PROGRAM_URL+'/operational-audit'||! /^[A-Za-z0-9_-]{43,128}$/.test(b.token??'')||b.token===p.token||[c.authHash,c.webhookHash,c.retentionProofAccess?.tokenHash].includes(digest(b.token??'')))throw Error('OWN_SEPARATE_AUDIT_ACCESS_REQUIRED');
+ if(c.company!=='fumigacion'||p?.enabled!==true||!b||Object.keys(b).sort().join(',')!=='actorId,expiresAt,startsAt,token,url'||b.actorId!==p.actorId||b.url!==MARIA_PROGRAM_URL+'/operational-audit'||! /^[A-Za-z0-9_-]{43,128}$/.test(b.token??'')||b.token===p.token||b.token===c.retentionNoteAccess?.token||[c.authHash,c.webhookHash,c.retentionProofAccess?.tokenHash].includes(digest(b.token??'')))throw Error('OWN_SEPARATE_AUDIT_ACCESS_REQUIRED');
  const startsAt=Date.parse(b.startsAt),expiresAt=Date.parse(b.expiresAt);
  if(!Number.isFinite(startsAt)||!Number.isFinite(expiresAt)||startsAt< p.startsAt||expiresAt>p.expiresAt||startsAt>=expiresAt)throw Error('OWN_AUDIT_CUTOFF_REQUIRED');
  return {...b,startsAt,expiresAt};
@@ -18,7 +18,7 @@ export function restoreProgramSupervision(c,s){if(s.company!==c.company)throw Er
 function ready(c,now=Date.now()){
  const p=c.programSupervision,r=c.mariaProgram;
  return Boolean(c.company==='fumigacion'&&r?.enabled===true&&p&&p.actorId===r.actorId&&p.url===MARIA_PROGRAM_URL+'/operational-audit'&&
-  /^[A-Za-z0-9_-]{43,128}$/.test(p.token??'')&&p.token!==r.token&&![c.authHash,c.webhookHash,c.retentionProofAccess?.tokenHash].includes(digest(p.token))&&
+  /^[A-Za-z0-9_-]{43,128}$/.test(p.token??'')&&p.token!==r.token&&p.token!==c.retentionNoteAccess?.token&&![c.authHash,c.webhookHash,c.retentionProofAccess?.tokenHash].includes(digest(p.token))&&
   Number.isFinite(p.startsAt)&&Number.isFinite(p.expiresAt)&&p.startsAt>=r.startsAt&&p.expiresAt<=r.expiresAt&&p.startsAt<p.expiresAt&&p.startsAt<=now&&p.expiresAt>now);
 }
 export function programSupervisionStatus(c){return {guard:c.company==='fumigacion'?PROGRAM_SUPERVISION_GUARD:null,configured:Boolean(c.programSupervision),enabled:Boolean(ready(c)),readOnly:true,tenantId:c.programSupervision?MARIA_TENANT:null,companyId:c.programSupervision?MARIA_COMPANY:null,actorId:c.programSupervision?.actorId??null,expiresAt:c.programSupervision?new Date(c.programSupervision.expiresAt).toISOString():null,customerNotesWritesEnabled:false,retentionSendingEnabled:false};}
