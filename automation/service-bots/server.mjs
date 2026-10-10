@@ -15,6 +15,9 @@ import {ADVISER_TONE_GUARD} from './adviser-tone.mjs';
 import {aiStatus} from './ai-settings.mjs';
 import {evaluateOwnAi,ownAiUsage} from './conversational-ai.mjs';
 import {MARIA_UNDERSTANDING_GUARD} from './maria-understanding.mjs';
+import {MIGUEL_UNDERSTANDING_GUARD} from './miguel-understanding.mjs';
+import {OWN_QUOTE_CLARIFICATION_GUARD} from './own-quote-clarification.mjs';
+import {TECHNICAL_INTAKE_CONTINUITY_GUARD} from './technical-intake-continuity.mjs';
 import {restoreOwnAiSetup,installOwnAiSetup} from './ai-setup.mjs';
 import {persistMariaKnowledge,mariaKnowledgeStatus,mariaKnowledgeDocument} from './maria-knowledge.mjs';
 import {restoreProgramSetup,installProgramSetup,registrationStatus} from './maria-program.mjs';
@@ -129,16 +132,16 @@ export function createBotServer(config,store,transport,engine) {
         finally{settingUpAi=false;}
       }
       if(req.url==='/ai-evaluate'){
-        if(config.company!=='fumigacion'||!config.conversationalAi?.ready)return reply(409,{error:'AI_SETUP_REQUIRED'});
+        if(!config.conversationalAi?.ready)return reply(409,{error:'AI_SETUP_REQUIRED'});
         if(Object.keys(body).join(',')!=='caseIds')return reply(400,{error:'AI_EVALUATION_CASE_IDS'});
         if(draining||settingUpAi)return reply(409,{error:'AI_EVALUATION_BUSY'});
         settingUpAi=true;try{return reply(200,await evaluateOwnAi(config,store,transport.fetcher,body.caseIds));}finally{settingUpAi=false;}
       }
       if(req.url==='/ai-knowledge')return config.company==='fumigacion'?reply(200,{status:mariaKnowledgeStatus(config,store),document:mariaKnowledgeDocument()}):reply(403,{error:'MARIA_KNOWLEDGE_OWN_SCOPE'});
-      if(req.url==='/status')return reply(200,{company:config.name,bot:config.bot,enabled:config.enabled,mode:'reception-with-human-review',operationalCoverage:operationalCoverage(config),fullyAutonomous:false,tesaOperations:tesaStatus(store,config),programRegistration:registrationStatus(config,store),privateNativeIdentity:privateIdentityStatus(store,config),inactivityFollowup:inactivityStatus(config,store),responseTiming:responseTimingStatus(config,store),drainIntervalMs:scheduler.intervalMs,semanticUnderstandingGuard:config.company==='fumigacion'?MARIA_UNDERSTANDING_GUARD:null,aiUsage:ownAiUsage(config,store),approvedAiKnowledge:mariaKnowledgeStatus(config,store),
+      if(req.url==='/status')return reply(200,{company:config.name,bot:config.bot,enabled:config.enabled,mode:'reception-with-human-review',operationalCoverage:operationalCoverage(config),fullyAutonomous:false,tesaOperations:tesaStatus(store,config),programRegistration:registrationStatus(config,store),privateNativeIdentity:privateIdentityStatus(store,config),inactivityFollowup:inactivityStatus(config,store),responseTiming:responseTimingStatus(config,store),drainIntervalMs:scheduler.intervalMs,semanticUnderstandingGuard:config.company==='fumigacion'?MARIA_UNDERSTANDING_GUARD:MIGUEL_UNDERSTANDING_GUARD,ownQuoteClarificationGuard:config.company==='fumigacion'?OWN_QUOTE_CLARIFICATION_GUARD:null,aiUsage:ownAiUsage(config,store),approvedAiKnowledge:mariaKnowledgeStatus(config,store),
         events:store.db.prepare('SELECT state,COUNT(*) n FROM events GROUP BY state').all(),outbox:store.db.prepare('SELECT state,COUNT(*) n FROM outbox GROUP BY state').all(),
         communicationGuard:'private-routing-and-media-work-v2',requestedContactGuard:'explicit-technician-contact-before-intake-v1',confirmationRecipient:config.tesaOperations?.enabled?config.tesaOperations.groupJid:questionRecipients(config,'disponibilidad-y-tecnico')[0],operationalConfirmationRecipients:config.tesaOperations?.enabled?[config.tesaOperations.groupJid]:questionRecipients(config,'disponibilidad-y-tecnico'),chiefRecipient:SANDRA,operatorRouting:config.tesaOperations?.enabled?'tesa-group-case-operations-20261008':config.operatorRouting||'sandra',privateHistoricalOperatorRouting:config.operatorRouting||'sandra',operatorRoutingGuard:'scoped-new-question-fanout-and-exact-line-answer-v1',operatorRoutingActive:operatorRoutingActive(config),chiefDocumentGuard:'fixed-chief-encrypted-hash-and-idempotency-v1',internalConversationGuard:'verified-internal-per-line-v2',chiefStatusGuard:'exact-directed-status-and-active-mode-v2',quotationQuestionGuard:'scoped-price-followup-and-existing-question-v1',internalConversationEnabled:Boolean(config.chiefOnly),customerResponsesEnabled:config.enabled,
-        socialGreetingGuard:config.company==='fumigacion'?'literal-pure-social-greeting-before-semantic-review-v1':null,internalRoutingGuard:'exact-historical-question-and-no-cross-bot-dialogue-v1',retiredRecipientGuard:'current-route-no-ready-diego-send-v1',
+        socialGreetingGuard:'literal-pure-social-greeting-before-semantic-review-v1',internalRoutingGuard:'exact-historical-question-and-no-cross-bot-dialogue-v1',retiredRecipientGuard:'current-route-no-ready-diego-send-v1',
         customerIntakeEnabled:config.enabled,businessWritesEnabled:registrationStatus(config,store).enabled,capabilityDisclosure:'runtime-mode-and-own-registration-status-v2',chiefReadOnlyGuard:CHIEF_READ_ONLY_GUARD,mariaAutonomousIntakeGuard:config.company==='fumigacion'?MARIA_AUTONOMOUS_INTAKE_GUARD:null,customerCourtesyGuard:'gratitude-only-without-intake-or-ownership-v1',customerAdviserGuard:config.company==='fumigacion'?ADVISER_TONE_GUARD:null,
         commonAnswerGuard:config.company==='fumigacion'?'approved-source-context-and-complete-topics-v1':null,pendingFollowupGuard:config.company==='fumigacion'?'punctuation-only-own-pending-case-without-repeat-v1':null,approvedCustomerAnswerDocuments:store.approvedCustomerAnswers().length,customerActivity:customerActivity(store,config),
         controlVisitGuard:config.company==='fumigacion'?'requested-control-antecedent-before-intake-v1':null,intakePestGuard:config.company==='fumigacion'?'literal-additive-pests-and-own-source-union-v1':null,propertyScopeGuard:config.company==='fumigacion'?'single-apartment-address-and-explicit-special-scope-v1':null,
@@ -149,6 +152,8 @@ export function createBotServer(config,store,transport,engine) {
         paymentInquiryGuard:'amount-before-intake-and-no-receipt-v1',existingQuotationGuard:'verified-prior-quote-before-intake-v1',serviceDocumentsGuard:'reported-past-service-documents-before-intake-v1',postServiceGuard:config.company==='fumigacion'?'reported-pest-control-problem-and-planned-revisit-before-intake-v3':null,
         caseAuthorship:store.db.prepare('SELECT state,COUNT(*) n FROM case_authorship GROUP BY state').all(),
         technicalScopeGuard:config.company==='servicio-tecnico'?'literal-painting-scope-before-intake-and-pending-question-v1':null,
+        technicalSemanticRoutingGuard:config.company==='servicio-tecnico'?'own-current-technical-intent-before-new-intake-v1':null,
+        technicalIntakeContinuityGuard:config.company==='servicio-tecnico'?TECHNICAL_INTAKE_CONTINUITY_GUARD:null,
         afterServiceKindGuard:config.company==='fumigacion'?'literal-followup-kind-and-first-source-before-new-intake-v1':null,
         unanswered:store.db.prepare("SELECT COUNT(*) n FROM questions WHERE state IN ('PENDING','LEGACY_PENDING','ANSWER_REVIEW')").get().n,
         knowledge:store.db.prepare('SELECT kind,COUNT(*) n FROM knowledge GROUP BY kind').all(),programConnected:Boolean(config.programContextUrl&&config.programToken)||registrationStatus(config,store).enabled,programContextConnected:Boolean(config.programContextUrl&&config.programToken),aiConfigured:config.conversationalAi?.provider?Boolean(config.conversationalAi.ready):Boolean(config.aiUrl&&config.aiToken),conversationalAi:aiStatus(config),priorHistoryProtection:Boolean(config.historyCheckRequired)});
@@ -159,7 +164,7 @@ export function createBotServer(config,store,transport,engine) {
         return reply(200,{company:config.name,ready:true,operationalCoverage:coverage,lines});
       }
       if(req.url==='/ai-health'){
-        if(config.company!=='fumigacion'||!config.conversationalAi?.ready)return reply(409,{error:'AI_SETUP_REQUIRED',...aiStatus(config)});
+        if(!config.conversationalAi?.ready)return reply(409,{error:'AI_SETUP_REQUIRED',...aiStatus(config)});
         return reply(200,await transport.aiHealth(store));
       }
       if(req.url==='/supervision'){

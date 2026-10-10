@@ -30,8 +30,10 @@ test('historical-service question is not a pure social greeting',()=>{
 test('parvovirus, audio and forwarded message retain review',()=>{
  for(const e of [event('Hola cómo está? Necesito desinfección especial por parvovirus'),{...event('Cómo está?'),kind:'audio'},{...event('Cómo está?'),forwarded:true}])assert.notEqual(customerDecision('fumigacion',initial(),e,general(e)).socialGreeting,true);
 });
-test('other company does not receive FUM social guard',()=>{
- const e=event();assert.notEqual(customerDecision('servicio-tecnico',initial(),e,general(e)).socialGreeting,true);
+test('technical social greeting uses native text and preserves only its own prior state',()=>{
+ const e=event(),state={slots:{service:'nevera',detail:'no enfría'},asked:['location'],caseId:'TECH_SOCIAL_CASE'};
+ const d=customerDecision('servicio-tecnico',state,e,general(e));
+ assert.equal(d.socialGreeting,true);assert.deepEqual(d.state.slots,state.slots);assert.equal(d.state.caseId,state.caseId);assert.equal(d.question,undefined);assert.equal(d.review,undefined);assert.doesNotMatch(d.reply,/fumig|cucarach|plaga/);
 });
 test('rapid initial greeting followed by exact social question produces no operational questions or alerts',async()=>{
  const f=fixture();try{

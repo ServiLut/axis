@@ -1,4 +1,5 @@
 import {explicitNewService} from './after-service.mjs';
+import {explicitNewTechnicalCase,technicalIntakeMetaQuestion} from './technical-intake-continuity.mjs';
 import { SANDRA, DIEGO, HILARY, CURRENT_OPERATOR_ROUTING, publicTextSafe, normalize,internalRecipients,knownInternalRecipient } from './config.mjs';
 import {parseChiefDocument} from './chief-document.mjs';
 import {selectPrice,verifyPriceSource} from './prices.mjs';
@@ -190,10 +191,10 @@ export async function drain(store,config,transport,engine) {
       store.db.prepare("UPDATE events SET state='OPERATIONAL_SCOPE_REVIEW' WHERE id=? AND state='PENDING'").run(e.id);
       store.audit('OPERATIONAL_SCOPE_CHANGED_BEFORE_MODEL',e.id,{line:e.line,coverage:operationalCoverage(config),replayed:false,migrated:false});continue;
     }
-    const newCase=config.company==='fumigacion'?explicitNewService(e.text):/\b(?:otra solicitud|nuevo servicio|otro servicio|otro equipo)\b/.test(normalize(e.text));
+    const newCase=config.company==='fumigacion'?explicitNewService(e.text):explicitNewTechnicalCase(e.text);
     const intakeStage=store.conversation(e.phone)?.state.programIntake?.stage;
     const ownQuotationAcceptance=config.company==='fumigacion'&&Boolean(conversation?.state.quotedPrice)&&acceptsOrdinaryQuotation(e.text);
-    if(!e.fromMe&&!knownInternalRecipient(e.phone)&&!store.conversation(e.phone)?.hold&&(!store.conversation(e.phone)?.state.awaitingHumanReview||newCase)&&!ownQuotationAcceptance&&!['name','address','details','confirm','correction','pending'].includes(intakeStage)){
+    if(!e.fromMe&&!knownInternalRecipient(e.phone)&&!store.conversation(e.phone)?.hold&&(!store.conversation(e.phone)?.state.awaitingHumanReview||newCase)&&!ownQuotationAcceptance&&!(config.company==='servicio-tecnico'&&technicalIntakeMetaQuestion(e.text))&&!['name','address','details','confirm','correction','pending'].includes(intakeStage)){
       // Customer history remains in its company. Observations are explicitly untrusted reference, never policy.
       const knowledge=store.db.prepare('SELECT body FROM knowledge ORDER BY imported DESC LIMIT 10').all().map(k=>store.open(k.body));
       const caseId=newCase?'':store.conversation(e.phone)?.state.caseId||'';
@@ -261,10 +262,10 @@ export async function flushOutbox(store,config,transport){
     // their separate channel check.
     const ownerCheckedByNativeAttention=!o.internal&&config.historyCheckRequired&&transport instanceof Transport&&transport.config===config&&transport.currentAttention===Transport.prototype.currentAttention&&transport.verifyLine===Transport.prototype.verifyLine&&transport.verifyLineBinding===Transport.prototype.verifyLineBinding&&transport.request===Transport.prototype.request&&operationalLineAllowed(config,o.line);
     if(!ownerCheckedByNativeAttention){try{await transport.verifyLine(o.line);}catch{store.audit('CHANNEL_CHECK_FAILED',o.id);continue;}}
-    if(!o.internal&&config.company==='fumigacion'&&config.responseTargetMs!==3000&&config.conversationalAi?.ready&&typeof transport.composeReply==='function'&&store.approvedReplyStillValid(o)&&store.priceReplyStillValid(o)){
+    if(!o.internal&&config.responseTargetMs!==3000&&config.conversationalAi?.ready&&typeof transport.composeReply==='function'&&store.approvedReplyStillValid(o)&&store.priceReplyStillValid(o)){
       try{
         const composed=await transport.composeReply(o,text,store);
-        if(!replyCandidates(text).includes(composed))throw Error('AI_REPLY_NOT_APPROVED');
+        if(!replyCandidates(text,config.company).includes(composed))throw Error('AI_REPLY_NOT_APPROVED');
         if(composed!==text)store.tx(()=>{
           const current=store.conversation(o.phone);
           if(current?.hold||current?.revision!==o.revision)return;
