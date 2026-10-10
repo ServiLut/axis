@@ -2,16 +2,17 @@ import test from 'node:test';import assert from 'node:assert/strict';import {ran
 import {Store} from '../automation/service-bots/store.mjs';
 import {BUSINESSES,SANDRA,DIEGO} from '../automation/service-bots/config.mjs';
 import {chiefReadOnlyTopic,chiefReadOnlyReply,whatsAppCallActivity} from '../automation/service-bots/chief-readonly.mjs';
+import {initializeIntakeJournal,recordIntakeWebhook} from '../automation/service-bots/intake-journal.mjs';
 
 const NOW=Date.parse('2026-10-08T22:30:00Z'),QUERY='necesito que me digas cuantas llamadas han salido y entrado de las 2 lineas de whatsapp';
-function fixture(company='fumigacion'){const config={company,...BUSINESSES[company],lines:BUSINESSES[company].phones.map(phone=>({phone}))},store=new Store(':memory:',company,randomBytes(32));return {config,store};}
+function fixture(company='fumigacion'){const config={company,...BUSINESSES[company],lines:BUSINESSES[company].phones.map((phone,i)=>({phone,instance:company+'-'+i}))},store=new Store(':memory:',company,randomBytes(32));return {config,store};}
 function record(f,id,line,at,kind='call',fromMe=false){const e={id,line,at,phone:'573001112233',kind,fromMe,text:kind==='call'?'Llamada observada.':'Hola.'};f.store.enqueue(e);return e;}
 
 test('natural directed body recognizes WhatsApp call record questions including the exact request',()=>{
  for(const text of [QUERY,'¿Cuántas llamadas han entrado y salido hoy de ambas líneas de WhatsApp?','Dime cuántas llamadas entrantes y salientes hay en las dos líneas de WhatsApp hoy.','Por favor dime el número de llamadas de WhatsApp','Me puedes decir cuántas llamadas recibidas hay en mis dos líneas, por favor?','Cuántas llamadas de las dos líneas?'])assert.equal(chiefReadOnlyTopic(text),'whatsapp-call-records',text);
 });
 test('OpenAI, chats, foreign destinations/companies, other periods and mixed commands are not this read request',()=>{
- for(const text of ['cuantas llamadas de OpenAI','cuantas llamadas de IA hay hoy','cuantos chats han entrado de las dos lineas de whatsapp','cuantas llamadas han salido de las dos lineas de whatsapp y crea un servicio','necesito que me digas cuantas llamadas han entrado de las dos lineas de whatsapp y cancela las citas','cuantas llamadas de las dos lineas de whatsapp y registra el pago','dile a Diego cuantas llamadas han entrado de las dos lineas de whatsapp','cuantas llamadas de las lineas de Abogados','cuantas llamadas han entrado de las dos lineas de whatsapp ayer','cuantas llamadas han entrado de las dos lineas de whatsapp en total','cuantas llamadas han entrado de la linea 573152819233','María dijo que necesito saber cuantas llamadas de las dos lineas'])assert.equal(chiefReadOnlyTopic(text),null,text);
+ for(const text of ['cuantas llamadas de OpenAI','cuantas llamadas de IA hay hoy','cuantas llamadas han salido de las dos lineas de whatsapp y crea un servicio','necesito que me digas cuantas llamadas han entrado de las dos lineas de whatsapp y cancela las citas','cuantas llamadas de las dos lineas de whatsapp y registra el pago','dile a Diego cuantas llamadas han entrado de las dos lineas de whatsapp','cuantas llamadas de las lineas de Abogados','cuantas llamadas han entrado de las dos lineas de whatsapp ayer','cuantas llamadas han entrado de las dos lineas de whatsapp en total','cuantas llamadas han entrado de la linea 573152819233','María dijo que necesito saber cuantas llamadas de las dos lineas'])assert.equal(chiefReadOnlyTopic(text),null,text);
  assert.equal(chiefReadOnlyTopic({text:QUERY}),null);
 });
 test('zero observed records states absence of sufficient history without reporting zero calls',()=>{const f=fixture();try{
@@ -35,3 +36,12 @@ test('unread or inconsistent stored events retain partial coverage without inven
  record(f,'CORRUPT_CALL_EVENT',f.config.lines[0].phone,NOW-1000);f.store.db.prepare('UPDATE events SET body=? WHERE id=?').run('invalid encrypted body','CORRUPT_CALL_EVENT');const other=record(f,'INCONSISTENT_CALL_EVENT',f.config.lines[1].phone,NOW-1000);f.store.db.prepare('UPDATE events SET body=? WHERE id=?').run(f.store.seal({...other,id:'OTHER_ID'}),other.id);
  const activity=whatsAppCallActivity(f.store,f.config,NOW);assert.equal(activity.observedCallRecords,0);assert.equal(activity.unreadStoredRecords,2);assert.equal(activity.coverage,'partial-stored-event-observations');assert.match(chiefReadOnlyReply(f.store,f.config,SANDRA,'whatsapp-call-records',QUERY,NOW),/no tengo historial de llamadas suficiente/);
 }finally{f.store.close();}});
+test('Sandra receives incoming observations and phone list without another approval or release',()=>{const f=fixture();try{
+ initializeIntakeJournal(f.store,f.config,{now:NOW-1000});
+ const line=f.config.lines[0];recordIntakeWebhook(f.store,f.config,{event:'messages.upsert',instance:line.instance,data:{key:{id:'INCOMING_CHIEF_COUNTS_1',fromMe:false,remoteJid:'573001112233@s.whatsapp.net'},messageTimestamp:Math.floor(NOW/1000),message:{conversation:'Hola'}}},{authenticated:true,verifiedBinding:{ownerVerified:true,phone:line.phone,instance:line.instance},receivedAt:NOW});
+ for(const text of ['cuantos chats han entrado de las dos lineas de whatsapp','dime cuantos mensajes recibidos hoy de ambas lineas de whatsapp']){const topic=chiefReadOnlyTopic(text);assert.equal(topic,'whatsapp-incoming-records');const reply=chiefReadOnlyReply(f.store,f.config,SANDRA,topic,text,NOW);assert.match(reply,/1 contactos distintos/);assert.match(reply,/no equivalen a ventas/);assert.doesNotMatch(reply,/confirmas|guardé tu solicitud/);}
+ const text='dame el listado de telefonos de ambas lineas de whatsapp hoy';assert.match(chiefReadOnlyReply(f.store,f.config,SANDRA,chiefReadOnlyTopic(text),text,NOW),/573001112233/);
+ assert.equal(chiefReadOnlyReply(f.store,f.config,DIEGO,'whatsapp-incoming-records','cuantos chats han entrado de las dos lineas de whatsapp',NOW),null);
+ assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM outbox').get().n,0);
+ for(const text of ['cuantos chats han entrado de ambas lineas de whatsapp ayer','dile a Diego cuantos chats entraron de whatsapp','cuantos chats entraron de whatsapp y elimina los servicios','dame el listado de telefonos de Abogados'])assert.equal(chiefReadOnlyTopic(text),null);
+ }finally{f.store.close();}});

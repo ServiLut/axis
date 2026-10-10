@@ -1,7 +1,8 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import {randomBytes} from 'node:crypto';
 import {BUSINESSES,SANDRA,DIEGO} from '../automation/service-bots/config.mjs';
 import {Store} from '../automation/service-bots/store.mjs';import {Engine} from '../automation/service-bots/engine.mjs';
-import {customerActivity,chiefStatusTopic} from '../automation/service-bots/chief-status.mjs';import {decodeWebhook} from '../automation/service-bots/webhook.mjs';
+import {customerActivity,chiefStatusTopic,chiefStatusReply} from '../automation/service-bots/chief-status.mjs';import {decodeWebhook} from '../automation/service-bots/webhook.mjs';
+import {BLUE_ONLY_SCOPE_VERSION,BLUE_ONLY_AUTHORIZATION_SOURCE,FUMIGACION_BLUE,FUMIGACION_RED} from '../automation/service-bots/line-scope.mjs';
 function fixture(company='fumigacion'){const config={company,...BUSINESSES[company],enabled:false,chiefOnly:true,activatedAt:Date.now()-3600000,lines:BUSINESSES[company].phones.map((phone,i)=>({phone,instance:company+'-'+i}))},store=new Store(':memory:',company,randomBytes(32));return {config,store,engine:new Engine(store,config)};}
 const event=(f,text,patch={})=>({id:'STATUS_TEST_001',phone:SANDRA,line:f.config.lines[0].phone,at:Date.now(),fromMe:false,kind:'text',text,quotedId:null,...patch});
 test('actual screenshot questions answer mode and counts under pause without review acknowledgements or releases',async()=>{
@@ -33,4 +34,10 @@ test('status recognition never converts a question about actions, clients or cam
 });
 test('Miguel uses only his own stored scope and Diego gets the same factual status without changing human attention',async()=>{
  const f=fixture('servicio-tecnico');try{const e=event(f,'Miguel Ángel, estas respondiendo mensajes?',{phone:DIEGO});f.store.enqueue(e);f.store.hold(DIEGO,'STAFF_DIEGO',true);await f.engine.process(e);const row=f.store.db.prepare('SELECT * FROM outbox').get();assert.equal(row.phone,DIEGO);assert.match(f.store.open(row.body),/pausada/);assert.equal(f.store.conversation(DIEGO).hold,1);}finally{f.store.close();}
+});
+test('presence and counts disclose the authorized suspended red line rather than claim both active',()=>{
+ const f=fixture();try{f.config.enabled=true;f.config.operationalLineScope={company:'fumigacion',version:BLUE_ONLY_SCOPE_VERSION,authorizationSource:BLUE_ONLY_AUTHORIZATION_SOURCE,activeLines:[FUMIGACION_BLUE],suspendedLines:[FUMIGACION_RED],authorizedAt:new Date().toISOString(),reportedBlockedDurationHours:24};
+ for(const topic of ['presence','customer-status','counts']){const reply=chiefStatusReply(f.store,f.config,SANDRA,topic,'cuantos chats has respondido hoy');assert.match(reply,/línea 4997/);assert.match(reply,/línea 8721 permanece suspendida/);assert.doesNotMatch(reply,/activa en mis dos líneas/);}
+ assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM outbox').get().n,0);
+ }finally{f.store.close();}
 });

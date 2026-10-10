@@ -17,7 +17,7 @@ function document(entries,patch={}){
     entries:entries.map(e=>({id:'duration-home',topics:['duration'],text:'La visita de este ejemplo dura entre treinta y cuarenta minutos.',appliesTo:{services:['cucarachas'],sites:['apartamento']},reviewAfter:new Date(Date.now()+86400000).toISOString(),...e})),...patch};
 }
 function fixture(company='fumigacion'){
-  const s=new Store(':memory:',company,randomBytes(32)),c={company,...BUSINESSES[company],enabled:true,chiefOnly:true,lines:BUSINESSES[company].phones.map(phone=>({phone}))},engine=new Engine(s,c);
+  const s=new Store(':memory:',company,randomBytes(32)),c={company,...BUSINESSES[company],enabled:true,chiefOnly:true,lines:BUSINESSES[company].phones.map((phone,i)=>({phone,instance:company+'-fixture-'+i}))},engine=new Engine(s,c);
   let at=Date.now(),id=0;
   const process=async(text,patch={})=>{const e={id:'FAQ_EVENT_'+(++id),phone:'573001112233',line:c.phones[0],kind:'text',fromMe:false,at:++at,text,...patch};s.enqueue(e);await engine.process(e);return e;};
   const seed=()=>{const e={id:'FAQ_CONTEXT_SEED',phone:'573001112233',line:c.phones[0],kind:'text',fromMe:false,at:at++,text:'apartamento con cucarachas'};s.enqueue(e);s.db.prepare("UPDATE events SET state='DONE' WHERE id=?").run(e.id);s.saveConversation(e.phone,{caseId:'fumigacion:case-test',slots:{service:'cucarachas',site:'apartamento',area:'66 m²',location:'medellin'},asked:['service','site','size','location'],introduced:true,lastHandledSourceId:e.id});};

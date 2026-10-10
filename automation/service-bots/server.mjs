@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import {createHash} from 'node:crypto';
 import { configFromEnv,authorized,validateEvent,questionRecipients,operatorRoutingActive,SANDRA } from './config.mjs';
 import { Store } from './store.mjs';
 import { Engine,MARIA_AUTONOMOUS_INTAKE_GUARD } from './engine.mjs';
@@ -25,6 +26,9 @@ import {initializeInactivityFollowup,inactivityStatus,responseTimingStatus,recor
 import {initializeTesaStore,tesaStatus,reviewTesaSources} from './tesa-operations.mjs';
 import {ingestTesaWebhook,refreshTesaMembership} from './tesa-transport.mjs';
 import {operationalLines,operationalLineAllowed,operationalCoverage} from './line-scope.mjs';
+import {initializeIntakeJournal,recordIntakeWebhook,recordIntakeBinding,recordIntakeIngressGap,intakeAudit,intakeJournalStatus} from './intake-journal.mjs';
+import {restoreProgramSupervision,programSupervisionStatus,installProgramSupervision,dailyProgramCross,readRetentionCandidates} from './program-supervision.mjs';
+import {PREVENTIVE_RETENTION_GUARD} from './preventive-retention.mjs';
 
 export function createDrainScheduler(config,store,runner,{blocked=()=>false,setImmediateFn=setImmediate,setIntervalFn=setInterval,clearIntervalFn=clearInterval}={}){
   const fast=config.company==='fumigacion'&&config.responseTargetMs===3000,key='verified-ingestion-drain-wake-v1';
@@ -70,10 +74,12 @@ async function verifyApprovedAnswerSource(document,config,transport){
 }
 
 export function createBotServer(config,store,transport,engine) {
+  initializeIntakeJournal(store,config);
   initializeTesaStore(store);
   store.db.prepare("UPDATE tesa_outbox SET state='UNCERTAIN',updated=? WHERE state='SENDING'").run(Date.now());
   restoreOwnAiSetup(config,store);
   restoreProgramSetup(config,store);
+  restoreProgramSupervision(config,store);
   persistMariaKnowledge(config,store);
   initializeInactivityFollowup(config,store);
   let draining=false,settingUpAi=false;
@@ -105,8 +111,28 @@ export function createBotServer(config,store,transport,engine) {
     if(req.method!=='POST')return reply(405,{error:'POST_REQUIRED'});
     try {
       const bodyLimit=req.url==='/notify-chief-document'?720000:20000;
-      let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>bodyLimit)return reply(413,{error:'PAYLOAD_TOO_LARGE'});}
-      const body=JSON.parse(raw);
+      const journalGap=kind=>{if(req.url==='/webhook')recordIntakeIngressGap(store,config,{kind,receivedAt:serverReceivedAt,payloadHash:createHash('sha256').update(raw.slice(0,bodyLimit)).digest('hex'),byteLength:Buffer.byteLength(raw)});};
+      let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>bodyLimit){journalGap('PAYLOAD_TOO_LARGE');return reply(413,{error:'PAYLOAD_TOO_LARGE'});}}
+      let body;try{body=JSON.parse(raw);}catch{journalGap('INVALID_JSON');return reply(400,{error:'INVALID_JSON'});}
+      if(req.url==='/intake-audit'){
+        if(body.company!==config.company||Object.keys(body).some(k=>!['company','day','includeStaff','includeOutgoing','afterRow','limit'].includes(k)))return reply(400,{error:'INTAKE_AUDIT_SCOPED_DAY_REQUIRED'});
+        try{return reply(200,intakeAudit(store,config,body));}catch{return reply(400,{error:'INTAKE_AUDIT_SCOPED_DAY_REQUIRED'});}
+      }
+      if(req.url==='/operational-audit-setup'){
+        if(config.company!=='fumigacion')return reply(403,{error:'OWN_FUMIGACION_AUDIT_REQUIRED'});
+        if(draining||settingUpAi)return reply(409,{error:'OWN_AUDIT_SETUP_BUSY'});
+        settingUpAi=true;try{return reply(200,await installProgramSupervision(config,store,body,transport.fetcher));}
+        catch{return reply(409,{error:'OWN_AUDIT_SETUP_NOT_APPLIED'});}finally{settingUpAi=false;}
+      }
+      if(req.url==='/daily-operational-audit'){
+        if(config.company!=='fumigacion')return reply(403,{error:'OWN_FUMIGACION_AUDIT_REQUIRED'});
+        if(Object.keys(body).sort().join(',')!=='company,day')return reply(400,{error:'OWN_DAILY_AUDIT_FIELDS_REQUIRED'});
+        try{return reply(200,await dailyProgramCross(config,store,transport.fetcher,body));}catch{return reply(409,{error:'OWN_DAILY_AUDIT_NOT_VERIFIED'});}
+      }
+      if(req.url==='/retention-candidates'){
+        if(config.company!=='fumigacion')return reply(403,{error:'OWN_FUMIGACION_AUDIT_REQUIRED'});
+        try{return reply(200,await readRetentionCandidates(config,transport.fetcher,body));}catch{return reply(409,{error:'OWN_RETENTION_READ_NOT_VERIFIED'});}
+      }
       if(req.url==='/program-setup'){
         if(config.company!=='fumigacion')return reply(403,{error:'MARIA_PROGRAM_OWN_SCOPE_REQUIRED'});
         if(draining||settingUpAi)return reply(409,{error:'PROGRAM_SETUP_BUSY'});
@@ -138,7 +164,7 @@ export function createBotServer(config,store,transport,engine) {
         settingUpAi=true;try{return reply(200,await evaluateOwnAi(config,store,transport.fetcher,body.caseIds));}finally{settingUpAi=false;}
       }
       if(req.url==='/ai-knowledge')return config.company==='fumigacion'?reply(200,{status:mariaKnowledgeStatus(config,store),document:mariaKnowledgeDocument()}):reply(403,{error:'MARIA_KNOWLEDGE_OWN_SCOPE'});
-      if(req.url==='/status')return reply(200,{company:config.name,bot:config.bot,enabled:config.enabled,mode:'reception-with-human-review',operationalCoverage:operationalCoverage(config),fullyAutonomous:false,tesaOperations:tesaStatus(store,config),programRegistration:registrationStatus(config,store),privateNativeIdentity:privateIdentityStatus(store,config),inactivityFollowup:inactivityStatus(config,store),responseTiming:responseTimingStatus(config,store),drainIntervalMs:scheduler.intervalMs,semanticUnderstandingGuard:config.company==='fumigacion'?MARIA_UNDERSTANDING_GUARD:MIGUEL_UNDERSTANDING_GUARD,ownQuoteClarificationGuard:config.company==='fumigacion'?OWN_QUOTE_CLARIFICATION_GUARD:null,aiUsage:ownAiUsage(config,store),approvedAiKnowledge:mariaKnowledgeStatus(config,store),
+      if(req.url==='/status')return reply(200,{company:config.name,bot:config.bot,enabled:config.enabled,mode:'reception-with-human-review',operationalCoverage:operationalCoverage(config),fullyAutonomous:false,intakeJournal:intakeJournalStatus(store,config),programSupervision:programSupervisionStatus(config),preventiveRetention:config.company==='fumigacion'?{guard:PREVENTIVE_RETENTION_GUARD,prepared:true,sendsEnabled:false,notesEnabled:false,required:'own-both-line-history-and-native-delivery-note-adapter'}:null,tesaOperations:tesaStatus(store,config),programRegistration:registrationStatus(config,store),privateNativeIdentity:privateIdentityStatus(store,config),inactivityFollowup:inactivityStatus(config,store),responseTiming:responseTimingStatus(config,store),drainIntervalMs:scheduler.intervalMs,semanticUnderstandingGuard:config.company==='fumigacion'?MARIA_UNDERSTANDING_GUARD:MIGUEL_UNDERSTANDING_GUARD,ownQuoteClarificationGuard:config.company==='fumigacion'?OWN_QUOTE_CLARIFICATION_GUARD:null,aiUsage:ownAiUsage(config,store),approvedAiKnowledge:mariaKnowledgeStatus(config,store),
         events:store.db.prepare('SELECT state,COUNT(*) n FROM events GROUP BY state').all(),outbox:store.db.prepare('SELECT state,COUNT(*) n FROM outbox GROUP BY state').all(),
         communicationGuard:'private-routing-and-media-work-v2',requestedContactGuard:'explicit-technician-contact-before-intake-v1',confirmationRecipient:config.tesaOperations?.enabled?config.tesaOperations.groupJid:questionRecipients(config,'disponibilidad-y-tecnico')[0],operationalConfirmationRecipients:config.tesaOperations?.enabled?[config.tesaOperations.groupJid]:questionRecipients(config,'disponibilidad-y-tecnico'),chiefRecipient:SANDRA,operatorRouting:config.tesaOperations?.enabled?'tesa-group-case-operations-20261008':config.operatorRouting||'sandra',privateHistoricalOperatorRouting:config.operatorRouting||'sandra',operatorRoutingGuard:'scoped-new-question-fanout-and-exact-line-answer-v1',operatorRoutingActive:operatorRoutingActive(config),chiefDocumentGuard:'fixed-chief-encrypted-hash-and-idempotency-v1',internalConversationGuard:'verified-internal-per-line-v2',chiefStatusGuard:'exact-directed-status-and-active-mode-v2',quotationQuestionGuard:'scoped-price-followup-and-existing-question-v1',internalConversationEnabled:Boolean(config.chiefOnly),customerResponsesEnabled:config.enabled,
         socialGreetingGuard:'literal-pure-social-greeting-before-semantic-review-v1',internalRoutingGuard:'exact-historical-question-and-no-cross-bot-dialogue-v1',retiredRecipientGuard:'current-route-no-ready-diego-send-v1',
@@ -232,21 +258,26 @@ export function createBotServer(config,store,transport,engine) {
       if(req.url==='/webhook'){
         // Group delivery metadata belongs to the separate native group proof path.
         const privateRows=(Array.isArray(body.data)?body.data:[body.data]).filter(row=>!row?.key?.remoteJid?.endsWith('@g.us'));
-        const parsed=decodeWebhook({...body,data:privateRows},config);let accepted=0,duplicates=0,deliveryUpdates=0;
+        let accepted=0,duplicates=0,deliveryUpdates=0;
         const own=config.lines.find(l=>l.instance===body.instance);if(!own)return reply(400,{error:'INSTANCE_OUTSIDE_SCOPE'});
+        const journalBody={...body,data:privateRows};
+        const intakeJournal=recordIntakeWebhook(store,config,journalBody,{authenticated:true,bindingPending:true,receivedAt:serverReceivedAt});
+        let binding;
+        try{binding=operationalLineAllowed(config,own.phone)?await transport.verifyLine(own.phone):await transport.verifyLineBinding(own.phone);recordIntakeBinding(store,config,journalBody,{authenticated:true,verifiedBinding:binding,receivedAt:serverReceivedAt});}
+        catch(error){recordIntakeBinding(store,config,journalBody,{authenticated:true,error,receivedAt:serverReceivedAt});throw error;}
+        const parsed=decodeWebhook(journalBody,config);
         if(!operationalLineAllowed(config,own.phone)){
-          await transport.verifyLineBinding(own.phone);let observed=0;
+          let observed=0;
           const unresolvedPrivateIdentity=observePrivateIdentity(store,{...body,data:privateRows},config,parsed);
           for(const value of parsed.events){const event=validateEvent(value,{...config,operationalLineScope:null});if(event){const result=suspendedObservation(event);observed++;if(result.duplicate)duplicates++;}}
           for(const d of parsed.deliveries)deliveryUpdates+=store.delivery(d.mid,own.phone,d.state);
-          return reply(202,{accepted:0,observed,duplicates,deliveryUpdates,unresolvedPrivateIdentity,reason:'USER_AUTHORIZED_SUSPENDED_LINE',operationalCoverage:operationalCoverage(config)});
+          return reply(202,{accepted:0,observed,duplicates,deliveryUpdates,unresolvedPrivateIdentity,intakeJournal,reason:'USER_AUTHORIZED_SUSPENDED_LINE',operationalCoverage:operationalCoverage(config)});
         }
-        await transport.verifyLine(own.phone);
         const unresolvedPrivateIdentity=observePrivateIdentity(store,{...body,data:privateRows},config,parsed);
         const groupOperations=await ingestTesaWebhook(store,config,transport,body);
         for(const value of parsed.events){const e=validateEvent(value,config);if(e){const r=ingress(e);accepted++;if(r.duplicate)duplicates++;}}
         for(const d of parsed.deliveries){deliveryUpdates+=store.delivery(d.mid,own.phone,d.state);if(config.company==='fumigacion')recordDeliveryTiming(store,d.mid,own.phone,d.state);}
-        reply(202,{accepted,duplicates,deliveryUpdates,groupOperations,unresolvedPrivateIdentity});if(accepted>duplicates||groupOperations.caseAnswers)scheduler.wake();return;
+        reply(202,{accepted,duplicates,deliveryUpdates,groupOperations,unresolvedPrivateIdentity,intakeJournal});if(accepted>duplicates||groupOperations.caseAnswers)scheduler.wake();return;
       }
       if(req.url==='/delivery'){
         const line=config.lines.find(l=>l.instance===body.instance&&l.phone===body.owner);

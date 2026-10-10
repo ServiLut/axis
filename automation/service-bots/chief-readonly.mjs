@@ -1,6 +1,7 @@
 import {BUSINESSES,SANDRA,normalize} from './config.mjs';
+import {intakeAudit} from './intake-journal.mjs';
 
-export const CHIEF_READ_ONLY_GUARD='own-whatsapp-call-observations-without-native-total-v1';
+export const CHIEF_READ_ONLY_GUARD='own-whatsapp-observed-calls-and-journal-incoming-without-reapproval-v2';
 
 // The engine verifies the directed Sandra turn. This parser recognizes only a
 // complete read request; extra destinations, other periods and commands fail.
@@ -13,7 +14,17 @@ export function chiefReadOnlyTopic(body){
  const activity='(?:han (?:entrado|salido)(?: y (?:entrado|salido))?|'+direction+'(?: y '+direction+')?(?: (?:hay|hubo|tienes|se han registrado))?|se han (?:recibido|realizado|registrado)|has (?:recibido|realizado)(?: y (?:recibido|realizado))?|hay|hubo|tienes)';
  const scope='(?:de|en|por) (?:(?:(?:las (?:dos|2)|ambas|tus dos|mis dos) lineas)(?: de whatsapp)?|las lineas de whatsapp|whatsapp)';
  const request=new RegExp('^(?:por favor[ ,]+)?(?:'+prefix+' )?'+quantity+'(?: '+activity+')?(?: hoy)? '+scope+'(?: hoy)?(?:[, ]+por favor)?$');
- return request.test(text)?'whatsapp-call-records':null;
+ if(request.test(text))return 'whatsapp-call-records';
+ const incoming=new RegExp('^(?:por favor[ ,]+)?(?:'+prefix+' )?(?:cuantos (?:chats|whatsapps|mensajes|contactos)(?: (?:han entrado|entraron|han llegado|llegaron|has recibido|recibiste|recibidos|entrantes))?|(?:el )?(?:numero|conteo|cantidad) de (?:chats|whatsapps|mensajes|contactos)(?: recibidos| entrantes)?)?(?: hoy)? '+scope+'(?: hoy)?(?:[, ]+por favor)?$');
+ if(/(?:chats|whatsapps|mensajes|contactos)/.test(text)&&incoming.test(text))return 'whatsapp-incoming-records';
+ const listing=new RegExp('^(?:por favor[ ,]+)?(?:'+prefix+' )?(?:dame|enviame|pasame)? ?(?:el )?listado de (?:numeros|telefonos|contactos|chats)(?: recibidos| entrantes)?(?: hoy)? '+scope+'(?: hoy)?(?:[, ]+por favor)?$');
+ return listing.test(text)?'whatsapp-incoming-list':null;
+}
+
+export function whatsAppIncomingActivity(store,config,now=Date.now()){
+ if(!Number.isFinite(now))throw Error('CHIEF_READ_ONLY_TIME_REQUIRED');ownLines(store,config);
+ const date=new Date(now-5*3600000).toISOString().slice(0,10);
+ return intakeAudit(store,config,{day:date,limit:500});
 }
 
 function ownLines(store,config){
@@ -41,7 +52,21 @@ export function whatsAppCallActivity(store,config,now=Date.now()){
 }
 
 export function chiefReadOnlyReply(store,config,phone,topic,text,now=Date.now()){
- if(phone!==SANDRA||topic!=='whatsapp-call-records'||chiefReadOnlyTopic(text)!==topic)return null;
+ if(phone!==SANDRA||chiefReadOnlyTopic(text)!==topic)return null;
+ if(['whatsapp-incoming-records','whatsapp-incoming-list'].includes(topic)){
+  const a=whatsAppIncomingActivity(store,config,now),total=new Set(a.contacts.map(c=>c.phone)).size;
+  if(!a.coverage.enabled)return 'Sandra, todavía no tengo un registro diario de entradas suficiente para confirmar esos totales. No puedo afirmar que hayan sido cero.';
+  const perLine=a.lines.map(l=>'línea '+l.phone.slice(-4)+': '+l.receivedContacts+' contactos con teléfono verificado y '+l.receivedMessages+' mensajes recibidos').join('; ');
+  let answer='Sandra, hoy tengo registrados '+total+' contactos distintos ('+perLine+'). Un contacto en ambas líneas se cuenta una sola vez en el total. Son entradas observadas desde el inicio de este registro; incluyen conversaciones de servicios anteriores y no equivalen a ventas ni al total garantizado de WhatsApp.';
+  if(a.aggregates.unidentifiedIncomingMessages||a.aggregates.unverifiedBindingIncomingMessages)answer+=' Hay mensajes con identidad o conexión pendientes de verificar, separados de los teléfonos confirmados.';
+  if(a.coverage.suspendedLines?.length)answer+=' La línea '+a.coverage.suspendedLines.map(p=>p.slice(-4)).join(' y ')+' está suspendida; su cobertura es parcial.';
+  if(topic==='whatsapp-incoming-list'){
+   const list=a.lines.map(l=>'Línea '+l.phone.slice(-4)+': '+(a.contacts.filter(c=>c.line===l.phone).map(c=>c.phone).join(', ')||'sin teléfonos verificados en este registro')).join('\n');
+   answer+=answer.length+list.length<5900?'\n'+list:' La lista completa requiere un archivo; no la recorto para presentarla como completa.';
+  }
+  return answer;
+ }
+ if(topic!=='whatsapp-call-records')return null;
  const activity=whatsAppCallActivity(store,config,now),ends=activity.lines.map(line=>line.phone.slice(-4));
  if(!activity.observedCallRecords)return 'Sandra, hoy no tengo historial de llamadas suficiente para confirmar los totales de mis dos líneas ('+ends.join(' y ')+'). No puedo afirmar que hayan sido cero ni separar entrantes y salientes, llamadas contestadas o duración.';
  const perLine=activity.lines.map(line=>'línea '+line.phone.slice(-4)+': '+line.observedCallRecords).join('; ');

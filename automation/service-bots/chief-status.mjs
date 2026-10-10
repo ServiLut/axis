@@ -1,6 +1,7 @@
 import {normalize,SANDRA,internalName} from './config.mjs';
 import {currentPriceEntries} from './prices.mjs';
 import {programEnabled} from './maria-program.mjs';
+import {operationalCoverage} from './line-scope.mjs';
 
 export function chiefStatusTopic(text) {
   const t=normalize(text).replace(/[¿?!.]+$/,'').trim();
@@ -25,12 +26,14 @@ export function customerActivity(store,config,today=false,now=Date.now()) {
 export function chiefStatusReply(store,config,phone,topic,text,now=Date.now()) {
   const recipient=internalName(phone);
   const priceReady=config.company==='fumigacion'&&currentPriceEntries(store.approvedPriceCatalogs()).length>0;
-  const mode=programEnabled(config)?'La recepción está activa en mis dos líneas. Puedo cotizar servicios ordinarios y registrar las solicitudes aceptadas a mi nombre cuando tenga los datos completos. Técnico, disponibilidad y hora necesitan confirmación del equipo. No registro pagos ni concedo garantías.':config.enabled?(priceReady?'La recepción de solicitudes está activa en mis dos líneas. Puedo cotizar servicios que coincidan con tarifas verificadas; los casos especiales y la programación necesitan confirmación. Todavía no creo servicios ni registro pagos.':'La recepción de solicitudes de clientes está activa en mis dos líneas. Las cotizaciones y la programación aún requieren confirmación; todavía no creo servicios ni registro pagos.'):'La atención a clientes está pausada en mis dos líneas. Puedo responderte por aquí; aún falta completar las respuestas y la cotización antes de reanudar.';
+  const coverage=operationalCoverage(config),lineLabel=coverage.suspendedLines.length?'en la línea '+coverage.activeLines.map(p=>p.slice(-4)).join(' y '):'en mis dos líneas';
+  let mode=programEnabled(config)?'La recepción está activa '+lineLabel+'. Puedo cotizar servicios ordinarios y registrar las solicitudes aceptadas a mi nombre cuando tenga los datos completos. Técnico, disponibilidad y hora necesitan confirmación del equipo. No registro pagos ni concedo garantías.':config.enabled?(priceReady?'La recepción de solicitudes está activa '+lineLabel+'. Puedo cotizar servicios que coincidan con tarifas verificadas; los casos especiales y la programación necesitan confirmación. Todavía no creo servicios ni registro pagos.':'La recepción de solicitudes de clientes está activa '+lineLabel+'. Las cotizaciones y la programación aún requieren confirmación; todavía no creo servicios ni registro pagos.'):'La atención a clientes está pausada '+lineLabel+'. Puedo responderte por aquí; aún falta completar las respuestas y la cotización antes de reanudar.';
+  if(coverage.suspendedLines.length)mode+=' La línea '+coverage.suspendedLines.map(p=>p.slice(-4)).join(' y ')+' permanece suspendida.';
   if(topic!=='counts')return (topic==='presence'?'Sí, '+recipient+'. Soy '+config.bot+'. ':recipient+', ')+mode;
   const today=/\bhoy\b/.test(normalize(text)),activity=customerActivity(store,config,today,now);
   const label=today?'Hoy':'En mis registros';
   const perLine=activity.lines.map(l=>'línea '+l.phone.slice(-4)+': '+l.deliveredChats).join('; ');
   let reply=recipient+', '+label.toLowerCase()+' tengo respuestas con entrega comprobada a '+activity.deliveredChats+' chats de clientes ('+perLine+'). Un chat presente en ambas líneas se cuenta una sola vez en el total.';
   if(activity.unverifiedDeliveryChats)reply+=' Además, '+activity.unverifiedDeliveryChats+' chats tienen alguna salida cuya entrega aún no está comprobada; esas salidas no se suman como entregadas.';
-  return reply+' '+(config.enabled?'La recepción sigue activa.':'Ahora la atención a clientes está pausada.');
+  return reply+' '+(config.enabled?'La recepción sigue activa '+lineLabel+'.':'Ahora la atención a clientes está pausada.')+(coverage.suspendedLines.length?' La línea '+coverage.suspendedLines.map(p=>p.slice(-4)).join(' y ')+' permanece suspendida.':'');
 }
