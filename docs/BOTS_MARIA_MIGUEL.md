@@ -1,5 +1,17 @@
 # María Ángel y Miguel Ángel
 
+## Reactivación preparada y pendiente de fuentes — 10/10/2026 16:26Z
+
+Sólo María instaló `312b28022194d8dcee362968d260d6c411e725c5`, Dokploy DONE en 2 s; API propia comprobada a las 16:26:17Z. Lectores cruzados, cola `RETENTION_STAGED`, guardia fresca antes del envío único y nota por clave de ciclo están conectados. La activación de contactos y notas sigue **OFF**; el drenaje general no puede enviar esa cola. Recibir empresa/día/cursor no permite afirmar elegibilidad, entrega ni activar el flujo. La nota sólo procede tras verificar MID, línea, destinatario y fuente actual; revisar entregas de días anteriores no reenvía mensajes.
+
+María conserva recepción azul, Luna propia, registro ordinario y el único recibo BF23DF14. Roja suspendida, sin recuperación ni traslado. Miguel revalidado a las 16:26:19Z conserva recepción y sus dos propietarios OPEN, IA propia/programa sin configurar y versión instalada previa `a92824b`; no recibió este nuevo despliegue.
+
+Tenaxis Backend y Frontend de `2ffdd1d23cc4d795dc8bb02f43deb41dcc5744b2` están DONE (3 min 46 s / 1 min 20 s). Los módulos adicionales de historia y notas permanecen OFF y la SQL es candidata. Su ensayo PostgreSQL aislado aprobó 36 comprobaciones de aislamiento, concurrencia, reversión y respaldo/restauración; no se usaron datos ni respaldo de producción.
+
+664 pruebas runtime y diez comprobaciones adversariales independientes pasan. Cero mensajes de campaña, notas, concesiones nuevas, DDL productiva, compras, replays o liberaciones del supervisor. Los accesos exclusivos de lectura/notas/prueba con vencimiento máximo 07/11/2026 requieren la confirmación específica ya solicitada. Historia sincronizada/revisada de ambas líneas, no-contacto histórico, medios originales y cruce normalizado completo siguen pendientes. El contrato inicial sólo soporta la última finalización real; agendamiento como única fuente conserva un motivo explícito y pendiente de integración. Checkpoint vigente: `.tmp/services-live-review-20261010/retention-checkpoint-private.json`.
+
+Las revisiones de este chat a las 08:00 y 00:05 permanecen activas y dependen de Codex/equipo/conexiones. No equivalen a campaña activada ni a nuevos jobs de servidor. Este estado prevalece sobre los apartados anteriores sin ampliar los permisos existentes.
+
 ## Supervisión y reactivación preventiva — 10/10/2026
 
 Estado propio verificado a las 15:54:46–47Z: runtimes `a92824b638dbefd55cfdc69b5e4e4cfe765b25a4` instalados, Dokploy DONE en dos segundos cada uno. María conserva recepción, Luna propia, registro ordinario y un recibo real BF23DF14. Azul 4997 activa; roja 8721 suspendida por instrucción humana, sin restauración ni traslado automático de clientes. Miguel mantiene recepción y ambas líneas OPEN, pero IA propia y registro del programa siguen sin configurar. No atribuirle los accesos o resultados de María.
