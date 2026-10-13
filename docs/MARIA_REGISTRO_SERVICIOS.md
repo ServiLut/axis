@@ -1,5 +1,22 @@
 # Registro propio de servicios nuevos de María
 
+## Mapa literal de campos revisado; instalación parcial — 13/10/2026
+
+Backend `46965390841d4ed90a48361dbd4fa49140dc3016` instalado y guardia `literal-intake-visible-order-fields-and-known-property-type-v1` comprobada. El Frontend y el runtime de la segunda ronda siguen pendientes de comprobación de instalación; no confundir la publicación de la rama con su código activo. Gates: 719 runtime, 139 backend, 28 formularios y typechecks productivos aprobados.
+
+| Dato de origen propio | Destino en Tenaxis | Regla |
+|---|---|---|
+| Nombre literal del cliente | Cliente.nombre y nombreContacto de su dirección | No separar apellidos por conjetura ni usar nombres atribuidos por terceros. |
+| Teléfono nativo | Cliente.telefono, telefonoContacto y recibo | No inferirlo del texto, nombre o LID. |
+| Dirección y municipio literales | Direccion.direccion/municipio y direccionTexto/municipio de la orden | Separados del nombre; una dirección existente conserva su identidad. |
+| Casa/apartamento validado | Direccion.tipoUbicacion, CASA/APTO | Sólo direcciones nuevas; tipo desconocido de una dirección editada permanece vacío. |
+| Plaga o servicio | Servicios del catálogo propio en la orden | Sólo alcance y tarifa propios compatibles. |
+| Área/habitaciones o colchones e indicaciones | Observación visible de la orden | Etiquetados como datos informados por el cliente; no diagnóstico ni metraje total probado. |
+| Precio propio entregado y aceptado | Orden.valorCotizado | Conserva la fuente y el precio validado, no pagos. |
+| Registro nuevo aceptado | NUEVO y creadoPorId de maria.angel.bot | Pendiente de programación; sin técnico, hora, ejecución, pago o garantía inventados. |
+
+La API autorizada de lectura del recibo conserva identidad y autoría; no devuelve los campos actuales de nombre/dirección/valor para certificar su vista visual. El login humano conocido y la roja suspendida siguen pendientes sin nueva solicitud. No se crearon servicios de prueba productivos ni se modificó el recibo anterior.
+
 ## Registro literal y continuación instalados — 13/10/2026
 
 María instaló `0219be952b7ae0b900956d0a388afe61f17cb222`, Dokploy DONE en 3 s; Tenaxis Backend instaló `cbf5adaf3dbf24989bb09452b0b9ceaa146c2922`, DONE en 3 min 44 s. Se conservaron el actor, alcance, precio aprobado y vencimiento máximo del 07/11/2026 a las 16:56:52.680Z. El Backend usa la rama propia `codex/maria-own-order-registration-20261008`; las otras aplicaciones no se desplegaron.

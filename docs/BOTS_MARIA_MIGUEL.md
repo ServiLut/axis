@@ -1,5 +1,17 @@
 # María Ángel y Miguel Ángel
 
+## Segunda revisión de María: instalación en curso — 13/10/2026
+
+La segunda corrección está publicada en `65eed46dcdc45b0be12a9a87f13c2df1de2869ca`, con 719 pruebas del runtime aprobadas. Corrige documentos pendientes, finalidad de certificado, llegada y programación relatadas, compra de productos, ofertas de proveedores y conservación del formulario ante negaciones/citas. La recepción acumula bytes autenticados antes de decodificar UTF-8; sólo el webhook de Fumigación admite hasta 2 MiB. Los huecos históricos no se reconstruyen ni se reproducen.
+
+Tenaxis Backend instaló `46965390841d4ed90a48361dbd4fa49140dc3016`, DONE en 4 min 13 s, y su guardia de campos visibles fue comprobada. Área, habitaciones o colchones validados e indicaciones literales pasan a la observación visible de la orden; CASA/APTO sólo se fija al crear una dirección nueva con inmueble comprobado. La edición mantiene vacío un tipo desconocido. Pasaron 139 pruebas del backend, 28 de formularios y ambos typechecks productivos.
+
+María y el Frontend aún requieren comprobación de instalación de esta segunda ronda. Las API de las 17:29:32Z conservaban el runtime anterior, recepción activa, Luna propia, azul autorizada, registro habilitado y SAVED=1; no presentarlas como segunda versión instalada. Los intentos del botón de publicación no mostraron un build nuevo. Se habilitó temporalmente Autodeploy de María para completar la publicación; debe volver a su valor false tras verificarla. Miguel permanece separado y sin nueva instalación.
+
+Evaluación adicional: 24 llamadas reales Luna, 23 JSON válidos y uno inválido rechazado con fallback seguro. Ocho historias aprobaron 34 comprobaciones en las revisiones correspondientes y el certificado exclusivo final aprobó cinco con una llamada adicional; no afirmar que todas las historias se repitieron contra el último cambio. Consumo 31.595 tokens de entrada y 1.283 de salida. Cero servicios reales, mensajes a clientes o cambios de permisos en esas pruebas.
+
+Evidencia: `.tmp/maria-quality-20261013/second-release/`, `followup-live-luna/`, `form-map/` e `installed-verification-second/`. Los estados y límites de la primera instalación siguiente se conservan hasta la comprobación final.
+
 ## María: conversación, registro y continuación corregidos — 13/10/2026
 
 La prioridad humana vigente es María/FUMIGACIÓN. Sólo su runtime recibió `0219be952b7ae0b900956d0a388afe61f17cb222`, Dokploy **DONE en 3 s**. Tenaxis Backend recibió `cbf5adaf3dbf24989bb09452b0b9ceaa146c2922`, **DONE en 3 min 44 s**, para reconocer las mismas etiquetas literales del cliente. Las publicaciones se hicieron en las ramas propias existentes; main conserva su historia. El Backend ahora toma su código de `codex/maria-own-order-registration-20261008`. Miguel y los otros runtimes no recibieron esta instalación. No cambiaron claves, permisos, precios, expiración, holds, suspensión roja, destinatarios históricos ni resultados inciertos.
