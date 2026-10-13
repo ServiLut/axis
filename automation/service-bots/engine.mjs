@@ -9,7 +9,7 @@ import {ownIntent} from './maria-understanding.mjs';
 import {ownMiguelIntent,miguelLiteralSlotAllowed} from './miguel-understanding.mjs';
 import {literalPaintingRequest} from './technical-scope.mjs';
 import {afterServiceKind,afterServiceRequest,afterServiceDecision,explicitNewService,mariaLiteralServiceContext} from './after-service.mjs';
-import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,literalIntakeTextWithoutRegistrationFields,prepareRegisteredTesaContinuation} from './maria-program.mjs';
+import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,literalIntakeTextWithoutRegistrationFields,literalProgramPreference,prepareRegisteredTesaContinuation} from './maria-program.mjs';
 import {createHash} from 'node:crypto';
 import {tesaOperationalTopic} from './tesa-config.mjs';
 import {prepareTesaQuestion,initializeTesaStore} from './tesa-operations.mjs';
@@ -18,6 +18,7 @@ import {ownQuoteClarification,OWN_QUOTE_CLARIFICATION_GUARD} from './own-quote-c
 import {explicitNewTechnicalCase,technicalIntakeMetaQuestion,technicalIntakeClarificationReply,technicalIntakeLiteralCorrection} from './technical-intake-continuity.mjs';
 
 export const MARIA_AUTONOMOUS_INTAKE_GUARD='literal-ordinary-intake-without-staff-delegation-v1';
+export const MARIA_AFTER_SERVICE_CONTINUITY_GUARD='own-same-case-quoted-postservice-context-and-priority-preservation-v1';
 
 const groupField=value=>String(value??'').replace(/https?:\/\/\S+|www\.\S+|[\w.+-]+@[\w.-]+/g,'[referencia reservada]').replace(/\b(?:57)?3\d{9}\b/g,'[teléfono reservado]').replace(/\b(?:calle|carrera|avenida|transversal|diagonal|cl|cra|cr|kr|av|trv|tv|dg)\.?\s*\d[^;\n]*|#\s*\d[^;\n]*/gi,'[dirección reservada]').replace(/\b\d{6,}\b/g,'[referencia reservada]').slice(0,130);
 export function routeCaseQuestion(store,config,request){
@@ -280,6 +281,10 @@ export function customerDecision(company,state,e,analysis={}) {
     else understood=Object.fromEntries(Object.entries(understood).filter(([k,v])=>!existing[k]&&(company!=='fumigacion'||k!=='location'||ordinaryLiteralMunicipality(v)&&normalize(ordinaryLiteralMunicipality(v))===normalize(literal.location))));
   }
   const next={...state,slots:{...existing,...understood},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)};
+  // An exception may take priority over a warranty/followup route, but must
+  // not erase the customer's existing-service context for later turns.
+  const preservedFollowup=company==='fumigacion'&&afterServiceDecision(state,next,e,analysis);
+  if(preservedFollowup)next.requestedAfterServiceReview=preservedFollowup.state.requestedAfterServiceReview;
   if(directOwnAi&&Object.keys(understood).length)next.intakeSources={...next.intakeSources,...Object.fromEntries(Object.keys(understood).map(k=>[k,{sourceId:e.id,at:e.at,context:'own-ai-literal-fragment',guard:conversationalAiGuard(company)}]))};
   if(company==='fumigacion'&&literalIntakeTurn(e))rememberFields(next,e,company);
   // Preserve an elliptical answer to our own size prompt literally. Do not invent
@@ -450,6 +455,17 @@ export class Engine {
       const newCase=c.company==='fumigacion'?explicitNewService(e.text)&&!afterServiceRequest(e,analysis):explicitNewTechnicalCase(e.text);
       const caseState=newCase?{slots:{},asked:[],introduced:conv.state.introduced,caseId:c.company+':'+e.id}:conv.state;
       caseState.caseId ||= reportedOrder || c.company+':'+e.id;
+      if(!newCase&&c.company==='fumigacion'&&e.kind==='text'&&!e.forwarded&&!e.fromMe&&!caseState.requestedAfterServiceReview&&e.quotedId&&caseState.caseId.startsWith(c.company+':')){
+        const firstRow=s.db.prepare('SELECT rowid,at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(caseState.caseId.slice(c.company.length+1),e.phone,e.line);
+        const currentRow=s.db.prepare('SELECT rowid FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(e.id,e.phone,e.line);
+        const quotedRow=s.db.prepare('SELECT rowid,body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(e.quotedId,e.phone,e.line);
+        const quoted=quotedRow&&s.open(quotedRow.body);
+        const reference=firstRow&&currentRow&&quotedRow&&quotedRow.rowid>=firstRow.rowid&&quotedRow.rowid<=currentRow.rowid&&quoted&&quoted.id===e.quotedId&&quoted.phone===e.phone&&quoted.line===e.line&&!quoted.fromMe&&!quoted.forwarded&&quoted.kind==='text'&&quoted.at>=firstRow.at&&quoted.at<=e.at&&afterServiceRequest(quoted);
+        if(reference){
+          caseState.requestedAfterServiceReview={...reference,restoredFromQuotedSource:{sourceId:e.id,quotedId:quoted.id,at:e.at}};
+          s.audit('OWN_QUOTED_AFTER_SERVICE_CONTEXT_RESTORED',e.id,{guard:MARIA_AFTER_SERVICE_CONTINUITY_GUARD,caseId:caseState.caseId,sourceId:quoted.id,line:e.line,originalEventReplayed:false,businessWritten:false});
+        }
+      }
       if(c.company==='fumigacion'&&e.kind==='text'&&!e.forwarded&&/^[¿?\s]+$/.test(e.text)&&/[¿?]/.test(e.text)){
         // A punctuation-only followup supplies no new question or intake fact.
         // Preserve pending work on this own line without choosing its meaning,
@@ -529,7 +545,9 @@ export class Engine {
         const delivered=s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND state IN ('DELIVERED','READ')").get(currentQuote.sourceId+':reply',e.phone,e.line);
         if(delivered&&s.priceReplyStillValid(delivered)){
           decision.state.quotedPrice={...currentQuote,accepted:true,acceptanceSource:currentQuote.acceptanceSource||e.id,acceptedAt:currentQuote.acceptedAt||e.at};
-          const preference=/\b(?:hoy|manana|lunes|martes|miercoles|jueves|viernes|sabado|domingo|tarde|noche|\d{1,2}[/:]\d{1,2})\b/.test(normalize(e.text))?textWithoutLinks(e.text).slice(0,300):decision.state.slots.preference;
+          const literalPreference=literalProgramPreference(e.text);
+          const preference=literalPreference||decision.state.slots.preference;
+          if(literalPreference)decision.state.intakeSources={...decision.state.intakeSources,preference:{sourceId:e.id,at:e.at,context:'literal-customer-preference-pending-coordination'}};
           if(programEnabled(c)&&priceNow.source?.type==='direct_user_approved_schedule'&&decision.state.programIntake?.stage!=='registered'&&registrationQuoteReady(s,decision.state,e.phone,e.line)){
             if(preference)decision.state.slots.preference=preference;
             decision={state:decision.state};
@@ -559,7 +577,7 @@ export class Engine {
       // descriptions. In particular a street number before "apartamento"
       // must not become a quantity of apartments for quotation scope.
       const literalProgramStage=['name','address','details','confirm','correction'].includes(caseState.programIntake?.stage);
-      const registration=decision.quoteClarification||decision.literalServiceContext?null:registrationTurn(s,c,caseState,e,literalProgramStage?{...decision,state:{...decision.state,slots:{...caseState.slots}}}:decision);
+      const registration=decision.quoteClarification||decision.literalServiceContext?null:registrationTurn(s,c,caseState,e,literalProgramStage?{...decision,state:{...decision.state,slots:{...caseState.slots,...(decision.state.slots.preference?{preference:decision.state.slots.preference}:{})}}}:decision);
       if(registration)decision=registration;
       decision.state.lastHandledSourceId=e.id;
       if(/^[¡! ]*(?:hola\b|buenos dias\b|buen dia\b|buenas tardes\b|buenas noches\b)/.test(normalize(e.text))&&!conv.state.introduced&&decision.reply){
@@ -579,14 +597,20 @@ export class Engine {
       const labels={service:'Servicio',location:'Municipio confirmado por el texto',locationDetails:'Ubicación indicada',site:'Inmueble',area:'Área informada',rooms:'Habitaciones informadas',mattresses:'Colchones afectados',roomScale:'Tamaño de las habitaciones',siteScale:'Tamaño del inmueble indicado',floors:'Pisos informados',patio:'Patio informado',treatmentScope:'Alcance informado',detail:'Falla informada',preference:'Preferencia'};
       const context=Object.entries(decision.state.slots).map(([k,v])=>(labels[k]||k)+': '+questionExcerpt(String(v))).join('; ').slice(0,650);
       if(decision.review){
+        const restored=decision.state.requestedAfterServiceReview;
+        let inheritedPending=null;
+        if(c.company==='fumigacion'&&restored&&restored.restoredFromQuotedSource?.quotedId===restored.sourceId&&decision.reviewTopic==='warranty-review'&&decision.reviewSource===restored.sourceId){
+          const candidates=s.db.prepare("SELECT q.id,q.state,q.body FROM questions q JOIN outbox o ON o.id=q.outbox_id WHERE q.phone=? AND q.case_id=? AND q.recipient=? AND q.topic=? AND o.line=? AND q.state IN ('PENDING','ANSWER_REVIEW') AND o.state IN ('READY','SENDING','UNCERTAIN','ACCEPTED','DELIVERED','READ') ORDER BY q.rowid").all(e.phone,caseState.caseId,SANDRA,'revision:'+restored.sourceId,e.line);
+          inheritedPending=candidates.find(q=>s.open(q.body).source===restored.sourceId)||null;
+        }
         if(decision.reviewTopic==='service-documents'||c.company==='fumigacion'&&decision.reviewTopic==='special-quotation'){decision.state.awaitingHumanReview=true;s.saveConversation(e.phone,decision.state);}
         const history=s.conversationContext(e.phone,e.at,20,e.id);
         s.audit('CONVERSATION_CONTEXT_REVIEW',e.id,{caseId:caseState.caseId,turns:history.turns.length,storedCoverageComplete:history.completeStoredHistory,fullWhatsAppHistoryRead:false,originalMediaRead:false});
-        const request=routeCaseQuestion(s,c,{phone:e.phone,line:e.line,caseId:caseState.caseId,topic:decision.reviewTopic||'revision:'+e.id,conditions:decision.reviewConditions|| (decision.reviewTopic?{question:normalize(e.text),caseId:caseState.caseId}:{event:e.id,caseId:caseState.caseId}),recipients:questionRecipients(c,decision.reviewTopic||'revision:'+e.id,decision.reviewConditions||{}),source:decision.reviewSource||e.id,
+        const request=inheritedPending?{id:inheritedPending.id,state:inheritedPending.state,created:false,valid:false}:routeCaseQuestion(s,c,{phone:e.phone,line:e.line,caseId:caseState.caseId,topic:decision.reviewTopic||'revision:'+e.id,conditions:decision.reviewConditions|| (decision.reviewTopic?{question:normalize(e.text),caseId:caseState.caseId}:{event:e.id,caseId:caseState.caseId}),recipients:questionRecipients(c,decision.reviewTopic||'revision:'+e.id,decision.reviewConditions||{}),source:decision.reviewSource||e.id,
           text:c.name+': contacto terminado en '+e.phone.slice(-4)+'. '+decision.review+(decision.pendingQuestion?' Pregunta pendiente: '+questionExcerpt(decision.pendingQuestion)+'.':'')+' Mensaje actual: '+questionExcerpt(e.text)+(context?' Datos de esta solicitud: '+context+'.':'')+' '+(decision.reviewQuestion||'¿Cómo debemos continuar en este caso?')});
         if(request.created&&request.outboxId?.startsWith('tesa-question:')){decision.state.pendingTesaQuestionId=request.id;s.saveConversation(e.phone,decision.state);}
         if(!request.created&&(decision.reviewTopic?.startsWith('missing-intake:')||c.company==='fumigacion'&&decision.reviewTopic==='disponibilidad-y-tecnico'&&decision.reviewConditions?.kind==='reported-existing-schedule'||c.company==='servicio-tecnico'&&['customer-question','special-quotation'].includes(decision.reviewTopic)||['cotizacion-verificada','common-question','service-documents','service-followup','warranty-review','requested-technician-contact','payment-instructions','existing-quotation','unread-link'].includes(decision.reviewTopic))){
-          decision.reply=null;
+          decision.reply=inheritedPending&&e.quotedId===restored.sourceId?'Tu solicitud de garantía sigue pendiente de revisión.':null;
           s.audit('PENDING_CLARIFICATION_REUSED',e.id,{caseId:caseState.caseId,questionId:request.id,topic:decision.reviewTopic,newOutboundCreated:false});
         }
       }

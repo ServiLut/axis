@@ -7,7 +7,7 @@ export function ownQuoteClarification(store,config,state,event){
  // Only a complete literal clarification qualifies. Additional questions,
  // negations, another pest or a changed scope retain their normal route.
  const text=normalize(event.text).replace(/\s+/g,' ').trim();
- const match=text.match(/^(?:(?:maria(?: angel)?|mariangel)[, ]+)?(?:(?:hola|buenos dias|buenas tardes|buenas noches)[,!. ]+)?[¿ ]*(?:(?:el precio|la cotizacion|el servicio) )?es para (?:el control de |tratar )?(comejen|cucarachas?|chinches?|roedores|ratas?|ratones|hormigas?|avispas?)(?:[, ]+(?:cierto|verdad|correcto))?[?!., ]*$/);
+ const match=text.match(/^(?:(?:maria(?: angel)?|mariangel)[, ]+)?(?:(?:hola|buenos dias|buenas tardes|buenas noches)[,!. ]+)?[¿ ]*(?:(?:(?:el precio|la cotizacion|el servicio) )?es para (?:el control de |tratar )?|(?:el precio|la cotizacion) (?:ya )?incluye (?:el servicio )?(?:para |de control de |el control de ))(comejen|cucarachas?|chinches?|roedores|ratas?|ratones|hormigas?|avispas?)(?:[, ]+(?:cierto|verdad|correcto))?[?!., ]*$/);
  const quote=state.quotedPrice;
  if(!match||!quote||normalize(quote.slots?.service)!==match[1]||normalize(state.slots?.service)!==match[1])return null;
  const entry=selectPrice(state.slots,store.approvedPriceCatalogs(),quote.entryId).entry;

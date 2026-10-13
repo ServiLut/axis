@@ -7,6 +7,8 @@ export const MARIA_PROGRAM_GUARD='own-accepted-ordinary-service-literal-fields-a
 export const MARIA_PROGRAM_PIPELINE_GUARD='processed-customer-turn-before-registration-v1';
 export const MARIA_PROGRAM_LITERAL_FIELDS_GUARD='own-prompted-separate-name-address-standard-labels-and-native-source-v2';
 export const MARIA_PROGRAM_OPERATIONAL_CONTINUATION_GUARD='own-saved-order-new-quoted-operation-and-customer-continuity-v1';
+export const MARIA_PROGRAM_TIMED_ACCEPTANCE_GUARD='own-literal-timed-acceptance-before-conditional-v1';
+export const MARIA_PROGRAM_REQUESTED_TIMING_GUARD='own-literal-preference-source-and-pending-coordination-v1';
 export const MARIA_TENANT='9ffea9df-1e06-4590-acec-0e5cde715ba9';
 export const MARIA_COMPANY='35a19d89-15d1-4c32-8353-3471b6d9f0ff';
 export const MARIA_PROGRAM_URL='https://tenaxis-backend-0zeuja.servilutioncrm.cloud/integrations/maria-service-registration';
@@ -63,7 +65,7 @@ export function registrationStatus(c,s){
  const reviewed=entries.filter(entry=>entry.status==='REVIEW').sort((a,b)=>(Number(b.reviewAt)||0)-(Number(a.reviewAt)||0));
  const reasons=new Map();for(const entry of reviewed){const reason=safeReason(entry.reason);reasons.set(reason,(reasons.get(reason)||0)+1);}
  const own=c.company==='fumigacion';
- return {guard:own?MARIA_PROGRAM_GUARD:null,pipelineGuard:own?MARIA_PROGRAM_PIPELINE_GUARD:null,literalFieldsGuard:own?MARIA_PROGRAM_LITERAL_FIELDS_GUARD:null,operationalCoverage:operationalCoverage(c),configured:own&&c.mariaProgram?.enabled===true,enabled:programEnabled(c),company:own?'FUMIGACION':'S.TECNICO',tenantId:own&&c.mariaProgram?.enabled?MARIA_TENANT:null,companyId:own&&c.mariaProgram?.enabled?MARIA_COMPANY:null,advisorMembershipId:own?c.mariaProgram?.actorId||null:null,registrationKind:own?'new-service-pending-scheduling':null,prepared:states.PENDING,states,saved:states.SAVED,uncertain:states.UNCERTAIN+states.SENDING,review:states.REVIEW,lastReviewReason:reviewed.length?safeReason(reviewed[0].reason):null,reviewReasons:[...reasons].sort(([a],[b])=>a.localeCompare(b)).map(([reason,count])=>({reason,count})),scheduled:false,paymentsEnabled:false,fullyAutonomous:false};
+ return {guard:own?MARIA_PROGRAM_GUARD:null,pipelineGuard:own?MARIA_PROGRAM_PIPELINE_GUARD:null,literalFieldsGuard:own?MARIA_PROGRAM_LITERAL_FIELDS_GUARD:null,acceptanceTimingGuard:own?MARIA_PROGRAM_TIMED_ACCEPTANCE_GUARD:null,requestedTimingGuard:own?MARIA_PROGRAM_REQUESTED_TIMING_GUARD:null,operationalCoverage:operationalCoverage(c),configured:own&&c.mariaProgram?.enabled===true,enabled:programEnabled(c),company:own?'FUMIGACION':'S.TECNICO',tenantId:own&&c.mariaProgram?.enabled?MARIA_TENANT:null,companyId:own&&c.mariaProgram?.enabled?MARIA_COMPANY:null,advisorMembershipId:own?c.mariaProgram?.actorId||null:null,registrationKind:own?'new-service-pending-scheduling':null,prepared:states.PENDING,states,saved:states.SAVED,uncertain:states.UNCERTAIN+states.SENDING,review:states.REVIEW,lastReviewReason:reviewed.length?safeReason(reviewed[0].reason):null,reviewReasons:[...reasons].sort(([a],[b])=>a.localeCompare(b)).map(([reason,count])=>({reason,count})),scheduled:false,paymentsEnabled:false,fullyAutonomous:false};
 }
 // Only an affirmative from the customer is authority to create an ordinary,
 // unscheduled order. Courtesy, a preference or a quoted third-party "yes" alone
@@ -71,8 +73,14 @@ export function registrationStatus(c,s){
 export function acceptsOrdinaryQuotation(text){
  if(typeof text!=='string'||text.length>500||/[?¿]|https?:/i.test(text))return false;
  const t=normalize(text).replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim();
- if(/\b(?:no|pero|siempre|depende|cuando|quizas|tal vez|puede|podria|si se|si hay|si tiene|si es|si queda|si pueden|si manana|refuerzo|garantia|verificacion|revisita|anterior|pague|pago|pagar|transferencia|comprobante|consignacion|descuento|gratis|cancelar|cancela|otro|otra|edificio|apartamentos|casas|colchones|metros|cucarachas|hormigas|roedores|chinches|comejen)\b/.test(t))return false;
  const labels=[...text.matchAll(fieldLabels())];
+ const prefix=(labels.length?text.slice(0,labels[0].index):text).trim().replace(/[.!¡,;]+$/g,'').trim();
+ const temporalPrefix=normalize(prefix).replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim();
+ // A date alone is a preference, not consent. Only an accented or punctuated
+ // affirmative followed by a complete literal preference extends the grammar;
+ // unpunctuated "Si mañana..." keeps its conditional/ambiguous meaning.
+ const literalTimedYes=/^(?:sí(?=[\s,.!;])|si\s*[,.;!])/iu.test(prefix)&&/^si(?: para)? (?:hoy|manana|pasado manana|(?:el )?(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo))(?: (?:(?:en|por) la (?:manana|tarde|noche)|a las? \d{1,2}(?::\d{2})?(?: am| pm)?))?(?: (?:por favor|gracias|muchas gracias))*$/.test(temporalPrefix);
+ if(/\b(?:no|pero|siempre|depende|cuando|quizas|tal vez|puede|podria|si se|si hay|si tiene|si es|si queda|si pueden|refuerzo|garantia|verificacion|revisita|anterior|pague|pago|pagar|transferencia|comprobante|consignacion|descuento|gratis|cancelar|cancela|otro|otra|edificio|apartamentos|casas|colchones|metros|cucarachas|hormigas|roedores|chinches|comejen)\b/.test(t)||!literalTimedYes&&/\bsi manana\b/.test(t))return false;
  if(labels.length){
   const before=text.slice(0,labels[0].index).trim().replace(/[.!¡,;]+$/g,'').trim();
   if(!before||!acceptsOrdinaryQuotation(before))return false;
@@ -83,7 +91,7 @@ export function acceptsOrdinaryQuotation(text){
    return Boolean(key==='name'?literalName(value,true):literalAddress(value,true));
   });
  }
- return /^(?:si|listo|dale|acepto|de acuerdo|confirmo|correcto|esta bien|perfecto|si esta bien|si confirmo|si acepto|todo correcto|si todo correcto|si correcto|listo esta bien|ok|okay)(?: (?:agendame|programame|reservame|agenda el servicio|programa el servicio|quiero el servicio)(?: para)?(?: (?:hoy|manana|pasado manana|el lunes|el martes|el miercoles|el jueves|el viernes|el sabado|el domingo))?(?: (?:en la manana|en la tarde|en la noche|a las? \d{1,2}(?::\d{2})?(?: am| pm)?))?)?(?: (?:por favor|gracias|muchas gracias))*$/.test(t);
+ return literalTimedYes||/^(?:si|listo|dale|acepto|de acuerdo|confirmo|correcto|esta bien|perfecto|si esta bien|si confirmo|si acepto|todo correcto|si todo correcto|si correcto|listo esta bien|ok|okay)(?: (?:agendame|programame|reservame|agenda el servicio|programa el servicio|quiero el servicio)(?: para)?(?: (?:hoy|manana|pasado manana|el lunes|el martes|el miercoles|el jueves|el viernes|el sabado|el domingo))?(?: (?:en la manana|en la tarde|en la noche|a las? \d{1,2}(?::\d{2})?(?: am| pm)?))?)?(?: (?:por favor|gracias|muchas gracias))*$/.test(t);
 }
 const confirms=acceptsOrdinaryQuotation;
 const fieldLabels=()=>/(?:\b(?:mi nombre(?: completo)?(?: es)?|nombre completo|nombre(?=\s*:)|me llamo|a nombre de)|\b(?:(?:mi|la) direcci[oó]n(?: completa)?(?: es)?|direcci[oó]n(?: completa)?))\s*[: ,]*\s*/giu;
@@ -117,9 +125,20 @@ export function literalIntakeTextWithoutRegistrationFields(text){
  let result=text;for(const [start,end] of spans.reverse())result=result.slice(0,start)+' '+result.slice(end);
  return result.replace(/\s+/g,' ').trim();
 }
+export function literalProgramPreference(text){
+ if(typeof text!=='string')return null;
+ const raw=literalIntakeTextWithoutRegistrationFields(text).trim();
+ if(/^(?:en|por) la (?:mañana|manana|tarde|noche)[.! ]*$/i.test(raw))return raw.replace(/[.! ]+$/g,'');
+ const folded=normalize(raw).replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim();
+ const standalone=/^(?:(?:para|el|prefiero|preferiria|quiero|quisiera|seria|puede ser|me queda bien|me sirve) )?(?:hoy|manana|pasado manana|(?:el )?(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo))(?: (?:(?:en|por) la (?:manana|tarde|noche)|a las? \d{1,2}(?::\d{2})?(?: am| pm)?))?(?: (?:por favor|gracias|muchas gracias))*$/.test(folded);
+ if(!standalone&&!acceptsOrdinaryQuotation(raw))return null;
+ const value=raw.match(/\b(?:hoy|pasado mañana|pasado manana|mañana|manana|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\b[^.!?;\r\n]*/i)?.[0]?.trim().replace(/[, ]+$/g,'');
+ return value&&value.length<=300?value:null;
+}
 function literalName(text,prompted){
  const explicit=text.match(/^(?:mi nombre (?:es|completo es)|me llamo|a nombre de|nombre completo)\s*[: ,]*\s+(.+)$/i);
  const name=(explicit?.[1]||(prompted?text:'' )).trim().replace(/[.!]+$/,'').trim();
+ if(/^(?:en|por) la (?:manana|tarde|noche)$/.test(normalize(name)))return null;
  if(/[\r\n]/.test(name)||registrationPreface.test(normalize(name))||relayedNameSource(name)||! /^[\p{L}][\p{L}'’-]*(?:[^\S\r\n]+[\p{L}][\p{L}'’-]*){1,9}$/u.test(name)||/\b(?:quiero|necesito|gracias|servicio|manana|hoy|cucarachas|refuerzo|garantia|no|si|nombre|descuento|gratis|dijo|dice|anonimo|cliente|empresa)\b/.test(normalize(name)))return null;return name;
 }
 const relayedNameSource=text=>/(?:\b(?:el|la|mi|su)\s+(?:tecnic[oa]|asesor[ae]?|vecin[oa])\b|\b(?:un tercero|otra persona|me dijo|me dice)\b)/.test(normalize(text));
@@ -153,7 +172,10 @@ function changedAddressScope(text,slots){
  const cities=['medellin','bello','envigado','itagui','sabaneta','la estrella','copacabana','girardota','bogota','cali','barranquilla','cartagena','rionegro','marinilla','guarne','santa fe de antioquia','sopetran'];
  if(cities.some(x=>new RegExp('\\b'+x+'\\b').test(t)&&x!==city))return true;
  const namedCity=t.match(/\b(?:municipio|ciudad)(?: de)?\s+([^,#.]+)/)?.[1]?.trim();if(namedCity&&namedCity!==city)return true;
- if(/\b(?:todo|toda|entero|entera|completo|completa)\s+(?:(?:el|la|un|una)\s+)?(?:edificio|unidad|conjunto|torre|casa|finca)|\b(?:zonas? comunes?|parqueaderos?|shute?|bodegas?|locales?|restaurante|cafeteria|patio|pisos?|varias propiedades)\b/.test(t))return true;
+ if(/\b(?:todo|toda|entero|entera|completo|completa)\s+(?:(?:el|la|un|una)\s+)?(?:edificio|unidad|conjunto|torre|casa|finca)|\b(?:zonas? comunes?|parqueaderos?|shute?|bodegas?|locales?|restaurante|cafeteria|patio|varias propiedades)\b/.test(t))return true;
+ // A singular floor/interior label belongs to the address. An explicit request
+ // to treat floors or a multi-floor scope still needs its own quotation review.
+ if(/\b(?:todos? (?:los )?|varios |dos |tres |cuatro |\d+ )pisos\b|\b(?:fumigar|tratar|servicio para|fumigacion de)\b[^.!?;]{0,45}\bpisos?\b/.test(t))return true;
  if(/\b(?:dos|tres|cuatro|cinco|seis)\s+(?:casas?|apartamentos?|locales?|torres?)\b/.test(t))return true;
  const units=t.match(/\b(?:para|son|necesito|tratar|fumigar|fumigacion de|servicio para)\s+(?:(?:los|las)\s+)?(\d+)\s+(?:casas?|apartamentos?|aptos?|locales?|torres?)\b/);if(units&&Number(units[1])>1)return true;
  const inPlace=t.match(/\ben\s+([\p{L}][\p{L}\s'-]*)/u)?.[1]?.trim();
@@ -162,6 +184,18 @@ function changedAddressScope(text,slots){
  return false;
 }
 const source=e=>({id:e.id,text:e.text,at:iso(e.at)});
+function casePreferenceSource(s,c,state,e){
+ const value=state.slots.preference,reference=state.intakeSources?.preference;
+ if(typeof value!=='string'||!value.trim()||value.length>300||/[\r\n]/.test(value)||!reference?.sourceId)return null;
+ const firstId=state.caseId?.startsWith(c.company+':')?state.caseId.slice(c.company.length+1):state.quotedPrice?.sourceId;
+ const first=firstId&&s.db.prepare('SELECT rowid,at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(firstId,e.phone,e.line);
+ const current=s.db.prepare('SELECT rowid FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(e.id,e.phone,e.line);
+ const row=s.db.prepare('SELECT rowid,body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(reference.sourceId,e.phone,e.line);
+ if(!first||!current||!row||row.rowid<first.rowid||row.rowid>current.rowid)return null;
+ const native=s.open(row.body);
+ if(native.id!==reference.sourceId||native.phone!==e.phone||native.line!==e.line||native.fromMe||native.forwarded||native.kind!=='text'||native.at!==reference.at||native.at<c.mariaProgram.startsAt||native.at<first.at||native.at>e.at||typeof native.text!=='string'||native.text.length>8000||!normalize(native.text).includes(normalize(value)))return null;
+ return {value,source:source(native)};
+}
 function caseLiteralFields(s,c,state,e){
  const firstId=state.caseId?.startsWith(c.company+':')?state.caseId.slice(c.company.length+1):state.quotedPrice?.sourceId;
  const first=firstId&&s.db.prepare('SELECT rowid,at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(firstId,e.phone,e.line);
@@ -236,17 +270,20 @@ export function registrationTurn(s,c,previous,e,decision){
  // delivered price, the acceptance is sufficient for an unscheduled order.
  // New/corrected facts supplied after acceptance still need a delivered summary.
  const preprovided=confirms(e.text)&&!conflicting&&!explicit.conflict&&!['confirm','correction'].includes(prior.stage)&&Date.parse(pi.nameSource.at)<=e.at&&Date.parse(pi.addressSource.at)<=e.at;
- if(!preprovided&&(prior.stage!=='confirm'||changed)){
-  pi.stage='confirm';pi.promptId=e.id+':reply';pi.preview={customerName:pi.customerName,address:pi.address,municipality:state.slots.location,service:state.slots.service,priceCop:own.entry.priceCop};
-  return {state,reply:'Registraré el servicio de '+state.slots.service+' por $'+own.entry.priceCop.toLocaleString('es-CO')+' en '+pi.address+', '+state.slots.location+', a nombre de '+pi.customerName+'. ¿Confirmas que estos datos son correctos?'};
+ const preference=casePreferenceSource(s,c,state,e);
+ const preview={customerName:pi.customerName,address:pi.address,municipality:state.slots.location,service:state.slots.service,priceCop:own.entry.priceCop,...(preference?{preference:preference.value}:{})};
+ if(!preprovided&&(prior.stage!=='confirm'||changed||JSON.stringify(pi.preview)!==JSON.stringify(preview))){
+  pi.stage='confirm';pi.promptId=e.id+':reply';pi.preview=preview;
+  return {state,reply:'Registraré el servicio de '+state.slots.service+' por $'+own.entry.priceCop.toLocaleString('es-CO')+' en '+pi.address+', '+state.slots.location+', a nombre de '+pi.customerName+'.'+(preference?' Preferencia solicitada: '+preference.value+'. El horario sigue pendiente de coordinación.':'')+' ¿Confirmas que estos datos son correctos?'};
  }
  if(!preprovided&&(!prompt||!confirms(e.text)))return {state,observed:true,observedState:'PROGRAM_SUMMARY_CONFIRMATION_PENDING'};
- if(!preprovided&&JSON.stringify(pi.preview)!==JSON.stringify({customerName:pi.customerName,address:pi.address,municipality:state.slots.location,service:state.slots.service,priceCop:own.entry.priceCop}))return {state,observed:true,observedState:'PROGRAM_SUMMARY_REVIEW'};
+ if(!preprovided&&JSON.stringify(pi.preview)!==JSON.stringify(preview))return {state,observed:true,observedState:'PROGRAM_SUMMARY_REVIEW'};
  const conv=s.conversation(e.phone),allowed=['service','site','location','area','rooms','mattresses','patio','floors','roomScale','siteScale','treatmentScope','affectedFurniture'];
  const slots=Object.fromEntries(allowed.filter(k=>state.slots[k]!=null).map(k=>[k,String(state.slots[k])]));
+ if(preference)slots.preference=preference.value;
  const payload={caseId:state.caseId,phone:e.phone,line:e.line,sourceId:e.id,customerName:pi.customerName,address:pi.address,municipality:state.slots.location,locationDetails:String(state.slots.locationDetails||''),slots,
   quote:{entryId:own.entry.id,priceCop:own.entry.priceCop,scheduleHash:BUSINESS_PRICE_HASH,mid:own.row.mid,sourceId:own.q.sourceId,deliveredAt:iso(own.row.firstDeliveryAt),acceptedAt:iso(e.at),acceptanceId:e.id},
-  sources:{customerName:pi.nameSource,address:pi.addressSource,acceptance:{...source(e),phone:e.phone,line:e.line,fromMe:false,forwarded:false}}};
+  sources:{customerName:pi.nameSource,address:pi.addressSource,...(preference?{preference:preference.source}:{}),acceptance:{...source(e),phone:e.phone,line:e.line,fromMe:false,forwarded:false}}};
  const key=prefix+state.caseId,existing=get(s,key),hash=registrationHash(payload);
  if(existing){if(existing.requestHash!==hash)throw Error('PROGRAM_CASE_ALREADY_RESERVED');return {state,observed:true,observedState:'PROGRAM_REGISTRATION_PENDING'};}
  const summaryOutboxId=preprovided?null:pi.promptId;

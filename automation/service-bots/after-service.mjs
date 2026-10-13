@@ -58,7 +58,7 @@ export function afterServiceKind(text){
     !/\b(?:precio|cotizacion|pago|transferencia|comprobante|datos|direccion|identidad|disponibilidad)\b/.test(t)&&
     (/^(?:por favor\s+)?verificacion[.!? ]*$/.test(t)||/\b(?:servicio|tratamiento|fumigacion|visita|control de plagas)\b/.test(t));
   const warranty=affirmed(t,/\bgarantia\b/g)&&
-    (/^(?:por favor\s+)?garantia[.!? ]*$/.test(t)||/\b(?:solicito|solicitar|necesito|requiero|reclamar|aplicar|hacer efectiva|es por|por la)\b[^.!?]*\bgarantia\b/.test(t));
+    (/^(?:por favor\s+)?garantia[.!? ]*$/.test(t)||/\b(?:solicito|solicitamos|solicitar|necesito|necesitamos|requiero|requerimos|pedimos|reclamamos|reclamar|aplicar|hacer efectiva|es por|por la)\b[^.!?]*\bgarantia\b/.test(t));
   const kinds=[reinforcement&&'reinforcement',verification&&'verification',warranty&&'warranty'].filter(Boolean);
   if(!kinds.length)return null;
   if(affirmed(t,newService))return 'ambiguous-followup';
