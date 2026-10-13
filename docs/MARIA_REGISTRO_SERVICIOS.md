@@ -1,5 +1,21 @@
 # Registro propio de servicios nuevos de María
 
+## Registro literal y continuación instalados — 13/10/2026
+
+María instaló `0219be952b7ae0b900956d0a388afe61f17cb222`, Dokploy DONE en 3 s; Tenaxis Backend instaló `cbf5adaf3dbf24989bb09452b0b9ceaa146c2922`, DONE en 3 min 44 s. Se conservaron el actor, alcance, precio aprobado y vencimiento máximo del 07/11/2026 a las 16:56:52.680Z. El Backend usa la rama propia `codex/maria-own-order-registration-20261008`; las otras aplicaciones no se desplegaron.
+
+Comprobación de las API propias a las 16:26:25Z: guardias nuevas presentes, registro habilitado, un recibo SAVED y cero registros pendientes, inciertos o en revisión. BF23DF14 conserva identidad, hash y creador originales. La lectura actual del contacto lo observa NUEVO sin técnico ni agenda. Nombre, dirección y monto actuales no están incluidos en los contratos leídos y no se certifican como formulario completo. El login humano conocido no invalida esta conexión de servidor.
+
+`own-prompted-separate-name-address-standard-labels-and-native-source-v2` y `single-name-address-standard-labels-with-full-native-source-v2` admiten `Nombre:` y `Dirección:` separados y mantienen el cuerpo nativo completo como evidencia. No guardan una frase conversacional dentro del nombre, descuentos como identidad o un nombre relatado por un tercero. Datos posteriores a la aceptación y correcciones requieren la confirmación real del resumen entregado al cliente. No se añade otra aprobación de Sandra a un servicio ordinario completo.
+
+`own-saved-order-new-quoted-operation-and-customer-continuity-v1` permite continuar al mismo cliente tras una respuesta humana nueva, citada y verificada de TESA sobre técnico/disponibilidad/hora, sólo cuando se preparó esa pregunta después del recibo propio. No adopta pendientes históricos. Conserva las cortesías puras con fuentes nativas; cambios, cancelaciones, toma humana, ediciones y respuestas adicionales impiden enviar datos desactualizados. La fuente humana se relee después de las comprobaciones asíncronas y antes de reservar la salida.
+
+El acceso existente sigue creando **NUEVO**, sin programación, técnico, ejecución, pagos o garantía. La respuesta de disponibilidad se presenta como pendiente de confirmación en agenda; no se atribuye un guardado que el contrato no permite. Un error posterior de consulta conserva SAVED y no repite la creación.
+
+Las 665 pruebas del runtime y 131 del backend aprobaron, incluidos dos contratos Engine → DTO → módulo. Luna aprobó seis historias sintéticas y 25 comprobaciones con 29 respuestas reales sin fallback. El alta sintética guardó un único recibo en memoria con nombre, dirección y creador exactos; **no fue un servicio real de producción**. La comprobación de programa permanece limitada a sus API autorizadas y recibo existente; la interfaz humana de Tenaxis sigue mostrando el login conocido, sin pedir nuevamente ese acceso. Evidencia privada: `.tmp/maria-quality-20261013/`.
+
+La redacción con contexto de María ahora opera aunque `responseTargetMs=3000`. Nombre, dirección, aceptación, resumen y recibo no se reescriben mediante la IA. Hasta dos llamadas por turno y una reserva de redacción por salida; el objetivo de tres segundos no acredita tiempo de entrega. Este apartado prevalece sobre las referencias históricas siguientes a omitir siempre la segunda llamada.
+
 ## Alcance vigente: altas nuevas exclusivas de la azul — 09/10/2026 21:46Z
 
 La instrucción directa de continuar por la línea disponible mientras la roja está bloqueada está instalada sólo en María, commit `92eb9150ae0e807cfb29af5de9bd4134bcce63c8`, Dokploy DONE en 4 s. `authorized-fumigacion-blue-only-v1` activa azul `573126944997`, suspende roja `573126938721` y conserva el corte explícito `2026-10-09T21:43:05.250Z`. No reactiva la roja por un temporizador de 24 horas ni migra sus pendientes.
