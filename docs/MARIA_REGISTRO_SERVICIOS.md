@@ -1,5 +1,13 @@
 # Registro propio de servicios nuevos de María
 
+## Recorrido real y campos actuales comprobados — 13/10/2026
+
+BF23DF14, creada el 8/10 de Bogotá por María, fue contrastada desde su consulta inicial hasta la confirmación READ mediante doce mensajes nativos exactos. Cotización propia entregada/aceptada: $129.000; datos de casa, cucarachas, dos habitaciones y 50 m² reportados. La lectura actual de las 18:25:40Z confirmó nombre, teléfono, contacto, dirección, municipio, barrio, interior/piso, selección e ID de servicio, valor, observaciones y creador. Se conserva el requestHash original y la corrección humana auditada del 09/10, sin atribuirla al bot. No se registró otro caso ni se repitieron mensajes.
+
+Lector limitado instalado en Backend `f3cac8f4415d99a543914bfeac7d964977adf2c7`, DONE 3 min 35 s. `POST /receipt/current-fields`, body cerrado `{caseId, acceptanceId}`, token existente y mismos controles de actor/empresa/tenant/vencimiento. Guarda separados recibo inmutable y datos actuales de cliente, orden y dirección; devuelve nulos y diferencias sin reconstruir el registro desde el request antiguo. No acepta orderId libre ni cambia filas. Guardia `own-persisted-receipt-current-fields-readonly-v1` comprobada por API. 220 pruebas backend pasan, 18 PostgreSQL optativas omitidas; typecheck productivo aprobado. El lector no ejecuta pagos, agenda, mensajes ni correcciones.
+
+El registro actual está NUEVO/visita NUEVO/facturación UNICO, pendiente de técnico y horario; no inferir ejecución o pago. La clasificación histórica Residencial se conserva y el inmueble literal casa consta en observaciones. Campos desconocidos antes contaminados siguen null. El área está escrita como `50mts cuadrados`; se ajustó el comparador local para reconocerla sin alterar evidencia ni negocio. La vista visual autenticada y una alta real nueva después de las correcciones de hoy siguen sin acreditar. API de datos actuales y pantalla visual son fuentes distintas.
+
 ## Mapa literal de campos revisado e instalado — 13/10/2026
 
 Backend y Frontend `46965390841d4ed90a48361dbd4fa49140dc3016` instalados; guardia `literal-intake-visible-order-fields-and-known-property-type-v1` comprobada. Runtime de María `1e194e9a7564709b9ff2a425f2afe364fd919959` contiene el código revisado `65eed46`; todas las guardias propias concordaron a las 17:34:38Z. Gates: 719 runtime, 139 backend, 28 formularios y typechecks productivos aprobados. Se conserva el primer recibo, autoría, precio y vencimiento; cero altas productivas del supervisor en esta ronda. La vista autenticada del formulario permanece pendiente: instalar el Frontend y revisar código/pruebas no acredita haber leído una nueva orden en pantalla.
