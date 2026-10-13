@@ -1,8 +1,8 @@
 # Registro propio de servicios nuevos de María
 
-## Mapa literal de campos revisado; instalación parcial — 13/10/2026
+## Mapa literal de campos revisado e instalado — 13/10/2026
 
-Backend `46965390841d4ed90a48361dbd4fa49140dc3016` instalado y guardia `literal-intake-visible-order-fields-and-known-property-type-v1` comprobada. El Frontend y el runtime de la segunda ronda siguen pendientes de comprobación de instalación; no confundir la publicación de la rama con su código activo. Gates: 719 runtime, 139 backend, 28 formularios y typechecks productivos aprobados.
+Backend y Frontend `46965390841d4ed90a48361dbd4fa49140dc3016` instalados; guardia `literal-intake-visible-order-fields-and-known-property-type-v1` comprobada. Runtime de María `1e194e9a7564709b9ff2a425f2afe364fd919959` contiene el código revisado `65eed46`; todas las guardias propias concordaron a las 17:34:38Z. Gates: 719 runtime, 139 backend, 28 formularios y typechecks productivos aprobados. Se conserva el primer recibo, autoría, precio y vencimiento; cero altas productivas del supervisor en esta ronda. La vista autenticada del formulario permanece pendiente: instalar el Frontend y revisar código/pruebas no acredita haber leído una nueva orden en pantalla.
 
 | Dato de origen propio | Destino en Tenaxis | Regla |
 |---|---|---|
