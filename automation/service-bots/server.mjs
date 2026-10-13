@@ -18,6 +18,7 @@ import {evaluateOwnAi,ownAiUsage,MARIA_CONVERSATION_GUARD} from './conversationa
 import {MARIA_UNDERSTANDING_GUARD} from './maria-understanding.mjs';
 import {MIGUEL_UNDERSTANDING_GUARD} from './miguel-understanding.mjs';
 import {OWN_QUOTE_CLARIFICATION_GUARD} from './own-quote-clarification.mjs';
+import {MARIA_LITERAL_SERVICE_CONTEXT_GUARD} from './after-service.mjs';
 import {TECHNICAL_INTAKE_CONTINUITY_GUARD} from './technical-intake-continuity.mjs';
 import {restoreOwnAiSetup,installOwnAiSetup} from './ai-setup.mjs';
 import {persistMariaKnowledge,mariaKnowledgeStatus,mariaKnowledgeDocument} from './maria-knowledge.mjs';
@@ -33,6 +34,9 @@ import {restoreRetentionProofAccess,installRetentionProofAccess,retentionProofAc
 import {createRetentionDeliveryRuntime} from './retention-delivery.mjs';
 import {createRetentionEligibilityAdapter} from './retention-eligibility.mjs';
 import {createRetentionDispatchRuntime,restoreRetentionNoteAccess,installRetentionNoteAccess} from './retention-dispatch.mjs';
+
+export const HTTP_BODY_DECODING_GUARD='authenticated-byte-bounded-complete-utf8-json-v1';
+export const FUMIGACION_WEBHOOK_BODY_LIMIT=2*1024*1024;
 
 export function createDrainScheduler(config,store,runner,{blocked=()=>false,setImmediateFn=setImmediate,setIntervalFn=setInterval,clearIntervalFn=clearInterval}={}){
   const fast=config.company==='fumigacion'&&config.responseTargetMs===3000,key='verified-ingestion-drain-wake-v1';
@@ -122,9 +126,13 @@ export function createBotServer(config,store,transport,engine) {
     if(!(retentionProof?retentionProofAuthorized(config,req.headers.authorization):authorized(req.headers.authorization,ingestion?config.webhookHash:config.authHash)))return reply(401,{error:'UNAUTHORIZED'});
     if(req.method!=='POST')return reply(405,{error:'POST_REQUIRED'});
     try {
-      const bodyLimit=req.url==='/notify-chief-document'?720000:20000;
-      const journalGap=kind=>{if(req.url==='/webhook')recordIntakeIngressGap(store,config,{kind,receivedAt:serverReceivedAt,payloadHash:createHash('sha256').update(raw.slice(0,bodyLimit)).digest('hex'),byteLength:Buffer.byteLength(raw)});};
-      let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>bodyLimit){journalGap('PAYLOAD_TOO_LARGE');return reply(413,{error:'PAYLOAD_TOO_LARGE'});}}
+      const bodyLimit=req.url==='/notify-chief-document'?720000:req.url==='/webhook'&&config.company==='fumigacion'?FUMIGACION_WEBHOOK_BODY_LIMIT:20000;
+      // Decode once, after collecting bounded bytes. Decoding each network
+      // chunk separately can split one UTF-8 letter into replacement characters.
+      const chunks=[];let byteLength=0;
+      const journalGap=kind=>{if(req.url==='/webhook')recordIntakeIngressGap(store,config,{kind,receivedAt:serverReceivedAt,payloadHash:createHash('sha256').update(Buffer.concat(chunks).subarray(0,bodyLimit)).digest('hex'),byteLength});};
+      for await(const chunk of req){const bytes=Buffer.isBuffer(chunk)?chunk:Buffer.from(chunk);chunks.push(bytes);byteLength+=bytes.length;if(byteLength>bodyLimit){journalGap('PAYLOAD_TOO_LARGE');return reply(413,{error:'PAYLOAD_TOO_LARGE'});}}
+      const raw=Buffer.concat(chunks,byteLength).toString('utf8');
       let body;try{body=JSON.parse(raw);}catch{journalGap('INVALID_JSON');return reply(400,{error:'INVALID_JSON'});}
       if(retentionProof){
         if(!retentionDelivery)return reply(403,{error:'OWN_FUMIGACION_RETENTION_REQUIRED'});
@@ -202,7 +210,7 @@ export function createBotServer(config,store,transport,engine) {
       if(req.url==='/status')return reply(200,{company:config.name,bot:config.bot,enabled:config.enabled,mode:'reception-with-human-review',operationalCoverage:operationalCoverage(config),fullyAutonomous:false,intakeJournal:intakeJournalStatus(store,config),programSupervision:programSupervisionStatus(config),preventiveRetention:config.company==='fumigacion'?{guard:PREVENTIVE_RETENTION_GUARD,prepared:true,sendsEnabled:false,notesEnabled:false,required:'own-complete-both-line-history-and-separate-expiring-access',proofAccess:retentionProofAccessStatus(config),eligibilityAdapter:retentionEligibility.status(),dispatch:retentionDispatch.status(),deliveryProof:retentionDelivery.status()}:null,tesaOperations:tesaStatus(store,config),programRegistration:registrationStatus(config,store),privateNativeIdentity:privateIdentityStatus(store,config),inactivityFollowup:inactivityStatus(config,store),responseTiming:responseTimingStatus(config,store),drainIntervalMs:scheduler.intervalMs,semanticUnderstandingGuard:config.company==='fumigacion'?MARIA_UNDERSTANDING_GUARD:MIGUEL_UNDERSTANDING_GUARD,ownQuoteClarificationGuard:config.company==='fumigacion'?OWN_QUOTE_CLARIFICATION_GUARD:null,aiUsage:ownAiUsage(config,store),approvedAiKnowledge:mariaKnowledgeStatus(config,store),
         events:store.db.prepare('SELECT state,COUNT(*) n FROM events GROUP BY state').all(),outbox:store.db.prepare('SELECT state,COUNT(*) n FROM outbox GROUP BY state').all(),
         communicationGuard:'private-routing-and-media-work-v2',requestedContactGuard:'explicit-technician-contact-before-intake-v1',confirmationRecipient:config.tesaOperations?.enabled?config.tesaOperations.groupJid:questionRecipients(config,'disponibilidad-y-tecnico')[0],operationalConfirmationRecipients:config.tesaOperations?.enabled?[config.tesaOperations.groupJid]:questionRecipients(config,'disponibilidad-y-tecnico'),chiefRecipient:SANDRA,operatorRouting:config.tesaOperations?.enabled?'tesa-group-case-operations-20261008':config.operatorRouting||'sandra',privateHistoricalOperatorRouting:config.operatorRouting||'sandra',operatorRoutingGuard:'scoped-new-question-fanout-and-exact-line-answer-v1',operatorRoutingActive:operatorRoutingActive(config),chiefDocumentGuard:'fixed-chief-encrypted-hash-and-idempotency-v1',internalConversationGuard:'verified-internal-per-line-v2',chiefStatusGuard:'exact-directed-status-and-active-mode-v2',quotationQuestionGuard:'scoped-price-followup-and-existing-question-v1',internalConversationEnabled:Boolean(config.chiefOnly),customerResponsesEnabled:config.enabled,
-        socialGreetingGuard:'literal-pure-social-greeting-before-semantic-review-v1',mariaConversationGuard:config.company==='fumigacion'?MARIA_CONVERSATION_GUARD:null,mariaOperationalContinuationGuard:config.company==='fumigacion'?MARIA_PROGRAM_OPERATIONAL_CONTINUATION_GUARD:null,internalRoutingGuard:'exact-historical-question-and-no-cross-bot-dialogue-v1',retiredRecipientGuard:'current-route-no-ready-diego-send-v1',
+        socialGreetingGuard:'literal-pure-social-greeting-before-semantic-review-v1',httpBodyDecodingGuard:HTTP_BODY_DECODING_GUARD,webhookBodyLimitBytes:config.company==='fumigacion'?FUMIGACION_WEBHOOK_BODY_LIMIT:20000,mariaLiteralServiceContextGuard:config.company==='fumigacion'?MARIA_LITERAL_SERVICE_CONTEXT_GUARD:null,mariaConversationGuard:config.company==='fumigacion'?MARIA_CONVERSATION_GUARD:null,mariaOperationalContinuationGuard:config.company==='fumigacion'?MARIA_PROGRAM_OPERATIONAL_CONTINUATION_GUARD:null,internalRoutingGuard:'exact-historical-question-and-no-cross-bot-dialogue-v1',retiredRecipientGuard:'current-route-no-ready-diego-send-v1',
         customerIntakeEnabled:config.enabled,businessWritesEnabled:registrationStatus(config,store).enabled,capabilityDisclosure:'runtime-mode-and-own-registration-status-v2',chiefReadOnlyGuard:CHIEF_READ_ONLY_GUARD,mariaAutonomousIntakeGuard:config.company==='fumigacion'?MARIA_AUTONOMOUS_INTAKE_GUARD:null,customerCourtesyGuard:'gratitude-only-without-intake-or-ownership-v1',customerAdviserGuard:config.company==='fumigacion'?ADVISER_TONE_GUARD:null,
         commonAnswerGuard:config.company==='fumigacion'?'approved-source-context-and-complete-topics-v1':null,pendingFollowupGuard:config.company==='fumigacion'?'punctuation-only-own-pending-case-without-repeat-v1':null,approvedCustomerAnswerDocuments:store.approvedCustomerAnswers().length,customerActivity:customerActivity(store,config),
         controlVisitGuard:config.company==='fumigacion'?'requested-control-antecedent-before-intake-v1':null,intakePestGuard:config.company==='fumigacion'?'literal-additive-pests-and-own-source-union-v1':null,propertyScopeGuard:config.company==='fumigacion'?'single-apartment-address-and-explicit-special-scope-v1':null,

@@ -2,6 +2,7 @@ import {normalize} from './config.mjs';
 import {semanticFollowup} from './maria-understanding.mjs';
 
 export const AFTER_SERVICE_GUARD='literal-followup-kind-and-first-source-before-new-intake-v1';
+export const MARIA_LITERAL_SERVICE_CONTEXT_GUARD='own-affirmed-documents-arrival-schedule-and-product-context-before-intake-v1';
 const plain=text=>normalize(String(text??'').replace(/\b(?:https?:\/\/|www\.)[^\s<>"']+/gi,' '));
 const newService=/\b(?:otra solicitud|nuevo servicio|servicio nuevo|otro servicio|nueva fumigacion|fumigacion nueva)\b/g;
 function affirmed(text,pattern){
@@ -10,6 +11,45 @@ function affirmed(text,pattern){
     // A denied request is not a new case. Keep negation across its request verb.
     return !/\b(?:no|nunca|sin)\b(?:\s+\p{L}+){0,6}\s*$/u.test(clause)&&! /\b(?:si|quizas|tal vez|en caso de)\b/.test(clause);
   });
+}
+const documentWords='(?:facturas?|certificados?|documentos?|soportes?|fichas de seguridad|permisos?|arl)';
+const productWords='(?:geles?|gel|insecticidas?|plaguicidas?|rodenticidas?|productos?|insumos?)';
+function literalAffirmed(text,pattern){
+  return [...text.matchAll(pattern)].some(match=>{
+    const clause=text.slice(0,match.index).split(/[.!?;,]|\b(?:pero|sino)\b/).at(-1);
+    return !/\b(?:no|nunca|sin|si|quizas|tal vez|en caso de)\b/.test(clause);
+  });
+}
+// These are the sender's current requests/claims, never proof that a service,
+// document, schedule, product sale or supplier agreement exists.
+export function mariaLiteralServiceContext(e){
+  if(e?.kind!=='text'||e.fromMe||e.forwarded)return null;
+  const t=plain(e.text);
+  const documents=new RegExp('\\b'+documentWords+'\\b').test(t);
+  const productMention=new RegExp('\\b'+productWords+'\\b').test(t);
+  const contextMention=documents||/\b(?:esperando (?:su|la) llegada|esperando (?:al|a la|el|la) (?:tecnico|tecnica|fumigador|fumigadora)|agendaron|programaron|programad[oa] (?:la |el )?(?:fumigacion|visita|servicio))\b/.test(t)||productMention&&/\b(?:comprar|adquirir|ofrecemos|ofrezco|vendemos|vendo|venden)\b/.test(t);
+  const ordinaryNewRequest=literalAffirmed(t,/\b(?:quiero|necesito|requiero|busco|deseo|quisiera)\b[^.!?;,]{0,65}\b(?:fumigar|fumigacion nueva|nueva fumigacion|un servicio nuevo|una fumigacion)\b/g);
+  const quoted=/\b(?:dijo|dice|comento|comentaron|segun|mi vecin[oa]|su vecin[oa]|un tercero)\b|["“”]/.test(t);
+  const reference=()=>contextMention&&!ordinaryNewRequest?{kind:'context-reference',documentDetail:documents&&!quoted&&!/\b(?:no|nunca|sin|si|quizas|tal vez|en caso de)\b/.test(t),guard:MARIA_LITERAL_SERVICE_CONTEXT_GUARD}:null;
+  if(quoted)return reference();
+  if(documents){
+    const prospective=/\b(?:antes de|antes del|para cotizar|si (?:los |les )?contrato|si (?:contratara|contratase|fuera)|en caso de contratar|(?:no|nunca) (?:me|nos) fumigaron)\b/.test(t);
+    const request=literalAffirmed(t,new RegExp('\\b(?:necesito|requiero|solicito|solicitar|enviame|envienme|enviarnos|mandame|mandenme|entreguenme|quiero recibir|(?:me|nos) (?:envian|envia|mandan|manda|entregan|entrega))\\b[^.!?;,]{0,80}\\b'+documentWords+'\\b','g'));
+    const pending=literalAffirmed(t,new RegExp('\\b(?:(?:no|aun no|todavia no)\\s+(?:(?:me|nos)\\s+)?(?:(?:han|ha)\\s+)?(?:mandado|enviado|entregado|mandan|mandaron|envian|enviaron|entregan|entregaron)|(?:me|nos) faltan)\\b[^.!?;,]{0,70}\\b'+documentWords+'\\b','g'));
+    const nominalPending=literalAffirmed(t,new RegExp('\\b(?:tengo|tenemos) pendientes?\\b[^.!?;,]{0,60}\\b'+documentWords+'\\b|\\b(?:siguen|sigue|estan|esta) pendientes?\\b','g'));
+    const purpose=literalAffirmed(t,new RegExp('\\b(?:solo|solamente|unicamente) (?:es |seria )?para (?:el |la |un |una )?'+documentWords+'\\b','g'));
+    if(purpose)return {kind:'documents-capability',guard:MARIA_LITERAL_SERVICE_CONTEXT_GUARD};
+    if(!prospective&&(request||pending||nominalPending||new RegExp('^(?:por favor )?'+documentWords+'[.! ]*$').test(t)))return {kind:'documents-request',guard:MARIA_LITERAL_SERVICE_CONTEXT_GUARD};
+    if(/[?¿]/.test(e.text)||prospective&&request||/\b(?:entregan|emiten|dan|incluyen|ofrecen)\b/.test(t))return {kind:'documents-capability',guard:MARIA_LITERAL_SERVICE_CONTEXT_GUARD};
+  }
+  if(literalAffirmed(t,/\b(?:estoy|estamos|sigo|seguimos) esperando (?:(?:su|la) llegada|(?:al|a la|el|la) (?:tecnico|tecnica|fumigador|fumigadora)|que llegue (?:el|la) (?:tecnico|tecnica|fumigador|fumigadora))\b/g))return {kind:'arrival',guard:MARIA_LITERAL_SERVICE_CONTEXT_GUARD};
+  if(literalAffirmed(t,/\b(?:(?:ya )?(?:me|nos) (?:agendaron|programaron)|ya tengo programad[oa] (?:la |el |una |un )?(?:fumigacion|servicio|visita))\b/g))return {kind:'reported-existing-schedule',guard:MARIA_LITERAL_SERVICE_CONTEXT_GUARD};
+  if(productMention){
+    const offer=literalAffirmed(t,/\b(?:les ofrecemos|les ofrezco|ofrecemos|ofrezco|vendemos|vendo|comercializamos|somos proveedores|soy proveedor)\b/g);
+    if(offer)return {kind:literalAffirmed(t,/\b(?:necesito|requiero|solicito)\b[^.!?;,]{0,60}\b(?:confirmacion|decision|respuesta|aprobar|aceptar)\b/g)?'supplier-decision':'supplier-offer',guard:MARIA_LITERAL_SERVICE_CONTEXT_GUARD};
+    if(literalAffirmed(t,/\b(?:(?:necesito|quiero|quisiera|requiero) (?:comprar|adquirir)|venden|comercializan|puedo comprar|pueden venderme)\b/g))return {kind:'product-commercial-question',guard:MARIA_LITERAL_SERVICE_CONTEXT_GUARD};
+  }
+  return reference();
 }
 export function afterServiceKind(text){
   const t=plain(text);
