@@ -114,6 +114,7 @@ test('a quote from a foreign phone or own different line cannot restore the acti
 test('a forwarded source or forwarded quoting turn is not a direct own-customer context restoration',async()=>{
  for(const variant of ['source','current']){const f=fixture();try{
   const claim=await f.turn(complaint,variant==='source'?{forwarded:true}:{});f.deliver(claim);const state=f.s.conversation(claim.phone).state;delete state.requestedAfterServiceReview;f.s.saveConversation(claim.phone,state);f.deliver(await f.turn('Buenas tardes'));
+  if(variant==='current'){const legacy=f.s.conversation(claim.phone).state;delete legacy.requestedAfterServiceReview;f.s.saveConversation(claim.phone,legacy);}
   const e=await f.turn('Me confirmas porfa',{quotedId:claim.id,...(variant==='current'?{forwarded:true}:{})});assert.equal(f.s.conversation(e.phone).state.requestedAfterServiceReview,undefined);
  }finally{f.s.close();}}
 });

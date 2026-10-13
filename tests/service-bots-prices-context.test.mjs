@@ -49,7 +49,7 @@ test('facts supplied together with a price question remain literal and are not r
   const f=fixture();try{
     await f.process('WITHQUESTION','Tengo cucarachas en mi casa de 3 habitaciones en Bello. ¿Cuánto cuesta?');
     assert.equal(f.s.conversation(phone).state.slots.rooms,'3 habitaciones');assert.equal(f.s.conversation(phone).state.slots.location,'bello');
-    assert.match(f.response('WITHQUESTION').text,/Una asesora continuará/);assert.doesNotMatch(f.response('WITHQUESTION').text,/cuántas|qué plaga|qué tipo|municipio/i);
+    assert.match(f.response('WITHQUESTION').text,/cotización aún necesita confirmación/);assert.doesNotMatch(f.response('WITHQUESTION').text,/cuántas|qué plaga|qué tipo|municipio/i);
     await f.process('ADDEDFLOOR','Es en el primer piso');
     assert.equal(f.response('ADDEDFLOOR'),undefined);assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,1);
   }finally{f.s.close();}
@@ -103,7 +103,7 @@ test('accepted-only or withdrawn quotations cannot support a natural confirmatio
       f.s.importKnowledge(catalog());await f.process('UNDELPRICE',facts);
       if(withdrawn){f.s.delivery(f.response('UNDELPRICE').mid,f.c.lines[1].phone,'READ');f.s.importKnowledge({...catalog({active:false}),at:'2026-10-05T11:00:00.000Z'});}
       await f.process('UNDELACCEPT','Sí');
-      if(withdrawn)assert.match(f.response('UNDELACCEPT').text,/Una asesora continuará/);else assert.equal(f.response('UNDELACCEPT'),undefined);
+      if(withdrawn)assert.match(f.response('UNDELACCEPT').text,/cotización aún necesita confirmación/);else assert.equal(f.response('UNDELACCEPT'),undefined);
       assert.equal(f.s.conversation(phone).state.quotedPrice.accepted,undefined);
     }finally{f.s.close();}
   }

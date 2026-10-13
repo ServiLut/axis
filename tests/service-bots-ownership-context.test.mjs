@@ -421,7 +421,7 @@ test('a new pest-control greeting requests the quotation intake together, withou
   try {
     const first=await f.process({text:'Buenos días'});
     const reply=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(first.id+':reply').body);
-    assert.match(reply,/Hola, soy María Ángel/);assert.match(reply,/Qué plaga/);
+    assert.match(reply,/^Buen día, soy María Ángel\./);assert.match(reply,/qué plaga/i);
     assert.match(reply,/tipo de inmueble/);assert.match(reply,/habitaciones o metros cuadrados/);
     assert.match(reply,/municipio y barrio o vereda/);
     assert.doesNotMatch(reply,/139|300|ISO|insecticida|veneno|Sandra|Diego|técnico/i);
@@ -471,7 +471,7 @@ test('neighborhood quotation facts request the municipality before a single quot
     assert.match(question.text,/66 m²/);assert.match(question.text,/cucarachas y hormigas/);
     assert.match(question.text,/Robledo/);assert.doesNotMatch(question.text,/139|300|horario disponible/);
     const reply=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(municipality.id+':reply').body);
-    assert.match(reply,/Una asesora continuará contigo/);assert.doesNotMatch(reply,/día|horaria|confirmada|139|300/i);
+    assert.match(reply,/cotización aún necesita confirmación/);assert.doesNotMatch(reply,/día|horaria|confirmada|139|300/i);
     assert.equal(f.s.conversation(answer.phone).state.slots.price,undefined);
     assert.equal(f.s.conversation(answer.phone).state.slots.location,'medellin');
     assert.equal(f.s.conversation(answer.phone).state.intakeSources.location.sourceId,municipality.id);

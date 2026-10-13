@@ -20,7 +20,7 @@ function fixture(){
 test('a warm first intake preserves facts and later questions do not repeat the welcome',async()=>{
  const f=fixture();try{
   await f.process('ADVISER001','Tengo cucarachas en Medellín');
-  assert.match(f.reply('ADVISER001').text,/Con gusto te ayudo/);assert.match(f.reply('ADVISER001').text,/tipo de inmueble/);assert.doesNotMatch(f.reply('ADVISER001').text,/qué plaga|municipio/i);
+  assert.match(f.reply('ADVISER001').text,/^Hola, soy María Ángel\./);assert.match(f.reply('ADVISER001').text,/tipo de inmueble/);assert.doesNotMatch(f.reply('ADVISER001').text,/qué plaga|municipio/i);
   await f.process('ADVISER002','Apartamento');assert.match(f.reply('ADVISER002').text,/habitaciones o metros cuadrados/);assert.doesNotMatch(f.reply('ADVISER002').text,/Con gusto te ayudo|tipo de inmueble|qué plaga|municipio/i);
  }finally{f.s.close();}
 });
@@ -37,7 +37,7 @@ test('accepted delivered quote advances to preference without promising an appoi
   await f.process('ADVISER004','Ratas en casa de 3 habitaciones en Medellín');f.s.delivery(f.reply('ADVISER004').mid,f.c.lines[0].phone,'DELIVERED');
   await f.process('ADVISER005','Sí, por favor');assert.match(f.reply('ADVISER005').text,/día y franja/);
   await f.process('ADVISER006','Mañana en la tarde');const text=f.reply('ADVISER006').text;
-  assert.match(text,/Con gusto/);assert.match(text,/horario aún no está confirmado/);assert.doesNotMatch(text,/reservad|servicio confirmad|agendado|Diego|Hilary|Sandra/i);
+  assert.match(text,/horario.*aún no está confirmado/);assert.doesNotMatch(text,/Con gusto|reservad|servicio confirmad|agendado|Diego|Hilary|Sandra|asesora continuará/i);
   assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,1);assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE internal=1').get().n,2);
   await f.process('ADVISER007','Mañana en la tarde');assert.equal(f.reply('ADVISER007'),undefined);
  }finally{f.s.close();}
@@ -52,8 +52,47 @@ test('personal exception stays in review without inventing safety or sending an 
 test('documents receive a helpful acknowledgement and preserve the pending question without repeated intake',async()=>{
  const f=fixture();try{
   await f.process('ADVISER009','Ya nos fumigaron y necesito los documentos del servicio.');const text=f.reply('ADVISER009').text;
-  assert.match(text,/Con gusto/);assert.match(text,/documentos/);assert.doesNotMatch(text,/plaga|inmueble|habitaciones|municipio|enviados|listos/i);
+  assert.match(text,/documentos/);assert.match(text,/no tengo confirmado su envío/);assert.doesNotMatch(text,/Con gusto|plaga|inmueble|habitaciones|municipio|enviados|listos/i);
   await f.process('ADVISER010','Necesito el certificado');assert.equal(f.reply('ADVISER010'),undefined);
+ }finally{f.s.close();}
+});
+
+test('Maria identifies a first ordinary reply once and later precise questions do not add a new introduction',async()=>{
+ const f=fixture();try{
+  await f.process('TONE_IDENT_FIRST','Cucarachas en Medellín');
+  assert.equal((f.reply('TONE_IDENT_FIRST').text.match(/soy María Ángel/g)||[]).length,1);
+  await f.process('TONE_IDENT_NEXT','Casa');
+  const later=f.reply('TONE_IDENT_NEXT').text;
+  assert.match(later,/habitaciones o metros cuadrados/);assert.doesNotMatch(later,/Hola|María Ángel|Con gusto|municipio|plaga/i);
+ }finally{f.s.close();}
+});
+
+test('pending states describe the known result without internal storage, staff routing or invented completion',()=>{
+ const sources=['Recibí tu pregunta. Tu solicitud sigue pendiente de confirmación.','Con gusto. Revisaremos tu solicitud de documentos.','Con gusto. Tu solicitud de garantía quedó pendiente de revisión.','Gracias. Una asesora continuará contigo para confirmar el horario del servicio.'];
+ for(const reply of sources){const rendered=adviserReply('fumigacion',{reply});assert.match(rendered,/pendiente|aún/i);assert.doesNotMatch(rendered,/guardad|ticket|equipo|asesora continuará|Sandra|Diego|Hilary|garantía aprobada|enviado|reservado|programado/i);}
+});
+
+test('literal personal registration summaries and approved answers remain exact despite first-reply styling',()=>{
+ const summary='Registraré el servicio de cucarachas por $129.000 en Calle Sintética, a nombre de Persona Sintética. ¿Confirmas que estos datos son correctos?';
+ assert.equal(adviserReply('fumigacion',{reply:summary,state:{programIntake:{stage:'confirm'}}},{firstReply:true}),summary);
+ const receipt='Tu solicitud quedó registrada. El horario sigue pendiente.';
+ assert.equal(adviserReply('fumigacion',{reply:receipt,state:{programIntake:{stage:'registered'}}},{firstReply:true}),receipt);
+ const approved='Texto aprobado con precio literal $129.000 y su alcance.';
+ assert.equal(adviserReply('fumigacion',{reply:approved},{firstReply:true,approvedAnswer:true}),approved);
+});
+
+test('a pending reinforcement keeps its unverified conditions rather than claiming only the appointment time is missing',()=>{
+ const reply=adviserReply('fumigacion',{reply:'Con gusto. Tu solicitud de refuerzo quedó pendiente de revisión.'});
+ assert.match(reply,/solicitud de refuerzo/);assert.match(reply,/falta confirmar cómo atenderla/);
+ assert.doesNotMatch(reply,/horario|aprobado|gratis|elegible|pago|agendado|registrado/i);
+});
+
+test('a pure greeting identifies Maria and requests the original intake facts in one brief paragraph',async()=>{
+ const f=fixture();try{
+  await f.process('TONE_PURE_GREETING','Buenas tardes');const reply=f.reply('TONE_PURE_GREETING').text;
+  assert.match(reply,/^Buenas tardes, soy María Ángel\./);assert.match(reply,/plaga.*prevención/);assert.match(reply,/tipo de inmueble.*habitaciones o metros cuadrados/);assert.match(reply,/municipio y barrio o vereda/);
+  assert.doesNotMatch(reply,/\n|•|Con gusto|Sandra|Diego|asesora|guardad|ticket/i);
+  assert.equal(f.s.conversation(phone).state.initialIntakeAllRequested,true);
  }finally{f.s.close();}
 });
 test('staff takeover suppresses even a warmly phrased approved price',async()=>{

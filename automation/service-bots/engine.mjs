@@ -8,7 +8,7 @@ import {CONVERSATIONAL_AI_GUARD,MIGUEL_CONVERSATIONAL_AI_GUARD,conversationalAiG
 import {ownIntent} from './maria-understanding.mjs';
 import {ownMiguelIntent,miguelLiteralSlotAllowed} from './miguel-understanding.mjs';
 import {literalPaintingRequest} from './technical-scope.mjs';
-import {afterServiceKind,afterServiceRequest,afterServiceDecision,explicitNewService,mariaLiteralServiceContext} from './after-service.mjs';
+import {afterServiceKind,afterServiceRequest,afterServiceDecision,explicitNewService,mariaLiteralServiceContext,literalOwnAfterServiceRequest,MARIA_LITERAL_SERVICE_CONTEXT_GUARD} from './after-service.mjs';
 import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,literalIntakeTextWithoutRegistrationFields,literalProgramPreference,prepareRegisteredTesaContinuation} from './maria-program.mjs';
 import {createHash} from 'node:crypto';
 import {tesaOperationalTopic} from './tesa-config.mjs';
@@ -16,9 +16,47 @@ import {prepareTesaQuestion,initializeTesaStore} from './tesa-operations.mjs';
 import {assertOperationalLineScope,operationalLineAllowed} from './line-scope.mjs';
 import {ownQuoteClarification,OWN_QUOTE_CLARIFICATION_GUARD} from './own-quote-clarification.mjs';
 import {explicitNewTechnicalCase,technicalIntakeMetaQuestion,technicalIntakeClarificationReply,technicalIntakeLiteralCorrection} from './technical-intake-continuity.mjs';
+import {literalIntakeDimensions,MARIA_DIMENSIONS_GUARD} from './intake-dimensions.mjs';
 
 export const MARIA_AUTONOMOUS_INTAKE_GUARD='literal-ordinary-intake-without-staff-delegation-v1';
-export const MARIA_AFTER_SERVICE_CONTINUITY_GUARD='own-same-case-quoted-postservice-context-and-priority-preservation-v1';
+export const MARIA_AFTER_SERVICE_CONTINUITY_GUARD='own-same-case-stored-or-quoted-postservice-context-and-priority-preservation-v2';
+
+function ownCaseLiteralSources(store,config,state,event,sourceId=null){
+ if(config.company!=='fumigacion'||!state.caseId?.startsWith(config.company+':'))return [];
+ const first=store.db.prepare('SELECT rowid,at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(state.caseId.slice(config.company.length+1),event.phone,event.line);
+ const current=store.db.prepare('SELECT rowid FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(event.id,event.phone,event.line);
+ if(!first||!current)return [];
+ const rows=[];
+ if(sourceId)rows.push(...store.db.prepare('SELECT rowid,id,at,body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').all(sourceId,event.phone,event.line));
+ else{
+  let cursor=first.rowid-1;
+  const pageQuery=store.db.prepare('SELECT rowid,id,at,body FROM events WHERE phone=? AND line=? AND from_me=0 AND rowid>? AND rowid<? ORDER BY rowid LIMIT 128');
+  while(rows.length<=4096){
+   const page=pageQuery.all(event.phone,event.line,cursor,current.rowid);if(!page.length)break;rows.push(...page);cursor=page.at(-1).rowid;if(page.length<128)break;
+  }
+  if(rows.length>4096){state.storedContextCoverageIncomplete={guard:MARIA_AFTER_SERVICE_CONTINUITY_GUARD,sourceId:event.id,firstSourceId:state.caseId.slice(config.company.length+1),maximumOwnRows:4096,observedOwnRows:rows.length,...(state.storedContextCoverageIncomplete?.notifiedSourceId?{notifiedSourceId:state.storedContextCoverageIncomplete.notifiedSourceId}:{})};rows.length=4096;}
+ }
+ const sources=[];
+ for(const row of rows){
+  if(row.rowid<first.rowid||row.rowid>current.rowid)continue;
+  const source=store.open(row.body);
+  if(source.id!==row.id||source.at!==row.at||source.phone!==event.phone||source.line!==event.line||source.fromMe!==false||source.forwarded||source.kind!=='text'||source.at<first.at||source.at>event.at||sourceId&&source.id!==sourceId)continue;
+  sources.push(source);
+ }
+ return sources;
+}
+function ownCaseLiteralFollowup(store,config,state,event,sourceId=null){
+ for(const source of ownCaseLiteralSources(store,config,state,event,sourceId)){
+  const reference=literalOwnAfterServiceRequest(source);if(!reference)continue;
+  const related=store.db.prepare('SELECT state,body FROM questions WHERE phone=? AND case_id=?').all(event.phone,state.caseId).filter(q=>store.open(q.body).source===source.id);
+  if(related.length&&!related.some(q=>['PENDING','ANSWER_REVIEW'].includes(q.state)))continue;
+  return {reference,source};
+ }
+ return null;
+}
+function ownCaseProductInquiry(store,config,state,event){return ownCaseLiteralSources(store,config,state,event).find(source=>mariaLiteralServiceContext(source)?.kind==='product-commercial-question')||null;}
+function explicitServiceAfterProduct(text){const t=normalize(text);return !/[?¿"“”]/.test(text)&&!/\b(?:no|nunca|si|quizas|tal vez|en caso de)\b/.test(t)&&/^(?:quiero|necesito|requiero|deseo|busco) (?:fumigar|una fumigacion|un servicio de (?:fumigacion|control)|un control de plagas)\b/.test(t);}
+function literalOwnNewService(source){return source.kind==='text'&&!source.fromMe&&!source.forwarded&&!/["“”]|\b(?:dijo|dice|segun|mi vecin[oa]|un tercero)\b/.test(normalize(source.text))&&explicitNewService(source.text)&&!afterServiceRequest(source);}
 
 const groupField=value=>String(value??'').replace(/https?:\/\/\S+|www\.\S+|[\w.+-]+@[\w.-]+/g,'[referencia reservada]').replace(/\b(?:57)?3\d{9}\b/g,'[teléfono reservado]').replace(/\b(?:calle|carrera|avenida|transversal|diagonal|cl|cra|cr|kr|av|trv|tv|dg)\.?\s*\d[^;\n]*|#\s*\d[^;\n]*/gi,'[dirección reservada]').replace(/\b\d{6,}\b/g,'[referencia reservada]').slice(0,130);
 export function routeCaseQuestion(store,config,request){
@@ -91,6 +129,7 @@ export function extractSlots(text,company) {
     // An explicit square exponent is required for mt/mts abbreviations. Keep
     // the literal source; bare metres remain ambiguous for automatic pricing.
     slots.area=text.match(/\b\d{1,5}(?:[.,]\d{1,2})?\s*(?:m(?:ts?)?\s*(?:²|2)|m(?:ts?)?\.?\s*cuadrados?|metros?\s*cuadrados?)(?=$|[\s.,;:)])/i)?.[0];
+    slots.dimensions=literalIntakeDimensions(text)?.literal;
     slots.mattresses=text.match(/\b(?:\d{1,3}|un|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+colch[oó](?:n|nes)\b/i)?.[0];
     slots.affectedFurniture=/\b(?:bases? de cama|sofas?|muebles?)\b/.test(t)?'muebles mencionados; alcance por verificar':undefined;
     slots.roomScale=/\b(?:habitaciones?|cuartos?|piezas?)\s*\(?\s*pequen[oa]s?\b/.test(t)?'pequeños':/\b(?:habitaciones?|cuartos?|piezas?)\s*\(?\s*grandes?\b/.test(t)?'grandes':undefined;
@@ -228,6 +267,8 @@ function mariaLiteralContextDecision(state,e,context){
  if(context.kind==='context-reference')return {state:preserved,observed:true,observedState:'OBSERVED_NONASSERTED_SERVICE_CONTEXT'};
  if(context.kind==='supplier-offer')return directed(e.text,'María Ángel')?{state:preserved,courtesy:true,reply:'Gracias por compartir tu propuesta.'}:{state:preserved,observed:true,observedState:'OBSERVED_SUPPLIER_OFFER'};
  if(context.kind==='documents-request')return {state:preserved,reviewTopic:'service-documents',reviewConditions:conditions,review:'La persona solicita documentos o informa que no los recibió. Su mensaje no acredita prestación del servicio, existencia, emisión, autorización ni entrega de esos documentos; hay que contrastar el antecedente y los soportes autorizados del mismo caso.',reviewQuestion:'¿Qué solicitud y documentos autorizados comprobados corresponden a este caso?',reply:'Con gusto. Revisaremos tu solicitud de documentos.'};
+ if(context.kind==='existing-quotation-reference')return {state:preserved,reviewTopic:'existing-quotation',reviewConditions:conditions,review:'La persona hace referencia a una cotización anterior o a un añadido para esa misma solicitud. No consta aquí su precio, alcance, aceptación ni reserva; hace falta contrastar la cotización propia del mismo caso.',reviewQuestion:'¿Qué cotización previa y alcance adicional verificados corresponden al mismo caso?',reply:'Conservé tu referencia a la cotización anterior. Necesitamos verificar su alcance para continuar.'};
+ if(context.kind==='product-commercial-question')preserved.requestedProductInquiry={sourceId:e.id,at:e.at,question:e.text.slice(0,300)};
  if(context.kind==='arrival')return {state:preserved,reviewTopic:'service-followup',reviewConditions:conditions,review:'La persona informa que está esperando la llegada. Hace falta contrastar el antecedente y comprobar el estado actual; no consta una hora de llegada verificada.',reviewQuestion:'¿Cuál es el estado comprobado de esta visita y la hora de llegada?',reply:'Entiendo que estás esperando la visita. Aún no tengo una hora de llegada confirmada.'};
  if(context.kind==='reported-existing-schedule')return {state:preserved,reviewTopic:'disponibilidad-y-tecnico',reviewConditions:conditions,review:'La persona relata que ya la agendaron. Su mensaje no acredita registro, horario, técnico ni ejecución; hay que comprobar la programación del mismo caso sin abrir otra cotización o reserva.',reviewQuestion:'¿Qué programación, horario y técnico comprobados corresponden a esta visita?',reply:'Entiendo que ya te indicaron una programación. Revisaremos los datos de esa visita.'};
  if(context.kind==='supplier-decision')return {state:preserved,reviewTopic:'supplier-offer',reviewConditions:conditions,review:'La persona presenta una propuesta comercial y pide una decisión explícita. No consta aceptación, acuerdo, compra ni autorización; hace falta revisar la propuesta en su propio ámbito.',reviewQuestion:'¿Qué respuesta autorizada corresponde a esta propuesta comercial?',reply:'Gracias por compartir tu propuesta. Su aceptación aún necesita revisión.'};
@@ -242,7 +283,7 @@ function retainPromptedLocation(state,e){
   if(!text||text.length>240||/^(?:no|quizas|tal vez|posiblemente)\b/.test(t))return;
   // Preserve the sender's location words, including a short answer in a rapid
   // batch. A neighborhood name alone never supplies an inferred municipality.
-  if(!/\b(?:villa|barrio|vereda|calle|carrera|unidad|urbanizacion|robledo|medellin|bello|envigado|itagui|sabaneta|santa helena)\b/.test(t)&&!/^(?:manrique|enciso)[.! ]*$/.test(t))return;
+  if(!/\b(?:villa|barrio|vereda|calle|carrera|unidad|urbanizacion|robledo|medellin|bello|envigado|itagui|sabaneta|santa helena)\b/.test(t)&&!/^(?:manrique|enciso|altos de cala(?:zans|sanz))[.! ]*$/.test(t))return;
   const previous=state.intakeLocationParts|| (state.slots.locationDetails?[{text:state.slots.locationDetails,sourceId:null,at:null}]:[]);
   const part={text,sourceId:e.id??null,at:Number.isSafeInteger(e.at)?e.at:null};
   const parts=[...previous.filter(p=>normalize(p.text)!==t),part].slice(-3);
@@ -271,6 +312,7 @@ export function customerDecision(company,state,e,analysis={}) {
   if(currentLiteralContext&&!contextNeedsPersonalPriority(e.text))return {...mariaLiteralContextDecision(state,e,currentLiteralContext),literalServiceContext:true};
   const literalText=textWithoutLinks(company==='fumigacion'?literalIntakeTextWithoutRegistrationFields(e.text):e.text).trim(),t=normalize(literalText);
   const literal=literalFields(state,e,company),existing={...state.slots,...literal};
+  if(company==='fumigacion'&&!literalIntakeTurn(e)){delete literal.dimensions;delete existing.dimensions;if(state.slots.dimensions)existing.dimensions=state.slots.dimensions;}
   let understood=parseUnderstanding(analysis,e.text,company);
   const directOwnAi=[CONVERSATIONAL_AI_GUARD,MIGUEL_CONVERSATIONAL_AI_GUARD].includes(analysis?.guard);
   if(directOwnAi){
@@ -294,6 +336,12 @@ export function customerDecision(company,state,e,analysis={}) {
     if(size){next.slots.area=size;next.intakeSources={...next.intakeSources,area:{sourceId:e.id,at:e.at,context:'prior-size-question',unitExpanded:false}};}
   }
   if(company==='fumigacion')retainPromptedLocation(next,e);
+  if(company==='fumigacion'&&state.requestedProductInquiry&&!next.requestedAfterServiceReview&&literalIntakeTurn(e)&&!contextNeedsPersonalPriority(e.text)&&(Object.keys(literal).length||/^(?:solo|solamente|unicamente) (?:el )?producto[.! ]*$/.test(t))){
+    if(/^(?:solo|solamente|unicamente) (?:el )?producto[.! ]*$/.test(t))return {...mariaLiteralContextDecision(next,{...e,id:state.requestedProductInquiry.sourceId,at:state.requestedProductInquiry.at,text:state.requestedProductInquiry.question},{kind:'product-commercial-question',guard:MARIA_LITERAL_SERVICE_CONTEXT_GUARD}),reviewSource:state.requestedProductInquiry.sourceId};
+    const asked=state.productPurposeClarification;
+    next.productPurposeClarification=asked||{sourceId:e.id,productSourceId:state.requestedProductInquiry.sourceId,at:e.at};
+    return {state:next,productPurposeClarification:true,reply:asked?(next.slots.dimensions?'Conservé las medidas '+next.slots.dimensions+'. Aún falta aclarar si buscas el servicio o información sobre el producto.':'Conservé los datos. Aún falta aclarar si buscas el servicio o información sobre el producto.'):'¿Buscas un servicio de control de plagas o información sobre el producto?'};
+  }
   if(e.kind==='call')return {state:{...next,lastCallEvent:e.id},observed:true};
   if(e.kind!=='text')return {state:next,review:'El cliente envió '+e.kind+'. El contenido original necesita revisión.',reply:e.kind==='audio'?'Recibí tu audio. Te atenderemos en cuanto revisemos su contenido.':'Recibí el archivo. Revisaremos su contenido para continuar contigo.'};
   if(postServiceDocuments(e.text)&&!faqNeedsPersonalReview(e.text)&&!paymentInquiry(e.text))return {state:{...next,slots:{...state.slots}},reviewTopic:'service-documents',reviewConditions:{kind:'reported-post-service-documents',directCustomerReport:!e.forwarded},review:'La persona solicita documentos de un servicio que relata como realizado. El mensaje no acredita registro, ejecución ni existencia o autorización de documentos; hay que contrastar el servicio y revisar qué soportes pueden entregarse.',reviewQuestion:'¿Qué servicio y soportes autorizados comprobados corresponden a esta solicitud?',reply:'Con gusto. Una asesora continuará contigo para revisar los documentos que necesitas.'};
@@ -350,13 +398,17 @@ export function customerDecision(company,state,e,analysis={}) {
     if(preference){next.slots.preference=preference;next.intakeSources={...next.intakeSources,preference:{sourceId:e.id,at:e.at,context:'literal-request-not-confirmed-availability'}};}
   }
   const mattressService=company==='fumigacion'&&normalize(next.slots.service).includes('chinches');
+  const dimensions=company==='fumigacion'&&literalIntakeDimensions(next.slots.dimensions);
+  const nonResidentialDimensions=dimensions?.explicitMetricUnits&&!['casa','apartamento'].includes(normalize(next.slots.site));
   const fields=company==='fumigacion'?['service','site',mattressService?'mattresses':'size','location']:['service','detail','location'];
-  const missing=fields.find(f=>f==='size'?!next.slots.area&&!next.slots.rooms:!next.slots[f]||company==='fumigacion'&&f==='service'&&normalize(next.slots.service)==='fumigacion');
+  const missing=fields.find(f=>f==='size'?!next.slots.area&&!next.slots.rooms&&!nonResidentialDimensions:!next.slots[f]||company==='fumigacion'&&f==='service'&&normalize(next.slots.service)==='fumigacion');
   const questions={service:company==='fumigacion'?'¿Qué plaga deseas tratar o buscas un servicio preventivo?':'¿Qué equipo necesitas revisar?',site:'¿En qué tipo de inmueble necesitas el servicio?',size:'¿Cuántas habitaciones o metros cuadrados tiene el lugar?',mattresses:'¿Cuántos colchones están afectados? Cuéntame también si hay chinches en bases de cama u otros muebles.',detail:'¿Qué falla presenta el equipo?',location:'¿En qué municipio y barrio necesitas el servicio?'};
   if(/[?¿]/.test(literalText)&&/\b(eso|lo anterior|lo que (?:me )?(?:dij|coment|indic|explic)|me habian|me hab[ií]as|mismo (?:precio|horario|servicio)|como qued|que qued)\w*/.test(t))
     return {state:next,reviewTopic:'previous-communication',review:'El cliente pregunta por algo comunicado antes. Hay que relacionar su pregunta con el contexto guardado y el servicio correcto antes de contestar.',reply:'Gracias. Revisaremos lo que ya conversamos para responder tu pregunta con claridad.'};
   if(isCustomerQuestion(e.text)&&!(company==='fumigacion'&&(quotationInquiry(e.text)||ordinaryAvailability)&&!ambiguousIntake(e.text)))
     return {state:literalIntakeTurn(e,company)?next:{...next,slots:{...state.slots}},reviewTopic:!e.forwarded&&quotationInquiry(e.text)?'cotizacion-verificada':'customer-question',review:'La persona hizo una pregunta concreta. Hace falta revisar sus antecedentes y confirmar la respuesta para este servicio.',reviewQuestion:'¿Qué respuesta verificada corresponde a esta pregunta?',reply:'Recibí tu pregunta. Tu solicitud sigue pendiente de confirmación.'};
+  if(missing==='size'&&dimensions)return {state:next,dimensionsClarification:true,reply:dimensions.explicitMetricUnits?'Conservé las medidas '+dimensions.literal+'. ¿Cuántos metros cuadrados en total necesitas tratar?':'Conservé las medidas '+dimensions.literal+'. ¿Son largo por ancho en metros y corresponden al espacio que necesitas tratar?'};
+  if(!missing&&nonResidentialDimensions)return {state:next,reviewTopic:'special-quotation',reviewConditions:{kind:'literal-special-property-dimensions',guard:MARIA_DIMENSIONS_GUARD},review:'La persona indicó un inmueble no residencial y sus dimensiones literales. No se calculó superficie ni hay precio aprobado; necesita alcance y cotización propios del mismo caso.',reviewQuestion:'¿Qué alcance y cotización propios corresponden a este inmueble y las medidas indicadas?',reply:'Conservé las medidas '+dimensions.literal+'. La cotización de este inmueble necesita verificar su alcance.'};
   if(missing&&!next.asked.includes(missing)){next.asked.push(missing);return {state:next,reply:company==='fumigacion'&&missing==='location'&&next.slots.locationDetails?'¿En qué municipio necesitas el servicio? Ya conservé la ubicación que me indicaste.':questions[missing]};}
   if(missing){
     if(company==='fumigacion')return {state:next,reply:missing==='location'&&next.slots.locationDetails?'Me falta confirmar el municipio para cotizarte; ya conservé la ubicación que me indicaste.':missing==='mattresses'?'Para cotizar esa cama, confirma cuántos colchones están afectados y si también hay chinches en la base u otros muebles.':questions[missing]};
@@ -452,19 +504,29 @@ export class Engine {
         finish('OBSERVED_TEMPORARY_LINE_SCOPE');return;
       }
       const reportedOrder=/\borden\s*(?:n[ºo°.]?\s*)?([a-f0-9]{8})\b/i.exec(e.text)?.[1]?.toUpperCase();
-      const newCase=c.company==='fumigacion'?explicitNewService(e.text)&&!afterServiceRequest(e,analysis):explicitNewTechnicalCase(e.text);
-      const caseState=newCase?{slots:{},asked:[],introduced:conv.state.introduced,caseId:c.company+':'+e.id}:conv.state;
-      caseState.caseId ||= reportedOrder || c.company+':'+e.id;
-      if(!newCase&&c.company==='fumigacion'&&e.kind==='text'&&!e.forwarded&&!e.fromMe&&!caseState.requestedAfterServiceReview&&e.quotedId&&caseState.caseId.startsWith(c.company+':')){
-        const firstRow=s.db.prepare('SELECT rowid,at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(caseState.caseId.slice(c.company.length+1),e.phone,e.line);
-        const currentRow=s.db.prepare('SELECT rowid FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(e.id,e.phone,e.line);
-        const quotedRow=s.db.prepare('SELECT rowid,body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(e.quotedId,e.phone,e.line);
-        const quoted=quotedRow&&s.open(quotedRow.body);
-        const reference=firstRow&&currentRow&&quotedRow&&quotedRow.rowid>=firstRow.rowid&&quotedRow.rowid<=currentRow.rowid&&quoted&&quoted.id===e.quotedId&&quoted.phone===e.phone&&quoted.line===e.line&&!quoted.fromMe&&!quoted.forwarded&&quoted.kind==='text'&&quoted.at>=firstRow.at&&quoted.at<=e.at&&afterServiceRequest(quoted);
-        if(reference){
-          caseState.requestedAfterServiceReview={...reference,restoredFromQuotedSource:{sourceId:e.id,quotedId:quoted.id,at:e.at}};
-          s.audit('OWN_QUOTED_AFTER_SERVICE_CONTEXT_RESTORED',e.id,{guard:MARIA_AFTER_SERVICE_CONTINUITY_GUARD,caseId:caseState.caseId,sourceId:quoted.id,line:e.line,originalEventReplayed:false,businessWritten:false});
+      const productInquiry=c.company==='fumigacion'&&(conv.state.requestedProductInquiry||ownCaseProductInquiry(s,c,conv.state,e));
+      const pendingBatch=c.company==='fumigacion'?s.customerTurnBatch(e.phone,e.id,conv.state.lastHandledSourceId):[];
+      const batchNewSource=pendingBatch.filter(source=>source.phone===e.phone&&source.line===e.line&&literalOwnNewService(source)&&(source.id!==e.id||!afterServiceRequest(e,analysis))).at(-1);
+      const currentNewCase=c.company==='fumigacion'?(literalOwnNewService(e)||productInquiry&&e.kind==='text'&&!e.forwarded&&explicitServiceAfterProduct(e.text))&&!afterServiceRequest(e,analysis):explicitNewTechnicalCase(e.text);
+      const newCase=currentNewCase||Boolean(batchNewSource);
+      const newCaseSource=currentNewCase?e:batchNewSource;
+      const caseState=newCase?{slots:{},asked:[],introduced:conv.state.introduced,caseId:c.company+':'+newCaseSource.id}:conv.state;
+      const initialSource=!newCase&&!caseState.caseId&&c.company==='fumigacion'?pendingBatch.find(source=>source.line===e.line&&!source.fromMe&&!source.forwarded&&source.kind==='text'&&literalIntakeTextWithoutRegistrationFields(source.text).trim()&&(!/^(?:(?:mi|el) )?(?:nombre(?: completo)?|direccion|correo|telefono|documento|cedula)\s*(?::|=|es\b)/.test(normalize(source.text))||Object.keys(extractSlots(source.text,c.company)).length))?.id:null;
+      caseState.caseId ||= reportedOrder || c.company+':'+(initialSource||e.id);
+      if(!newCase&&c.company==='fumigacion'&&productInquiry&&!caseState.requestedProductInquiry)caseState.requestedProductInquiry={sourceId:productInquiry.id,at:productInquiry.at,question:productInquiry.text.slice(0,300)};
+      if(!newCase&&c.company==='fumigacion'&&e.kind==='text'&&!e.forwarded&&!e.fromMe&&!caseState.requestedAfterServiceReview){
+        const recovered=ownCaseLiteralFollowup(s,c,caseState,e,e.quotedId||null);
+        if(recovered){
+          const marker=e.quotedId?{restoredFromQuotedSource:{sourceId:e.id,quotedId:recovered.source.id,at:e.at}}:{restoredFromStoredSource:{sourceId:e.id,originalId:recovered.source.id,at:e.at}};
+          caseState.requestedAfterServiceReview={...recovered.reference,...marker};
+          s.audit(e.quotedId?'OWN_QUOTED_AFTER_SERVICE_CONTEXT_RESTORED':'OWN_STORED_AFTER_SERVICE_CONTEXT_RESTORED',e.id,{guard:MARIA_AFTER_SERVICE_CONTINUITY_GUARD,caseId:caseState.caseId,sourceId:recovered.source.id,line:e.line,originalEventReplayed:false,businessWritten:false});
         }
+      }
+      if(c.company==='fumigacion'&&caseState.storedContextCoverageIncomplete)s.audit('OWN_STORED_CONTEXT_COVERAGE_INCOMPLETE',e.id,{...caseState.storedContextCoverageIncomplete,caseId:caseState.caseId,ordinaryIntakeBlocked:true,knownFollowupPreserved:Boolean(caseState.requestedAfterServiceReview),businessWritten:false,originalEventReplayed:false});
+      if(c.company==='fumigacion'&&caseState.storedContextCoverageIncomplete&&!caseState.requestedAfterServiceReview&&!newCase){
+        const coverage=caseState.storedContextCoverageIncomplete;
+        if(!coverage.notifiedSourceId&&!e.forwarded&&e.kind==='text'){s.queue(e.id+':reply',e.phone,e.line,'Necesito revisar el contexto anterior de este caso para continuar.',false,row.revision,caseState.caseId);coverage.notifiedSourceId=e.id;}
+        caseState.lastHandledSourceId=e.id;s.saveConversation(e.phone,caseState);finish('OBSERVED_STORED_CONTEXT_COVERAGE_REVIEW');return;
       }
       if(c.company==='fumigacion'&&e.kind==='text'&&!e.forwarded&&/^[¿?\s]+$/.test(e.text)&&/[¿?]/.test(e.text)){
         // A punctuation-only followup supplies no new question or intake fact.
@@ -478,13 +540,13 @@ export class Engine {
         }
       }
       let pendingQuestion=null,documentRequest=null,controlRequest=null,followupRequest=null,literalContextRequest=null;
-      if(!newCase){
+      if(!newCase||newCaseSource.id!==e.id){
         const firstSource=caseState.caseId.startsWith(c.company+':')?caseState.caseId.slice(c.company.length+1):null;
-        const turns=s.customerTurnBatch(e.phone,e.id,caseState.lastHandledSourceId||firstSource);
+        const turns=newCase?pendingBatch.slice(pendingBatch.findIndex(source=>source.id===newCaseSource.id)):s.customerTurnBatch(e.phone,e.id,caseState.lastHandledSourceId||(initialSource?null:firstSource));
         if(c.company==='fumigacion')literalContextRequest=turns.filter(turn=>{const context=mariaLiteralServiceContext(turn);return context&&context.kind!=='context-reference'&&!contextNeedsPersonalPriority(turn.text);}).at(-1)||null;
         documentRequest=turns.filter(turn=>turn.kind==='text'&&postServiceDocuments(turn.text)).at(-1)||null;
         if(c.company==='fumigacion')controlRequest=turns.filter(turn=>turn.kind==='text'&&requestedControl(turn.text)).at(-1)||null;
-        if(c.company==='fumigacion')followupRequest=turns.find(turn=>afterServiceRequest(turn))||null;
+        if(c.company==='fumigacion')followupRequest=turns.find(turn=>ownCaseLiteralFollowup(s,c,caseState,e,turn.id))||null;
         caseState.intakeSources={...caseState.intakeSources};
         for(const turn of turns.filter(turn=>literalIntakeTurn(turn,c.company)&&!['name','address','details','confirm'].includes(caseState.programIntake?.stage)&&!(c.company==='fumigacion'&&caseState.programIntake?.stage==='correction'))){
           const fields=literalFields(caseState,turn,c.company);
@@ -510,7 +572,10 @@ export class Engine {
       const literalContextSource=c.company==='fumigacion'&&e.kind==='text'&&!contextNeedsPersonalPriority(e.text)?(currentContext?.documentDetail&&literalContextRequest?literalContextRequest:currentContext?e:literalContextRequest):null;
       const faq=c.company==='fumigacion'&&!documentSource&&!controlSource&&!followupSource&&!caseState.requestedAfterServiceReview&&!caseState.requestedControlReview&&e.kind==='text'&&!e.forwarded&&!unreadLinkOnly(e.text)&&!faqNeedsPersonalReview(e.text)&&!paymentInquiry(e.text)&&!previousQuotation(e.text)&&!postServiceReturn(e.text)&&!plannedRevisit(e.text)&&faqQuestion.kind==='text'?selectCommonAnswer(textWithoutLinks(faqQuestion.text),caseState.slots,s.approvedCustomerAnswers(),caseState.caseId):null;
       let decision;
-      if(literalContextSource){
+      const productClarification=c.company==='fumigacion'&&caseState.requestedProductInquiry&&literalIntakeTurn(e)&&!contextNeedsPersonalPriority(e.text)&&(Object.keys(extractSlots(e.text,c.company)).length||/^(?:solo|solamente|unicamente) (?:el )?producto[.! ]*$/.test(normalize(e.text)));
+      if(productClarification){
+        decision=customerDecision(c.company,caseState,e,analysis);
+      }else if(literalContextSource){
         decision=customerDecision(c.company,caseState,{...e,id:literalContextSource.id,at:literalContextSource.at,text:literalContextSource.text,forwarded:literalContextSource.forwarded},analysis);
         if(decision.review)decision.reviewSource=literalContextSource.id;
         decision.state.lastText=e.text;
@@ -594,12 +659,12 @@ export class Engine {
         decision.reply='Hola, soy '+c.bot+'. '+decision.reply;decision.state.introduced=true;
       }
       s.saveConversation(e.phone,decision.state);
-      const labels={service:'Servicio',location:'Municipio confirmado por el texto',locationDetails:'Ubicación indicada',site:'Inmueble',area:'Área informada',rooms:'Habitaciones informadas',mattresses:'Colchones afectados',roomScale:'Tamaño de las habitaciones',siteScale:'Tamaño del inmueble indicado',floors:'Pisos informados',patio:'Patio informado',treatmentScope:'Alcance informado',detail:'Falla informada',preference:'Preferencia'};
+      const labels={service:'Servicio',location:'Municipio confirmado por el texto',locationDetails:'Ubicación indicada',site:'Inmueble',area:'Área informada',dimensions:'Dimensiones literales; superficie no calculada',rooms:'Habitaciones informadas',mattresses:'Colchones afectados',roomScale:'Tamaño de las habitaciones',siteScale:'Tamaño del inmueble indicado',floors:'Pisos informados',patio:'Patio informado',treatmentScope:'Alcance informado',detail:'Falla informada',preference:'Preferencia'};
       const context=Object.entries(decision.state.slots).map(([k,v])=>(labels[k]||k)+': '+questionExcerpt(String(v))).join('; ').slice(0,650);
       if(decision.review){
         const restored=decision.state.requestedAfterServiceReview;
         let inheritedPending=null;
-        if(c.company==='fumigacion'&&restored&&restored.restoredFromQuotedSource?.quotedId===restored.sourceId&&decision.reviewTopic==='warranty-review'&&decision.reviewSource===restored.sourceId){
+        if(c.company==='fumigacion'&&restored&&(restored.restoredFromQuotedSource?.quotedId===restored.sourceId||restored.restoredFromStoredSource?.originalId===restored.sourceId)&&decision.reviewTopic==='warranty-review'&&decision.reviewSource===restored.sourceId){
           const candidates=s.db.prepare("SELECT q.id,q.state,q.body FROM questions q JOIN outbox o ON o.id=q.outbox_id WHERE q.phone=? AND q.case_id=? AND q.recipient=? AND q.topic=? AND o.line=? AND q.state IN ('PENDING','ANSWER_REVIEW') AND o.state IN ('READY','SENDING','UNCERTAIN','ACCEPTED','DELIVERED','READ') ORDER BY q.rowid").all(e.phone,caseState.caseId,SANDRA,'revision:'+restored.sourceId,e.line);
           inheritedPending=candidates.find(q=>s.open(q.body).source===restored.sourceId)||null;
         }
@@ -610,7 +675,7 @@ export class Engine {
           text:c.name+': contacto terminado en '+e.phone.slice(-4)+'. '+decision.review+(decision.pendingQuestion?' Pregunta pendiente: '+questionExcerpt(decision.pendingQuestion)+'.':'')+' Mensaje actual: '+questionExcerpt(e.text)+(context?' Datos de esta solicitud: '+context+'.':'')+' '+(decision.reviewQuestion||'¿Cómo debemos continuar en este caso?')});
         if(request.created&&request.outboxId?.startsWith('tesa-question:')){decision.state.pendingTesaQuestionId=request.id;s.saveConversation(e.phone,decision.state);}
         if(!request.created&&(decision.reviewTopic?.startsWith('missing-intake:')||c.company==='fumigacion'&&decision.reviewTopic==='disponibilidad-y-tecnico'&&decision.reviewConditions?.kind==='reported-existing-schedule'||c.company==='servicio-tecnico'&&['customer-question','special-quotation'].includes(decision.reviewTopic)||['cotizacion-verificada','common-question','service-documents','service-followup','warranty-review','requested-technician-contact','payment-instructions','existing-quotation','unread-link'].includes(decision.reviewTopic))){
-          decision.reply=inheritedPending&&e.quotedId===restored.sourceId?'Tu solicitud de garantía sigue pendiente de revisión.':null;
+          decision.reply=inheritedPending&&(e.quotedId===restored.sourceId||restored.restoredFromStoredSource?.sourceId===e.id)?'Tu solicitud de garantía sigue pendiente de revisión.':null;
           s.audit('PENDING_CLARIFICATION_REUSED',e.id,{caseId:caseState.caseId,questionId:request.id,topic:decision.reviewTopic,newOutboundCreated:false});
         }
       }

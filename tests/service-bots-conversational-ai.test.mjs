@@ -135,7 +135,7 @@ test('AI selects a reviewed next question while keeping the same case and suppli
 test('own quote retains 99,000 per mattress and validated price references after style selection',async()=>{
  const f=fixture();try{
   await f.run('AI_PRICE01','Chinches en dos colchones de un apartamento en Medellín, ¿cuánto cuesta?');
-  const row=f.reply('AI_PRICE01');assert.match(row.text,/\$198\.000 COP/);assert.match(row.text,/^Con gusto te ayudo/);
+  const row=f.reply('AI_PRICE01');assert.match(row.text,/\$198\.000 COP/);assert.match(row.text,/^Hola, soy María Ángel\./);
   assert.equal(f.s.priceReplyReference(row).priceCop,198000);assert.equal(f.s.priceReplyStillValid(row),true);
   assert.doesNotMatch(row.text,/garantiz|inofensiv|reservad|confirmado|100\.000|70\.000/i);
  }finally{f.s.close();}
@@ -306,5 +306,28 @@ test('a pending reply reuses the same Maria wording without extra calls or dupli
   f.s.db.prepare('UPDATE outbox SET body=? WHERE id=?').run(f.s.seal(first),row.id);
   assert.equal(await composeOwnReply(f.c,f.s,f.fetcher,f.reply(e.id),first),first);assert.equal(f.requests.length,calls);
   await assert.rejects(composeOwnReply(f.c,f.s,f.fetcher,f.reply(e.id),'El precio cambió a $1 COP'),/AI_WORDING_FACTS_CHANGED/);assert.equal(f.requests.length,calls);
+ }finally{f.s.close();}
+});
+
+test('new wording acknowledges only current-source facts while old reserved wording remains reusable without another call',async()=>{
+ const f=fixture({handler:(_body,input)=>({opening:'none',acknowledgements:['field:site'],nextStep:'step:0',factualAnchors:input.replyContract.factualAnchors})});try{
+  const old={id:'TONE_BOUND_OLD01',phone,line:f.c.lines[0].phone,at:Date.now()-100,kind:'text',fromMe:false,forwarded:false,text:'Apartamento'};
+  const current={...old,id:'TONE_BOUND_CUR01',at:old.at+10,text:'10 x 5'};
+  f.s.enqueue(old);f.s.enqueue(current);const caseId='fumigacion:'+old.id;
+  f.s.saveConversation(phone,{caseId,slots:{site:'apartamento'},asked:['size'],intakeSources:{site:{sourceId:old.id,at:old.at}},lastHandledSourceId:current.id});
+  const original='¿Cuántas habitaciones o metros cuadrados tiene el lugar?',oldFinal='El inmueble que me indicas es un apartamento. '+original;
+  const conv=f.s.conversation(phone);f.s.queue(current.id+':reply',phone,current.line,original,false,conv.revision,caseId);const row=f.reply(current.id);
+  f.s.db.prepare('INSERT INTO meta(key,value) VALUES(?,?)').run('maria-reply-wording:'+row.id,f.s.seal({guard:MARIA_CONVERSATION_GUARD,caseId,revision:row.revision,originalText:original,finalText:oldFinal,contractHash:'prior-reserved-own-contract'}));
+  assert.equal(ownReplyTextAllowed(f.c,f.s,row,original,oldFinal),true);
+  assert.equal(await composeOwnReply(f.c,f.s,f.fetcher,row,original),oldFinal);assert.equal(f.requests.length,0);
+  const next={...current,id:'TONE_BOUND_CUR02',at:old.at+20,text:'Medellín'};f.s.enqueue(next);const state=f.s.conversation(phone).state;
+  f.s.saveConversation(phone,{...state,slots:{...state.slots,location:'Medellín'},intakeSources:{...state.intakeSources,location:{sourceId:next.id,at:next.at}}});
+  f.s.queue(next.id+':reply',phone,next.line,original,false,f.s.conversation(phone).revision,caseId);
+  const nextRow=f.reply(next.id),text=await composeOwnReply(f.c,f.s,f.fetcher,nextRow,original),request=f.requests.at(-1).body,input=JSON.parse(request.input);
+  assert.deepEqual(input.replyContract.verifiedLiteralFacts.map(f=>f.id),['field:location']);
+  assert.equal(request.text.format.schema.properties.acknowledgements.items.enum.includes('field:site'),false);
+  assert.equal(input.replyContract.openings.helpful,undefined);assert.equal(input.replyContract.mandatorySteps.some(step=>/^Con gusto\./.test(step.text)),false);
+  assert.match(text,/Medellín/);assert.doesNotMatch(text,/apartamento|Con gusto|Hola/);
+  assert.equal(f.requests.length,1);assert.equal(f.s.open(f.s.db.prepare('SELECT value FROM meta WHERE key=?').get('maria-reply-wording:'+row.id).value).finalText,oldFinal);assert.equal(f.requests.length,1);
  }finally{f.s.close();}
 });
