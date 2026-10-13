@@ -19,6 +19,18 @@ test('exact native social source overrides a cached general-question label witho
 test('pure forms accept punctuation and greeting prefix, not extra content',()=>{
  for(const text of ['Cómo está?','¿Cómo está?','¿Cómo estás?','Como estan?','Hola, ¿cómo está?','Buenas tardes, ¿cómo está?'])assert.equal(customerDecision('fumigacion',{slots:{},asked:[]},event(text),general(event(text))).courtesy,true,text);
 });
+test('a complete compound Maria greeting stays social despite a general semantic label',()=>{
+ for(const text of ['Hola buen día cómo estás?','Hola, buen día. ¿Cómo estás?','Hola buenos días, como estan?','¡Hola! Buenas tardes, ¿cómo está?']){
+  const e=event(text),state=initial(),d=customerDecision('fumigacion',state,e,general(e));
+  assert.equal(d.socialGreeting,true,text);assert.equal(d.review,undefined,text);assert.equal(d.question,undefined,text);
+  assert.deepEqual(d.state.slots,state.slots);assert.deepEqual(d.state.asked,state.asked);assert.equal(d.state.caseId,state.caseId);
+ }
+});
+test('compound greetings with an actual request or previous service retain that request',()=>{
+ for(const text of ['Hola buen día cómo estás? Necesito fumigar','Hola buen día cómo estás? ¿Cuánto vale el servicio?','Hola buen día cómo estás? Me fumigaron y siguen las cucarachas']){
+  const e=event(text),d=customerDecision('fumigacion',initial(),e,general(e));assert.notEqual(d.socialGreeting,true,text);assert.notEqual(d.courtesy,true,text);
+ }
+});
 test('greeting plus task, followup, warranty or safety retains its substantive route',()=>{
  const cases=[['Cómo está? Necesito fumigar mi casa','general-question'],['Hola, ¿cómo está? Necesito un refuerzo','reinforcement'],['Cómo está? Quiero verificar el tratamiento anterior','verification'],['Cómo está? Reclamo la garantía','warranty-claim'],['Cómo está? Tengo intoxicación','general-question'],['Cómo está el servicio?','general-question']];
  for(const [text,kind] of cases){const e=event(text),d=customerDecision('fumigacion',initial(),e,{...general(e),intent:{kind,evidence:text}});assert.notEqual(d.socialGreeting,true,text);assert.notEqual(d.courtesy,true,text);}

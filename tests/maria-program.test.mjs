@@ -52,6 +52,22 @@ test('asks missing literal fields together and captures both from one delivered 
   assert.equal(registrationStatus(f.config,f.store).saved,1);assert.equal(payload.sources.customerName.id,facts.id);assert.equal(payload.sources.address.id,facts.id);assert.equal(payload.sources.address.text,facts.text);
  }finally{f.store.close();}
 });
+test('standard Nombre and Dirección labels keep separate literal fields, native source and a real summary confirmation',async()=>{
+ const f=fixture();try{
+  f.delivered(await f.turn('Tengo cucarachas en mi apartamento de 42 mts2 en Itagüí. Cuánto cuesta?'));f.delivered(await f.turn('Sí'));
+  const facts=await f.turn('Nombre: Juan Pérez\nDirección: Calle 50 # 42-18 apartamento 301'),preview=f.delivered(facts);assert.match(preview,/a nombre de Juan Pérez/);assert.doesNotMatch(preview,/nombre completo/);
+  const accepted=await f.turn('Confirmo');let payload;
+  await drainProgramRegistrations(f.store,f.config,transport(f,async(url,opts)=>{payload=JSON.parse(opts.body);return {ok:true,json:async()=>receipt(payload)};}));
+  assert.equal(payload.customerName,'Juan Pérez');assert.equal(payload.address,'Calle 50 # 42-18 apartamento 301');assert.equal(payload.sources.customerName.text,facts.text);assert.equal(payload.sources.address.text,facts.text);assert.equal(payload.quote.acceptanceId,accepted.id);assert.equal(registrationStatus(f.config,f.store).saved,1);
+ }finally{f.store.close();}
+});
+test('standard labels in the accepted turn preserve acceptance, while relayed names and conditions cannot become the customer name',async()=>{
+ assert.equal(acceptsOrdinaryQuotation('Sí. Nombre: Juan Pérez\nDirección: Calle 50 # 42-18'),true);
+ for(const text of ['Sí. Nombre: Juan Pérez con descuento','Sí. A nombre de mi vecino Juan Pérez','El técnico dijo sí. Nombre: Juan Pérez','Sí. Nombre: Juan Pérez dijo listo'])assert.equal(acceptsOrdinaryQuotation(text),false,text);
+ for(const text of ['Mi vecino indicó Nombre: Juan Pérez\nDirección: Calle 50 # 42-18','El técnico dijo Nombre: Juan Pérez\nDirección: Calle 50 # 42-18']){
+  const f=fixture();try{f.delivered(await f.turn('Tengo cucarachas en mi apartamento de 42 mts2 en Itagüí. Cuánto cuesta?'));f.delivered(await f.turn('Sí'));const event=await f.turn(text);assert.equal(f.store.conversation(event.phone).state.programIntake.customerName,undefined);assert.equal(registrationStatus(f.config,f.store).prepared,0);}finally{f.store.close();}
+ }
+});
 test('unlabelled name and address on separate lines answer the delivered joint request without contaminating either field',async()=>{
  const f=fixture();try{
   const first=await f.turn('Tengo cucarachas en mi apartamento de 42 mts2 en Itagüí. Cuánto cuesta?');f.delivered(first);f.delivered(await f.turn('Sí'));

@@ -8,7 +8,7 @@ function affirmed(text,pattern){
   return [...text.matchAll(pattern)].some(m=>{
     const clause=text.slice(0,m.index).split(/[.!?;,]|\b(?:pero|sino|y)\b/).at(-1);
     // A denied request is not a new case. Keep negation across its request verb.
-    return !/\b(?:no|nunca|sin)\b(?:\s+\p{L}+){0,6}\s*$/u.test(clause);
+    return !/\b(?:no|nunca|sin)\b(?:\s+\p{L}+){0,6}\s*$/u.test(clause)&&! /\b(?:si|quizas|tal vez|en caso de)\b/.test(clause);
   });
 }
 export function afterServiceKind(text){

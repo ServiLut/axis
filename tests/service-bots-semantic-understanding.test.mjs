@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
-import {customerDecision,Engine} from '../automation/service-bots/engine.mjs';
+import {customerDecision,Engine,extractSlots} from '../automation/service-bots/engine.mjs';
 import {Store} from '../automation/service-bots/store.mjs';
 import {BUSINESSES,OPERATOR_ROUTING,DIEGO,HILARY,SANDRA} from '../automation/service-bots/config.mjs';
 import {CONVERSATIONAL_AI_GUARD,aiConfiguration} from '../automation/service-bots/ai-settings.mjs';
@@ -30,6 +30,44 @@ test('generic conditions, ambiguous requests and prior-treatment problems stay s
  const general=decide('¿Qué es un refuerzo y qué incluye?','general-question');assert.equal(general.reviewConditions.kind,'general-question');assert.equal(general.state.requestedAfterServiceReview,undefined);
  const mixed=decide('Necesito fumigar otra casa y revisar el tratamiento de la anterior.','ambiguous');assert.equal(mixed.reviewConditions.kind,'ambiguous-followup');
  const past=decide('Fumigaron hace dos semanas y siguen apareciendo cucarachas.','post-service');assert.equal(past.reviewConditions.kind,'post-service');
+});
+test('a short literal neighborhood cannot become post-service review through an ambiguous label',()=>{
+ const first=event('Necesito cotización de fumigación en Medellín.','LOCAL_ORDINARY_FIRST');
+ const prior=customerDecision('fumigacion',{slots:{},asked:[]},first,analysis(first,'new-service'));
+ assert.match(prior.reply,/plaga/);
+ for(const kind of ['ambiguous','general-question']){
+  const e=event('Enciso','LOCAL_ORDINARY_NEIGHBOR_'+kind),d=customerDecision('fumigacion',prior.state,e,analysis(e,kind));
+  assert.equal(d.review,undefined,kind);assert.equal(d.state.requestedAfterServiceReview,undefined,kind);
+  assert.equal(d.state.slots.location,'medellin');assert.match(d.state.slots.locationDetails,/Enciso/);
+  assert.equal(d.state.intakeSources.locationDetails.sourceId,e.id);assert.equal(d.state.intakeSources.locationDetails.municipalityInferred,false);
+  assert.doesNotMatch(d.reply,/revis|asesora|confirmaci[oó]n/);assert.match(d.reply,/plaga|preventivo/);
+ }
+});
+test('the ordinary neighborhood continuation creates no internal question or human-review state',async()=>{
+ const f=fixture();try{
+  const engine=new Engine(f.s,f.c),first=event('Necesito cotización de fumigación en Medellín.','LOCAL_CITY_SOURCE');
+  f.s.enqueue(first);await engine.process(first,analysis(first,'new-service'));
+  const e=event('Enciso','LOCAL_NEIGHBOR_SOURCE');e.at=first.at+1000;f.s.enqueue(e);await engine.process(e,analysis(e,'ambiguous'));
+  const state=f.s.conversation(e.phone).state;
+  assert.equal(state.slots.location,'medellin');assert.match(state.slots.locationDetails,/Enciso/);assert.equal(state.requestedAfterServiceReview,undefined);
+  assert.equal(state.awaitingHumanReview,undefined);assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);
+  assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE internal=1').get().n,0);
+ }finally{f.s.close();}
+});
+test('only an affirmed unambiguous municipality replaces the current ordinary location',()=>{
+ const state={slots:{service:'cucarachas',site:'apartamento',rooms:'2 habitaciones',location:'medellin'},asked:['location'],initialIntakeAllRequested:true};
+ const corrected=event('No es Medellín, es Bello','LOCAL_LOCATION_CORRECTION'),d=customerDecision('fumigacion',state,corrected,analysis(corrected,'ambiguous'));
+ assert.equal(d.state.slots.location,'bello');assert.equal(d.state.intakeSources.location.sourceId,corrected.id);
+ for(const text of ['No es Medellín','Si fuera en Bello','Quizás en Bello','Medellín o Bello','La casa de mi vecina está en Bello','Itagüía']){
+  const e=event(text),a={...analysis(e,'ambiguous'),slots:{location:text}},result=customerDecision('fumigacion',state,e,a);
+  assert.equal(result.state.slots.location,state.slots.location,text);assert.equal(result.state.requestedAfterServiceReview,undefined,text);
+ }
+ assert.equal(extractSlots('No es Medellín, es Bello','fumigacion').location,'bello');
+ assert.equal(extractSlots('Si fuera en Bello','fumigacion').location,undefined);
+});
+test('a bare neighborhood with no municipality never supplies an invented municipality',()=>{
+ const e=event('Enciso'),d=customerDecision('fumigacion',{slots:{service:'cucarachas',site:'apartamento',rooms:'2 habitaciones'},asked:['location']},e,analysis(e,'ambiguous'));
+ assert.equal(d.state.slots.location,undefined);assert.equal(d.state.slots.locationDetails,'Enciso');assert.match(d.reply,/municipio/);
 });
 test('a semantic label cannot import facts from another source, unquoted evidence or another company',()=>{
  const e=event('Cucarachas en apartamento'),a=analysis(e,'warranty-claim','garantía');

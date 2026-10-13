@@ -9,7 +9,7 @@ import {ownIntent} from './maria-understanding.mjs';
 import {ownMiguelIntent,miguelLiteralSlotAllowed} from './miguel-understanding.mjs';
 import {literalPaintingRequest} from './technical-scope.mjs';
 import {afterServiceKind,afterServiceRequest,afterServiceDecision,explicitNewService} from './after-service.mjs';
-import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,literalIntakeTextWithoutRegistrationFields} from './maria-program.mjs';
+import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,literalIntakeTextWithoutRegistrationFields,prepareRegisteredTesaContinuation} from './maria-program.mjs';
 import {createHash} from 'node:crypto';
 import {tesaOperationalTopic} from './tesa-config.mjs';
 import {prepareTesaQuestion,initializeTesaStore} from './tesa-operations.mjs';
@@ -25,11 +25,20 @@ export function routeCaseQuestion(store,config,request){
   const reference=createHash('sha256').update(config.company+':'+request.caseId).digest('hex').slice(0,12).replace(/[0-9]/g,d=>String.fromCharCode(65+Number(d)));
   const labels={service:'Servicio',location:'Municipio',site:'Inmueble',area:'Área',rooms:'Habitaciones',mattresses:'Colchones',detail:'Falla',preference:'Horario solicitado',question:'Petición literal'};
   const ownCase=store.conversation(request.phone)?.state,source=store.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND from_me=0').get(request.source,request.phone);
+  // Carry a saved receipt's identifiers only into this new operational
+  // request. The program module independently validates scope, actor, hash,
+  // receipt and current case before it can prepare customer continuity.
+  if(config.company==='fumigacion'&&request.topic==='disponibilidad-y-tecnico'&&ownCase?.caseId===request.caseId&&ownCase.programIntake?.stage==='registered'){
+    const row=store.db.prepare('SELECT value FROM meta WHERE key=?').get('maria-registration:'+request.caseId),entry=row&&store.open(row.value);
+    if(entry?.status==='SAVED'&&entry.receipt?.orderId&&Number.isSafeInteger(entry.payload?.quote?.priceCop))request={...request,conditions:{programServiceId:entry.receipt.orderId,quotedPriceCop:entry.payload.quote.priceCop,...request.conditions}};
+  }
   const display={...(ownCase?.caseId===request.caseId?ownCase.slots:{}),...request.conditions};
   if(!display.question&&source)display.question=store.open(source.body).text;
   const facts=Object.entries(display).filter(([key,value])=>labels[key]&&typeof value==='string').map(([key,value])=>labels[key]+': '+groupField(value)).join('; ').slice(0,700);
   const question=request.conditions?.kind==='technical-painting'?'¿Ofrecemos la pintura solicitada y qué alcance está disponible para este caso?':['cotizacion-verificada','special-quotation','existing-quotation'].includes(request.topic)?'¿Qué cotización corresponde a este caso?':request.topic==='requested-technician-contact'?'¿Qué contacto del técnico está autorizado para este caso?':request.topic==='service-followup'?'¿Cuál es el estado de llegada de este servicio?':request.topic.startsWith('missing-intake:')?'¿Qué dato verificado falta para continuar este caso?':'¿Qué disponibilidad, ruta y técnico corresponden a este caso?';
-  return prepareTesaQuestion(store,config,{...request,text:config.bot+' · '+config.name+'. Ref '+reference+'; cliente …'+request.phone.slice(-4)+'; línea …'+request.line.slice(-4)+'. '+(facts?facts+'. ':'')+question});
+  const result=prepareTesaQuestion(store,config,{...request,text:config.bot+' · '+config.name+'. Ref '+reference+'; cliente …'+request.phone.slice(-4)+'; línea …'+request.line.slice(-4)+'. '+(facts?facts+'. ':'')+question});
+  if(config.company==='fumigacion'&&result.created===true)prepareRegisteredTesaContinuation(store,config,request,result);
+  return result;
 }
 
 const externalLinks = text => String(text??'').match(/\b(?:https?:\/\/|www\.)[^\s<>"']+/gi)||[];
@@ -46,6 +55,21 @@ function shortNameStatus(text,name){
   const match=normalize(text).match(new RegExp('^[¿¡ ]*(?:(?:hola|buenos dias|buenas tardes|buenas noches)[, :]+)?'+short+'[, :¿?!]+(.+)$'));
   return match&&chiefStatusTopic(match[1])?match[1]:null;
 }
+function ordinaryLiteralMunicipality(text){
+  const t=normalize(text),found=[];
+  for(const clause of t.split(/[.!?;,]|\b(?:pero|sino)\b/)){
+    if(/\b(?:si|quizas|tal vez|posiblemente|en caso de|mi vecin[oa]|su vecin[oa]|un tercero)\b/.test(clause))continue;
+    for(const match of clause.matchAll(/\b(?:medellin|bello|envigado|itagui|sabaneta|la estrella|copacabana|girardota|rionegro|(?:santa fe|santafe) de antioquia|sopetran)\b/g)){
+      const prefix=clause.slice(0,match.index),suffix=clause.slice(match.index+match[0].length);
+      if(/\b(?:no|nunca|sin)\b(?:\s+\p{L}+){0,6}\s*$/u.test(prefix)||/^\s+no\b/.test(suffix))continue;
+      found.push(match[0]);
+    }
+  }
+  const distinct=[...new Set(found)];
+  if(distinct.length!==1)return undefined;
+  // Preserve the existing literal source of the two external municipalities.
+  return /sopetran|antioquia/.test(distinct[0])?String(text).match(/\b(?:(?:santa\s+fe|santaf[eé])\s+de\s+antioquia|sopetr[aá]n)\b/i)?.[0]:distinct[0];
+}
 export function extractSlots(text,company) {
   if(company==='servicio-tecnico'&&technicalIntakeMetaQuestion(text))return {};
   text=textWithoutLinks(company==='fumigacion'?literalIntakeTextWithoutRegistrationFields(text):text);
@@ -54,11 +78,9 @@ export function extractSlots(text,company) {
   const found=company==='fumigacion'?Object.keys(pests).filter(s=>pests[s].test(t)):['nevera','lavadora','secadora','estufa','horno','calentador','aire acondicionado'].filter(s=>t.includes(s)&&miguelLiteralSlotAllowed('service',s,text));
   const specific=company==='fumigacion'?found.filter(s=>!['prevencion','fumigacion'].includes(s)):found;
   slots.service=(specific.length?specific:found).join(' y ')||undefined;
-  const city=['medellin','bello','envigado','itagui','sabaneta','la estrella','copacabana','girardota','rionegro'].find(s=>new RegExp('\\b'+s+'\\b').test(t)&&(company==='fumigacion'||miguelLiteralSlotAllowed('location',s,text)));
+  const city=company==='fumigacion'?ordinaryLiteralMunicipality(text):['medellin','bello','envigado','itagui','sabaneta','la estrella','copacabana','girardota','rionegro'].find(s=>new RegExp('\\b'+s+'\\b').test(t)&&miguelLiteralSlotAllowed('location',s,text));
   if(city)slots.location=city;
   if(company==='fumigacion'){
-    const municipality=text.match(/\b(?:(?:santa\s+fe|santaf[eé])\s+de\s+antioquia|sopetr[aá]n)\b/i)?.[0];
-    if(municipality)slots.location=municipality;
     // A locative answer names a café as the place. Coffee drinks or colors
     // alone do not identify an inmueble, and no restaurant type is inferred.
     const properties={'casa finca':/\bcasas?\s+fincas?\b/,finca:/\bfincas?\b/,apartamento:/\b(?:apartamentos?|aptos?)\b/,casa:/\bcasas?\b/,restaurante:/\brestaurantes?\b/,local:/\blocal(?:es)?\b/,oficina:/\boficinas?\b/,bodega:/\bbodegas?\b/,'cafetería':/\bcafeterias?\b/,'café':/^(?:(?:es|seria)\s+)?en\s+(?:(?:el|un|nuestro|mi)\s+)?cafe\b/};
@@ -204,7 +226,7 @@ function retainPromptedLocation(state,e){
   if(!text||text.length>240||/^(?:no|quizas|tal vez|posiblemente)\b/.test(t))return;
   // Preserve the sender's location words, including a short answer in a rapid
   // batch. A neighborhood name alone never supplies an inferred municipality.
-  if(!/\b(?:villa|barrio|vereda|calle|carrera|unidad|urbanizacion|robledo|medellin|bello|envigado|itagui|sabaneta|santa helena)\b/.test(t)&&!/^manrique[.! ]*$/.test(t))return;
+  if(!/\b(?:villa|barrio|vereda|calle|carrera|unidad|urbanizacion|robledo|medellin|bello|envigado|itagui|sabaneta|santa helena)\b/.test(t)&&!/^(?:manrique|enciso)[.! ]*$/.test(t))return;
   const previous=state.intakeLocationParts|| (state.slots.locationDetails?[{text:state.slots.locationDetails,sourceId:null,at:null}]:[]);
   const part={text,sourceId:e.id??null,at:Number.isSafeInteger(e.at)?e.at:null};
   const parts=[...previous.filter(p=>normalize(p.text)!==t),part].slice(-3);
@@ -224,7 +246,10 @@ export function customerDecision(company,state,e,analysis={}) {
   // A complete social greeting is decided from the current literal source,
   // before a cached semantic label can create an operational question. Extra
   // words, media and forwarded messages keep their normal guarded route.
-  if(['fumigacion','servicio-tecnico'].includes(company)&&e.kind==='text'&&!e.forwarded&&/^(?:(?:hola|buenos dias|buen dia|buenas tardes|buenas noches)[,!. ]+)?[¿¡ ]*como esta(?:s|n)?[?!.,! ]*$/.test(normalize(e.text)))return {state:{...state,slots:{...state.slots},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)},courtesy:true,socialGreeting:true,reply:'Gracias por preguntar. Estoy aquí para ayudarte.'};
+  const socialSource=normalize(e.text);
+  const ordinarySocial=/^[¡ ]*(?:hola[,!. ]+)?(?:(?:buenos dias|buen dia|buenas tardes|buenas noches)[,!. ]+)?[¿¡ ]*como esta(?:s|n)?[?!.,! ]*$/.test(socialSource);
+  const existingSocial=/^(?:(?:hola|buenos dias|buen dia|buenas tardes|buenas noches)[,!. ]+)?[¿¡ ]*como esta(?:s|n)?[?!.,! ]*$/.test(socialSource);
+  if(e.kind==='text'&&!e.forwarded&&(company==='fumigacion'?ordinarySocial:company==='servicio-tecnico'&&existingSocial))return {state:{...state,slots:{...state.slots},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)},courtesy:true,socialGreeting:true,reply:'Gracias por preguntar. Estoy aquí para ayudarte.'};
   if(e.kind==='text'&&!e.forwarded&&(state.introduced||state.initialIntakeAllRequested||state.asked?.length)&&/^(?:hola|hola buenas noches|buenos dias|buen dia|buenas tardes|buenas noches)[.!¡, ]*$/.test(normalize(e.text)))return {state:{...state,slots:{...state.slots},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)},courtesy:true,greeting:true,reply:/buenas noches/.test(normalize(e.text))?'Buenas noches.':/buenas tardes/.test(normalize(e.text))?'Buenas tardes.':/buen(?:os dias| dia)/.test(normalize(e.text))?'Buen día.':'Hola.'};
   const literalText=textWithoutLinks(company==='fumigacion'?literalIntakeTextWithoutRegistrationFields(e.text):e.text).trim(),t=normalize(literalText);
   const literal=literalFields(state,e,company),existing={...state.slots,...literal};
@@ -235,7 +260,7 @@ export function customerDecision(company,state,e,analysis={}) {
     // Its result belongs to this exact incoming source, not another case/turn.
     const allowed=company==='fumigacion'?literalIntakeTurn(e):['new-service','clarification'].includes(ownMiguelIntent(analysis,e)?.kind)&&e.kind==='text'&&!e.forwarded&&!e.fromMe&&!unreadLinkOnly(e.text)&&!paymentInquiry(e.text)&&!postServiceDocuments(e.text)&&!serviceFollowup(e.text);
     if(analysis.guard!==conversationalAiGuard(company)||analysis.eventId!==e.id||analysis.company!==(company==='fumigacion'?'FUMIGACION':'S.TECNICO')||!allowed)understood={};
-    else understood=Object.fromEntries(Object.entries(understood).filter(([k])=>!existing[k]));
+    else understood=Object.fromEntries(Object.entries(understood).filter(([k,v])=>!existing[k]&&(company!=='fumigacion'||k!=='location'||ordinaryLiteralMunicipality(v)&&normalize(ordinaryLiteralMunicipality(v))===normalize(literal.location))));
   }
   const next={...state,slots:{...existing,...understood},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)};
   if(directOwnAi&&Object.keys(understood).length)next.intakeSources={...next.intakeSources,...Object.fromEntries(Object.keys(understood).map(k=>[k,{sourceId:e.id,at:e.at,context:'own-ai-literal-fragment',guard:conversationalAiGuard(company)}]))};
@@ -278,7 +303,8 @@ export function customerDecision(company,state,e,analysis={}) {
   const ordinaryAvailability=company==='fumigacion'&&ordinaryAvailabilityRequest(e.text);
   // A semantic label cannot erase a literal intake answer or turn an ordinary
   // availability request into a generic approval question.
-  if(company==='fumigacion'&&ownIntent(analysis,e)?.kind==='general-question'&&!(literalIntakeTurn(e)&&Object.keys(literal).length)&&!ordinaryAvailability)return {state:{...next,slots:{...state.slots}},reviewTopic:'customer-question',reviewConditions:{kind:'general-question'},review:'La persona consulta condiciones generales. Falta una respuesta aprobada aplicable; no es una nueva cotización ni una garantía concedida.',reviewQuestion:'¿Qué respuesta verificada corresponde a esta pregunta?',reply:'Con gusto. Tu pregunta quedó pendiente de revisión.'};
+  const ordinaryLiteralAnswer=literalIntakeTurn(e)&&(Object.keys(literal).length||next.intakeSources?.locationDetails?.sourceId===e.id);
+  if(company==='fumigacion'&&ownIntent(analysis,e)?.kind==='general-question'&&!ordinaryLiteralAnswer&&!ordinaryAvailability)return {state:{...next,slots:{...state.slots}},reviewTopic:'customer-question',reviewConditions:{kind:'general-question'},review:'La persona consulta condiciones generales. Falta una respuesta aprobada aplicable; no es una nueva cotización ni una garantía concedida.',reviewQuestion:'¿Qué respuesta verificada corresponde a esta pregunta?',reply:'Con gusto. Tu pregunta quedó pendiente de revisión.'};
   if(company==='fumigacion'&&(requestedControl(e.text)||state.requestedControlReview)){
     const reference=state.requestedControlReview||{sourceId:e.id,at:e.at,directCustomerReport:!e.forwarded};
     return {state:{...next,requestedControlReview:reference},reviewTopic:'service-followup',reviewConditions:{kind:'requested-control',directCustomerReport:reference.directCustomerReport},reviewSource:reference.sourceId,review:'La persona solicita una visita de control. Debe comprobarse el antecedente y el alcance; la solicitud no acredita un servicio anterior, intervalo aprobado, garantía, reserva ni precio.',reviewQuestion:'¿Qué antecedente y condiciones verificadas corresponden a esta solicitud de control?',reply:'Con gusto. Tu solicitud de control sigue pendiente de confirmación.'};
@@ -303,7 +329,7 @@ export function customerDecision(company,state,e,analysis={}) {
   }
   const mattressService=company==='fumigacion'&&normalize(next.slots.service).includes('chinches');
   const fields=company==='fumigacion'?['service','site',mattressService?'mattresses':'size','location']:['service','detail','location'];
-  const missing=fields.find(f=>f==='size'?!next.slots.area&&!next.slots.rooms:!next.slots[f]);
+  const missing=fields.find(f=>f==='size'?!next.slots.area&&!next.slots.rooms:!next.slots[f]||company==='fumigacion'&&f==='service'&&normalize(next.slots.service)==='fumigacion');
   const questions={service:company==='fumigacion'?'¿Qué plaga deseas tratar o buscas un servicio preventivo?':'¿Qué equipo necesitas revisar?',site:'¿En qué tipo de inmueble necesitas el servicio?',size:'¿Cuántas habitaciones o metros cuadrados tiene el lugar?',mattresses:'¿Cuántos colchones están afectados? Cuéntame también si hay chinches en bases de cama u otros muebles.',detail:'¿Qué falla presenta el equipo?',location:'¿En qué municipio y barrio necesitas el servicio?'};
   if(/[?¿]/.test(literalText)&&/\b(eso|lo anterior|lo que (?:me )?(?:dij|coment|indic|explic)|me habian|me hab[ií]as|mismo (?:precio|horario|servicio)|como qued|que qued)\w*/.test(t))
     return {state:next,reviewTopic:'previous-communication',review:'El cliente pregunta por algo comunicado antes. Hay que relacionar su pregunta con el contexto guardado y el servicio correcto antes de contestar.',reply:'Gracias. Revisaremos lo que ya conversamos para responder tu pregunta con claridad.'};
@@ -515,7 +541,7 @@ export class Engine {
       if(/^[¡! ]*(?:hola\b|buenos dias\b|buen dia\b|buenas tardes\b|buenas noches\b)/.test(normalize(e.text))&&!conv.state.introduced&&decision.reply){
         if(c.company==='fumigacion'&&!selectedPrice&&!decision.courtesy&&!decision.review&&!decision.question&&!decision.observed){
           const missing=decision.state.slots,requests=[];
-          if(!missing.service)requests.push('Qué plaga deseas tratar o si buscas prevención.');
+          if(!missing.service||normalize(missing.service)==='fumigacion')requests.push('Qué plaga deseas tratar o si buscas prevención.');
           if(normalize(missing.service).includes('chinches')){
             if(!missing.site)requests.push('Qué tipo de inmueble es.');
             if(!missing.mattresses)requests.push('Cuántos colchones están afectados y si también hay chinches en bases de cama u otros muebles.');

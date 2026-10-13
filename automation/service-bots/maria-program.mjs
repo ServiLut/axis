@@ -5,7 +5,8 @@ import {operationalLineAllowed,operationalCoverage} from './line-scope.mjs';
 
 export const MARIA_PROGRAM_GUARD='own-accepted-ordinary-service-literal-fields-and-atomic-receipt-v2';
 export const MARIA_PROGRAM_PIPELINE_GUARD='processed-customer-turn-before-registration-v1';
-export const MARIA_PROGRAM_LITERAL_FIELDS_GUARD='own-prompted-separate-name-address-and-native-source-v1';
+export const MARIA_PROGRAM_LITERAL_FIELDS_GUARD='own-prompted-separate-name-address-standard-labels-and-native-source-v2';
+export const MARIA_PROGRAM_OPERATIONAL_CONTINUATION_GUARD='own-saved-order-new-quoted-operation-and-customer-continuity-v1';
 export const MARIA_TENANT='9ffea9df-1e06-4590-acec-0e5cde715ba9';
 export const MARIA_COMPANY='35a19d89-15d1-4c32-8353-3471b6d9f0ff';
 export const MARIA_PROGRAM_URL='https://tenaxis-backend-0zeuja.servilutioncrm.cloud/integrations/maria-service-registration';
@@ -85,12 +86,13 @@ export function acceptsOrdinaryQuotation(text){
  return /^(?:si|listo|dale|acepto|de acuerdo|confirmo|correcto|esta bien|perfecto|si esta bien|si confirmo|si acepto|todo correcto|si todo correcto|si correcto|listo esta bien|ok|okay)(?: (?:agendame|programame|reservame|agenda el servicio|programa el servicio|quiero el servicio)(?: para)?(?: (?:hoy|manana|pasado manana|el lunes|el martes|el miercoles|el jueves|el viernes|el sabado|el domingo))?(?: (?:en la manana|en la tarde|en la noche|a las? \d{1,2}(?::\d{2})?(?: am| pm)?))?)?(?: (?:por favor|gracias|muchas gracias))*$/.test(t);
 }
 const confirms=acceptsOrdinaryQuotation;
-const fieldLabels=()=>/(?:\b(?:mi nombre(?: completo)?(?: es)?|nombre completo|me llamo|a nombre de)|\b(?:(?:mi|la) direcci[oó]n(?: completa)?(?: es)?|direcci[oó]n(?: completa)?))\s*[: ,]*\s*/giu;
+const fieldLabels=()=>/(?:\b(?:mi nombre(?: completo)?(?: es)?|nombre completo|nombre(?=\s*:)|me llamo|a nombre de)|\b(?:(?:mi|la) direcci[oó]n(?: completa)?(?: es)?|direcci[oó]n(?: completa)?))\s*[: ,]*\s*/giu;
 const fieldValue=(text,hits,i)=>text.slice(hits[i].index+hits[i][0].length,hits[i+1]?.index??text.length).trim().replace(/(?:\s+y)?[\s,;.!]*$/u,'').trim();
 function explicitFields(text){
  const hits=[...text.matchAll(fieldLabels())],fields={};
  for(let i=0;i<hits.length;i++){
   const hit=hits[i],key=/direcci[oó]n/i.test(hit[0])?'address':'name';
+  if(key==='name'&&relayedNameSource(text.slice(0,hit.index)))continue;
   let value=fieldValue(text,hits,i);
   // A sentence after an explicitly labelled fact is not part of that fact.
   value=value.split(/[;\n]|\.\s+(?=[¿¡\p{L}])/u)[0].trim();
@@ -118,8 +120,9 @@ export function literalIntakeTextWithoutRegistrationFields(text){
 function literalName(text,prompted){
  const explicit=text.match(/^(?:mi nombre (?:es|completo es)|me llamo|a nombre de|nombre completo)\s*[: ,]*\s+(.+)$/i);
  const name=(explicit?.[1]||(prompted?text:'' )).trim().replace(/[.!]+$/,'').trim();
- if(/[\r\n]/.test(name)||registrationPreface.test(normalize(name))||! /^[\p{L}][\p{L}'’-]*(?:[^\S\r\n]+[\p{L}][\p{L}'’-]*){1,9}$/u.test(name)||/\b(?:quiero|necesito|gracias|servicio|manana|hoy|cucarachas|refuerzo|garantia|no|si|nombre)\b/.test(normalize(name)))return null;return name;
+ if(/[\r\n]/.test(name)||registrationPreface.test(normalize(name))||relayedNameSource(name)||! /^[\p{L}][\p{L}'’-]*(?:[^\S\r\n]+[\p{L}][\p{L}'’-]*){1,9}$/u.test(name)||/\b(?:quiero|necesito|gracias|servicio|manana|hoy|cucarachas|refuerzo|garantia|no|si|nombre|descuento|gratis|dijo|dice|anonimo|cliente|empresa)\b/.test(normalize(name)))return null;return name;
 }
+const relayedNameSource=text=>/(?:\b(?:el|la|mi|su)\s+(?:tecnic[oa]|asesor[ae]?|vecin[oa])\b|\b(?:un tercero|otra persona|me dijo|me dice)\b)/.test(normalize(text));
 function literalAddress(text,prompted){
  const explicit=text.match(/^(?:(?:mi|la) direcci[oó]n(?: completa)?(?: es)?|direcci[oó]n(?: completa)?)\s*[: ,]+(.+)$/i);
  const address=(explicit?.[1]||(prompted?text:'')).trim();
@@ -252,6 +255,20 @@ export function registrationTurn(s,c,previous,e,decision){
  return {state,observed:true,observedState:'PROGRAM_REGISTRATION_PENDING'};
 }
 function receiptValid(c,entry,r){return ownScope(c,r)&&r.createdById===c.mariaProgram.actorId&&r.phone===entry.payload.phone&&r.persisted===true&&uuid.test(r.orderId||'')&&r.caseId===entry.payload.caseId&&r.acceptanceId===entry.payload.quote.acceptanceId&&r.requestHash===entry.requestHash&&r.state==='NUEVO'&&r.scheduled===false&&r.paymentRecorded===false;}
+// Only the creation of a new operational question may prepare continuity.
+// Existing questions never acquire this marker after an upgrade or rerouting.
+export function prepareRegisteredTesaContinuation(s,c,request,result){
+ if(c.company!=='fumigacion'||!result?.created||!result.outboxId?.startsWith('tesa-question:')||request.topic!=='disponibilidad-y-tecnico')return false;
+ const conv=s.conversation(request.phone),entry=get(s,prefix+request.caseId),q=s.db.prepare('SELECT * FROM tesa_questions WHERE id=? AND company=?').get(result.id,c.company);
+ if(!conv||conv.hold||conv.state.caseId!==request.caseId||conv.state.programIntake?.stage!=='registered'||!entry||entry.status!=='SAVED'||!receiptValid(c,entry,entry.receipt)||conv.state.programServiceId!==entry.receipt.orderId||!q||q.state!=='PENDING'||q.source_line!==request.line)return false;
+ const body=s.open(q.body);
+ if(body.conditions?.programServiceId!==entry.receipt.orderId||body.conditions?.quotedPriceCop!==entry.payload.quote.priceCop)return false;
+ const key='tesa-continuation-plan:'+result.id;
+ if(get(s,key))return false;
+ put(s,key,{guard:MARIA_PROGRAM_OPERATIONAL_CONTINUATION_GUARD,questionId:result.id,caseId:request.caseId,phone:request.phone,line:request.line,revision:conv.revision,customerAt:conv.at,slotsHash:registrationHash(conv.state.slots),orderId:entry.receipt.orderId,receiptHash:entry.requestHash,preparedAt:Date.now()});
+ s.audit('OWN_SAVED_ORDER_OPERATIONAL_CONTINUITY_PREPARED',request.source,{caseId:request.caseId,questionId:result.id,orderId:entry.receipt.orderId,scheduled:false,paymentsEnabled:false,historicalQuestionAdopted:false});
+ return true;
+}
 async function nativeMessage(t,c,id,phone,line){
  const l=c.lines.find(x=>x.phone===line);if(!l||typeof t.request!=='function')throw Error('PROGRAM_NATIVE_RECHECK_REQUIRED');
  const response=await t.request(l,'/chat/findMessages/'+encodeURIComponent(l.instance),{where:{key:{id}},offset:10,page:1});
@@ -271,7 +288,7 @@ function registrationOperationalScope(s,c,entry){
  return Object.values(p.sources||{}).every(src=>Boolean(s.db.prepare('SELECT 1 FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(src.id,p.phone,p.line)))&&
   Boolean(s.db.prepare('SELECT 1 FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(p.quote.sourceId,p.phone,p.line));
 }
-const neutralCourtesy=text=>/^(?:gracias|muchas gracias|mil gracias|muy amable|gracias muy amable)[.!¡, ]*$/.test(normalize(text));
+const neutralCourtesy=text=>/^(?:gracias|muchas gracias|mil gracias|muy amable|gracias muy amable)$/.test(normalize(text).replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim());
 function storedCourtesy(s,p,id){
  const row=s.db.prepare("SELECT * FROM events WHERE id=? AND phone=? AND line=? AND from_me=0 AND state NOT IN ('PENDING','PROCESSING')").get(id,p.phone,p.line);
  if(!row)return null;const event=s.open(row.body);
@@ -349,6 +366,7 @@ function saved(s,c,key,entry,r,routeQuestion){
      if(typeof routeQuestion!=='function'&&c.tesaOperations?.enabled)throw Error('PROGRAM_OPERATIONAL_ROUTER_REQUIRED');
      const routed=typeof routeQuestion==='function'?routeQuestion(s,c,question):s.questionToRecipients(question);
      if(routed?.then)throw Error('PROGRAM_OPERATIONAL_ROUTER_MUST_BE_SYNC');
+     prepareRegisteredTesaContinuation(s,c,question,routed);
      if(routed?.outboxId?.startsWith('tesa-question:'))conv.state.pendingTesaQuestionId=routed.id;
      conv.state.awaitingHumanReview=true;s.saveConversation(p.phone,conv.state);
     }catch{

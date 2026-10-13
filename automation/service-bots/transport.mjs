@@ -3,12 +3,12 @@ import {explicitNewTechnicalCase,technicalIntakeMetaQuestion} from './technical-
 import { SANDRA, DIEGO, HILARY, CURRENT_OPERATOR_ROUTING, publicTextSafe, normalize,internalRecipients,knownInternalRecipient } from './config.mjs';
 import {parseChiefDocument} from './chief-document.mjs';
 import {selectPrice,verifyPriceSource} from './prices.mjs';
-import {understandOwnCustomer,composeOwnReply,replyCandidates,probeOwnAi} from './conversational-ai.mjs';
+import {understandOwnCustomer,composeOwnReply,ownReplyTextAllowed,probeOwnAi} from './conversational-ai.mjs';
 import {drainProgramRegistrations,acceptsOrdinaryQuotation} from './maria-program.mjs';
 import {routeCaseQuestion} from './engine.mjs';
 import {initializeInactivityFollowup,queueInactivityFollowups,inactivityDeliveryValid,recordResponseTiming} from './inactivity-followup.mjs';
 import {tesaCaseAnswers} from './tesa-operations.mjs';
-import {drainTesaGroup} from './tesa-transport.mjs';
+import {drainTesaGroup,tesaCustomerReplyStillValid} from './tesa-transport.mjs';
 import {assertOperationalLineScope,operationalLines,operationalLineAllowed,operationalHistoryGuard,operationalCoverage} from './line-scope.mjs';
 
 export class Transport {
@@ -221,6 +221,18 @@ export async function drain(store,config,transport,engine) {
 export async function flushOutbox(store,config,transport){
   await drainProgramRegistrations(store,config,transport,routeCaseQuestion);
   let accepted=0,suppressed=0,uncertain=0;
+  const checkTesaContinuation=async outbox=>{
+    if(!outbox.id.startsWith('tesa-continuation:'))return true;
+    try{
+      const valid=await tesaCustomerReplyStillValid(store,config,transport,outbox);
+      if(valid===true)return true;
+      // A pending verified courtesy waits for ordinary Engine processing. It
+      // neither changes the case nor proves a reason for permanent review.
+      if(valid===null)return false;
+    }catch{}
+    store.db.prepare("UPDATE outbox SET state='TESA_ANSWER_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),outbox.id);
+    store.audit('TESA_CONTINUATION_BEFORE_SEND_REVIEW',outbox.id,{attemptedSend:false,humanAttentionPreserved:true});suppressed++;return false;
+  };
   const out=store.db.prepare("SELECT * FROM outbox WHERE state='READY' AND (?=1 OR (internal=1 AND phone IN (?,?,?))) ORDER BY created,rowid LIMIT 20").all(Number(config.enabled),SANDRA,DIEGO,HILARY);
   for(const o of out) {
     const lineScope=assertOperationalLineScope(config);
@@ -262,10 +274,14 @@ export async function flushOutbox(store,config,transport){
     // their separate channel check.
     const ownerCheckedByNativeAttention=!o.internal&&config.historyCheckRequired&&transport instanceof Transport&&transport.config===config&&transport.currentAttention===Transport.prototype.currentAttention&&transport.verifyLine===Transport.prototype.verifyLine&&transport.verifyLineBinding===Transport.prototype.verifyLineBinding&&transport.request===Transport.prototype.request&&operationalLineAllowed(config,o.line);
     if(!ownerCheckedByNativeAttention){try{await transport.verifyLine(o.line);}catch{store.audit('CHANNEL_CHECK_FAILED',o.id);continue;}}
-    if(!o.internal&&config.responseTargetMs!==3000&&config.conversationalAi?.ready&&typeof transport.composeReply==='function'&&store.approvedReplyStillValid(o)&&store.priceReplyStillValid(o)){
+    if(!await checkTesaContinuation(o))continue;
+    // The latency target controls worker scheduling; it must not silently turn
+    // off Maria's contextual reply planner. Provider failures retain her useful
+    // deterministic next step, and every await still rechecks human attention.
+    if(!o.internal&&(config.company==='fumigacion'||config.responseTargetMs!==3000)&&config.conversationalAi?.ready&&typeof transport.composeReply==='function'&&store.approvedReplyStillValid(o)&&store.priceReplyStillValid(o)){
       try{
         const composed=await transport.composeReply(o,text,store);
-        if(!replyCandidates(text,config.company).includes(composed))throw Error('AI_REPLY_NOT_APPROVED');
+        if(!ownReplyTextAllowed(config,store,o,text,composed))throw Error('AI_REPLY_NOT_APPROVED');
         if(composed!==text)store.tx(()=>{
           const current=store.conversation(o.phone);
           if(current?.hold||current?.revision!==o.revision)return;
@@ -273,7 +289,7 @@ export async function flushOutbox(store,config,transport){
           if(!store.db.prepare("UPDATE outbox SET body=? WHERE id=? AND state='READY'").run(body,o.id).changes)return;
           const ref=store.priceReplyReference(o);
           if(ref)store.savePriceReplyReference(o.id,{...ref,finalText:composed});
-          store.audit('AI_APPROVED_WORDING_SELECTED',o.id,{originalText:text,finalText:composed,caseId:o.case_id,priceCop:ref?.priceCop||null,claimsGenerated:false});
+          store.audit('AI_APPROVED_WORDING_SELECTED',o.id,{originalText:text,finalText:composed,caseId:o.case_id,priceCop:ref?.priceCop||null,claimsGenerated:false,contextualPlan:config.company==='fumigacion'});
           o.body=body;text=composed;
         });
       }catch{store.audit('AI_WORDING_FALLBACK',o.id,{deterministicReplyRetained:true});}
@@ -329,6 +345,9 @@ export async function flushOutbox(store,config,transport){
       }
       continue;
     }
+    // The quoted human answer may change during a channel/model/price await.
+    // Recheck its exact native proof and customer attention before reserving.
+    if(!await checkTesaContinuation(o))continue;
     if(!store.db.prepare("UPDATE outbox SET state='SENDING',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id).changes)continue;
     try {
       const mid=await transport.send(o,text);

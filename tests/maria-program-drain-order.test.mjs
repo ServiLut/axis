@@ -33,6 +33,12 @@ test('real fast drain resolves a queued native courtesy before consuming a prepa
 test('the real fast drain can register a complete prepared case with no newer customer input',async()=>{const f=fixture();try{
  await f.ready();await drain(f.store,f.config,f.transport,f.engine);assert.equal(f.stats().writes,1);assert.equal(registrationStatus(f.config,f.store).saved,1);assert.equal(f.store.conversation('573001112233').state.programServiceId,ORDER);
 }finally{f.store.close();}});
+test('punctuation inside a native pure courtesy does not turn an accepted complete registration into review',async()=>{
+ for(const text of ['Gracias, muy amable.','Gracias; muy amable!']){const f=fixture();try{
+  const {acceptance}=await f.ready();f.store.enqueue(f.event(text));await drain(f.store,f.config,f.transport,f.engine);
+  assert.equal(f.stats().writes,1,text);assert.equal(registrationStatus(f.config,f.store).saved,1);assert.equal(registrationStatus(f.config,f.store).review,0);assert.equal(f.stats().payload.quote.acceptanceId,acceptance.id);
+ }finally{f.store.close();}}
+});
 test('courtesy arriving during native attention or activity reads is deferred until Engine classifies it',async()=>{
  for(const phase of ['attention','activity-before-snapshot','activity-after-snapshot']){const f=fixture();try{
   const {acceptance}=await f.ready(),key=f.store.db.prepare("SELECT key,value FROM meta WHERE key LIKE 'maria-registration:%'").get(),original=f.store.open(key.value);

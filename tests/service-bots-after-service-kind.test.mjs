@@ -5,6 +5,8 @@ import {customerDecision,Engine} from '../automation/service-bots/engine.mjs';
 import {Store} from '../automation/service-bots/store.mjs';
 import {BUSINESSES,OPERATOR_ROUTING,DIEGO,HILARY,SANDRA} from '../automation/service-bots/config.mjs';
 import {afterServiceKind,explicitNewService} from '../automation/service-bots/after-service.mjs';
+import {CONVERSATIONAL_AI_GUARD} from '../automation/service-bots/ai-settings.mjs';
+import {MARIA_UNDERSTANDING_GUARD} from '../automation/service-bots/maria-understanding.mjs';
 const initial={slots:{},asked:[]};
 const decision=text=>customerDecision('fumigacion',initial,{id:'LOCAL',at:1,kind:'text',text});
 function fixture(){const store=new Store(':memory:','fumigacion',randomBytes(32)),config={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,chiefOnly:true,operatorRouting:OPERATOR_ROUTING},engine=new Engine(store,config);let n=0;const at=Date.now();const enqueue=(text,extra={})=>{const e={id:'AFTER'+(++n),at:at+n,phone:'573001112233',line:config.phones[0],fromMe:false,kind:'text',text,...extra};store.enqueue(e);return e;};return {store,enqueue,handle:e=>engine.process(e),async process(text,extra={}){const e=enqueue(text,extra);await engine.process(e);return e;}};}
@@ -46,6 +48,16 @@ test('negative and explanatory phrases do not authorize a new case or a return r
  for(const text of ['No necesito refuerzo','¿Qué es un refuerzo?','¿Incluye un refuerzo?','¿Tiene garantía?'])assert.equal(afterServiceKind(text),null,text);
  assert.equal(afterServiceKind('Necesito un servicio nuevo y un refuerzo'),'ambiguous-followup');
  assert.equal(decision('Necesito un servicio nuevo y un refuerzo').reviewConditions.kind,'ambiguous-followup');
+});
+test('an ambiguous label needs a literal or preserved previous-service antecedent',()=>{
+ const state={slots:{location:'medellin'},asked:['service']};
+ for(const text of ['Enciso','Cucarachas','Un apartamento','42 mts2','Si necesitara un refuerzo, ¿qué incluye?','No necesito refuerzo ni revisar un tratamiento anterior']){
+  const e={id:'LOCAL_AMBIGUOUS',at:1,kind:'text',text,fromMe:false},a={company:'FUMIGACION',eventId:e.id,guard:CONVERSATIONAL_AI_GUARD,semanticGuard:MARIA_UNDERSTANDING_GUARD,intent:{kind:'ambiguous',evidence:text}};
+  assert.equal(customerDecision('fumigacion',state,e,a).state.requestedAfterServiceReview,undefined,text);
+ }
+ const text='Necesito fumigar otra casa y revisar el tratamiento anterior',e={id:'LOCAL_MIXED_SERVICE',at:1,kind:'text',text};
+ const a={company:'FUMIGACION',eventId:e.id,guard:CONVERSATIONAL_AI_GUARD,semanticGuard:MARIA_UNDERSTANDING_GUARD,intent:{kind:'ambiguous',evidence:text}};
+ assert.equal(customerDecision('fumigacion',state,e,a).reviewConditions.kind,'ambiguous-followup');
 });
 test('a later warranty claim keeps the original reinforcement source and its old destinations',async()=>{
  const f=fixture();try{const first=await f.process('Refuerzo'),claim=await f.process('Solicito la garantía del servicio');await f.process('Necesito hacer efectiva la garantía');const state=f.store.conversation(first.phone).state;assert.equal(state.requestedAfterServiceReview.sourceId,first.id);assert.equal(state.requestedAfterServiceReview.warrantySource.sourceId,claim.id);assert.deepEqual(f.store.db.prepare('SELECT recipient,topic FROM questions ORDER BY rowid').all().map(r=>({...r})),[{recipient:DIEGO,topic:'service-followup'},{recipient:SANDRA,topic:'warranty-review'}]);assert.deepEqual(f.store.db.prepare('SELECT phone FROM outbox WHERE internal=1 ORDER BY phone').all().map(r=>r.phone),[DIEGO,HILARY,SANDRA].sort());assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM outbox WHERE internal=0').get().n,2);}finally{f.store.close();}

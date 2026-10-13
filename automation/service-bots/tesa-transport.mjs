@@ -1,11 +1,129 @@
 import {createHash} from 'node:crypto';
 import {getTesaConfig} from './tesa-config.mjs';
-import {decodeTesaGroupWebhook} from './tesa-webhook.mjs';
+import {decodeTesaGroupWebhook,validateTesaGroupEvent} from './tesa-webhook.mjs';
 import {observeTesaGroupEvent,acceptTesaQuotedAnswer,bindTesaQuestionDelivery,tesaOutboxScopeSafe} from './tesa-operations.mjs';
 import {operationalCoverage} from './line-scope.mjs';
+import {registrationHash,MARIA_PROGRAM_OPERATIONAL_CONTINUATION_GUARD} from './maria-program.mjs';
+import {publicTextSafe,normalize} from './config.mjs';
 
 const nativeText=r=>{const m=r.message?.ephemeralMessage?.message??r.message??{};return m.conversation??m.extendedTextMessage?.text??null;};
 const phoneJid=j=>/^57\d{10}@s\.whatsapp\.net$/.test(j??'')?j.split('@')[0]:null;
+const getMeta=(s,key)=>{const row=s.db.prepare('SELECT value FROM meta WHERE key=?').get(key);return row?s.open(row.value):null;};
+const putMeta=(s,key,value)=>s.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key,s.seal(value));
+const continuationPrefix='tesa-continuation:';
+const bogotaDay=at=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Bogota',year:'numeric',month:'2-digit',day:'2-digit'}).format(at);
+const neutralCourtesy=text=>/^(?:gracias|muchas gracias|mil gracias|muy amable|gracias muy amable)$/.test(normalize(text).replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim());
+function pendingContinuationCourtesy(s,plan){
+ const rows=s.db.prepare("SELECT line,body FROM events WHERE phone=? AND from_me=0 AND state IN ('PENDING','PROCESSING')").all(plan.phone);
+ return rows.length>0&&rows.length<=3&&rows.every(row=>{const event=s.open(row.body);return row.line===plan.line&&event.kind==='text'&&!event.forwarded&&!event.fromMe&&event.at>=plan.customerAt&&neutralCourtesy(event.text);});
+}
+function continuationCourtesies(s,plan,conv){
+ const delta=conv.revision-plan.revision;if(delta===0)return conv.at===plan.customerAt?[]:null;
+ if(delta<0||delta>3)return null;
+ const rows=s.db.prepare('SELECT line,body,state,revision FROM events WHERE phone=? AND from_me=0 AND revision>? AND revision<=? ORDER BY revision').all(plan.phone,plan.revision,conv.revision);
+ if(rows.length!==delta)return null;
+ const events=rows.map(row=>s.open(row.body));
+ return rows.every((row,i)=>row.line===plan.line&&!['PENDING','PROCESSING'].includes(row.state)&&events[i].kind==='text'&&!events[i].forwarded&&!events[i].fromMe&&events[i].at>=plan.customerAt&&neutralCourtesy(events[i].text))?events:null;
+}
+
+function currentContinuation(s,c,plan,questionId){
+ if(c.company!=='fumigacion'||!c.enabled||plan?.guard!==MARIA_PROGRAM_OPERATIONAL_CONTINUATION_GUARD||plan.questionId!==questionId)return null;
+ const q=s.db.prepare('SELECT q.*,o.state delivery,o.mid,o.created outbox_created FROM tesa_questions q JOIN tesa_outbox o ON o.id=q.outbox_id WHERE q.id=? AND q.company=?').get(questionId,c.company),conv=s.conversation(plan.phone),entry=getMeta(s,'maria-registration:'+plan.caseId);
+ if(!q||q.state!=='ANSWERED'||q.valid_until<=Date.now()||!['DELIVERED','READ'].includes(q.delivery)||q.topic!=='disponibilidad-y-tecnico'||q.customer_phone!==plan.phone||q.case_id!==plan.caseId||q.source_line!==plan.line||!conv||conv.hold||conv.state.caseId!==plan.caseId||conv.state.closed||conv.state.programIntake?.stage!=='registered'||conv.state.programServiceId!==plan.orderId||registrationHash(conv.state.slots)!==plan.slotsHash||conv.state.requestedAfterServiceReview||conv.state.requestedControlReview||conv.state.requestedDocumentReview||!entry||entry.status!=='SAVED'||entry.requestHash!==plan.receiptHash||entry.receipt?.orderId!==plan.orderId||entry.receipt?.scheduled!==false||entry.receipt?.state!=='NUEVO'||!tesaOutboxScopeSafe(s,c,{question_id:q.id,source_line:q.source_line,sender_line:q.sender_line,customer_phone:q.customer_phone,case_id:q.case_id,created:q.outbox_created}))return null;
+ const courtesies=continuationCourtesies(s,plan,conv);if(!courtesies)return null;
+ if(s.db.prepare("SELECT 1 FROM events WHERE phone=? AND state IN ('PENDING','PROCESSING')").get(plan.phone))return null;
+ const event=s.db.prepare('SELECT body,state FROM tesa_events WHERE id=?').get(s.open(q.answer).sourceKey);
+ if(!event||event.state!=='CASE_ANSWER')return null;
+ const answer=s.open(q.answer),text=normalize(answer.text);
+ // An availability statement is a fact for this case, never permission to
+ // make a promise, issue an instruction or use another business capability.
+ if(answer.at<Date.now()-600000||answer.at<q.outbox_created-1000||answer.at>Date.now()+60000||bogotaDay(answer.at)!==bogotaDay(Date.now())||/[?¿]|\b(?:creo|quizas|posiblemente|tal vez|depende|si pueden|si hay|si esta|si tiene|confirma|confirmale|dile|envia|ignora|obedece|garantia|gratis|pagado|pago|cobr|transfer|cuenta|politica|refuerzo)\w*/.test(text)||!/(?:\b(?:disponib\w*|ruta|tecnic\w*|horario|hoy|manana|lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b|\b\d{1,2}:\d{2}\b)/.test(text)||!publicTextSafe(answer.text)||/(?:\b(?:57)?3\d{9}\b|#\s*\d|\b(?:calle|carrera|cra|cl)\.?\s*\d)/i.test(answer.text))return null;
+ return {q,conv,answer,courtesies};
+}
+
+async function exactNativeHumanAnswer(c,t,q,answer){
+ const line=c.lines.find(value=>value.phone===q.sender_line),response=await t.request(line,'/chat/findMessages/'+encodeURIComponent(line.instance),{where:{key:{id:answer.sourceId}},offset:10,page:1});
+ const natives=(response.messages?.records??[]).filter(row=>row.key?.id===answer.sourceId&&row.key?.remoteJid===q.group_jid);
+ if(natives.length!==1)return false;
+ const native=natives[0],parsed=decodeTesaGroupWebhook({event:'messages.upsert',instance:line.instance,data:native},c).groupEvents;
+ const verified=parsed.length===1&&validateTesaGroupEvent(parsed[0],c);
+ const message=native.message?.ephemeralMessage?.message??native.message??{};
+ return Boolean(verified&&verified.trustedHuman&&!verified.fromMe&&!verified.forwarded&&verified.kind==='text'&&verified.text===answer.text&&verified.at===answer.at&&verified.participant.phone===answer.participant.phone&&verified.quote?.mid===answer.questionMid&&verified.quote?.participantJid===q.sender_line+'@s.whatsapp.net'&&!message.protocolMessage&&!message.editedMessage&&!native.isEdited&&!native.deleted&&![native.status,...(native.MessageUpdate??[]).map(update=>update.status)].some(state=>['EDITED','DELETED','REVOKED'].includes(state)));
+}
+
+async function verifiedContinuation(s,c,t,plan,questionId){
+ let current=currentContinuation(s,c,plan,questionId);if(!current)return null;
+ const {q,answer,courtesies}=current,revision=current.conv.revision;
+ if(!getTesaConfig(c)||typeof t.currentCustomerActivity!=='function'||typeof t.currentAttention!=='function')return null;
+ const own=s.db.prepare('SELECT * FROM tesa_outbox WHERE question_id=?').get(questionId);
+ if(!await verifyTesaNativeDelivery(s,c,t,own)||!await exactNativeHumanAnswer(c,t,q,answer))return null;
+ const attention=await t.currentAttention(plan.phone);if(!attention.complete)return null;
+ const unknown=attention.sources.find(item=>!s.db.prepare('SELECT 1 FROM outbox WHERE mid=? AND phone=? AND line=?').get(item.id,plan.phone,item.line));
+ if(unknown){s.hold(plan.phone,unknown.id);return null;}
+ const activity=await t.currentCustomerActivity(plan.phone,plan.customerAt);
+ if(!activity.complete||!activity.sources.length||activity.sources.some(item=>{const row=s.db.prepare('SELECT line,at,revision FROM events WHERE id=? AND phone=? AND from_me=0').get(item.id,plan.phone);return !row||row.line!==plan.line||row.at!==item.at||row.revision>revision;}))return null;
+ for(const event of courtesies){
+  const ownLine=c.lines.find(value=>value.phone===plan.line),data=await t.request(ownLine,'/chat/findMessages/'+encodeURIComponent(ownLine.instance),{where:{key:{id:event.id}},offset:10,page:1}),matches=(data.messages?.records??[]).filter(row=>row.key?.id===event.id&&(row.key.remoteJid===plan.phone+'@s.whatsapp.net'||row.key.remoteJidAlt===plan.phone+'@s.whatsapp.net'));
+  if(matches.length!==1)return null;const row=matches[0],message=row.message?.ephemeralMessage?.message??row.message??{},contexts=[message.extendedTextMessage?.contextInfo,message.messageContextInfo,row.contextInfo].filter(Boolean);
+  if(row.key.fromMe!==false||nativeText(row)!==event.text||Number(row.messageTimestamp)*1000!==event.at||contexts.some(context=>context.isForwarded||Number(context.forwardingScore)>0))return null;
+ }
+ // Attention/activity/courtesy reads can yield while the native human body is
+ // edited without a webhook. Re-read that exact source after every such await;
+ // only synchronous persisted checks remain before the send reservation.
+ if(!await exactNativeHumanAnswer(c,t,q,answer))return null;
+ current=currentContinuation(s,c,plan,questionId);return current&&current.conv.revision===revision&&current.q.mid===q.mid&&current.answer.sourceId===answer.sourceId&&current.answer.text===answer.text?current:null;
+}
+
+// Transport calls this before composition and once more immediately before
+// reserving a send. Another reply/edit, takeover or new customer fact stops it.
+export async function tesaCustomerReplyStillValid(s,c,t,outbox){
+ if(!outbox?.id?.startsWith(continuationPrefix))return true;
+ const questionId=outbox.id.slice(continuationPrefix.length),ref=getMeta(s,'tesa-continuation-reply:'+outbox.id);
+ if(!ref||ref.text!==s.open(outbox.body)||ref.questionId!==questionId||ref.revision!==outbox.revision)return false;
+ // Wait for Engine to classify an authenticated courtesy already in the queue.
+ // Null is a deferral, not approval to send and not irreversible review.
+ if(pendingContinuationCourtesy(s,ref.plan))return null;
+ const revisionBefore=s.conversation(ref.plan.phone)?.revision;
+ const current=await verifiedContinuation(s,c,t,ref.plan,questionId);
+ if(!current&&(pendingContinuationCourtesy(s,ref.plan)||s.conversation(ref.plan.phone)?.revision!==revisionBefore&&currentContinuation(s,c,ref.plan,questionId)?.courtesies.length))return null;
+ if(!current||current.answer.sourceId!==ref.sourceId||current.answer.text!==ref.answerText||current.conv.state.verifiedTesaAnswerSource!==ref.sourceId||current.conv.state.awaitingHumanReview)return false;
+ if(current.conv.revision!==outbox.revision){
+  const revised=s.tx(()=>{
+   const latest=currentContinuation(s,c,ref.plan,questionId);if(!latest||latest.conv.revision!==current.conv.revision||latest.answer.sourceId!==ref.sourceId)return false;
+   if(!s.db.prepare("UPDATE outbox SET revision=? WHERE id=? AND state='READY' AND revision=?").run(latest.conv.revision,outbox.id,outbox.revision).changes)return false;
+   putMeta(s,'tesa-continuation-reply:'+outbox.id,{...ref,revision:latest.conv.revision});outbox.revision=latest.conv.revision;
+   s.audit('TESA_NEUTRAL_CUSTOMER_COURTESY_RECHECKED',outbox.id,{caseId:ref.plan.caseId,questionId,sourceIds:latest.courtesies.map(event=>event.id),acceptanceRenewed:false,receiptChanged:false,customerReplyDuplicated:false});return true;
+  });if(!revised)return false;
+ }
+ return true;
+}
+
+async function continueRegisteredCustomer(s,c,t,accepted){
+ const plan=getMeta(s,'tesa-continuation-plan:'+accepted.questionId);if(!plan)return {prepared:false,queued:false};
+ let current;const revisionBefore=s.conversation(plan.phone)?.revision;
+ try{current=await verifiedContinuation(s,c,t,plan,accepted.questionId);}catch{
+  // No send has been reserved. Keep a retry for this new, explicitly prepared
+  // question only; a duplicate webhook or a historical answer is not replayed.
+  putMeta(s,'tesa-continuation-read:'+accepted.questionId,{questionId:accepted.questionId,caseId:accepted.caseId,customerPhone:accepted.customerPhone,id:accepted.id,state:'PENDING_NATIVE_READ',nextAt:Date.now()+60000});
+  s.audit('TESA_CUSTOMER_CONTINUITY_NATIVE_READ_PENDING',accepted.id,{caseId:accepted.caseId,questionId:accepted.questionId,customerReplyQueued:false,businessWritten:false});return {prepared:true,queued:false};
+ }
+ s.db.prepare('DELETE FROM meta WHERE key=?').run('tesa-continuation-read:'+accepted.questionId);
+ if(!current){
+  if(pendingContinuationCourtesy(s,plan)||s.conversation(plan.phone)?.revision!==revisionBefore&&currentContinuation(s,c,plan,accepted.questionId)?.courtesies.length){putMeta(s,'tesa-continuation-read:'+accepted.questionId,{questionId:accepted.questionId,caseId:accepted.caseId,customerPhone:accepted.customerPhone,id:accepted.id,state:'PENDING_NATIVE_READ',nextAt:Date.now()+1000});s.audit('TESA_CUSTOMER_COURTESY_CLASSIFICATION_PENDING',accepted.id,{caseId:accepted.caseId,questionId:accepted.questionId,customerReplyQueued:false});return {prepared:true,queued:false};}
+  s.audit('TESA_CUSTOMER_CONTINUITY_REVIEW',accepted.id,{caseId:accepted.caseId,questionId:accepted.questionId,customerReplyQueued:false,businessWritten:false});return {prepared:true,queued:false};
+ }
+ const {answer}=current,text='Para tu solicitud registrada, la disponibilidad informada es: «'+answer.text+'». Esta disponibilidad todavía requiere confirmación en la agenda.';
+ if(!publicTextSafe(text))return {prepared:true,queued:false};
+ return s.tx(()=>{
+  const latest=currentContinuation(s,c,plan,accepted.questionId);if(!latest||latest.conv.state.pendingTesaQuestionId!==accepted.questionId)return {prepared:true,queued:false};
+  const id=continuationPrefix+accepted.questionId;
+  putMeta(s,'tesa-continuation-reply:'+id,{questionId:accepted.questionId,sourceId:answer.sourceId,answerText:answer.text,text,revision:latest.conv.revision,plan});
+  const queued=s.queue(id,plan.phone,plan.line,text,false,latest.conv.revision,plan.caseId);
+  s.saveConversation(plan.phone,{...latest.conv.state,awaitingHumanReview:false,pendingTesaQuestionId:null,verifiedTesaAnswerSource:answer.sourceId});
+  s.audit('TESA_OWN_OPERATIONAL_WAIT_FINISHED',answer.sourceId,{caseId:plan.caseId,questionId:accepted.questionId,humanHoldReleased:false,customerReplyQueued:queued,scheduled:false,businessWritten:false});
+  return {prepared:true,queued};
+ });
+}
 
 // Refresh only the already authorized group and its own sending instance.
 // Native membership supplies identity, never policy or permission to write business data.
@@ -67,7 +185,12 @@ export async function ingestTesaWebhook(store,config,transport,body){
     const answer=acceptTesaQuotedAnswer(store,config,event);
     if(answer?.accepted){
       caseAnswers++;
+      const continuation=await continueRegisteredCustomer(store,config,transport,answer);
+      if(continuation.prepared)continue;
       const conversation=store.conversation(answer.customerPhone);
+      if(config.company==='fumigacion'&&conversation?.state.programIntake?.stage==='registered'){
+        store.audit('TESA_HISTORICAL_CONTINUITY_PRESERVED',event.id,{caseId:answer.caseId,questionId:answer.questionId,customerReplyQueued:false,humanHoldReleased:false});continue;
+      }
       if(conversation&&!conversation.hold&&conversation.state.caseId===answer.caseId&&conversation.state.pendingTesaQuestionId===answer.questionId){
         // This finishes only the bot's own operational wait. A staff hold is never released.
         store.saveConversation(answer.customerPhone,{...conversation.state,awaitingHumanReview:false,pendingTesaQuestionId:null,verifiedTesaAnswerSource:event.id});
@@ -132,5 +255,7 @@ export async function drainTesaGroup(store,config,transport){
       store.audit('TESA_GROUP_SEND_UNCERTAIN',o.id,{cause:/^[A-Z_0-9]+$/.test(error.message??'')?error.message:'SEND_RESULT_UNCERTAIN',resend:false});uncertain++;
     }
   }
+  const pendingContinuity=store.db.prepare("SELECT key,value FROM meta WHERE key LIKE 'tesa-continuation-read:%' ORDER BY key LIMIT 3").all();
+  for(const row of pendingContinuity){const pending=store.open(row.value);if(pending.state==='PENDING_NATIVE_READ'&&pending.nextAt<=Date.now())await continueRegisteredCustomer(store,config,transport,pending);}
   return {enabled:true,accepted,uncertain,scopeReviewed};
 }
