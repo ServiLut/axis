@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
 import {BUSINESS_PRICE_HASH,approvedBusinessPriceSchedule} from './business-prices.mjs';
+import {chiefConversationRules} from './chief-actions.mjs';
 
 export const MARIA_KNOWLEDGE_GUARD='own-approved-rule-sources-current-quotation-and-context-v2';
 // These instructions summarize existing approved runtime controls. They do not
@@ -50,6 +51,11 @@ export function mariaModelKnowledge(config,store,phase,row){
  const selected=phase==='understand'?rules.filter(r=>['same-case','human-priority','post-service','tone-and-privacy'].includes(r.id)):rules;
  const result={company:'FUMIGACION',guard:MARIA_KNOWLEDGE_GUARD,version:MARIA_KNOWLEDGE_HASH,
   approvedRules:structuredClone(selected),complete:false,pendingKnowledgeMustNotBeInvented:true};
+ const communication=chiefConversationRules(store,config);
+ result.chiefConversationRules=communication;
+ // These sourced rules affect communication only. Static factual controls,
+ // prices, safety and company policy retain their separate authority.
+ result.approvedRules.push(...communication.rules.map(rule=>({id:'chief-communication:'+rule.id,source:rule.sourceId,text:rule.text,scope:rule.scope})));
  // The approved outbox already contains the result of pricing. Send only that
  // verified amount, never all case histories, staff text or internal minima.
  if(phase==='reply'&&row&&store.priceReplyStillValid(row)){

@@ -10,6 +10,9 @@ import {initializeInactivityFollowup,queueInactivityFollowups,inactivityDelivery
 import {tesaCaseAnswers} from './tesa-operations.mjs';
 import {drainTesaGroup,tesaCustomerReplyStillValid} from './tesa-transport.mjs';
 import {assertOperationalLineScope,operationalLines,operationalLineAllowed,operationalHistoryGuard,operationalCoverage} from './line-scope.mjs';
+import {drainChiefActions} from './chief-actions.mjs';
+import {decodeWebhook} from './webhook.mjs';
+import {validateEvent} from './config.mjs';
 
 export class Transport {
   constructor(config, fetcher=fetch){this.config=config;this.fetcher=fetcher;}
@@ -39,6 +42,20 @@ export class Transport {
     const binding=await this.verifyLineBinding(phone);
     if(!binding.open)throw new Error('CHANNEL_NOT_OPEN');
     return binding;
+  }
+  async verifyChiefCommandSource(source){
+    const c=this.config;
+    if(c.company!=='fumigacion'||source?.phone!==SANDRA||source.fromMe!==false||source.forwarded||source.kind!=='text'||!operationalLineAllowed(c,source.line))throw Error('CHIEF_NATIVE_SOURCE_UNVERIFIED');
+    const line=c.lines.find(l=>l.phone===source.line);if(!line)throw Error('CHIEF_NATIVE_SOURCE_UNVERIFIED');
+    await this.verifyLine(source.line);
+    const response=await this.request(line,'/chat/findMessages/'+encodeURIComponent(line.instance),{where:{key:{id:source.id}},offset:2,page:1});
+    const records=response?.messages?.records;
+    if(response?.messages?.total!==1||!Array.isArray(records)||records.length!==1)throw Error('CHIEF_NATIVE_SOURCE_UNVERIFIED');
+    const decoded=decodeWebhook({instance:line.instance,event:'messages.upsert',data:records},c);
+    if(decoded.events.length!==1)throw Error('CHIEF_NATIVE_SOURCE_UNVERIFIED');
+    const checked=validateEvent(decoded.events[0],c);
+    if(checked.id!==source.id||checked.phone!==SANDRA||checked.line!==source.line||checked.fromMe!==false||checked.forwarded||checked.kind!==source.kind||checked.text!==source.text||checked.at!==source.at||(checked.quotedId??null)!==(source.quotedId??null))throw Error('CHIEF_NATIVE_SOURCE_UNVERIFIED');
+    return {verified:true,sourceId:checked.id,phone:checked.phone,line:checked.line,at:checked.at};
   }
   async send(row,text) {
     if(!row.internal&&!this.config.enabled)throw new Error('CUSTOMER_GATE_CLOSED');
@@ -210,12 +227,17 @@ export async function drain(store,config,transport,engine) {
     await engine.process(e,analysis);
   }
   const after=await flushOutbox(store,config,transport);
+  // Deliver active client replies before the chief's potentially slower reads.
+  // The durable consumer runs outside the Engine transaction and uses the
+  // existing authenticated outbox for its checked results.
+  const chiefActions=await drainChiefActions(store,config,transport);
+  const chiefResults=chiefActions.processed?await flushOutbox(store,config,transport):{accepted:0,suppressed:0,uncertain:0};
   // Active reception takes precedence over inactivity scans. A fresh reply is
   // delivered before any optional native-history read for another open case.
   const followup=pending.length?{enabled:Boolean(config.inactivityFollowupEnabled),queued:0,deferredForActiveReception:true}:await queueInactivityFollowups(store,config,transport);
   const followed=followup.queued?await flushOutbox(store,config,transport):{accepted:0,suppressed:0,uncertain:0};
   const groupOperations=await drainTesaGroup(store,config,transport);
-  return {processed:pending.length,accepted:before.accepted+after.accepted+followed.accepted,suppressed:before.suppressed+after.suppressed+followed.suppressed,uncertain:before.uncertain+after.uncertain+followed.uncertain,followup,groupOperations};
+  return {processed:pending.length,accepted:before.accepted+after.accepted+followed.accepted+chiefResults.accepted,suppressed:before.suppressed+after.suppressed+followed.suppressed+chiefResults.suppressed,uncertain:before.uncertain+after.uncertain+followed.uncertain+chiefResults.uncertain,followup,groupOperations,chiefActions};
 }
 
 export async function flushOutbox(store,config,transport){

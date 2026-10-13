@@ -4,6 +4,7 @@ import {randomBytes} from 'node:crypto';
 import {Store} from '../automation/service-bots/store.mjs';
 import {Transport,drain} from '../automation/service-bots/transport.mjs';
 import {Engine} from '../automation/service-bots/engine.mjs';
+import {drainChiefActions} from '../automation/service-bots/chief-actions.mjs';
 import {BUSINESSES,SANDRA,configFromEnv} from '../automation/service-bots/config.mjs';
 const cfg=(company='fumigacion')=>({company,...BUSINESSES[company],enabled:true,activatedAt:Date.now()-10000,historyCheckRequired:true,provider:'https://own.example',lines:BUSINESSES[company].phones.map((phone,i)=>({phone,instance:company+'-'+i,apiKey:String(i).repeat(32)}))});
 const ev=(c,patch={})=>({id:'NEWMSG001',phone:'573001112233',at:Date.now(),line:c.lines[0].phone,fromMe:false,kind:'text',text:'Hola',...patch});
@@ -34,7 +35,7 @@ test('unavailable or unverifiable history is retained for review without a send 
  const {c,s,e}=fixture();try{const m=ev(c);s.enqueue(m);let attempts=0,sent=0;const t={priorHistory:async()=>{attempts++;throw Error('timeout');},send:async()=>{sent++;},understand:async()=>({})};await drain(s,c,t,e);await drain(s,c,t,e);assert.equal(attempts,1);assert.equal(sent,0);assert.equal(s.db.prepare('SELECT state FROM events').get().state,'HISTORY_REVIEW');}finally{s.close();}
 });
 test('verified explicit release is preserved when first preactivation history check happens later',async()=>{
- const {c,s,e}=fixture();try{const m=ev(c);s.enqueue(m);s.hold(m.phone,'STAFF001');const release=ev(c,{id:'CHIEFREL001',phone:SANDRA,text:'María Ángel, retoma chat de '+m.phone});s.enqueue(release);await e.process(release);assert.equal(s.conversation(m.phone).hold,0);s.savePriorHistory(m.phone,{cutoff:c.activatedAt,priorOutgoing:true,checks:[]},m.id);assert.equal(s.conversation(m.phone).hold,0);
+ const {c,s,e}=fixture();try{const m=ev(c);s.enqueue(m);s.hold(m.phone,'STAFF001');const release=ev(c,{id:'CHIEFREL001',phone:SANDRA,text:'María Ángel, retoma chat de '+m.phone});s.enqueue(release);await e.process(release);assert.equal(s.conversation(m.phone).hold,1);await drainChiefActions(s,c,{verifyChiefCommandSource:async source=>({verified:true,sourceId:source.id,phone:SANDRA,line:source.line,at:source.at})});assert.equal(s.conversation(m.phone).hold,0);s.savePriorHistory(m.phone,{cutoff:c.activatedAt,priorOutgoing:true,checks:[]},m.id);assert.equal(s.conversation(m.phone).hold,0);
  // A later staff turn continues to hold even with that earlier release marker.
  s.hold(m.phone,'LATERSTAFF');s.savePriorHistory(m.phone,{cutoff:c.activatedAt,priorOutgoing:true,checks:[]},m.id);assert.equal(s.conversation(m.phone).hold,1);
  }finally{s.close();}

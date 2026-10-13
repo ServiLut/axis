@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
-import {normalize,publicTextSafe,knownInternalRecipient} from './config.mjs';
+import {normalize,publicTextSafe,knownInternalRecipient,SANDRA} from './config.mjs';
+import {operationalLineAllowed} from './line-scope.mjs';
 import {conversationalAiGuard,ownAiScope,ownAiScopeMatches} from './ai-settings.mjs';
 import {mariaModelKnowledge} from './maria-knowledge.mjs';
 import {MARIA_UNDERSTANDING_GUARD,MARIA_UNDERSTANDING_VERSION,MARIA_UNDERSTANDING_INSTRUCTIONS,MARIA_INTENTS,MARIA_REVIEWED_EXAMPLES,MARIA_EVALUATION_CASES,validatedIntent} from './maria-understanding.mjs';
@@ -108,6 +109,15 @@ async function understandText(config,store,fetcher,key,text,context){
  }}};
  return request(config,store,fetcher,key,p.instructions,
   {company:p.company,customerText:text,context:scopedContext(context,config.company),approvedKnowledge:modelKnowledge(config,store,'understand'),reviewedExamples:p.examples},schema,650);
+}
+// A verified chief source may use one closed read planner. It shares Maria's
+// existing budget and durable attempt record, without a second credential or
+// a customer reply/style call. The caller still validates every plan field.
+export async function requestOwnChiefReadPlan(config,store,fetcher,event,instructions,input,schema){
+ if(!ownAiScopeMatches(config,store)||config.company!=='fumigacion'||event?.phone!==SANDRA||event.fromMe!==false||event.forwarded||event.kind!=='text'||!operationalLineAllowed(config,event.line)||!config.lines.some(l=>l.phone===event.line)||schema?.name!=='chief_read_plan')throw Error('CHIEF_READ_AI_SOURCE_SCOPE');
+ const row=store.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(event.id,SANDRA,event.line),native=row&&store.open(row.body);
+ if(!native||native.text!==event.text||native.at!==event.at||native.phone!==SANDRA||native.line!==event.line||native.fromMe!==false||native.forwarded||(native.quotedId??null)!==(event.quotedId??null))throw Error('CHIEF_READ_AI_SOURCE_SCOPE');
+ return request(config,store,fetcher,'chief-read-plan:'+event.id,instructions,input,schema,400);
 }
 export async function understandOwnCustomer(config,store,fetcher,event,context){
  if(!ownAiScopeMatches(config,store)||event.kind!=='text'||event.forwarded||event.fromMe||knownInternalRecipient(event.phone)||!config.lines.some(l=>l.phone===event.line)||!Number.isFinite(event.at)||event.at<config.conversationalAi.enabledFrom||store?.conversation(event.phone)?.hold||context?.awaitingHumanReview)return {};

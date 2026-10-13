@@ -6,8 +6,10 @@ import {Store} from '../automation/service-bots/store.mjs';
 import {Engine,capabilitiesReply} from '../automation/service-bots/engine.mjs';
 import {Transport,drain} from '../automation/service-bots/transport.mjs';
 import {decodeWebhook} from '../automation/service-bots/webhook.mjs';
+import {drainChiefActions} from '../automation/service-bots/chief-actions.mjs';
 const config=company=>({company,...BUSINESSES[company],enabled:false,chiefOnly:true,activatedAt:Date.now()-3600000,lines:BUSINESSES[company].phones.map((phone,i)=>({phone,instance:company+'-'+i}))});
 const ev=(c,patch={})=>({id:'CHIEF_EVENT_01',phone:SANDRA,line:c.lines[0].phone,fromMe:false,kind:'text',text:c.bot+' que funciones puedes realizar en este momento?',at:Date.now(),quotedId:null,...patch});
+const ownChiefSourceTransport={verifyChiefCommandSource:async source=>({verified:true,sourceId:source.id,phone:source.phone,line:source.line,at:source.at})};
 
 test('enabled reception describes actual intake without claiming programme writes or full autonomy',async()=>{
  const c={...config('fumigacion'),enabled:true},s=new Store(':memory:',c.company,randomBytes(32)),engine=new Engine(s,c);try{
@@ -18,9 +20,13 @@ test('enabled reception describes actual intake without claiming programme write
   assert.match(reply,/recibir solicitudes/);assert.match(reply,/Todavía no creo servicios en el programa ni registro pagos/);
   assert.doesNotMatch(reply,/sigo en aprendizaje|no atiendo clientes/);assert.equal(s.conversation(SANDRA).hold,1);
   const command=ev(c,{id:'CHIEF_WRITE_REVIEW',text:'María Ángel, crea el servicio',at:e.at+1});s.enqueue(command);await engine.process(command);
-  assert.equal(s.db.prepare('SELECT state FROM chief_requests').get().state,'REVIEW');
-  const ack=s.open(s.db.prepare('SELECT body FROM outbox WHERE id=?').get(command.id+':review-ack').body);
-  assert.match(ack,/Todavía no he ejecutado cambios/);assert.doesNotMatch(ack,/etapa de aprendizaje|ni enviado mensajes a clientes/);
+  assert.equal(s.db.prepare('SELECT state FROM chief_commands WHERE source_id=?').get(command.id).state,'PENDING');
+  assert.equal(s.db.prepare('SELECT body FROM outbox WHERE id=?').get(command.id+':review-ack'),undefined);
+  await drainChiefActions(s,c,ownChiefSourceTransport);
+  const action=s.db.prepare('SELECT state,result FROM chief_commands WHERE source_id=?').get(command.id);
+  assert.equal(action.state,'NEEDS_CONTEXT');
+  const result=s.open(action.result);assert.match(result.text,/acceso actual no permite/);
+  assert.doesNotMatch(result.text,/etapa de aprendizaje|Todavía no he ejecutado cambios/);
   assert.match(capabilitiesReply(config('servicio-tecnico'),DIEGO),/no atiendo clientes/);
  }finally{s.close();}
 });
@@ -49,7 +55,13 @@ for(const company of Object.keys(BUSINESSES))test(company+': directed capabiliti
   assert.equal(sent.length,1);assert.equal(sent[0].o.phone,SANDRA);assert.equal(sent[0].o.internal,1);assert.match(sent[0].text,/aprendizaje/);
   assert.equal(s.db.prepare('SELECT state FROM outbox WHERE id=?').get('OLD_CUSTOMER_REPLY').state,'READY');
   const command=ev(c,{id:'RELEASE_REQUEST1',text:c.bot+', retoma el chat de 573001112233',at:Date.now()+2});s.enqueue(command);await engine.process(command);
-  assert.equal(s.conversation('573001112233').hold,1);assert.equal(s.db.prepare('SELECT state FROM chief_requests').get().state,'REVIEW');
+  assert.equal(s.conversation('573001112233').hold,1);
+  if(company==='fumigacion'){
+   assert.equal(s.db.prepare('SELECT state FROM chief_commands WHERE source_id=?').get(command.id).state,'PENDING');
+   await drainChiefActions(s,c,ownChiefSourceTransport);
+   assert.equal(s.db.prepare('SELECT state FROM chief_commands WHERE source_id=?').get(command.id).state,'BLOCKED');
+   assert.equal(s.conversation('573001112233').hold,1);
+  }else assert.equal(s.db.prepare('SELECT state FROM chief_requests').get().state,'REVIEW');
  }finally{s.close();}
 });
 test('forwarded or unaddressed internal text is observed; customer events never generate a reply in learning mode',async()=>{

@@ -17,6 +17,7 @@ import {assertOperationalLineScope,operationalLineAllowed} from './line-scope.mj
 import {ownQuoteClarification,OWN_QUOTE_CLARIFICATION_GUARD} from './own-quote-clarification.mjs';
 import {explicitNewTechnicalCase,technicalIntakeMetaQuestion,technicalIntakeClarificationReply,technicalIntakeLiteralCorrection} from './technical-intake-continuity.mjs';
 import {literalIntakeDimensions,MARIA_DIMENSIONS_GUARD} from './intake-dimensions.mjs';
+import {parseChiefCommand,enqueueChiefCommand} from './chief-actions.mjs';
 
 export const MARIA_AUTONOMOUS_INTAKE_GUARD='literal-ordinary-intake-without-staff-delegation-v1';
 export const MARIA_AFTER_SERVICE_CONTINUITY_GUARD='own-same-case-stored-or-quoted-postservice-context-and-priority-preservation-v2';
@@ -439,11 +440,20 @@ export class Engine {
       const conv=s.conversation(e.phone);
       const internal=internalRecipients(c).includes(e.phone);
       if(knownInternalRecipient(e.phone)&&!internal){finish('OBSERVED_INTERNAL_OUTSIDE_SCOPE');return;}
+      const ownChiefQuote=internal&&e.quotedId&&s.db.prepare("SELECT id FROM outbox WHERE phone=? AND line=? AND mid=? AND internal=1 AND state IN ('DELIVERED','READ')").get(e.phone,e.line,e.quotedId);
+      const chiefPlan=internal&&parseChiefCommand(e,c,{quotedOwn:Boolean(ownChiefQuote)});
+      const ownCaseQuestion=chiefPlan?.action==='unsupported'&&ownChiefQuote&&s.db.prepare("SELECT 1 FROM questions q JOIN outbox o ON (o.id=q.outbox_id OR EXISTS(SELECT 1 FROM question_routes r WHERE r.question_id=q.id AND r.outbox_id=o.id AND r.recipient=o.phone AND r.line=o.line)) WHERE o.phone=? AND o.line=? AND o.mid=? AND o.internal=1 AND o.state IN ('DELIVERED','READ') AND q.state IN ('PENDING','ANSWERED','ANSWER_REVIEW')").get(e.phone,e.line,e.quotedId);
+      // Independent directed orders are not collapsed into the latest chat
+      // turn. Only this bounded chief dispatcher may bypass supersession.
+      const newChiefCommand=chiefPlan&&(chiefPlan.action!=='unsupported'||chiefPlan.sourceReadIntent||chiefPlan.directed&&!ownCaseQuestion);
       const newerOnLine=internal&&s.db.prepare('SELECT 1 FROM events WHERE phone=? AND line=? AND from_me=0 AND (at>? OR (at=? AND revision>?)) LIMIT 1').get(e.phone,e.line,e.at,e.at,row.revision);
-      if(internal?newerOnLine:(e.at<conv.at||row.revision<conv.revision)){finish('OBSERVED_SUPERSEDED');return;}
+      if(internal?newerOnLine&&!newChiefCommand:(e.at<conv.at||row.revision<conv.revision)){finish('OBSERVED_SUPERSEDED');return;}
       if(!c.enabled&&(!c.chiefOnly||!internal)){finish('OBSERVED_ANALYSIS_ONLY');return;}
       if(internal){
         if(e.forwarded){finish('OBSERVED_FORWARDED');return;}
+        // A literal direct read order takes precedence over an answer to a
+        // quoted case question. Ordinary quoted answers retain their route.
+        if(newChiefCommand){enqueueChiefCommand(s,c,e,chiefPlan);finish('CHIEF_COMMAND_QUEUED');return;}
         const quoted=e.quotedId&&s.db.prepare("SELECT q.*,o.state AS delivery FROM questions q JOIN outbox o ON (o.id=q.outbox_id OR EXISTS(SELECT 1 FROM question_routes r WHERE r.question_id=q.id AND r.outbox_id=o.id AND r.recipient=o.phone AND r.line=o.line)) WHERE o.phone=? AND o.line=? AND o.mid=? AND o.internal=1 AND o.state IN ('DELIVERED','READ')").get(e.phone,e.line,e.quotedId);
         // The former coordinator can answer only an exact delivered question.
         // Additional sources keep the existing review branch. The technical
@@ -486,7 +496,7 @@ export class Engine {
           if(new RegExp('^(?:(?:hola|buenos dias|buenas tardes|buenas noches)[, :]+)?(?:'+normalize(c.bot)+'|bot)[, :]+[¿ ]*(?:hola|estas ahi|estas presente|me escuchas|estas disponible|puedes responder|sigues ahi)[?!. ]*$').test(normalize(e.text))){
             s.queue(e.id+':presence',SANDRA,e.line,'Sí, Sandra. Soy '+c.bot+'. Estoy aquí para ayudarte.',true,0);finish('CHIEF_PRESENCE');return;
           }
-          const target=/retoma (?:el )?chat (?:de )?(?:\+)?(57\d{10})\b/.exec(normalize(e.text));
+          const target=c.company==='fumigacion'?null:/retoma (?:el )?chat (?:de )?(?:\+)?(57\d{10})\b/.exec(normalize(e.text));
           if(c.enabled&&target&&!knownInternalRecipient(target[1])&&s.conversation(target[1])){
             s.hold(target[1],e.id,false);s.queue(e.id+':release',SANDRA,e.line,'El chat quedó devuelto al bot para el próximo mensaje.',true,0);finish('EXPLICIT_RELEASE');return;
           }

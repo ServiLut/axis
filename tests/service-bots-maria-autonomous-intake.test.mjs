@@ -53,7 +53,9 @@ test('registration-enabled factual capabilities never deny the installed own pro
 test('Sandra directed readonly request is answered under her hold without a generic review or another confirmation',async()=>{
  const f=fixture();try{const e={id:'CHIEF_CALLS_REQUEST_001',phone:SANDRA,line:f.c.lines[0].phone,at:Date.now(),kind:'text',fromMe:false,text:'Maria angel, necesito que me digas cuantas llamadas han salido y entrado de las 2 lineas de whatsapp'};
   f.s.enqueue(e);f.s.hold(SANDRA,'VERIFIED_STAFF_001',true);const engine=new Engine(f.s,f.c);await engine.process(e);await engine.process(e);
-  const row=f.s.db.prepare('SELECT * FROM outbox').get();assert.ok(row);assert.equal(row.phone,SANDRA);assert.match(f.s.open(row.body),/historial de llamadas/);assert.doesNotMatch(f.s.open(row.body),/guardé tu solicitud|ejecutado cambios|confírmame|necesito tu confirmación|autorizas/);
+  assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox').get().n,0);
+  const {drainChiefActions}=await import('../automation/service-bots/chief-actions.mjs');await drainChiefActions(f.s,f.c,{verifyChiefCommandSource:async source=>({verified:true,sourceId:source.id,phone:SANDRA,line:source.line,at:source.at})});
+  const row=f.s.db.prepare('SELECT * FROM outbox').get();assert.ok(row);assert.equal(row.phone,SANDRA);assert.match(f.s.open(row.body),/registros de llamadas observados/);assert.doesNotMatch(f.s.open(row.body),/guardé tu solicitud|ejecutado cambios|confírmame|necesito tu confirmación|autorizas/);
   assert.equal(f.s.conversation(SANDRA).hold,1);assert.equal(f.s.db.prepare("SELECT name FROM sqlite_master WHERE name='chief_requests'").get(),undefined);assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox').get().n,1);
  }finally{f.s.close();}
 });
