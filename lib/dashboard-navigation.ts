@@ -6,7 +6,7 @@ export type NavigationMenu = { key: MenuKey; label: string; href?: string; items
 const navigation: NavigationMenu[] = [
   { key: "inicio", label: "Inicio", href: "/dashboard", items: [] },
   { key: "agenda", label: "Agenda", items: [
-    { href: "/dashboard/recepcion", label: "Recepción: impresiones y adicionales" },
+    { href: "/dashboard/recepcion", label: "Recepción" },
     { href: "/dashboard/citas/programacion", label: "Agenda diaria" },
     { href: "/dashboard/citas", label: "Citas y reservas" },
     { href: "/dashboard/citas/nuevo", label: "Agendar cita o reserva" },

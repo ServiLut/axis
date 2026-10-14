@@ -37,12 +37,12 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
   }
 
   return (
-    <div className={cn("flex h-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground", className)}>
+    <div className={cn("flex h-full min-w-0 flex-col overflow-x-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground", className)}>
       <Link href="/dashboard" onClick={onNavigate} className="border-b border-sidebar-border px-5 py-5">
         <span className="block text-xl font-bold tracking-tight">Axis</span>
         <span className="mt-1 block text-xs text-sidebar-foreground/70">Psicólogos en Colombia</span>
       </Link>
-      <nav aria-label="Menú principal" className="flex-1 space-y-1 overflow-y-auto p-3">
+      <nav aria-label="Menú principal" className="min-w-0 flex-1 space-y-1 overflow-x-hidden overflow-y-auto p-3">
         {menuItems.map((menu) => {
           const Icon = menuIcons[menu.key];
           if (menu.href) {
