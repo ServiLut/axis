@@ -1,5 +1,11 @@
 # Registro propio de servicios nuevos de María
 
+## Corrección del formulario y continuidad — 14/10/2026, publicación en verificación
+
+María preparó `8487e57e62613887115ffb8781c48b73f5c77cdb`; Tenaxis Backend instaló `6a7229a2459584050f0b6419af6e0aa1ae05ecee`. Nombre y dirección enviados por separado en el lote posterior al prompt propio entregado conservan fuentes nativas. Igualdad de segundo entre un dato ya leído y la confirmación no convierte ese dato en posterior; posición propia y cotejo nativo siguen siendo necesarios. Dos nombres contradictorios no se seleccionan automáticamente: se pide un dato inequívoco y luego se entrega el resumen para confirmarlo. Los datos posteriores al primer consentimiento tampoco pueden guardarse con ese consentimiento antiguo. Se conserva autoría, contrato cerrado, recibo e idempotencia ante SENDING/UNCERTAIN.
+
+La preferencia literal puede conservarse desde la recepción inicial, sin afirmar disponibilidad; urgencia sin día no inventa una fecha. `porfavor` sólo se normaliza para reconocer aceptación, manteniendo el original en ambas plataformas. Gates: 850 runtime sin omisiones; 219 backend con dos optativas omitidas y typecheck aprobado; siete pruebas contractuales reales con adaptador en memoria. Una historia Luna aislada pasó 12 comprobaciones con cuatro llamadas y una sola alta simulada, cero envíos o filas productivas. No equivale a un nuevo cierre real. Publicación efectiva de María aún pendiente del checkpoint final: el acuse de Deploy/Rebuild no la acredita. Detalle, alcance vigente y fuentes en `docs/BOTS_MARIA_MIGUEL.md` y `.tmp/maria-fix-20261014/`.
+
 ## Órdenes de Sandra y comunicación aprendida — 13/10/2026 22:09Z
 
 María instaló `4d67e2092804035726d08d9d2e358391af707e1d`, DONE 2 s, y sus controles fueron comprobados por API a las 22:08:57Z. Las consultas dirigidas de Sandra tienen ahora un ejecutor durable con fuente nativa y resultados propios; las formulaciones naturales de lectura pueden usar Luna bajo su presupuesto/caché. Se conserva el registro ordinario de servicios, sus condiciones y credenciales. No se amplían pagos, agenda, técnicos, garantías, precios o modificación de órdenes existentes. Una pauta de atención explícita se guarda con fuente/versionado y entra en el contexto posterior, sin entrenamiento de pesos o cambio de políticas.
