@@ -31,7 +31,7 @@ test('Miguel retains a ten-second timer and no immediate wake',()=>{
 test('María sends an already ready response before another model request and keeps approved deterministic wording',async()=>{
  const f=fixture(),order=[];try{
   const old=event(f,'LATENCY001');f.store.enqueue(old);await f.engine.process(old);
-  f.store.enqueue(event(f,'LATENCY002','573004445566'));
+  f.store.enqueue({...event(f,'LATENCY002','573004445566'),text:'Tengo cucarachas'});
   const result=await drain(f.store,f.config,{verifyLine:async()=>{},understand:async()=>{order.push('understand');return {};},composeReply:async()=>{throw Error('wording model must not run');},send:async(row,text)=>{order.push('send:'+row.phone);assert.ok(text.includes('María Ángel'));return 'BOT_'+row.phone;}},f.engine);
   assert.equal(order[0],'send:573001112233');assert.equal(order[1],'understand');assert.equal(result.processed,1);assert.equal(result.accepted,2);
  }finally{f.store.close();}

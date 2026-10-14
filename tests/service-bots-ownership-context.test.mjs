@@ -416,16 +416,17 @@ test('the supplied multi-pest case retains both pests, the stated area, and lite
   }finally{f.s.close();}
 });
 
-test('a new pest-control greeting requests the quotation intake together, without a tariff or technical claims',async()=>{
+test('a new pest-control greeting stages the essential quotation facts without a tariff or technical claims',async()=>{
   const f=fixture();
   try {
     const first=await f.process({text:'Buenos días'});
     const reply=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(first.id+':reply').body);
     assert.match(reply,/^Buen día, soy María Ángel\./);assert.match(reply,/qué plaga/i);
-    assert.match(reply,/tipo de inmueble/);assert.match(reply,/habitaciones o metros cuadrados/);
+    assert.doesNotMatch(reply,/tipo de inmueble|habitaciones o metros cuadrados/);
     assert.match(reply,/municipio y barrio o vereda/);
     assert.doesNotMatch(reply,/139|300|ISO|insecticida|veneno|Sandra|Diego|técnico/i);
-    assert.equal(f.s.conversation(first.phone).state.initialIntakeAllRequested,true);
+    assert.equal(f.s.conversation(first.phone).state.initialIntakeAllRequested,false);
+    assert.deepEqual(f.s.conversation(first.phone).state.initialIntakeRequestedFields,['service','location']);
   }finally{f.s.close();}
 });
 

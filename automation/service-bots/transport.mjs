@@ -13,6 +13,7 @@ import {assertOperationalLineScope,operationalLines,operationalLineAllowed,opera
 import {drainChiefActions} from './chief-actions.mjs';
 import {decodeWebhook} from './webhook.mjs';
 import {validateEvent} from './config.mjs';
+import {literalGreetingEligible,literalGreetingReplyStillValid} from './literal-reception.mjs';
 
 export class Transport {
   constructor(config, fetcher=fetch){this.config=config;this.fetcher=fetcher;}
@@ -211,7 +212,7 @@ export async function drain(store,config,transport,engine) {
     const newCase=config.company==='fumigacion'?explicitNewService(e.text):explicitNewTechnicalCase(e.text);
     const intakeStage=store.conversation(e.phone)?.state.programIntake?.stage;
     const ownQuotationAcceptance=config.company==='fumigacion'&&Boolean(conversation?.state.quotedPrice)&&acceptsOrdinaryQuotation(e.text);
-    if(!e.fromMe&&!knownInternalRecipient(e.phone)&&!store.conversation(e.phone)?.hold&&(!store.conversation(e.phone)?.state.awaitingHumanReview||newCase)&&!ownQuotationAcceptance&&!(config.company==='servicio-tecnico'&&technicalIntakeMetaQuestion(e.text))&&!['name','address','details','confirm','correction','pending'].includes(intakeStage)){
+    if(!e.fromMe&&!knownInternalRecipient(e.phone)&&!store.conversation(e.phone)?.hold&&(!store.conversation(e.phone)?.state.awaitingHumanReview||newCase)&&!ownQuotationAcceptance&&!literalGreetingEligible(config,e,conversation?.state)&&!(config.company==='servicio-tecnico'&&technicalIntakeMetaQuestion(e.text))&&!['name','address','details','confirm','correction','pending'].includes(intakeStage)){
       // Customer history remains in its company. Observations are explicitly untrusted reference, never policy.
       const knowledge=store.db.prepare('SELECT body FROM knowledge ORDER BY imported DESC LIMIT 10').all().map(k=>store.open(k.body));
       const caseId=newCase?'':store.conversation(e.phone)?.state.caseId||'';
@@ -300,7 +301,7 @@ export async function flushOutbox(store,config,transport){
     // The latency target controls worker scheduling; it must not silently turn
     // off Maria's contextual reply planner. Provider failures retain her useful
     // deterministic next step, and every await still rechecks human attention.
-    if(!o.internal&&(config.company==='fumigacion'||config.responseTargetMs!==3000)&&config.conversationalAi?.ready&&typeof transport.composeReply==='function'&&store.approvedReplyStillValid(o)&&store.priceReplyStillValid(o)){
+    if(!o.internal&&!literalGreetingReplyStillValid(config,store,o,text)&&(config.company==='fumigacion'||config.responseTargetMs!==3000)&&config.conversationalAi?.ready&&typeof transport.composeReply==='function'&&store.approvedReplyStillValid(o)&&store.priceReplyStillValid(o)){
       try{
         const composed=await transport.composeReply(o,text,store);
         if(!ownReplyTextAllowed(config,store,o,text,composed))throw Error('AI_REPLY_NOT_APPROVED');

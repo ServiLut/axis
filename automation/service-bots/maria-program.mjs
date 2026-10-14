@@ -5,6 +5,7 @@ import {operationalLineAllowed,operationalCoverage} from './line-scope.mjs';
 
 export const MARIA_PROGRAM_GUARD='own-accepted-ordinary-service-literal-fields-and-atomic-receipt-v2';
 export const MARIA_PROGRAM_PIPELINE_GUARD='processed-customer-turn-before-registration-v1';
+export const MARIA_PROGRAM_FORM_BATCH_GUARD='own-native-prompt-batch-facts-ordered-acceptance-v1';
 export const MARIA_PROGRAM_LITERAL_FIELDS_GUARD='own-prompted-separate-name-address-standard-labels-and-native-source-v2';
 export const MARIA_PROGRAM_OPERATIONAL_CONTINUATION_GUARD='own-saved-order-new-quoted-operation-and-customer-continuity-v1';
 export const MARIA_PROGRAM_TIMED_ACCEPTANCE_GUARD='own-literal-timed-acceptance-before-conditional-v1';
@@ -65,17 +66,17 @@ export function registrationStatus(c,s){
  const reviewed=entries.filter(entry=>entry.status==='REVIEW').sort((a,b)=>(Number(b.reviewAt)||0)-(Number(a.reviewAt)||0));
  const reasons=new Map();for(const entry of reviewed){const reason=safeReason(entry.reason);reasons.set(reason,(reasons.get(reason)||0)+1);}
  const own=c.company==='fumigacion';
- return {guard:own?MARIA_PROGRAM_GUARD:null,pipelineGuard:own?MARIA_PROGRAM_PIPELINE_GUARD:null,literalFieldsGuard:own?MARIA_PROGRAM_LITERAL_FIELDS_GUARD:null,acceptanceTimingGuard:own?MARIA_PROGRAM_TIMED_ACCEPTANCE_GUARD:null,requestedTimingGuard:own?MARIA_PROGRAM_REQUESTED_TIMING_GUARD:null,operationalCoverage:operationalCoverage(c),configured:own&&c.mariaProgram?.enabled===true,enabled:programEnabled(c),company:own?'FUMIGACION':'S.TECNICO',tenantId:own&&c.mariaProgram?.enabled?MARIA_TENANT:null,companyId:own&&c.mariaProgram?.enabled?MARIA_COMPANY:null,advisorMembershipId:own?c.mariaProgram?.actorId||null:null,registrationKind:own?'new-service-pending-scheduling':null,prepared:states.PENDING,states,saved:states.SAVED,uncertain:states.UNCERTAIN+states.SENDING,review:states.REVIEW,lastReviewReason:reviewed.length?safeReason(reviewed[0].reason):null,reviewReasons:[...reasons].sort(([a],[b])=>a.localeCompare(b)).map(([reason,count])=>({reason,count})),scheduled:false,paymentsEnabled:false,fullyAutonomous:false};
+ return {guard:own?MARIA_PROGRAM_GUARD:null,pipelineGuard:own?MARIA_PROGRAM_PIPELINE_GUARD:null,formBatchGuard:own?MARIA_PROGRAM_FORM_BATCH_GUARD:null,literalFieldsGuard:own?MARIA_PROGRAM_LITERAL_FIELDS_GUARD:null,acceptanceTimingGuard:own?MARIA_PROGRAM_TIMED_ACCEPTANCE_GUARD:null,requestedTimingGuard:own?MARIA_PROGRAM_REQUESTED_TIMING_GUARD:null,operationalCoverage:operationalCoverage(c),configured:own&&c.mariaProgram?.enabled===true,enabled:programEnabled(c),company:own?'FUMIGACION':'S.TECNICO',tenantId:own&&c.mariaProgram?.enabled?MARIA_TENANT:null,companyId:own&&c.mariaProgram?.enabled?MARIA_COMPANY:null,advisorMembershipId:own?c.mariaProgram?.actorId||null:null,registrationKind:own?'new-service-pending-scheduling':null,prepared:states.PENDING,states,saved:states.SAVED,uncertain:states.UNCERTAIN+states.SENDING,review:states.REVIEW,lastReviewReason:reviewed.length?safeReason(reviewed[0].reason):null,reviewReasons:[...reasons].sort(([a],[b])=>a.localeCompare(b)).map(([reason,count])=>({reason,count})),scheduled:false,paymentsEnabled:false,fullyAutonomous:false};
 }
 // Only an affirmative from the customer is authority to create an ordinary,
 // unscheduled order. Courtesy, a preference or a quoted third-party "yes" alone
 // cannot become acceptance. The backend independently applies this same grammar.
 export function acceptsOrdinaryQuotation(text){
  if(typeof text!=='string'||text.length>500||/[?¿]|https?:/i.test(text))return false;
- const t=normalize(text).replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim();
+ const t=normalize(text).replace(/\bporfavor\b/g,'por favor').replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim();
  const labels=[...text.matchAll(fieldLabels())];
  const prefix=(labels.length?text.slice(0,labels[0].index):text).trim().replace(/[.!¡,;]+$/g,'').trim();
- const temporalPrefix=normalize(prefix).replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim();
+ const temporalPrefix=normalize(prefix).replace(/\bporfavor\b/g,'por favor').replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim();
  // A date alone is a preference, not consent. Only an accented or punctuated
  // affirmative followed by a complete literal preference extends the grammar;
  // unpunctuated "Si mañana..." keeps its conditional/ambiguous meaning.
@@ -105,7 +106,7 @@ function explicitFields(text){
   // A sentence after an explicitly labelled fact is not part of that fact.
   value=value.split(/[;\n]|\.\s+(?=[¿¡\p{L}])/u)[0].trim();
   const parsed=key==='name'?literalName(value,true):literalAddress(value,true);
-  if(parsed){if(fields[key]&&fields[key]!==parsed)fields.conflict=true;fields[key]=parsed;}
+  if(parsed){if(fields[key]&&fields[key]!==parsed){fields.conflict=true;fields.conflictFields=[...new Set([...(fields.conflictFields||[]),key])];}fields[key]=parsed;}
  }
  return fields;
 }
@@ -129,7 +130,7 @@ export function literalProgramPreference(text){
  if(typeof text!=='string')return null;
  const raw=literalIntakeTextWithoutRegistrationFields(text).trim();
  if(/^(?:en|por) la (?:mañana|manana|tarde|noche)[.! ]*$/i.test(raw))return raw.replace(/[.! ]+$/g,'');
- const folded=normalize(raw).replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim();
+ const folded=normalize(raw).replace(/\bporfavor\b/g,'por favor').replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim();
  const standalone=/^(?:(?:para|el|prefiero|preferiria|quiero|quisiera|seria|puede ser|me queda bien|me sirve) )?(?:hoy|manana|pasado manana|(?:el )?(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo))(?: (?:(?:en|por) la (?:manana|tarde|noche)|a las? \d{1,2}(?::\d{2})?(?: am| pm)?))?(?: (?:por favor|gracias|muchas gracias))*$/.test(folded);
  if(!standalone&&!acceptsOrdinaryQuotation(raw))return null;
  const value=raw.match(/\b(?:hoy|pasado mañana|pasado manana|mañana|manana|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\b[^.!?;\r\n]*/i)?.[0]?.trim().replace(/[, ]+$/g,'');
@@ -202,9 +203,30 @@ function caseLiteralFields(s,c,state,e){
  const current=s.db.prepare('SELECT rowid FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(e.id,e.phone,e.line);
  if(!first||!current)return [];
  // A bounded native case window, never another case or a different line.
- const rows=s.db.prepare('SELECT body FROM events WHERE phone=? AND line=? AND from_me=0 AND rowid>=? AND rowid<=? AND at>=? AND at<=? ORDER BY rowid DESC LIMIT 40').all(e.phone,e.line,first.rowid,current.rowid,Math.max(first.at,c.mariaProgram.startsAt),e.at).reverse();
- return rows.map(row=>s.open(row.body)).filter(turn=>turn.kind==='text'&&!turn.forwarded&&turn.phone===e.phone&&turn.line===e.line&&!/\b(?:psicologos|abogados|miguel angel|servicio tecnico|otra solicitud|otro servicio|otro inmueble)\b/.test(normalize(turn.text))).map(turn=>({...explicitFields(turn.text),source:source(turn)}));
+ const rows=s.db.prepare('SELECT rowid,body FROM events WHERE phone=? AND line=? AND from_me=0 AND rowid>=? AND rowid<=? AND at>=? AND at<=? ORDER BY rowid DESC LIMIT 40').all(e.phone,e.line,first.rowid,current.rowid,Math.max(first.at,c.mariaProgram.startsAt),e.at).reverse();
+ return rows.map(row=>({turn:s.open(row.body),position:row.rowid})).filter(({turn})=>turn.kind==='text'&&!turn.forwarded&&turn.phone===e.phone&&turn.line===e.line&&!/\b(?:psicologos|abogados|miguel angel|servicio tecnico|otra solicitud|otro servicio|otro inmueble)\b/.test(normalize(turn.text))).map(({turn,position})=>({...explicitFields(turn.text),source:source(turn),position}));
 }
+function promptedBatchFields(s,c,previous,e,pi,prompt){
+ if(!prompt||!['name','address','correction'].includes(pi.stage)||typeof s.customerTurnBatch!=='function')return [];
+ const promptSource=prompt.id?.endsWith(':reply')&&s.db.prepare('SELECT rowid FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(prompt.id.slice(0,-6),e.phone,e.line);
+ if(!promptSource)return [];
+ const requested=pi.requestedFields||[pi.stage],batch=s.customerTurnBatch(e.phone,e.id,previous.lastHandledSourceId),facts=[],values={};
+ for(const turn of batch){
+  const position=s.db.prepare('SELECT rowid FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(turn.id,e.phone,e.line)?.rowid;
+  if(!position||position<=promptSource.rowid)continue;
+  if(turn.phone!==e.phone||turn.line!==e.line||turn.fromMe||turn.forwarded||turn.kind!=='text'||turn.at<c.mariaProgram.startsAt)return [];
+  if(confirms(turn.text)||neutralCourtesy(turn.text)||/^(?:hola|hola buenas noches|buenos dias|buen dia|buenas tardes|buenas noches)[.!¡, ]*$/.test(normalize(turn.text))||/^[¡ ]*(?:hola[,!. ]+)?(?:(?:buenos dias|buen dia|buenas tardes|buenas noches)[,!. ]+)?[¿¡ ]*como esta(?:s|n)?[?!.,! ]*$/.test(normalize(turn.text))||registrationSourcePreface(turn.text)||literalProgramPreference(turn.text)||pi.stage==='correction'&&correctionFieldReference(turn.text))continue;
+  if(blockedText(turn.text))return [];
+  const explicit=explicitFields(turn.text),separated=promptedLiteralFields(turn.text,requested,pi.stage==='correction');
+  const name=explicit.name||separated.name||(requested.includes('name')&&literalName(turn.text,true)),address=explicit.address||separated.address||(requested.includes('address')&&literalAddress(turn.text,true));
+  if(!name&&!address||name&&address&&!explicit.name&&!separated.name)return [];
+  const fact={...explicit,...(name?{name}:{}),...(address?{address}:{}),source:source(turn),position};
+  for(const key of ['name','address'])if(fact[key]){if(values[key]&&values[key]!==fact[key])fact.conflictFields=[...new Set([...(fact.conflictFields||[]),key])];values[key]=fact[key];}
+  facts.push(fact);
+ }
+ return facts;
+}
+function sourcePosition(s,e,reference){return reference?.id?s.db.prepare('SELECT rowid FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(reference.id,e.phone,e.line)?.rowid||0:0;}
 function eligibleQuote(s,state,phone,line){
  const q=state.quotedPrice,entry=selectBusinessPrice(state.slots).entry;
  if(!q?.accepted||!entry||entry.id!==q.entryId||entry.priceCop!==q.priceCop||entry.source.scheduleHash!==BUSINESS_PRICE_HASH)return null;
@@ -222,11 +244,13 @@ export function registrationTurn(s,c,previous,e,decision){
  if(!operationalLineAllowed(c,e.line)||c.operationalLineScope&&e.at<Date.parse(c.operationalLineScope.authorizedAt))return null;
  if(c.operationalLineScope&&(typeof s.hasSourcesOutsideLine!=='function'||s.hasSourcesOutsideLine(e.phone,e.line)))return null;
  const state=decision.state,own=eligibleQuote(s,state,e.phone,e.line);
- if(!own||state.requestedAfterServiceReview||state.requestedControlReview||state.requestedDocumentReview||(decision.courtesy&&!confirms(e.text)))return null;
+ if(!own||state.requestedAfterServiceReview||state.requestedControlReview||state.requestedDocumentReview)return null;
  const prior=state.programIntake||{stage:'name',originalQuoteAcceptanceId:own.q.acceptanceSource};
  if(['pending','review','declined'].includes(prior.stage))return {state,observed:true,observedState:'PROGRAM_REGISTRATION_PENDING'};
  if(prior.stage==='registered')return null;
- const pi={...prior};state.programIntake=pi;
+ const pi={...prior},prompt=pi.promptId&&s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND state IN ('DELIVERED','READ')").get(pi.promptId,e.phone,e.line),batchFields=promptedBatchFields(s,c,previous,e,pi,prompt);
+ if(decision.courtesy&&!confirms(e.text)&&!batchFields.some(fact=>fact.name||fact.address))return null;
+ state.programIntake=pi;
  if(/\b(?:no (?:gracias|quiero|deseo|necesito|me interesa|acepto)|prefiero no|cancela|cancelar)\b/.test(normalize(e.text))){
   pi.stage='declined';pi.preview=null;state.closed=true;state.quotedPrice={...state.quotedPrice,accepted:false};
   return {state,reply:'Entendido. No registraré el servicio. Gracias por avisarme.'};
@@ -234,24 +258,21 @@ export function registrationTurn(s,c,previous,e,decision){
  if(/^no\b/.test(normalize(e.text))&&['confirm','correction'].includes(prior.stage)){
   pi.stage='correction';pi.requestedFields=['name','address'];pi.preview=null;pi.promptId=e.id+':reply';return {state,reply:'¿Qué dato debemos corregir antes de registrar tu solicitud?'};
  }
- if(blockedText(e.text))return null;
+ if(blockedText(e.text)&&!(decision.courtesy&&batchFields.some(fact=>fact.name||fact.address)))return null;
  // Reuse explicitly labelled facts from this native case window. Bare text is
  // interpreted as a field only in reply to our own delivered request for it.
- const prompt=pi.promptId&&s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND state IN ('DELIVERED','READ')").get(pi.promptId,e.phone,e.line);
- const fields=caseLiteralFields(s,c,state,e);let conflicting=false;
- for(const fact of fields){
-  if(fact.conflict)conflicting=true;
-  for(const [key,sourceKey] of [['name','nameSource'],['address','addressSource']]){
-   const valueKey=key==='name'?'customerName':'address';
-   if(fact[key]&&(!pi[valueKey]||Date.parse(fact.source.at)>Date.parse(pi[sourceKey]?.at||0))){
-    if(pi[valueKey]&&pi[valueKey]!==fact[key])conflicting=true;
-    if(pi[valueKey]!==fact[key]||!pi[sourceKey]){pi[valueKey]=fact[key];pi[sourceKey]=fact.source;}
-   }
-  }
+ const fields=[...caseLiteralFields(s,c,state,e),...batchFields].sort((a,b)=>a.position-b.position),latest={};let conflicting=false;
+ for(const fact of fields)for(const key of ['name','address'])if(fact[key])latest[key]=fact;
+ const unresolved=new Set();
+ for(const [key,sourceKey] of [['name','nameSource'],['address','addressSource']]){
+  const fact=latest[key],valueKey=key==='name'?'customerName':'address',position=sourcePosition(s,e,pi[sourceKey]);
+  if(!fact||fact.position<position)continue;
+  if(fact.conflictFields?.includes(key)){delete pi[valueKey];delete pi[sourceKey];unresolved.add(key);conflicting=true;continue;}
+  if(!pi[valueKey]||fact.position>position){if(pi[valueKey]&&pi[valueKey]!==fact[key])conflicting=true;pi[valueKey]=fact[key];pi[sourceKey]=fact.source;}
  }
  const explicit=explicitFields(e.text),requested=pi.requestedFields||(['name','address'].includes(pi.stage)?[pi.stage]:['name','address']);
  const separated=prompt&&!confirms(e.text)?promptedLiteralFields(e.text,requested,pi.stage==='correction'):{};
- const name=explicit.name||separated.name||(!confirms(e.text)&&literalName(e.text,(pi.stage==='name'||pi.stage==='correction'&&!correctionFieldReference(e.text))&&Boolean(prompt))),address=explicit.address||separated.address||literalAddress(e.text,(['address','confirm','correction'].includes(pi.stage)||pi.requestedFields?.includes('address'))&&Boolean(prompt));
+ const name=!unresolved.has('name')&&(explicit.name||separated.name||(!confirms(e.text)&&literalName(e.text,(pi.stage==='name'||pi.stage==='correction'&&!correctionFieldReference(e.text))&&Boolean(prompt)))),address=!unresolved.has('address')&&(explicit.address||separated.address||literalAddress(e.text,(['address','confirm','correction'].includes(pi.stage)||pi.requestedFields?.includes('address'))&&Boolean(prompt)));
  const scopedAddress=address||pi.address;
  if(scopedAddress&&changedAddressScope(scopedAddress,state.slots)){
   pi.stage='review';pi.preview=null;return {state,reviewTopic:'special-quotation',reviewConditions:{kind:'registration-address-scope-changed',caseId:state.caseId},review:'La dirección o su texto añaden un municipio o alcance diferente a la cotización aceptada. No se creó un servicio ni se conservó ese precio para otro alcance.',reviewQuestion:'¿Qué municipio y alcance comprobados corresponden a esta solicitud?',reply:'Los datos que compartiste cambian el alcance de la cotización. Tu solicitud necesita revisión antes de confirmarla.'};
@@ -269,7 +290,8 @@ export function registrationTurn(s,c,previous,e,decision){
  // If the customer already supplied both literal facts before accepting the
  // delivered price, the acceptance is sufficient for an unscheduled order.
  // New/corrected facts supplied after acceptance still need a delivered summary.
- const preprovided=confirms(e.text)&&!conflicting&&!explicit.conflict&&!['confirm','correction'].includes(prior.stage)&&Date.parse(pi.nameSource.at)<=e.at&&Date.parse(pi.addressSource.at)<=e.at;
+ const originalAcceptance=own.q.acceptanceSource&&s.db.prepare('SELECT rowid,at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(own.q.acceptanceSource,e.phone,e.line);
+ const preprovided=confirms(e.text)&&!conflicting&&!explicit.conflict&&!['confirm','correction'].includes(prior.stage)&&originalAcceptance&&sourcePosition(s,e,pi.nameSource)<=originalAcceptance.rowid&&sourcePosition(s,e,pi.addressSource)<=originalAcceptance.rowid&&Date.parse(pi.nameSource.at)<=originalAcceptance.at&&Date.parse(pi.addressSource.at)<=originalAcceptance.at;
  const preference=casePreferenceSource(s,c,state,e);
  const preview={customerName:pi.customerName,address:pi.address,municipality:state.slots.location,service:state.slots.service,priceCop:own.entry.priceCop,...(preference?{preference:preference.value}:{})};
  if(!preprovided&&(prior.stage!=='confirm'||changed||JSON.stringify(pi.preview)!==JSON.stringify(preview))){
@@ -353,7 +375,17 @@ async function verifyNative(s,c,t,entry){
  if(typeof t.currentCustomerActivity!=='function')throw Error('PROGRAM_CUSTOMER_CONTEXT_UNVERIFIED');
  const at=Date.parse(p.sources.acceptance.at),latest=await t.currentCustomerActivity(p.phone,at);
  if(!latest.complete||!latest.sources.some(r=>r.id===p.quote.acceptanceId&&r.line===p.line&&r.at===at))throw Error('PROGRAM_NEW_CUSTOMER_TURN');
- const subsequent=latest.sources.filter(r=>r.at>at||r.at===at&&r.id!==p.quote.acceptanceId);
+ const acceptancePosition=s.db.prepare('SELECT rowid FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(p.quote.acceptanceId,p.phone,p.line)?.rowid;
+ const verifiedFacts=new Set(Object.values(p.sources).filter(src=>src.id!==p.quote.acceptanceId&&Date.parse(src.at)===at).map(src=>src.id));
+ const subsequent=latest.sources.filter(r=>{
+  if(r.at!==at)return r.at>at;
+  if(r.id===p.quote.acceptanceId)return false;
+  // WhatsApp timestamps have second precision. Only an already rechecked fact
+  // ingested before this exact acceptance may share its second without being
+  // a new turn; unknown, later, forwarded or other-line sources still block.
+  const prior=r.line===p.line&&verifiedFacts.has(r.id)&&s.db.prepare("SELECT rowid FROM events WHERE id=? AND phone=? AND line=? AND from_me=0 AND at=? AND state NOT IN ('PENDING','PROCESSING')").get(r.id,p.phone,p.line,at);
+  return !prior||!acceptancePosition||prior.rowid>=acceptancePosition;
+ });
  if(subsequent.length>3)throw Error('PROGRAM_NEW_CUSTOMER_TURN');
  for(const item of subsequent){
   const event=storedCourtesy(s,p,item.id);if(!event||item.line!==p.line||item.at!==event.at)throw Error('PROGRAM_NEW_CUSTOMER_TURN');

@@ -1,6 +1,7 @@
 // Direct user approval, 05/10/2026: warm, useful advice for María only.
 // This changes reviewed reception wording, never the price, scope or authority.
-export const ADVISER_TONE_GUARD='identified-maria-reception-and-concrete-pending-state-v2';
+import {currentIntakeTimingAcknowledgement} from './intake-timing.mjs';
+export const ADVISER_TONE_GUARD='identified-maria-reception-and-current-requested-timing-v3';
 const initialRequests=new Map([
  ['Qué plaga deseas tratar o si buscas prevención.','qué plaga deseas tratar o si buscas prevención'],
  ['Qué tipo de inmueble es y cuántas habitaciones o metros cuadrados tiene.','qué tipo de inmueble es y cuántas habitaciones o metros cuadrados tiene'],
@@ -37,20 +38,27 @@ export function adviserReply(company,decision,{firstReply=false,approvedAnswer=f
  // Personal summaries and persisted receipt confirmations retain their exact
  // deterministic facts. Tone does not change a registration contract.
  if(decision.state?.programIntake||/^(?:Registraré el servicio|Tu solicitud quedó registrada|Registré tu solicitud|Tu servicio quedó registrado)\b/.test(text))return text;
+ const timing=!decision.review&&!decision.question&&!decision.courtesy&&!decision.observed?currentIntakeTimingAcknowledgement(decision.state):null;
+ const render=reply=>{
+  if(!timing||reply.includes(timing))return reply;
+  const intro=reply.match(/^((?:Hola|Buen día|Buenas tardes|Buenas noches), soy María Ángel\. )/);
+  const rest=(intro?reply.slice(intro[0].length):reply).replace(/^Con gusto\. /,'');
+  return (intro?.[0]||'')+timing+' '+rest;
+ };
  const greeting=text.match(/^(Hola, soy María Ángel\. )/);
  const body=greeting?text.slice(greeting[0].length):text;
  const social=String(decision.state?.lastText||'').trim();
  const ownGreeting=/^buenas tardes[.! ]*$/i.test(social)?'Buenas tardes, soy María Ángel. ':/^buenas noches[.! ]*$/i.test(social)?'Buenas noches, soy María Ángel. ':/^(?:buenos días|buenos dias|buen día|buen dia)[.! ]*$/i.test(social)?'Buen día, soy María Ángel. ':'Hola, soy María Ángel. ';
  const prefix=greeting||firstReply&&!decision.courtesy?ownGreeting:'';
  const reviewed=reviewedWording.get(body);
- if(reviewed)return prefix+reviewed;
+ if(reviewed)return render(prefix+reviewed);
  if((firstReply||greeting)&&!decision.review&&!decision.question&&!decision.courtesy&&!decision.observed&&body.startsWith('Para ayudarte con la cotización, cuéntame:\n')){
   const requests=body.slice('Para ayudarte con la cotización, cuéntame:\n'.length).split('\n').map(line=>line.startsWith('• ')?initialRequests.get(line.slice(2)):null);
-  if(requests.length&&requests.every(Boolean))return prefix+'Para cotizarte, cuéntame '+requests.join('; ')+'.';
+  if(requests.length&&requests.every(Boolean))return render(prefix+'Para cotizarte, cuéntame '+requests.join('; ')+'.');
  }
  // Only the first intake question gets an invitation. Later questions stay brief.
  if(firstReply&&!decision.review&&!decision.question&&!decision.courtesy&&!decision.observed&&
     (/^¿/.test(body)||/^Para ayudarte con la cotización, cuéntame:/.test(body)))
-  return prefix+'Te ayudo con la cotización. '+body;
- return prefix+body;
+  return render(prefix+'Te ayudo con la cotización. '+body);
+ return render(prefix+body);
 }

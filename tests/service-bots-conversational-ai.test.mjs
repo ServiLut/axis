@@ -99,7 +99,10 @@ test('extraction never replaces current literal pest combinations or prior case 
  const next=customerDecision('fumigacion',{slots:{site:'casa'},asked:['preference']},later,{...analysis,eventId:later.id,slots:{preference:later.text}});
  assert.equal(next.state.slots.site,'casa');assert.equal(next.state.intakeSources.preference.sourceId,later.id);
  const mismatch=customerDecision('fumigacion',{slots:{},asked:[]},later,{...analysis,slots:{preference:later.text}});
- assert.equal(mismatch.state.slots.preference,undefined);
+ // Literal timing now survives independently of a mismatched model result.
+ assert.equal(mismatch.state.slots.preference,later.text);
+ assert.equal(mismatch.state.intakeSources.preference.sourceId,later.id);
+ assert.equal(mismatch.state.intakeSources.preference.guard,'own-current-literal-requested-timing-before-quotation-v1');
 });
 
 test('old events, staff, internal numbers, forwards, media and negated or hypothetical sources make no model calls',async()=>{

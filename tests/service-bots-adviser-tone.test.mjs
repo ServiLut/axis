@@ -87,12 +87,12 @@ test('a pending reinforcement keeps its unverified conditions rather than claimi
  assert.doesNotMatch(reply,/horario|aprobado|gratis|elegible|pago|agendado|registrado/i);
 });
 
-test('a pure greeting identifies Maria and requests the original intake facts in one brief paragraph',async()=>{
+test('a pure greeting identifies Maria and first requests only pest and municipality in one brief paragraph',async()=>{
  const f=fixture();try{
   await f.process('TONE_PURE_GREETING','Buenas tardes');const reply=f.reply('TONE_PURE_GREETING').text;
-  assert.match(reply,/^Buenas tardes, soy María Ángel\./);assert.match(reply,/plaga.*prevención/);assert.match(reply,/tipo de inmueble.*habitaciones o metros cuadrados/);assert.match(reply,/municipio y barrio o vereda/);
-  assert.doesNotMatch(reply,/\n|•|Con gusto|Sandra|Diego|asesora|guardad|ticket/i);
-  assert.equal(f.s.conversation(phone).state.initialIntakeAllRequested,true);
+  assert.match(reply,/^Buenas tardes, soy María Ángel\./);assert.match(reply,/plaga.*prevención/);assert.match(reply,/municipio y barrio o vereda/);
+  assert.doesNotMatch(reply,/tipo de inmueble|habitaciones|metros cuadrados|\n|•|Con gusto|Sandra|Diego|asesora|guardad|ticket/i);
+  const state=f.s.conversation(phone).state;assert.equal(state.initialIntakeAllRequested,false);assert.deepEqual(state.initialIntakeRequestedFields,['service','location']);assert.deepEqual(state.asked,['service','location']);
  }finally{f.s.close();}
 });
 test('staff takeover suppresses even a warmly phrased approved price',async()=>{
