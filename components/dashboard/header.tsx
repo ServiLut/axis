@@ -6,8 +6,8 @@ import { usePathname } from "next/navigation";
 import { getDashboardPageLabel } from "@/lib/dashboard-navigation";
 import { Menu, UserCircle } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
-import { HalloweenTheme } from "@/components/dashboard/halloween-theme";
-import { HalloweenScene } from "@/components/seasonal/halloween-scene";
+import { SeasonalTheme } from "@/components/seasonal/seasonal-theme";
+import { SeasonalScene } from "@/components/seasonal/seasonal-scene";
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -31,10 +31,10 @@ export function Header({ onMenuClick, showMenuButtonOnDesktop = false }: HeaderP
       </Button>
       <div className="flex min-w-0 flex-1 items-center gap-2 font-semibold">
         <span className="truncate text-sm sm:text-base" title={getDashboardPageLabel(pathname, role)}>{getDashboardPageLabel(pathname, role)}</span>
-        <div className="hidden shrink-0 sm:block"><HalloweenScene variant="panel" /></div>
+        <div className="hidden shrink-0 sm:block"><SeasonalScene variant="panel" /></div>
       </div>
       <div className="ml-auto flex shrink-0 items-center space-x-2 sm:space-x-4">
-        <HalloweenTheme />
+        <SeasonalTheme />
         <div className="flex items-center gap-2 text-sm">
           <span className="hidden text-muted-foreground md:inline-block">
             {userFullName}

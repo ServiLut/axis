@@ -8,8 +8,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { HalloweenTheme } from "@/components/dashboard/halloween-theme";
-import { HalloweenScene } from "@/components/seasonal/halloween-scene";
+import { SeasonalTheme } from "@/components/seasonal/seasonal-theme";
+import { SeasonalScene } from "@/components/seasonal/seasonal-scene";
 import {
   Lock,
   Loader2,
@@ -114,8 +114,8 @@ export default function SignInPage() {
       <div className="login-form w-full lg:w-1/2 flex items-center justify-center px-8 py-24 lg:py-12 sm:px-12 lg:px-16 xl:px-24 z-10 bg-white">
         {/* Contenido del formulario: Se anima deslizándose desde la izquierda de manera sutil (slide-in-from-left-8) para crear un efecto cruzado sin revelar el fondo */}
         <div className="w-full max-w-md space-y-8 animate-in fade-in slide-in-from-left-8 duration-1000 ease-out">
-          <div className="login-season-controls"><HalloweenTheme /></div>
-          <HalloweenScene variant="compact" />
+          <div className="login-season-controls"><SeasonalTheme /></div>
+          <SeasonalScene variant="compact" />
           {/* Header & Logo */}
           <div className="space-y-4">
             <Link href="/" className="flex items-center gap-3 font-bold text-2xl text-slate-900 tracking-tight hover:opacity-80 transition-opacity w-fit">
@@ -260,7 +260,7 @@ export default function SignInPage() {
 
         {/* Contenido del Banner: Se anima deslizándose desde la derecha para completar la transición cruzada */}
         <div className="login-banner-content relative z-10 w-full max-w-lg text-white space-y-8 mb-20 animate-in fade-in slide-in-from-right-8 duration-1000 ease-out">
-          <HalloweenScene variant="login" />
+          <SeasonalScene variant="login" />
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 text-sm font-medium backdrop-blur-md border border-white/10 text-indigo-200 shadow-xl">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>

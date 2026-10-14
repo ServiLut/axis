@@ -282,3 +282,102 @@ html[data-halloween-paused] .halloween-scene * { animation-play-state: paused !i
 @media print {
     .halloween-scene, .login-season-controls { display: none !important; }
 }
+
+/* Christmas is enabled only by the Colombian December 1–January 10 calendar. */
+html[data-christmas] .axis-dashboard {
+    --primary: #176148;
+    --primary-foreground: #ffffff;
+    --ring: #9b752d;
+    --sidebar: #12372e;
+    --sidebar-foreground: #fff8e9;
+    --sidebar-primary: #f3d28c;
+    --sidebar-primary-foreground: #12372e;
+    --sidebar-accent: #245447;
+    --sidebar-accent-foreground: #fff8e9;
+    --sidebar-border: #3b6553;
+    --sidebar-ring: #f3d28c;
+    background: radial-gradient(ellipse at top right, #e4f1e7, transparent 55%), #fffaf0;
+}
+html[data-christmas] .axis-header {
+    background: linear-gradient(110deg, #fffaf0, #fff3d9 60%, #e9f3ea);
+    border-bottom-color: #decca4;
+}
+html[data-christmas] .christmas-toggle {
+    color: #17513e;
+    background: #fff9e9;
+    border-color: #beaa74;
+}
+html.dark[data-christmas] .axis-dashboard {
+    --primary: #9fd6b3;
+    --primary-foreground: #12372e;
+    --ring: #f3d28c;
+    background: radial-gradient(ellipse at top right, #214535, transparent 55%), #10251f;
+}
+html.dark[data-christmas] .axis-header { background: linear-gradient(110deg, #12372e, #214535); border-color: #3b6553; }
+html.dark[data-christmas] .christmas-toggle { color: #f5dba3; background: #214535; border-color: #8d804e; }
+html[data-christmas] .login-banner {
+    background: radial-gradient(ellipse at 50% 25%, #346c494d, transparent 65%), #102a24;
+}
+html[data-christmas] .login-banner-content { margin-bottom: 0; padding-bottom: 150px; }
+html[data-christmas] .login-title-accent { background-image: linear-gradient(100deg, #f6d58c, #bce3c7); }
+html[data-christmas] .login-logo-mark, html[data-christmas] .login-submit {
+    background-image: linear-gradient(110deg, #17573e, #176148);
+    border-color: #176148;
+    box-shadow: 0 8px 20px #17573e25;
+}
+html[data-christmas] .login-submit:hover { background-image: linear-gradient(110deg, #10432f, #124c38); }
+html[data-christmas] .login-accent-link { color: #17573e; }
+html[data-christmas] .login-accent-link:hover { color: #10432f; }
+
+.christmas-scene { position: relative; flex: none; pointer-events: none; user-select: none; }
+.christmas-scene svg { display: block; width: 100%; height: 100%; }
+.christmas-tree, .christmas-gift, .christmas-snow { position: absolute; }
+.christmas-tree {
+    width: 163px; height: 190px; left: calc(50% - 81.5px); top: 0;
+    filter: drop-shadow(0 8px 18px #e8c87633);
+}
+.christmas-lights { animation: christmas-glow 6s ease-in-out infinite; }
+.christmas-gift {
+    width: 60px; height: 57px; top: 113px;
+    animation: christmas-sway 7s ease-in-out infinite;
+}
+.christmas-gift--red { left: 8%; }
+.christmas-gift--gold { right: 7%; top: 100px; width: 48px; height: 46px; animation-delay: -3s; }
+.christmas-snow { color: #f6d58c; animation: christmas-snow 8s ease-in-out infinite; }
+.christmas-snow--one { left: 18%; top: 15px; font-size: 20px; }
+.christmas-snow--two { right: 16%; top: 38px; font-size: 21px; animation-delay: -3s; }
+.christmas-snow--three { right: 27%; top: 153px; font-size: 17px; animation-delay: -5s; }
+.christmas-scene--login { height: 190px; }
+.christmas-scene--compact { display: none; }
+.christmas-scene--panel { width: 100px; height: 48px; }
+.christmas-scene--panel .christmas-tree { width: 30px; height: 37px; top: 5px; left: 10px; }
+.christmas-scene--panel .christmas-gift { width: 23px; height: 23px; top: 20px; left: 53px; }
+.christmas-scene--panel .christmas-snow { color: #8e702f; font-size: 10px; }
+.christmas-scene--panel .christmas-snow--one { left: 47px; top: 5px; }
+.christmas-scene--panel .christmas-snow--two { right: 3px; top: 15px; }
+.dark .christmas-scene--panel .christmas-snow { color: #f6d58c; }
+
+@keyframes christmas-glow { 0%, 100% { opacity: 0.68; } 50% { opacity: 1; } }
+@keyframes christmas-sway { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-5px) rotate(2deg); } }
+@keyframes christmas-snow { 0%, 100% { transform: translateY(-3px); opacity: 0.65; } 50% { transform: translateY(10px); opacity: 1; } }
+html[data-christmas-paused] .christmas-scene * { animation-play-state: paused !important; }
+@media (max-width: 1023px) {
+    .christmas-scene--compact { display: block; height: 90px; }
+    .christmas-scene--compact .christmas-tree { width: 77px; height: 90px; left: calc(50% - 38.5px); }
+    .christmas-scene--compact .christmas-gift--red { width: 34px; height: 32px; left: calc(50% - 105px); top: 45px; }
+    .christmas-scene--compact .christmas-gift--gold { width: 29px; height: 28px; right: calc(50% - 100px); top: 42px; }
+    .christmas-scene--compact .christmas-snow { color: #8e702f; font-size: 14px; }
+    .christmas-scene--compact .christmas-snow--one { left: calc(50% - 96px); top: 8px; }
+    .christmas-scene--compact .christmas-snow--two { right: calc(50% - 86px); top: 9px; }
+    .christmas-scene--compact .christmas-snow--three { display: none; }
+}
+@media (max-width: 639px) {
+    .christmas-scene--panel { width: 42px; }
+    .christmas-scene--panel .christmas-tree { left: 5px; }
+    .christmas-scene--panel .christmas-gift, .christmas-scene--panel .christmas-snow { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .christmas-scene * { animation: none !important; } }
+@media print {
+    .christmas-toggle, .christmas-scene { display: none !important; }
+    html[data-christmas] .axis-dashboard, html[data-christmas] .axis-header { background: white; }
+}

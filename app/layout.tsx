@@ -19,6 +19,7 @@ export const metadata: Metadata = {
 
 import { Toaster } from "@/components/ui/sonner";
 import { HalloweenProvider } from "@/components/seasonal/halloween-provider";
+import { ChristmasProvider } from "@/components/seasonal/christmas-provider";
 
 export default function RootLayout({
   children,
@@ -31,7 +32,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning
       >
-        <HalloweenProvider>{children}</HalloweenProvider>
+        <HalloweenProvider><ChristmasProvider>{children}</ChristmasProvider></HalloweenProvider>
         <Toaster />
       </body>
     </html>
