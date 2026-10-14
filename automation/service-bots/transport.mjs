@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto';
 import {explicitNewService} from './after-service.mjs';
 import {explicitNewTechnicalCase,technicalIntakeMetaQuestion} from './technical-intake-continuity.mjs';
 import { SANDRA, DIEGO, HILARY, CURRENT_OPERATOR_ROUTING, publicTextSafe, normalize,internalRecipients,knownInternalRecipient } from './config.mjs';
@@ -14,6 +15,63 @@ import {drainChiefActions} from './chief-actions.mjs';
 import {decodeWebhook} from './webhook.mjs';
 import {validateEvent} from './config.mjs';
 import {literalGreetingEligible,literalGreetingReplyStillValid} from './literal-reception.mjs';
+
+export const MARIA_HISTORY_PROTOCOL_GUARD='own-preactivation-synchronization-only-complete-history-v1';
+const historyStart=Date.parse('2000-01-01T00:00:00.000Z');
+const historyObject=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
+function isolatedHistorySynchronization(record){
+  const message=record.message,protocol=message?.protocolMessage;
+  if(!historyObject(message)||Object.keys(message).length!==1||!historyObject(protocol)||Object.keys(protocol).length!==1||protocol.type!=='HISTORY_SYNC_NOTIFICATION')return false;
+  // Only the demonstrated, content-free packet qualifies. Wrappers, edits,
+  // revocations and unknown metadata remain positive attention evidence.
+  if(record.messageType!=null&&record.messageType!=='protocolMessage'||record.status!=null||record.update!=null)return false;
+  if(record.MessageUpdate!==undefined&&(!Array.isArray(record.MessageUpdate)||record.MessageUpdate.length))return false;
+  return !['isEdited','edited','deleted','isDeleted','revoked','isRevoked'].some(key=>record[key]!=null&&record[key]!==false);
+}
+function canonicalHistoryValue(value){
+  if(Array.isArray(value))return value.map(canonicalHistoryValue);
+  if(historyObject(value))return Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonicalHistoryValue(value[key])]));
+  return value;
+}
+function historySourceHash(record){
+  const source={key:record.key,messageTimestamp:Number(record.messageTimestamp),message:record.message??null};
+  for(const key of ['messageType','status','update','MessageUpdate','isEdited','edited','deleted','isDeleted','revoked','isRevoked'])source[key]=record[key]??null;
+  return createHash('sha256').update(JSON.stringify(canonicalHistoryValue(source))).digest('hex');
+}
+function rememberHistorySource(sources,line,record){
+  const key=line.phone+':'+record.key.id,hash=historySourceHash(record),previous=sources.get(key);
+  if(previous&&previous!==hash)throw Error('HISTORY_RESULT_UNVERIFIED');
+  sources.set(key,hash);return hash;
+}
+function protocolHistorySourceInScope(record,addressField,phone,cutoff){
+  const key=record?.key,pn=phone+'@s.whatsapp.net',at=Number(record?.messageTimestamp)*1000;
+  const ownAddress=value=>value===pn||/^\d+@lid$/.test(value??'');
+  return historyObject(record)&&historyObject(key)&&key[addressField]===pn&&key.fromMe===true&&typeof key.id==='string'&&key.id.length>0&&
+    ownAddress(key.remoteJid)&&(key.remoteJidAlt==null||ownAddress(key.remoteJidAlt))&&
+    ['string','number'].includes(typeof record.messageTimestamp)&&Number.isFinite(at)&&at>=historyStart&&at<cutoff;
+}
+async function verifiedProtocolHistory(transport,line,addressField,phone,initial,sources){
+  const c=transport.config,total=initial.total,first=initial.records[0];
+  if(c.company!=='fumigacion'||total>100||!protocolHistorySourceInScope(first,addressField,phone,c.activatedAt))throw Error('HISTORY_RESULT_UNVERIFIED');
+  const anchorHash=historySourceHash(first),seen=new Set(),sourceHashes=[],attentionSources=[];let read=0,protocolCount=0;
+  for(let page=1;page<=2;page++){
+    const data=await transport.request(line,'/chat/findMessages/'+encodeURIComponent(line.instance),{
+      where:{key:{[addressField]:phone+'@s.whatsapp.net',fromMe:true},messageTimestamp:{gte:'2000-01-01T00:00:00.000Z',lte:new Date(c.activatedAt-1).toISOString()}},offset:50,page
+    });
+    const value=data?.messages;
+    if(!value||value.total!==total||!Array.isArray(value.records)||value.records.length!==Math.min(50,total-read))throw Error('HISTORY_RESULT_UNVERIFIED');
+    if(page===1&&(value.records[0]?.key?.id!==first.key.id||historySourceHash(value.records[0])!==anchorHash))throw Error('HISTORY_RESULT_UNVERIFIED');
+    for(const record of value.records){
+      if(!protocolHistorySourceInScope(record,addressField,phone,c.activatedAt)||seen.has(record.key.id))throw Error('HISTORY_RESULT_UNVERIFIED');
+      seen.add(record.key.id);const sourceHash=rememberHistorySource(sources,line,record);sourceHashes.push(sourceHash);read++;
+      if(isolatedHistorySynchronization(record))protocolCount++;
+      else attentionSources.push({id:record.key.id,at:Number(record.messageTimestamp)*1000,sourceHash});
+    }
+    if(read===total)return {protocolGuard:MARIA_HISTORY_PROTOCOL_GUARD,complete:true,read,protocolCount,attentionOutgoing:protocolCount!==total,attentionSources,
+      firstSourceHash:anchorHash,sourcesHash:createHash('sha256').update(JSON.stringify(sourceHashes)).digest('hex')};
+  }
+  throw Error('HISTORY_RESULT_UNVERIFIED');
+}
 
 export class Transport {
   constructor(config, fetcher=fetch){this.config=config;this.fetcher=fetcher;}
@@ -77,7 +135,7 @@ export class Transport {
   async priorHistory(phone) {
     const c=this.config;
     if(!/^57\d{10}$/.test(phone)||!Number.isFinite(c.activatedAt))throw new Error('HISTORY_SCOPE_REQUIRED');
-    const checks=[];
+    const checks=[],sources=new Map();
     for(const line of operationalLines(c)){
       await this.verifyLine(line.phone);
       for(const addressField of ['remoteJid','remoteJidAlt']){
@@ -89,10 +147,13 @@ export class Transport {
         (value.total===0&&value.records.length!==0)||(value.total>0&&value.records.length!==1))throw new Error('HISTORY_RESULT_UNVERIFIED');
       const r=value.records[0];
       if(r&&(r.key?.[addressField]!==phone+'@s.whatsapp.net'||!/^57\d{10}@s\.whatsapp\.net$|^\d+@lid$/.test(r.key.remoteJid||'')||r.key.fromMe!==true||!r.key.id||!Number.isFinite(Number(r.messageTimestamp))||Number(r.messageTimestamp)*1000>=c.activatedAt))throw new Error('HISTORY_RESULT_OUTSIDE_SCOPE');
-      checks.push({line:line.phone,instance:line.instance,addressField,total:value.total,lastSourceId:r?.key.id??null,lastAt:r?Number(r.messageTimestamp)*1000:null});
+      if(c.company==='fumigacion'&&r)rememberHistorySource(sources,line,r);
+      const protocolReview=c.company==='fumigacion'&&r&&isolatedHistorySynchronization(r)?await verifiedProtocolHistory(this,line,addressField,phone,value,sources):{};
+      checks.push({line:line.phone,instance:line.instance,addressField,total:value.total,lastSourceId:r?.key.id??null,lastAt:r?Number(r.messageTimestamp)*1000:null,...protocolReview});
       }
     }
-    return {cutoff:c.activatedAt,checkedAt:Date.now(),guardVersion:operationalHistoryGuard(c),priorOutgoing:checks.some(x=>x.total>0),checks,coverage:operationalCoverage(c),scope:assertOperationalLineScope(c)?'authorized-own-blue-line-and-explicit-phone-alternatives; red-history-not-read; metadata-only; historical-author-unattributed':'own-two-lines-and-explicit-phone-alternatives; metadata-only; historical-author-unattributed'};
+    return {cutoff:c.activatedAt,checkedAt:Date.now(),guardVersion:operationalHistoryGuard(c),priorOutgoing:checks.some(x=>x.attentionOutgoing??(x.total>0)),checks,coverage:operationalCoverage(c),scope:assertOperationalLineScope(c)?'authorized-own-blue-line-and-explicit-phone-alternatives; red-history-not-read; metadata-only; historical-author-unattributed':'own-two-lines-and-explicit-phone-alternatives; metadata-only; historical-author-unattributed',
+      ...(c.company==='fumigacion'&&checks.some(x=>x.protocolGuard===MARIA_HISTORY_PROTOCOL_GUARD)?{classificationScope:'explicit-native-synchronization-packets-and-outgoing-attention; no-complete-chat-history'}:{})};
   }
   async currentAttention(phone) {
     const c=this.config;if(!/^57\d{10}$/.test(phone)||!Number.isFinite(c.activatedAt))throw new Error('ATTENTION_SCOPE_REQUIRED');
