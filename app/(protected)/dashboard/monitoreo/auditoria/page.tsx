@@ -521,7 +521,7 @@ export default function AuditoriaPage() {
                     <FilterDateRange />
 
                     <Select value={currentAccion} onValueChange={(val) => handleFilterChange("accion", val)}>
-                        <SelectTrigger className="w-[140px] h-9 text-xs bg-white border-slate-200">
+                        <SelectTrigger aria-label="Filtrar por acción" className="w-[140px] h-9 text-xs bg-white border-slate-200">
                             <SelectValue placeholder="Acción" />
                         </SelectTrigger>
                         <SelectContent>
@@ -534,7 +534,7 @@ export default function AuditoriaPage() {
                     </Select>
 
                     <Select value={currentEntidad} onValueChange={(val) => handleFilterChange("entidad", val)}>
-                        <SelectTrigger className="w-[160px] h-9 text-xs bg-white border-slate-200">
+                        <SelectTrigger aria-label="Filtrar por entidad" className="w-[160px] h-9 text-xs bg-white border-slate-200">
                             <SelectValue placeholder="Entidad" />
                         </SelectTrigger>
                         <SelectContent>
@@ -546,7 +546,7 @@ export default function AuditoriaPage() {
                     </Select>
 
                     <Select value={currentUsuario} onValueChange={(val) => handleFilterChange("usuarioId", val)}>
-                        <SelectTrigger className="w-[180px] h-9 text-xs bg-white border-slate-200">
+                        <SelectTrigger aria-label="Filtrar por integrante del equipo" className="w-[180px] h-9 text-xs bg-white border-slate-200">
                             <SelectValue placeholder="Usuario" />
                         </SelectTrigger>
                         <SelectContent>
@@ -560,6 +560,7 @@ export default function AuditoriaPage() {
                     </Select>
 
                     <Input 
+                        aria-label="ID de la entidad"
                         placeholder="ID Entidad..." 
                         className="w-[100px] h-9 text-xs bg-white border-slate-200" 
                         value={currentEntidadId}

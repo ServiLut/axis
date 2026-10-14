@@ -20,6 +20,9 @@ export function PaginationControls({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { replace } = useRouter();
+  const lastPage = Math.max(1, totalPages);
+  const cannotGoBack = totalRecords === 0 || currentPage <= 1;
+  const cannotGoForward = totalRecords === 0 || currentPage >= lastPage;
 
   const createPageURL = (pageNumber: number | string) => {
     const params = new URLSearchParams(searchParams);
@@ -33,14 +36,14 @@ export function PaginationControls({
         <Button
           variant="outline"
           onClick={() => createPageURL(Math.max(currentPage - 1, 1))}
-          disabled={currentPage === 1}
+          disabled={cannotGoBack}
         >
           Anterior
         </Button>
         <Button
           variant="outline"
           onClick={() => createPageURL(Math.min(currentPage + 1, totalPages))}
-          disabled={currentPage === totalPages}
+          disabled={cannotGoForward}
         >
           Siguiente
         </Button>
@@ -50,7 +53,7 @@ export function PaginationControls({
           <p className="text-sm text-slate-700">
             Mostrando{" "}
             <span className="font-medium">
-              {(currentPage - 1) * itemsPerPage + 1}
+              {totalRecords === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}
             </span>{" "}
             a{" "}
             <span className="font-medium">
@@ -62,13 +65,13 @@ export function PaginationControls({
         <div>
           <nav
             className="isolate inline-flex -space-x-px rounded-md shadow-sm"
-            aria-label="Pagination"
+            aria-label="Paginación de resultados"
           >
             <Button
               variant="outline"
               className="rounded-l-md px-2 py-2"
               onClick={() => createPageURL(1)}
-              disabled={currentPage === 1}
+              disabled={cannotGoBack}
             >
               <span className="sr-only">Primera</span>
               <ChevronsLeft className="h-4 w-4" />
@@ -77,19 +80,19 @@ export function PaginationControls({
               variant="outline"
               className="px-2 py-2"
               onClick={() => createPageURL(Math.max(currentPage - 1, 1))}
-              disabled={currentPage === 1}
+              disabled={cannotGoBack}
             >
               <span className="sr-only">Anterior</span>
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <div className="flex items-center px-4 border-y border-slate-200 bg-white text-sm font-medium text-slate-700">
-              Página {currentPage} de {totalPages}
+              Página {currentPage} de {lastPage}
             </div>
             <Button
               variant="outline"
               className="px-2 py-2"
               onClick={() => createPageURL(Math.min(currentPage + 1, totalPages))}
-              disabled={currentPage === totalPages}
+              disabled={cannotGoForward}
             >
               <span className="sr-only">Siguiente</span>
               <ChevronRight className="h-4 w-4" />
@@ -98,7 +101,7 @@ export function PaginationControls({
               variant="outline"
               className="rounded-r-md px-2 py-2"
               onClick={() => createPageURL(totalPages)}
-              disabled={currentPage === totalPages}
+              disabled={cannotGoForward}
             >
               <span className="sr-only">Última</span>
               <ChevronsRight className="h-4 w-4" />
