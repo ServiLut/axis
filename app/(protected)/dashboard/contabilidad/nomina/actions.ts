@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
+import { PSYCHOLOGY_TENANT_ID } from "@/lib/psychology";
 import { Prisma, ConfiguracionPagos } from "@/prisma/generated/prisma/client";
 import { revalidatePath } from "next/cache";
 
@@ -49,23 +50,14 @@ type GetServiciosPendientesResponse =
 
 export async function updateValorRepuestosTecnico(token: string, ordenId: number, valor: number) {
   const payload = await verifyToken(token);
-  if (!payload) return { success: false, error: "No autorizado" };
-
-  try {
-     await prisma.ordenServicio.update({
-        where: { id: ordenId },
-        data: { valorRepuestosTecnico: valor }
-     });
-     return { success: true };
-  } catch (error) {
-     console.error("Error updating repuesto pago:", error);
-     return { success: false, error: "Error al actualizar" };
-  }
+  if (!payload || !["ADMIN", "SU_ADMIN"].includes(payload.role)) return { success: false, error: "No autorizado" };
+  if (!Number.isSafeInteger(ordenId) || !Number.isFinite(valor) || valor < 0) return { success: false, error: "Valor no válido" };
+  return { success: false, error: "Los repuestos no aplican a citas y reservas de Psicólogos" };
 }
 
 export async function getNominas(token: string) {
   const payload = await verifyToken(token);
-  if (!payload) return { success: false as const, error: "No autorizado" };
+  if (!payload || !["ADMIN", "SU_ADMIN"].includes(payload.role)) return { success: false as const, error: "No autorizado" };
 
   try {
     const user = await prisma.usuario.findUnique({
@@ -79,9 +71,7 @@ export async function getNominas(token: string) {
     const whereClause: Prisma.NominaWhereInput = {};
 
     // Si no es SU_ADMIN, filtrar por su tenant
-    if (user.rol !== "SU_ADMIN") {
-      whereClause.tenantId = user.tenantId;
-    }
+    whereClause.tenantId = PSYCHOLOGY_TENANT_ID;
 
     const nominas = await prisma.nomina.findMany({
       where: whereClause,
@@ -126,7 +116,7 @@ export async function getServiciosPendientes(
   fechaFin: string,
 ): Promise<GetServiciosPendientesResponse> {
   const payload = await verifyToken(token);
-  if (!payload) return { success: false, error: "No autorizado" };
+  if (!payload || !["ADMIN", "SU_ADMIN"].includes(payload.role)) return { success: false, error: "No autorizado" };
 
   try {
     const user = await prisma.usuario.findUnique({
@@ -138,13 +128,13 @@ export async function getServiciosPendientes(
 
     // Verificar que el usuario objetivo pertenezca al mismo tenant (a menos que sea SU_ADMIN)
     const targetUser = await prisma.usuario.findUnique({
-      where: { id: usuarioId },
+      where: { id: usuarioId, tenantId: PSYCHOLOGY_TENANT_ID },
       include: { ConfiguracionPagos: true }, // Necesitamos la config de pago
     });
 
     if (!targetUser) return { success: false, error: "Técnico no encontrado" };
 
-    if (user.rol !== "SU_ADMIN" && targetUser.tenantId !== user.tenantId) {
+    if (targetUser.tenantId !== PSYCHOLOGY_TENANT_ID) {
       return {
         success: false,
         error: "No tienes permiso para ver este usuario",
@@ -163,6 +153,7 @@ export async function getServiciosPendientes(
       // --- TENANT 4 LOGIC (Citas) ---
       const citas = await prisma.citasPsicologos.findMany({
         where: {
+           tenantId: PSYCHOLOGY_TENANT_ID,
            psicologoId: usuarioId, // or creadoPorId depending on role logic, but typically assigned
            realizada: true,
            fechaCita: {
@@ -256,6 +247,7 @@ export async function getServiciosPendientes(
 
     const anticipos = await prisma.anticipos.findMany({
       where: {
+        tenantId: PSYCHOLOGY_TENANT_ID,
         usuarioId,
         created_at: {
           gte: startDate,
@@ -285,7 +277,7 @@ export async function getServiciosPendientes(
 
 export async function getTecnicos(token: string) {
   const payload = await verifyToken(token);
-  if (!payload) return { success: false as const, error: "No autorizado" };
+  if (!payload || !["ADMIN", "SU_ADMIN"].includes(payload.role)) return { success: false as const, error: "No autorizado" };
 
   try {
     const user = await prisma.usuario.findUnique({
@@ -301,9 +293,7 @@ export async function getTecnicos(token: string) {
       activo: true,
     };
 
-    if (user.rol !== "SU_ADMIN") {
-      whereClause.tenantId = user.tenantId;
-    }
+    whereClause.tenantId = PSYCHOLOGY_TENANT_ID;
 
     const tecnicos = await prisma.usuario.findMany({
       where: whereClause,
@@ -348,7 +338,7 @@ type CreateNominaInput = {
 
 export async function createNomina(token: string, data: CreateNominaInput) {
   const payload = await verifyToken(token);
-  if (!payload) return { success: false as const, error: "No autorizado" };
+  if (!payload || !["ADMIN", "SU_ADMIN"].includes(payload.role)) return { success: false as const, error: "No autorizado" };
 
   try {
     if (!data.usuarioId || !data.detalles || data.detalles.length === 0) {
@@ -356,6 +346,10 @@ export async function createNomina(token: string, data: CreateNominaInput) {
         success: false as const,
         error: "Datos incompletos para generar nómina",
       };
+    }
+
+    if (data.detalles.some((detail) => detail.type !== "CITA") || new Set(data.detalles.map((detail) => detail.id)).size !== data.detalles.length) {
+      return { success: false as const, error: "La liquidación solo admite citas y reservas válidas, sin duplicados" };
     }
 
     // Helper to get YYYY-MM-DD string
@@ -372,9 +366,23 @@ export async function createNomina(token: string, data: CreateNominaInput) {
     const endDate = new Date(`${endStr}T23:59:59.999Z`);
 
     const result = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(${data.usuarioId})`;
+      const targetUser = await tx.usuario.findFirst({ where: { id: data.usuarioId, tenantId: PSYCHOLOGY_TENANT_ID }, select: { id: true } });
+      if (!targetUser) throw new Error("La persona no pertenece al equipo de Psicólogos");
+      const appointments = await tx.citasPsicologos.count({
+        where: {
+          id: { in: data.detalles.map((detail) => BigInt(detail.id)) },
+          tenantId: PSYCHOLOGY_TENANT_ID,
+          psicologoId: targetUser.id,
+          realizada: true,
+          fechaCita: { gte: startDate, lte: endDate },
+          nominaDetalles: { none: { nomina: { estado: { in: ["BORRADOR", "PAGADO"] } } } },
+        },
+      });
+      if (appointments !== data.detalles.length) throw new Error("Una o más citas no son elegibles para este corte de pago");
       const nomina = await tx.nomina.create({
         data: {
-          tenantId: data.tenantId,
+          tenantId: PSYCHOLOGY_TENANT_ID,
           usuarioId: data.usuarioId,
           fechaInicio: startDate,
           fechaFin: endDate,
@@ -422,11 +430,11 @@ export async function createNomina(token: string, data: CreateNominaInput) {
 
 export async function getNominaById(token: string, id: number) {
   const payload = await verifyToken(token);
-  if (!payload) return { success: false as const, error: "No autorizado" };
+  if (!payload || !["ADMIN", "SU_ADMIN"].includes(payload.role)) return { success: false as const, error: "No autorizado" };
 
   try {
     const nomina = await prisma.nomina.findUnique({
-      where: { id },
+      where: { id, tenantId: PSYCHOLOGY_TENANT_ID },
       include: {
         usuario: {
           select: {
@@ -532,11 +540,12 @@ export async function updateNominaEstado(
   estado: "PAGADO" | "ANULADO",
 ) {
   const payload = await verifyToken(token);
-  if (!payload) return { success: false as const, error: "No autorizado" };
+  if (!payload || !["ADMIN", "SU_ADMIN"].includes(payload.role)) return { success: false as const, error: "No autorizado" };
 
   try {
+    if (estado !== "PAGADO" && estado !== "ANULADO") return { success: false as const, error: "Estado no válido" };
     await prisma.nomina.update({
-      where: { id },
+      where: { id, tenantId: PSYCHOLOGY_TENANT_ID },
       data: { estado },
     });
     revalidatePath("/dashboard/contabilidad/nomina");

@@ -26,7 +26,7 @@ export function ClientLocationFields({ municipality, neighborhood, onChange }: {
   return (
     <>
       <div className="space-y-2 md:col-span-5">
-        <Label htmlFor={`${id}-location`}>Ubicación del cliente</Label>
+        <Label htmlFor={`${id}-location`}>Ubicación del paciente</Label>
         <select
           id={`${id}-location`}
           value={external ? "external" : "local"}
@@ -44,7 +44,7 @@ export function ClientLocationFields({ municipality, neighborhood, onChange }: {
             placeholder="Ej. Varsovia, Polonia" className="bg-white h-11"
             onChange={(e) => onChange("municipio", e.target.value)} />
         ) : (
-          <Combobox options={municipalities} value={municipality || ""}
+          <Combobox id={`${id}-city`} options={municipalities} value={municipality || ""}
             onChange={(value) => onChange("municipio", value)}
             placeholder="Seleccionar municipio" emptyMessage="Municipio no encontrado" />
         )}
@@ -56,7 +56,7 @@ export function ClientLocationFields({ municipality, neighborhood, onChange }: {
             className="bg-white h-11" placeholder="Barrio o zona"
             onChange={(e) => onChange("barrio", e.target.value)} />
         ) : (
-          <Combobox options={neighborhoods} value={neighborhood || ""}
+          <Combobox id={`${id}-neighborhood`} options={neighborhoods} value={neighborhood || ""}
             onChange={(value) => onChange("barrio", value)}
             placeholder="Seleccionar barrio" emptyMessage="Barrio no encontrado"
             disabled={!municipality} />

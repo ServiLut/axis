@@ -206,7 +206,7 @@ export default function AnticiposPage() {
               Anticipos
             </h1>
             <p className="text-sm text-slate-600 mt-1">
-              Gestión de adelantos y préstamos a técnicos.
+              Adelantos de pago registrados para el equipo de Psicólogos.
             </p>
           </div>
           <Button onClick={handleOpenCreateModal} className="bg-indigo-600 hover:bg-indigo-700">
@@ -232,7 +232,7 @@ export default function AnticiposPage() {
                 <TableHeader className="bg-slate-50">
                   <TableRow>
                     <TableHead>Fecha</TableHead>
-                    <TableHead>Técnico</TableHead>
+                    <TableHead>Persona del equipo</TableHead>
                     <TableHead>Razón / Concepto</TableHead>
                     <TableHead className="text-right">Monto</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
@@ -296,15 +296,15 @@ export default function AnticiposPage() {
           <DialogHeader>
             <DialogTitle>{editingAnticipo ? "Editar Anticipo" : "Registrar Nuevo Anticipo"}</DialogTitle>
             <DialogDescription>
-              Ingrese los detalles del anticipo entregado al técnico.
+              Ingrese los detalles del anticipo entregado a la persona seleccionada.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="tecnico">Técnico</Label>
+              <Label htmlFor="tecnico">Persona del equipo</Label>
               <Select value={selectedTecnico} onValueChange={setSelectedTecnico}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar técnico..." />
+                  <SelectValue placeholder="Seleccionar persona..." />
                 </SelectTrigger>
                 <SelectContent>
                   {tecnicos.map((t) => (

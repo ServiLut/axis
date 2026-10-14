@@ -372,10 +372,10 @@ export default function ProgramacionCitasPage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 max-w-7xl mx-auto">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">
-              Programación de Consultorios
+              Agenda de consultorios
             </h1>
             <p className="text-sm text-slate-600 mt-1">
-              Agenda diaria por consultorio
+              Vea las citas y reservas del día. Seleccione una para consultar o cambiar su horario.
             </p>
           </div>
 
@@ -400,7 +400,7 @@ export default function ProgramacionCitasPage() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={handlePrev}
+                onClick={handlePrev} aria-label="Día anterior"
                 className="h-8 w-8"
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -428,7 +428,7 @@ export default function ProgramacionCitasPage() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={handleNext}
+                onClick={handleNext} aria-label="Día siguiente"
                 className="h-8 w-8"
               >
                 <ChevronRight className="h-4 w-4" />
@@ -460,7 +460,7 @@ export default function ProgramacionCitasPage() {
               {unassignedOrders.length > 0 && (
                 <span className="flex h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
               )}
-              Citas Sin Consultorio Asignado ({unassignedOrders.length})
+              Citas sin consultorio ({unassignedOrders.length})
             </h3>
 
             {unassignedOrders.length > 0 ? (
@@ -685,7 +685,7 @@ export default function ProgramacionCitasPage() {
                               >
                                 <div className="flex justify-between items-start gap-1">
                                   <div className="font-bold truncate text-xs flex-1">
-                                    {orden.cliente?.nombre || "Paciente"}{" "}
+                                    {orden.cliente?.nombre || "Reserva de consultorio"}{" "}
                                     {orden.cliente?.apellido || ""}
                                   </div>
                                   <Badge
@@ -839,7 +839,7 @@ export default function ProgramacionCitasPage() {
       <Dialog open={isAssignModalOpen} onOpenChange={setIsAssignModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Asignar Consultorio, Fecha y Horario</DialogTitle>
+            <DialogTitle>Asignar consultorio y horario</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
@@ -874,7 +874,7 @@ export default function ProgramacionCitasPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="startTime">Hora Inicio</Label>
+                <Label htmlFor="startTime">Hora de inicio</Label>
                 <Input
                   id="startTime"
                   type="time"
@@ -883,7 +883,7 @@ export default function ProgramacionCitasPage() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="endTime">Hora Fin</Label>
+                <Label htmlFor="endTime">Hora de fin</Label>
                 <Input
                   id="endTime"
                   type="time"
@@ -900,7 +900,7 @@ export default function ProgramacionCitasPage() {
             >
               Cancelar
             </Button>
-            <Button onClick={handleAssignSubmit}>Guardar Cambios</Button>
+            <Button onClick={handleAssignSubmit}>Guardar horario</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

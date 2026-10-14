@@ -344,7 +344,13 @@ function EventsModal({ sessionId }: { sessionId: number }) {
 
   const fetchEvents = useCallback(async (pageToLoad: number) => {
     setLoading(true);
-    const res = await getSessionEvents(sessionId, pageToLoad, 50);
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setLoading(false);
+      toast.error("Inicia sesión para consultar la actividad.");
+      return;
+    }
+    const res = await getSessionEvents(token, sessionId, pageToLoad, 50);
     if (res.success && res.data) {
       const newEvents = res.data as unknown as EventLog[];
       setEvents((prev) => (pageToLoad === 1 ? newEvents : [...prev, ...newEvents]));

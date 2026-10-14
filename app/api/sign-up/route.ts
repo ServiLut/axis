@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcrypt";
+import { PSYCHOLOGY_TENANT_ID } from "@/lib/psychology";
 
 export async function POST(request: Request) {
   try {
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
     // 3. Hash del password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 4. Crear usuario con tenantId por defecto (1)
+    // Las cuentas nuevas pertenecen al equipo de Psicólogos y requieren aprobación.
     const newUser = await prisma.usuario.create({
       data: {
         username,
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
         telefono,
         activo: true,
         aprobado: false, // Explicitly set as pending
-        tenantId: 1, // Asignar al tenant por defecto
+        tenantId: PSYCHOLOGY_TENANT_ID,
       },
     });
 

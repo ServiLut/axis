@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { loadServerModule } from "./load-server-module";
+import * as psychology from "../lib/psychology";
 import type * as Dashboard from "../app/(protected)/dashboard/actions";
 import type * as Clients from "../app/(protected)/dashboard/clientes/nuevo/actions";
 import type * as Caja from "../app/(protected)/dashboard/contabilidad/caja/actions";
@@ -17,7 +18,7 @@ test("dashboard statistics and outstanding detail use identical date boundaries 
     findMany: async (q: typeof queries[number]) => { queries.push(q); return []; },
   } };
   const actions = loadServerModule<typeof Dashboard>("app/(protected)/dashboard/actions.ts", {
-    "@/lib/prisma": prisma, "@/lib/auth": auth, "@/prisma/generated/prisma/client": mockEnums,
+    "@/lib/prisma": prisma, "@/lib/auth": auth, "@/lib/psychology": psychology, "@/prisma/generated/prisma/client": mockEnums,
   });
   const result = await actions.getDashboardStats("valid", "2026-09-23");
   assert.ok("stats" in result && result.type === "psychology");
@@ -41,7 +42,7 @@ test("psychology detail denies other tenants and invalid dates before reading ap
   let tenantId = 1;
   const actions = loadServerModule<typeof Dashboard>("app/(protected)/dashboard/actions.ts", {
     "@/lib/prisma": { usuario: { findUnique: async () => ({ tenantId, rol: "ADMIN" }) }, citasPsicologos: { findMany: () => { calls++; return []; } } },
-    "@/lib/auth": auth, "@/prisma/generated/prisma/client": mockEnums,
+    "@/lib/auth": auth, "@/lib/psychology": psychology, "@/prisma/generated/prisma/client": mockEnums,
   });
   assert.ok((await actions.getPsychologyOutstandingDetails("valid", "today", "2026-09-23")).error);
   tenantId = 4;
@@ -57,7 +58,7 @@ test("client creation checks international/local duplicates without inserting a 
     "@/lib/prisma": { usuario: { findUnique: async () => ({ tenantId: 4 }) }, cliente: {
       findFirst: async (q: unknown) => { filter = JSON.stringify(q); return { id: 2 }; },
       create: async () => { writes++; return { id: 3 }; },
-    } }, "@/lib/auth": auth, "next/cache": { revalidatePath() {} }, "@/lib/mysql": {}, "@/prisma/generated/prisma/client": mockEnums,
+    } }, "@/lib/auth": auth, "@/lib/psychology": psychology, "next/cache": { revalidatePath() {} }, "@/lib/mysql": {}, "@/prisma/generated/prisma/client": mockEnums,
   });
   const form = new FormData();
   form.set("telefono", "+57 3001234567");
@@ -82,7 +83,7 @@ function cajaFixture({ enabled = true, tenantId = 4, rol = "ASESOR", activo = tr
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma),
   };
   return { queries, userReads: () => userReads, actions: loadServerModule<typeof Caja>("app/(protected)/dashboard/contabilidad/caja/actions.ts", {
-    "@/lib/prisma": prisma, "@/lib/auth": auth, "@/lib/audit": { createAuditLog: async () => {} },
+    "@/lib/prisma": prisma, "@/lib/auth": auth, "@/lib/psychology": psychology, "@/lib/audit": { createAuditLog: async () => {} },
   }, enabled ? { NEXT_PUBLIC_CAJA_DIARIA_ENABLED: "true" } : {}) };
 }
 

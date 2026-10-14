@@ -67,7 +67,7 @@ interface CuentaCobro {
 }
 
 export default function CuentaCobroPage() {
-  const { role } = useUserRole();
+  const { role, userId } = useUserRole();
   const isAdmin = role === "ADMIN" || role === "SU_ADMIN";
   
   const [turnos, setTurnos] = useState<Turno[]>([]);
@@ -654,9 +654,9 @@ export default function CuentaCobroPage() {
       <div className="flex-none bg-white border-b border-slate-200 px-8 py-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 max-w-5xl mx-auto">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Cuenta de Cobro</h1>
+            <h1 className="text-2xl font-bold text-slate-900">Cuentas de cobro por turnos</h1>
             <p className="text-sm text-slate-600 mt-1">
-              Registro de actividades y horas laboradas
+              Registra tus horas y cierra cada periodo de trabajo. La administración revisa y paga las cuentas del equipo de Psicólogos.
             </p>
           </div>
         </div>
@@ -897,6 +897,7 @@ export default function CuentaCobroPage() {
                                         {cuentas.filter(c => c.estado === 'PENDIENTE').map((cuenta) => (
                                             <tr key={cuenta.id} className="hover:bg-slate-50/80 transition-colors">
                                                 <td className="px-6 py-4 whitespace-nowrap">
+                                                    {cuenta.usuario && <p className="mb-1 font-medium text-slate-900">{cuenta.usuario.nombre} {cuenta.usuario.apellido}</p>}
                                                     <div className="flex items-center gap-2">
                                                         <Calendar className="h-4 w-4 text-blue-500" />
                                                         <span className="font-semibold text-slate-900">
@@ -1014,6 +1015,7 @@ export default function CuentaCobroPage() {
                                         {cuentas.map((cuenta) => (
                                             <tr key={cuenta.id} className="hover:bg-slate-50/80 transition-colors">
                                                 <td className="px-6 py-4 whitespace-nowrap">
+                                                    {isAdmin && cuenta.usuario && <p className="mb-1 font-medium text-slate-900">{cuenta.usuario.nombre} {cuenta.usuario.apellido}</p>}
                                                     <div className="flex items-center gap-2">
                                                         <Calendar className="h-4 w-4 text-blue-500" />
                                                         <span className="font-semibold text-slate-900">
@@ -1066,7 +1068,7 @@ export default function CuentaCobroPage() {
                                                                 <Download className="h-4 w-4" />
                                                             )}
                                                         </Button>
-                                                        {cuenta.estado === 'GENERADA' && (
+                                                        {cuenta.estado === 'GENERADA' && cuenta.usuarioId === userId && (
                                                             <Button 
                                                                 variant="ghost" 
                                                                 size="icon"

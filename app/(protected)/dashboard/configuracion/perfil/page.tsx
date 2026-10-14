@@ -341,7 +341,7 @@ export default function PerfilPage() {
                   <Label>Rol (No editable)</Label>
                   <div className="flex items-center h-10 w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500 cursor-not-allowed">
                     <Lock className="h-4 w-4 mr-2 opacity-50" />
-                    {usuario?.rol}
+                    {usuario?.rol === "TECNICO" ? "Psicólogo/a" : usuario?.rol === "ASESOR" ? "Equipo de atención" : usuario?.rol === "SU_ADMIN" ? "Administración principal" : usuario?.rol === "ADMIN" ? "Administración" : "Sin rol asignado"}
                   </div>
                 </div>
               </CardContent>

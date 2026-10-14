@@ -266,23 +266,23 @@ export default function EditarCitaPage() {
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
-      <div className="sticky top-0 z-20 bg-white border-b border-slate-200 px-8 py-4">
+      <div className="sticky top-0 z-20 bg-white border-b border-slate-200 px-4 sm:px-8 py-4">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => router.push("/dashboard/citas")}
-              className="hover:bg-slate-100"
+              className="hover:bg-slate-100" aria-label="Volver a citas"
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
               <h1 className="text-2xl font-bold text-slate-900">
-                Editar Cita #{cita.id}
+                Editar cita #{cita.id}
               </h1>
               <p className="text-sm text-slate-600 mt-0.5">
-                Modifique los detalles de la programación
+                Actualice el psicólogo, el consultorio y el horario de esta cita.
               </p>
             </div>
           </div>
@@ -298,14 +298,14 @@ export default function EditarCitaPage() {
         </div>
       </div>
 
-      <div className="flex-1 bg-white px-8 py-8">
+      <div className="flex-1 bg-white px-4 sm:px-8 py-8">
         <form onSubmit={handleSubmit} className="max-w-5xl mx-auto space-y-8">
           
           {/* Read-Only Information */}
           <div className="bg-slate-50 p-6 rounded-lg border border-slate-200 space-y-4">
              <div className="flex items-center gap-2 mb-2">
                  <Info className="h-5 w-5 text-blue-600" />
-                 <h3 className="font-semibold text-slate-900">Información del Servicio</h3>
+                 <h3 className="font-semibold text-slate-900">Datos de la cita</h3>
              </div>
              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm">
                  <div>
@@ -320,10 +320,7 @@ export default function EditarCitaPage() {
                      <span className="text-slate-500 block">Servicio / Terapia</span>
                      <span className="font-medium text-slate-900">{cita.servicio?.nombre || 'N/A'}</span>
                  </div>
-                 <div>
-                     <span className="text-slate-500 block">Empresa</span>
-                     <span className="font-medium text-slate-900">{cita.empresa?.nombre || 'N/A'}</span>
-                 </div>
+
              </div>
           </div>
 
@@ -335,7 +332,7 @@ export default function EditarCitaPage() {
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">
-                  Asignación y Notas
+                  1. Psicólogo, consultorio y servicio
                 </h2>
               </div>
             </div>
@@ -346,10 +343,10 @@ export default function EditarCitaPage() {
                   htmlFor="tecnico"
                   className="text-sm font-medium text-slate-700"
                 >
-                  Psicólogo Asignado
+                  Psicólogo asignado
                 </Label>
                 <Select value={selectedPsicologoId} onValueChange={setSelectedPsicologoId}>
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger id="tecnico" className="h-11">
                     <SelectValue placeholder="Seleccione un psicólogo" />
                   </SelectTrigger>
                   <SelectContent>
@@ -370,7 +367,7 @@ export default function EditarCitaPage() {
                   Consultorio
                 </Label>
                 <Select value={selectedConsultorioId} onValueChange={setSelectedConsultorioId}>
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger id="consultorio" className="h-11">
                     <SelectValue placeholder="Seleccione un consultorio" />
                   </SelectTrigger>
                   <SelectContent>
@@ -391,10 +388,10 @@ export default function EditarCitaPage() {
                   htmlFor="terapia"
                   className="text-sm font-medium text-slate-700"
                 >
-                  Cambiar Paquete (Opcional)
+                  Cambiar servicio (opcional)
                 </Label>
                 <Select value={selectedTerapiaId} onValueChange={setSelectedTerapiaId}>
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger id="terapia" className="h-11">
                     <SelectValue placeholder="Seleccione para cambiar..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -412,13 +409,13 @@ export default function EditarCitaPage() {
                   htmlFor="observacion"
                   className="text-sm font-medium text-slate-700"
                 >
-                  Observaciones
+                  Notas de la cita (opcional)
                 </Label>
                 <Textarea
                   id="observacion"
                   value={observacion}
                   onChange={(e) => setObservacion(e.target.value)}
-                  placeholder="Notas adicionales sobre la cita"
+                  placeholder="Indicaciones para la cita o la reserva"
                   rows={3}
                   className="min-h-[80px]"
                 />
@@ -426,7 +423,7 @@ export default function EditarCitaPage() {
             </div>
           </div>
 
-          {/* Sección: Fecha y Horario */}
+          {/* Sección: 2. Fecha y horario */}
           <div className="space-y-6">
             <div className="flex items-center gap-3 pb-3 border-b-2 border-slate-200">
               <div className="p-2 bg-orange-50 rounded-lg">
@@ -434,7 +431,7 @@ export default function EditarCitaPage() {
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">
-                  Fecha y Horario
+                  2. Fecha y horario
                 </h2>
               </div>
             </div>
@@ -445,7 +442,7 @@ export default function EditarCitaPage() {
                   htmlFor="fechaVisita"
                   className="text-sm font-medium text-slate-700"
                 >
-                  Fecha de la Cita <span className="text-red-500">*</span>
+                  Fecha <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="fechaVisita"
@@ -462,7 +459,7 @@ export default function EditarCitaPage() {
                   htmlFor="horaInicio"
                   className="text-sm font-medium text-slate-700"
                 >
-                  Hora de Inicio <span className="text-red-500">*</span>
+                  Hora de inicio <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="horaInicio"
@@ -480,7 +477,7 @@ export default function EditarCitaPage() {
                   htmlFor="horaFin"
                   className="text-sm font-medium text-slate-700"
                 >
-                  Hora de Fin <span className="text-red-500">*</span>
+                  Hora de fin <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="horaFin"
@@ -495,7 +492,7 @@ export default function EditarCitaPage() {
             </div>
           </div>
 
-          {/* Sección: Información de Pago */}
+          {/* Sección: 3. Valor y pago */}
           {currentIsRental && process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true" &&
             <CorregirValorAlquiler citaId={id} disabled={saving} onSaved={() => router.push("/dashboard/citas")} />}
           <div className="space-y-6">
@@ -505,7 +502,7 @@ export default function EditarCitaPage() {
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">
-                  Información de Pago
+                  3. Valor y pago
                 </h2>
               </div>
             </div>
@@ -543,7 +540,7 @@ export default function EditarCitaPage() {
                   htmlFor="metodoPago"
                   className="text-sm font-medium text-slate-700"
                 >
-                  Método de Pago
+                  Método de pago
                 </Label>
                 <Select value={selectedMetodoPago} onValueChange={setSelectedMetodoPago}>
                   <SelectTrigger className="h-11">

@@ -3,6 +3,7 @@
 import prisma from "@/lib/prisma"; // Changed from named import to default to match existing pattern if needed, or check lib/prisma.ts
 import { revalidatePath } from "next/cache";
 import { verifyToken } from "@/lib/auth";
+import { PSYCHOLOGY_TENANT_ID } from "@/lib/psychology";
 import { Prisma } from "@/prisma/generated/prisma/client";
 
 // Schema de validación
@@ -59,19 +60,15 @@ export async function getUsuariosNomina(token: string) {
         select: { tenantId: true, rol: true }
     });
 
-    if (!currentUser) return { error: "Usuario no encontrado" };
+    if (!currentUser || currentUser.tenantId !== PSYCHOLOGY_TENANT_ID || !["ADMIN", "SU_ADMIN"].includes(currentUser.rol ?? "")) return { error: "No autorizado" };
 
     const whereClause: Prisma.UsuarioWhereInput = {
       rol: {
         in: ["TECNICO", "ASESOR", "ADMIN"], 
       },
       activo: true,
+      tenantId: PSYCHOLOGY_TENANT_ID,
     };
-
-    // Si NO es SU_ADMIN, filtramos por su tenant actual
-    if (currentUser.rol !== 'SU_ADMIN') {
-      whereClause.tenantId = currentUser.tenantId;
-    }
 
     const usuarios = await prisma.usuario.findMany({
       where: whereClause,
@@ -104,7 +101,7 @@ export async function getUsuariosNomina(token: string) {
         nombre: `${u.nombre} ${u.apellido}`,
         email: u.email,
         rol: u.rol,
-        empresaName: u.empresa?.nombre || "Sin Empresa",
+        empresaName: "Psicólogos en Colombia",
         configuracion: u.ConfiguracionPagos[0] || null
     }));
 
@@ -125,6 +122,18 @@ export async function saveConfiguracionNomina(token: string, data: NominaFormDat
    const { usuarioId, tipo, valorParticipacion, salarioBase } = parsed;
 
    try {
+     const [actor, targetUser] = await Promise.all([
+       prisma.usuario.findFirst({
+         where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID, activo: true, aprobado: true, rol: { in: ["ADMIN", "SU_ADMIN"] } },
+         select: { id: true },
+       }),
+       prisma.usuario.findFirst({
+         where: { id: usuarioId, tenantId: PSYCHOLOGY_TENANT_ID, activo: true },
+         select: { id: true },
+       }),
+     ]);
+     if (!actor || !targetUser) return { error: "No autorizado para configurar el pago de esta persona" };
+
      // Verificamos si ya existe una configuración para actualizarla o crear una nueva
      const existingConfig = await prisma.configuracionPagos.findFirst({
         where: { usuarioId }

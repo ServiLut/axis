@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { HalloweenTheme } from "@/components/dashboard/halloween-theme";
 import { HalloweenScene } from "@/components/seasonal/halloween-scene";
 import {
@@ -30,7 +29,6 @@ export default function SignInPage() {
   const [formData, setFormData] = useState({
     username: "",
     password: "",
-    rememberMe: false,
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -70,7 +68,9 @@ export default function SignInPage() {
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => {
+        throw new Error("No se pudo conectar con Axis. Intenta nuevamente o contacta a administración.");
+      });
 
       if (!response.ok) {
         throw new Error(data.message || "Error al iniciar sesión");
@@ -126,10 +126,10 @@ export default function SignInPage() {
             </Link>
             <div className="pt-2">
               <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">
-                Bienvenido de nuevo
+                Inicia sesión en Axis
               </h1>
               <p className="text-slate-500 mt-2 text-[15px]">
-                Ingresa tus credenciales para acceder a tu cuenta.
+                Espacio de trabajo de Psicólogos en Colombia.
               </p>
             </div>
           </div>
@@ -148,6 +148,9 @@ export default function SignInPage() {
                 <User className="absolute left-4 top-3.5 h-5 w-5 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
                 <Input
                   id="username"
+                  autoComplete="username"
+                  aria-invalid={!!errors.username}
+                  aria-describedby={errors.username ? "username-error" : undefined}
                   type="text"
                   placeholder="Tu usuario"
                   className={`pl-12 h-12 rounded-xl bg-white border-slate-200 shadow-sm hover:border-indigo-300 focus:bg-white focus:ring-4 focus:ring-indigo-500/15 focus:border-indigo-600 transition-all text-[15px] font-medium text-slate-900 ${errors.username ? "border-red-500 focus:ring-red-500/15 focus:border-red-500" : ""}`}
@@ -157,7 +160,7 @@ export default function SignInPage() {
                 />
               </div>
               {errors.username && (
-                <p className="text-sm text-red-500 mt-1 font-medium">
+                <p id="username-error" className="text-sm text-red-500 mt-1 font-medium">
                   {errors.username}
                 </p>
               )}
@@ -175,6 +178,9 @@ export default function SignInPage() {
                 <Lock className="absolute left-4 top-3.5 h-5 w-5 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
                 <Input
                   id="password"
+                  autoComplete="current-password"
+                  aria-invalid={!!errors.password}
+                  aria-describedby={errors.password ? "password-error" : undefined}
                   type={showPassword ? "text" : "password"}
                   placeholder="••••••••"
                   className={`pl-12 pr-12 h-12 rounded-xl bg-white border-slate-200 shadow-sm hover:border-indigo-300 focus:bg-white focus:ring-4 focus:ring-indigo-500/15 focus:border-indigo-600 transition-all text-[15px] tracking-widest font-medium text-slate-900 ${errors.password ? "border-red-500 focus:ring-red-500/15 focus:border-red-500" : ""}`}
@@ -184,6 +190,7 @@ export default function SignInPage() {
                 />
                 <button
                   type="button"
+                  aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-4 top-3.5 text-slate-400 hover:text-indigo-600 focus:outline-none transition-colors"
                 >
@@ -195,38 +202,13 @@ export default function SignInPage() {
                 </button>
               </div>
               {errors.password && (
-                <p className="text-sm text-red-500 mt-1 font-medium">
+                <p id="password-error" className="text-sm text-red-500 mt-1 font-medium">
                   {errors.password}
                 </p>
               )}
             </div>
 
-            {/* Remember Me & Forgot Password */}
-            <div className="flex items-center justify-between pt-2">
-              <div className="flex items-center space-x-2.5">
-                <Checkbox
-                  id="rememberMe"
-                  checked={formData.rememberMe}
-                  onCheckedChange={(checked) =>
-                    setFormData((p) => ({ ...p, rememberMe: !!checked }))
-                  }
-                  disabled={isLoading}
-                  className="data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600 border-slate-300 rounded shadow-sm"
-                />
-                <Label
-                  htmlFor="rememberMe"
-                  className="text-[14px] text-slate-600 cursor-pointer select-none font-semibold hover:text-slate-900 transition-colors"
-                >
-                  Recordarme
-                </Label>
-              </div>
-              <Link
-                href="/forgot-password"
-                className="login-accent-link text-[14px] font-bold text-indigo-600 hover:text-indigo-700 transition-colors"
-              >
-                ¿Olvidaste tu contraseña?
-              </Link>
-            </div>
+            <p className="text-xs text-slate-500">Si olvidaste tu contraseña, solicita ayuda a administración.</p>
 
             {/* Submit Button */}
             <Button
@@ -247,12 +229,12 @@ export default function SignInPage() {
 
           {/* Sign Up Link */}
           <p className="text-center text-[15px] text-slate-500 mt-8 font-medium">
-            ¿Nuevo en nuestra plataforma?<br />
+            ¿Formas parte del equipo?<br />
             <Link
               href="/sign-up"
               className="login-accent-link font-bold text-indigo-600 hover:text-indigo-700 transition-colors inline-block mt-1"
             >
-              Crea una cuenta
+              Solicita acceso
             </Link>
           </p>
         </div>
@@ -284,7 +266,7 @@ export default function SignInPage() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-300"></span>
             </span>
-            Plataforma Profesional de Gestión
+            Psicólogos en Colombia
           </div>
           <h2 className="text-4xl xl:text-5xl font-bold tracking-tight leading-tight text-white drop-shadow-lg">
             ¡Bienvenido de nuevo!
@@ -294,8 +276,8 @@ export default function SignInPage() {
             </span>
           </h2>
           <p className="text-lg text-indigo-100/80 max-w-md leading-relaxed font-light">
-            Gracias por regresar. Por favor revisa tu bandeja de entrada si
-            necesitas verificar tu cuenta para activarla.
+            Consulta la agenda, registra pacientes y coordina citas y reservas
+            de consultorio de Psicólogos en Colombia.
           </p>
         </div>
 

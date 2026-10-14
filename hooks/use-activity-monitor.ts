@@ -16,6 +16,8 @@ export function useActivityMonitor(userId: number | null | undefined) {
   // Función para reportar eventos a la API
   const logEvent = useCallback(async (tipo: string, detalles?: unknown) => {
     if (!userId) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
 
     try {
       await fetch("/api/monitor/log", {
@@ -23,7 +25,7 @@ export function useActivityMonitor(userId: number | null | undefined) {
         keepalive: true, // Permite que la petición sobreviva si se cierra la pestaña
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           userId,

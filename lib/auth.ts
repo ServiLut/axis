@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import { Rol } from '../prisma/generated/prisma/client';
 import prisma from './prisma';
 import {isLuisaServiceUser} from './psychology-bot-operator';
+import {isPsychologyTenant} from './psychology';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'default-secret';
 
@@ -18,13 +19,14 @@ export interface TokenPayload {
 }
 
 export function signToken(payload: TokenPayload): string {
+  if (!isPsychologyTenant(payload.tenantId)) throw new Error('Axis solo permite sesiones de Psicólogos en Colombia');
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '1d' });
 }
 
 export async function verifyToken(token: string): Promise<TokenPayload | null> {
   try {
     const payload = jwt.verify(token, JWT_SECRET) as TokenPayload;
-    if (!payload.aprobado || !Number.isSafeInteger(payload.userId) || payload.userId <= 0) return null;
+    if (!payload.aprobado || !isPsychologyTenant(payload.tenantId) || !Number.isSafeInteger(payload.userId) || payload.userId <= 0) return null;
     const user = await prisma.usuario.findUnique({
       where: { id: payload.userId },
       select: { username:true,activo: true, aprobado: true, tenantId: true, rol: true, authVersion: true },

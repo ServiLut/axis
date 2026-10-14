@@ -3,7 +3,6 @@
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
-import mysql from "@/lib/mysql";
 import { Prisma } from "@/prisma/generated/prisma/client";
 import { clientPhoneVariants, normalizeClientPhone } from "@/lib/client-phone";
 import { PSYCHOLOGY_TENANT_ID } from "@/lib/constants/tenants";
@@ -44,7 +43,7 @@ export async function createCliente(token: string, formData: FormData) {
 
   // Obtener el tenantId del usuario
   const usuario = await prisma.usuario.findUnique({
-    where: { id: payload.userId },
+    where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
     select: { tenantId: true },
   });
 
@@ -94,14 +93,14 @@ export async function createCliente(token: string, formData: FormData) {
 
   const existingCliente = await prisma.cliente.findFirst({
     where: {
-      tenantId: usuario.tenantId,
+      tenantId: PSYCHOLOGY_TENANT_ID,
       deletedAt: null,
       OR: orConditions
     },
   });
 
   if (existingCliente) {
-    return { error: "Ya existe un cliente registrado con este número de teléfono." };
+    return { error: "Ya existe un paciente registrado con este número de teléfono." };
   }
 
   let direccionesData: DireccionInput[] = [];
@@ -123,7 +122,7 @@ export async function createCliente(token: string, formData: FormData) {
           unidad?: string;
           linkMaps?: string;
         }) => ({
-          tenantId: usuario.tenantId,
+          tenantId: PSYCHOLOGY_TENANT_ID,
           direccion: d.direccion,
           barrio: formatValue(d.barrio),
           municipio: formatValue(d.municipio),
@@ -151,7 +150,7 @@ export async function createCliente(token: string, formData: FormData) {
           color?: string;
           tipo?: string;
         }) => ({
-          tenantId: usuario.tenantId,
+          tenantId: PSYCHOLOGY_TENANT_ID,
           placa: formatValue(v.placa),
           marca: formatValue(v.marca),
           modelo: formatValue(v.modelo),
@@ -168,7 +167,7 @@ export async function createCliente(token: string, formData: FormData) {
   try {
     const newCliente = await prisma.cliente.create({
       data: {
-        tenantId: usuario.tenantId,
+        tenantId: PSYCHOLOGY_TENANT_ID,
         nombre: formatValue(nombre),
         apellido: formatValue(apellido),
         tipoDocumento: formatValue(tipoDocumento),
@@ -188,10 +187,10 @@ export async function createCliente(token: string, formData: FormData) {
     });
 
     revalidatePath("/dashboard/clientes");
-    return { success: true, message: "Cliente creado exitosamente.", clienteId: newCliente.id };
+    return { success: true, message: "Paciente creado exitosamente.", clienteId: newCliente.id };
   } catch (error) {
-    console.error("Error creando cliente:", error);
-    return { error: "Error al crear el cliente." };
+    console.error("Error creando paciente:", error);
+    return { error: "Error al crear el paciente." };
   }
 }
 
@@ -201,7 +200,7 @@ export async function getClientForMigration(token: string, clientId: number) {
 
   try {
     const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
       select: { tenantId: true },
     });
 
@@ -209,18 +208,18 @@ export async function getClientForMigration(token: string, clientId: number) {
 
     // 1. Get Client and existing addresses
     const cliente = await prisma.cliente.findFirst({
-      where: { id: clientId, tenantId: usuario.tenantId },
+      where: { id: clientId, tenantId: PSYCHOLOGY_TENANT_ID },
       include: {
         direcciones: true,
         vehiculos: true,
       },
     });
 
-    if (!cliente) return { error: "Cliente no encontrado" };
+    if (!cliente) return { error: "Paciente no encontrado" };
 
     // 2. Get addresses from Orders (history)
     const ordenes = await prisma.ordenServicio.findMany({
-      where: { clienteId: clientId, tenantId: usuario.tenantId },
+      where: { clienteId: clientId, tenantId: PSYCHOLOGY_TENANT_ID },
       select: {
         direccionTexto: true,
         municipio: true,
@@ -268,144 +267,13 @@ export async function getClientForMigration(token: string, clientId: number) {
 
   } catch (error) {
     console.error("Error fetching migration data:", error);
-    return { error: "Error cargando datos del cliente" };
+    return { error: "Error cargando datos del paciente" };
   }
 }
 
 export async function getServilutionClientForMigration(token: string, clientId: number) {
+  void clientId; // Preserve the action signature for previous callers.
   const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
-
-  try {
-    // 1. Get Client from MySQL
-    const clientRows = await mysql.query<{
-        Id_cliente: number;
-        nombre: string;
-        apellido: string;
-        numero_de_documento: string;
-        telefono: string;
-        correo_electronico: string;
-        direccion: string;
-        municipio: number;
-        barrio: number;
-        numero_piso: string;
-        bloque: string;
-        unidad_residencial: string;
-        nombre_municipio: string;
-        nombre_barrio: string;
-    }>(`
-        SELECT 
-            c.*, 
-            m.Nombre as nombre_municipio,
-            b.Nombre as nombre_barrio
-        FROM clientes c
-        LEFT JOIN municipios m ON c.municipio = m.id_municipio
-        LEFT JOIN barrios b ON c.barrio = b.id_barrio
-        WHERE c.Id_cliente = ?
-    `, [clientId]);
-
-    if (!clientRows || clientRows.length === 0) {
-        return { error: "Cliente no encontrado en Servilution" };
-    }
-
-    const cliente = clientRows[0];
-    if (!cliente) {
-        return { error: "Error al procesar datos del cliente" };
-    }
-    
-    // Check for existing client in new system (sanitize document first)
-    // Legacy DB might have "900265730-0", new DB has "9002657300"
-    const rawDoc = cliente.numero_de_documento || "";
-    const sanitizedDoc = rawDoc.replace(/\D/g, "");
-
-    if (sanitizedDoc) {
-        // Get user for tenant context
-        const usuario = await prisma.usuario.findUnique({
-            where: { id: payload.userId },
-            select: { tenantId: true },
-        });
-
-        if (usuario) {
-            const existingClient = await prisma.cliente.findFirst({
-                where: {
-                    tenantId: usuario.tenantId,
-                    numeroDocumento: sanitizedDoc,
-                    deletedAt: null
-                },
-                select: { id: true }
-            });
-
-            if (existingClient) {
-                return { 
-                    error: "Este cliente ya ha sido migrado previamente.", 
-                    existingClientId: existingClient.id 
-                };
-            }
-        }
-    }
-
-    // 2. Get addresses from Orders (history)
-    const ordenesRows = await mysql.query<{
-        direccion_servicio: string;
-        numero_piso: string;
-        bloque_o_torre: string;
-        unidad_residencial: string;
-        nombre_municipio: string;
-        nombre_barrio: string;
-    }>(`
-        SELECT 
-            sp.direccion_servicio,
-            sp.numero_piso,
-            sp.bloque_o_torre,
-            sp.unidad_residencial,
-            m.Nombre as nombre_municipio,
-            b.Nombre as nombre_barrio
-        FROM servicios_prestados sp
-        LEFT JOIN municipios m ON sp.id_municipio = m.id_municipio
-        LEFT JOIN barrios b ON sp.id_barrio = b.id_barrio
-        WHERE sp.id_cliente = ? AND sp.direccion_servicio IS NOT NULL AND sp.direccion_servicio != ''
-    `, [clientId]);
-
-    // 3. Extract unique addresses
-    const hiddenDirecciones = [];
-    const seenHidden = new Set();
-    
-    // Add the main address to seen set if it exists
-    if (cliente.direccion) {
-        const mainKey = `${cliente.direccion}|${cliente.nombre_municipio || ''}|${cliente.nombre_barrio || ''}|${cliente.numero_piso || ''}|${cliente.bloque || ''}|${cliente.unidad_residencial || ''}`.toLowerCase();
-        seenHidden.add(mainKey);
-    }
-
-    for (const ord of ordenesRows) {
-      const key = `${ord.direccion_servicio}|${ord.nombre_municipio || ''}|${ord.nombre_barrio || ''}|${ord.numero_piso || ''}|${ord.bloque_o_torre || ''}|${ord.unidad_residencial || ''}`.toLowerCase();
-      
-      if (!seenHidden.has(key)) {
-        seenHidden.add(key);
-        hiddenDirecciones.push({
-          direccion: ord.direccion_servicio,
-          municipio: ord.nombre_municipio,
-          barrio: ord.nombre_barrio,
-          piso: ord.numero_piso,
-          bloque: ord.bloque_o_torre,
-          unidad: ord.unidad_residencial,
-        });
-      }
-    }
-
-    return { 
-      cliente: {
-          ...cliente,
-          tipoDocumento: 'CC', // Default, as old DB might store it differently or loosely
-          numeroDocumento: cliente.numero_de_documento,
-          telefono: cliente.telefono,
-          telefono2: null,
-          correo: cliente.correo_electronico
-      }, 
-      hiddenDirecciones 
-    };
-
-  } catch (error) {
-    console.error("Error fetching Servilution migration data:", error);
-    return { error: "Error cargando datos del cliente de Servilution" };
-  }
+  return { error: "La importación desde otras empresas está deshabilitada. Registra el paciente en Psicólogos en Colombia." };
 }

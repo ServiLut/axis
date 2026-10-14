@@ -7,10 +7,10 @@ import {
   ArrowLeft,
   Save,
   User,
-  Wrench,
+  HeartPulse,
   Calendar,
   DollarSign,
-  Briefcase,
+  UserRound,
   Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -368,7 +368,7 @@ export default function NuevoCitaPage() {
 
   if (loadingData) {
     return (
-      <div className="flex h-[calc(100vh-200px)] items-center justify-center bg-white">
+      <div className="flex h-[calc(100vh-200px)] items-center justify-center gap-3 bg-white" role="status"><span className="text-sm text-slate-600">Cargando formulario…</span>
         <div className="h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -377,22 +377,22 @@ export default function NuevoCitaPage() {
   if (!mode) {
       return (
           <div className="flex flex-col bg-slate-50 h-full overflow-y-auto">
-              <div className="sticky top-0 z-20 bg-white border-b border-slate-200 px-8 py-4">
+              <div className="sticky top-0 z-20 bg-white border-b border-slate-200 px-4 sm:px-8 py-4">
                   <div className="flex items-center gap-4 max-w-7xl mx-auto">
                         <Button
                           variant="ghost"
                           size="icon"
                           onClick={() => router.push("/dashboard/citas")}
-                          className="hover:bg-slate-100"
+                          className="hover:bg-slate-100" aria-label="Volver"
                         >
                           <ArrowLeft className="h-5 w-5" />
                         </Button>
                         <div>
                           <h1 className="text-2xl font-bold text-slate-900">
-                            Nueva Cita - Selección de Tipo
+                            Nueva cita o reserva
                           </h1>
                           <p className="text-sm text-slate-600 mt-0.5">
-                            ¿Qué tipo de cita deseas agendar?
+                            Primero elija qué desea agendar.
                           </p>
                         </div>
                   </div>
@@ -402,23 +402,29 @@ export default function NuevoCitaPage() {
                       <Card 
                         className="cursor-pointer hover:border-blue-500 hover:shadow-md transition-all group"
                         onClick={() => handleModeChange("PLANTA")}
+                        role="button" tabIndex={0} aria-label="Agendar sesión de psicología"
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault(); handleModeChange("PLANTA");
+                          }
+                        }}
                       >
                           <CardHeader>
                               <CardTitle className="flex items-center gap-3 text-2xl group-hover:text-blue-600 transition-colors">
                                   <div className="p-3 bg-blue-100 rounded-lg group-hover:bg-blue-200 transition-colors">
-                                      <Briefcase className="h-8 w-8 text-blue-700" />
+                                      <UserRound className="h-8 w-8 text-blue-700" />
                                   </div>
-                                  Cita de Planta
+                                  Sesión de psicología
                               </CardTitle>
                               <CardDescription className="text-base mt-2">
-                                  Servicio estándar para pacientes registrados.
+                                  Atención a un paciente con un psicólogo de nuestro equipo.
                               </CardDescription>
                           </CardHeader>
                           <CardContent>
                               <ul className="list-disc list-inside text-slate-600 space-y-1">
                                   <li>Requiere seleccionar un paciente</li>
-                                  <li>Uso de Paquetes o Nuevas Terapias</li>
-                                  <li>Asignación de psicólogo</li>
+                                  <li>Sesión individual o paquete de sesiones</li>
+                                  <li>Seleccione el psicólogo y el horario</li>
                               </ul>
                           </CardContent>
                       </Card>
@@ -426,23 +432,29 @@ export default function NuevoCitaPage() {
                       <Card 
                         className="cursor-pointer hover:border-green-500 hover:shadow-md transition-all group"
                         onClick={() => handleModeChange("ALQUILER")}
+                        role="button" tabIndex={0} aria-label="Reservar consultorio"
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault(); handleModeChange("ALQUILER");
+                          }
+                        }}
                       >
                           <CardHeader>
                               <CardTitle className="flex items-center gap-3 text-2xl group-hover:text-green-600 transition-colors">
                                   <div className="p-3 bg-green-100 rounded-lg group-hover:bg-green-200 transition-colors">
                                       <Building2 className="h-8 w-8 text-green-700" />
                                   </div>
-                                  Alquiler de Espacio
+                                  Reserva de consultorio
                               </CardTitle>
                               <CardDescription className="text-base mt-2">
-                                  Renta de consultorio por horas.
+                                  Alquiler de un consultorio para un psicólogo externo.
                               </CardDescription>
                           </CardHeader>
                           <CardContent>
                               <ul className="list-disc list-inside text-slate-600 space-y-1">
-                                  <li>Uso de Servicios Genéricos</li>
-                                  <li>Bloqueo de consultorio</li>
-                                  <li>Sin registro de paciente</li>
+                                  <li>Seleccione el psicólogo que usará el espacio</li>
+                                  <li>Reserve el consultorio y el horario</li>
+                                  <li>No requiere registrar un paciente</li>
                               </ul>
                           </CardContent>
                       </Card>
@@ -454,23 +466,23 @@ export default function NuevoCitaPage() {
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
-      <div className="sticky top-0 z-20 bg-white border-b border-slate-200 px-8 py-4">
+      <div className="sticky top-0 z-20 bg-white border-b border-slate-200 px-4 sm:px-8 py-4">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => handleModeChange(null)}
-              className="hover:bg-slate-100"
+              className="hover:bg-slate-100" aria-label="Volver"
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
               <h1 className="text-2xl font-bold text-slate-900">
-                {mode === "PLANTA" ? "Registrar Cita de Planta" : "Registrar Alquiler"}
+                {mode === "PLANTA" ? "Nueva sesión de psicología" : "Nueva reserva de consultorio"}
               </h1>
               <p className="text-sm text-slate-600 mt-0.5">
-                Complete los detalles del servicio
+                Complete los datos, el horario y la información del pago.
               </p>
             </div>
           </div>
@@ -486,9 +498,9 @@ export default function NuevoCitaPage() {
         </div>
       </div>
 
-      <div className="flex-1 bg-white px-8 py-8">
+      <div className="flex-1 bg-white px-4 sm:px-8 py-8">
         <form onSubmit={handleSubmit} className="max-w-5xl mx-auto space-y-8">
-          {/* Sección: Información del Paciente */}
+          {/* Sección: 1. Paciente */}
           {mode === "PLANTA" && (
             <div className="space-y-6">
               <div className="flex items-center gap-3 pb-3 border-b-2 border-slate-200">
@@ -497,10 +509,10 @@ export default function NuevoCitaPage() {
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">
-                    Información del Paciente
+                    1. Paciente
                   </h2>
                   <p className="text-sm text-slate-600">
-                    Seleccione el paciente (Obligatorio)
+                    Busque y seleccione el paciente que recibirá la atención.
                   </p>
                 </div>
               </div>
@@ -511,9 +523,10 @@ export default function NuevoCitaPage() {
                     htmlFor="cliente"
                     className="text-sm font-medium text-slate-700"
                   >
-                    Buscar Paciente <span className="text-red-500">*</span>
+                    Paciente <span className="text-red-500">*</span>
                   </Label>
                   <Combobox
+                    id="cliente"
                     options={clientOptions}
                     value={selectedClienteId}
                     onChange={handleClientChange}
@@ -529,23 +542,24 @@ export default function NuevoCitaPage() {
                     shouldFilter={false}
                   />
                   <input type="hidden" name="cliente" value={selectedClienteId} />
+                  <p className="text-xs text-slate-500">Escriba al menos 6 caracteres del nombre, documento o teléfono. Si es un paciente nuevo, regístrelo en Pacientes antes de agendar.</p>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Sección: Detalles de la Cita */}
+          {/* Sección: {mode === "PLANTA" ? "2. Psicólogo y servicio" : "1. Psicólogo y consultorio"} */}
           <div className="space-y-6">
             <div className="flex items-center gap-3 pb-3 border-b-2 border-slate-200">
               <div className="p-2 bg-green-50 rounded-lg">
-                <Wrench className="h-5 w-5 text-green-600" />
+                <HeartPulse className="h-5 w-5 text-green-600" />
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">
-                  Detalles de la Cita
+                  {mode === "PLANTA" ? "2. Psicólogo y servicio" : "1. Psicólogo y consultorio"}
                 </h2>
                 <p className="text-sm text-slate-600">
-                  Configure el servicio y el profesional
+                  Seleccione quién atenderá y dónde se realizará la cita.
                 </p>
               </div>
             </div>
@@ -577,9 +591,10 @@ export default function NuevoCitaPage() {
                   htmlFor="tecnico"
                   className="text-sm font-medium text-slate-700"
                 >
-                  Psicólogo Asignado
+                  Psicólogo asignado
                 </Label>
                 <Combobox
+                  id="tecnico"
                   options={psicologoOptions}
                   value={selectedPsicologoId}
                   onChange={setSelectedPsicologoId}
@@ -592,7 +607,7 @@ export default function NuevoCitaPage() {
               {/* Conditional Rendering based on Mode */}
               {mode === "PLANTA" ? (
                   <div className="md:col-span-2 space-y-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
-                      <Label className="text-base font-semibold">Tipo de Atención</Label>
+                      <Label className="text-base font-semibold">Servicio para esta sesión</Label>
                       <RadioGroup 
                         value={serviceSource} 
                         onValueChange={(val) => handleServiceSourceChange(val as ServiceSource)}
@@ -600,19 +615,19 @@ export default function NuevoCitaPage() {
                       >
                           <div className="flex items-center space-x-2">
                               <RadioGroupItem value="NEW_THERAPY" id="r1" />
-                              <Label htmlFor="r1">Nuevo Servicio / Tratamiento</Label>
+                              <Label htmlFor="r1">Servicio del catálogo</Label>
                           </div>
                           {activePackages.length > 0 && (
                               <div className="flex items-center space-x-2">
                                   <RadioGroupItem value="PACKAGE" id="r2" />
-                                  <Label htmlFor="r2">Usar Paquete Activo ({activePackages.length})</Label>
+                                  <Label htmlFor="r2">Usar paquete del paciente ({activePackages.length})</Label>
                               </div>
                           )}
                       </RadioGroup>
 
                       {serviceSource === "NEW_THERAPY" && (
                           <div className="space-y-2">
-                            <Label htmlFor="terapiaId">Seleccionar Terapia / Servicio <span className="text-red-500">*</span></Label>
+                            <Label htmlFor="terapiaId">Servicio de psicología <span className="text-red-500">*</span></Label>
                             <Combobox 
                                 options={terapiaOptions}
                                 value={selectedTerapiaId} 
@@ -621,14 +636,14 @@ export default function NuevoCitaPage() {
                                 emptyMessage="No se encontraron terapias."
                             />
                             <p className="text-xs text-slate-500">
-                                Esto creará un nuevo registro de paquete para el paciente.
+                                Si el servicio incluye varias sesiones, quedarán disponibles en un paquete para el paciente.
                             </p>
                           </div>
                       )}
 
                       {serviceSource === "PACKAGE" && (
                           <div className="space-y-2">
-                            <Label htmlFor="paqueteId">Seleccionar Paquete <span className="text-red-500">*</span></Label>
+                            <Label htmlFor="paqueteId">Paquete disponible <span className="text-red-500">*</span></Label>
                             <Select 
                                 value={selectedPaqueteId} 
                                 onValueChange={setSelectedPaqueteId}
@@ -667,19 +682,19 @@ export default function NuevoCitaPage() {
                 htmlFor="observacion"
                 className="text-sm font-medium text-slate-700"
               >
-                Observaciones
+                Notas de la cita (opcional)
               </Label>
               <Textarea
                 id="observacion"
                 name="observacion"
-                placeholder="Notas adicionales sobre la cita"
+                placeholder="Indicaciones para la cita o la reserva"
                 rows={3}
                 className="min-h-[80px]"
               />
             </div>
           </div>
 
-          {/* Sección: Fecha y Horario */}
+          {/* Sección: {mode === "PLANTA" ? "3. Fecha y horario" : "2. Fecha y horario"} */}
           <div className="space-y-6">
             <div className="flex items-center gap-3 pb-3 border-b-2 border-slate-200">
               <div className="p-2 bg-orange-50 rounded-lg">
@@ -687,10 +702,10 @@ export default function NuevoCitaPage() {
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">
-                  Fecha y Horario
+                  {mode === "PLANTA" ? "3. Fecha y horario" : "2. Fecha y horario"}
                 </h2>
                 <p className="text-sm text-slate-600">
-                  Agende el día y la hora de la cita
+                  Indique el inicio y el fin. Horarios de Colombia (Bogotá).
                 </p>
               </div>
             </div>
@@ -701,7 +716,7 @@ export default function NuevoCitaPage() {
                   htmlFor="fechaVisita"
                   className="text-sm font-medium text-slate-700"
                 >
-                  Fecha de la Cita <span className="text-red-500">*</span>
+                  Fecha <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="fechaVisita"
@@ -717,7 +732,7 @@ export default function NuevoCitaPage() {
                   htmlFor="horaInicio"
                   className="text-sm font-medium text-slate-700"
                 >
-                  Hora de Inicio <span className="text-red-500">*</span>
+                  Hora de inicio <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="horaInicio"
@@ -736,7 +751,7 @@ export default function NuevoCitaPage() {
                   htmlFor="horaFin"
                   className="text-sm font-medium text-slate-700"
                 >
-                  Hora de Fin <span className="text-red-500">*</span>
+                  Hora de fin <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="horaFin"
@@ -752,7 +767,7 @@ export default function NuevoCitaPage() {
             </div>
           </div>
 
-          {/* Sección: Información de Pago */}
+          {/* Sección: {mode === "PLANTA" ? "4. Valor y pago" : "3. Valor y pago"} */}
           <div className="space-y-6">
             <div className="flex items-center gap-3 pb-3 border-b-2 border-slate-200">
               <div className="p-2 bg-purple-50 rounded-lg">
@@ -760,10 +775,10 @@ export default function NuevoCitaPage() {
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">
-                  Información de Pago
+                  {mode === "PLANTA" ? "4. Valor y pago" : "3. Valor y pago"}
                 </h2>
                 <p className="text-sm text-slate-600">
-                  Detalles financieros de la cita
+                  Revise el valor y elija el método de pago si lo conoce.
                 </p>
               </div>
             </div>
@@ -802,7 +817,7 @@ export default function NuevoCitaPage() {
                   htmlFor="metodoPago"
                   className="text-sm font-medium text-slate-700"
                 >
-                  Método de Pago
+                  Método de pago
                 </Label>
                 <Select name="metodoPago">
                   <SelectTrigger className="h-11">
@@ -849,7 +864,7 @@ export default function NuevoCitaPage() {
                 ) : (
                   <span className="flex items-center gap-2">
                     <Save className="h-4 w-4" />
-                    Registrar Cita
+                    {mode === "PLANTA" ? "Guardar cita" : "Guardar reserva"}
                   </span>
                 )}
               </Button>

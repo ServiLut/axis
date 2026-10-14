@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getUsuariosPendientes, aprobarUsuario, rechazarUsuario, getEmpresasOptions } from "./actions";
+import { getUsuariosPendientes, aprobarUsuario, rechazarUsuario } from "./actions";
 import { useUserRole } from "@/hooks/use-user-role";
 
 interface UsuarioPendiente {
@@ -43,18 +43,12 @@ interface UsuarioPendiente {
   } | null;
 }
 
-interface Empresa {
-  id: number;
-  nombre: string;
-}
-
 type Rol = "SU_ADMIN" | "ADMIN" | "ASESOR" | "TECNICO";
 
 export default function AprobarUsuariosPage() {
   const router = useRouter();
   const { role, loading: roleLoading } = useUserRole();
   const [usuarios, setUsuarios] = useState<UsuarioPendiente[]>([]);
-  const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -64,10 +58,8 @@ export default function AprobarUsuariosPage() {
   const [selectedUser, setSelectedUser] = useState<UsuarioPendiente | null>(null);
   const [approveFormData, setApproveFormData] = useState<{
     rol: Rol;
-    empresaId: string;
   }>({
     rol: "TECNICO",
-    empresaId: "null",
   });
   const [isApproving, setIsApproving] = useState(false);
   const [showRejected, setShowRejected] = useState(false);
@@ -88,19 +80,12 @@ export default function AprobarUsuariosPage() {
       }
 
       const statusFilter = showRejected ? null : false;
-      const [usuariosRes, empresasRes] = await Promise.all([
-        getUsuariosPendientes(token, statusFilter),
-        getEmpresasOptions(token),
-      ]);
+      const usuariosRes = await getUsuariosPendientes(token, statusFilter);
 
       if (usuariosRes.error) {
         toast.error(usuariosRes.error);
       } else if (usuariosRes.usuarios) {
         setUsuarios(usuariosRes.usuarios);
-      }
-
-      if (empresasRes.empresas) {
-        setEmpresas(empresasRes.empresas);
       }
 
       setLoading(false);
@@ -123,7 +108,6 @@ export default function AprobarUsuariosPage() {
     setSelectedUser(usuario);
     setApproveFormData({
       rol: (usuario.rol as Rol) || "TECNICO",
-      empresaId: usuario.empresa?.id.toString() || "null",
     });
     setIsApproveModalOpen(true);
   };
@@ -134,16 +118,9 @@ export default function AprobarUsuariosPage() {
     const token = localStorage.getItem("token");
     if (!token) return;
 
-    // Convert string inputs to correct types
-    // Cast 'rol' string to expected enum type if necessary (handled by backend or loose typing here)
-    const empresaId = approveFormData.empresaId === "null" ? null : parseInt(approveFormData.empresaId);
-
-    // Casting rol to any to bypass strict client-side enum check if not imported, 
-    // assuming backend validates. Or I could import Rol from prisma client if available to client components (usually not).
-    // Using string is fine as long as it matches the enum values "ADMIN" | "ASESOR" | "TECNICO".
     const res = await aprobarUsuario(token, selectedUser.id, {
       rol: approveFormData.rol, 
-      empresaId: empresaId
+      empresaId: null
     });
 
     if (res.error) {
@@ -158,7 +135,7 @@ export default function AprobarUsuariosPage() {
   };
 
   const handleRechazar = async (id: number) => {
-    if (!confirm("¿Está seguro de rechazar esta solicitud? El usuario será eliminado.")) return;
+    if (!confirm("¿Está seguro de rechazar esta solicitud? El usuario no podrá ingresar hasta que se apruebe su acceso.")) return;
     
     setProcessingId(id);
     const token = localStorage.getItem("token");
@@ -207,6 +184,7 @@ export default function AprobarUsuariosPage() {
           <div className="relative w-full max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
+              aria-label="Buscar solicitudes por nombre, usuario o correo"
               placeholder="Buscar por nombre, usuario o correo..."
               className="pl-10 bg-white"
               value={searchTerm}
@@ -243,7 +221,7 @@ export default function AprobarUsuariosPage() {
                   <tr>
                     <th className="px-6 py-4">Usuario</th>
                     <th className="px-6 py-4">Documento</th>
-                    <th className="px-6 py-4">Rol / Empresa</th>
+                    <th className="px-6 py-4">Función en el equipo</th>
                     <th className="px-6 py-4">Fecha Registro</th>
                     <th className="px-6 py-4 text-right">Acciones</th>
                   </tr>
@@ -271,13 +249,8 @@ export default function AprobarUsuariosPage() {
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-1">
                           <Badge variant="outline" className="w-fit border-slate-200 bg-slate-50 font-normal text-slate-600">
-                            {usuario.rol || "No asignado"}
+                            {usuario.rol === "TECNICO" ? "Psicólogo" : usuario.rol === "ASESOR" ? "Asesor" : usuario.rol === "ADMIN" ? "Administrador" : usuario.rol === "SU_ADMIN" ? "Superadministrador" : "Por asignar"}
                           </Badge>
-                          {usuario.empresa ? (
-                            <span className="text-xs text-slate-600 font-medium">{usuario.empresa.nombre}</span>
-                          ) : (
-                            <span className="text-xs text-slate-400 italic">Sin empresa</span>
-                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 text-slate-600">
@@ -325,43 +298,24 @@ export default function AprobarUsuariosPage() {
           <DialogHeader>
             <DialogTitle>Aprobar Usuario</DialogTitle>
             <DialogDescription>
-              Asigna un rol y una empresa al usuario antes de aprobarlo.
+              Elige su función para darle acceso a Psicólogos en Colombia.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="rol">Rol</Label>
+              <Label htmlFor="rol">Función en el equipo</Label>
               <Select
                 value={approveFormData.rol}
                 onValueChange={(value) => setApproveFormData({ ...approveFormData, rol: value as Rol })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="rol">
                   <SelectValue placeholder="Seleccione un rol" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="SU_ADMIN">Super Administrador</SelectItem>
                   <SelectItem value="ADMIN">Administrador</SelectItem>
                   <SelectItem value="ASESOR">Asesor</SelectItem>
-                  <SelectItem value="TECNICO">Técnico</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="empresa">Empresa (Opcional)</Label>
-              <Select
-                value={approveFormData.empresaId}
-                onValueChange={(value) => setApproveFormData({ ...approveFormData, empresaId: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccione una empresa" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="null">Ninguna</SelectItem>
-                  {empresas.map((emp) => (
-                    <SelectItem key={emp.id} value={emp.id.toString()}>
-                      {emp.nombre}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="TECNICO">Psicólogo</SelectItem>
                 </SelectContent>
               </Select>
             </div>

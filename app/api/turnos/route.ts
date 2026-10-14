@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
+import { PSYCHOLOGY_TENANT_ID } from "@/lib/psychology";
 
 export async function POST(request: Request) {
     try {
@@ -16,7 +17,7 @@ export async function POST(request: Request) {
 
         // Get User
         const usuario = await prisma.usuario.findUnique({
-            where: { id: payload.userId },
+            where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID, activo: true, aprobado: true },
             select: { tenantId: true },
         });
 
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
 
         // Calculate Totals
         const userWithCuenta = await prisma.usuario.findUnique({
-            where: { id: payload.userId },
+            where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
             include: { CuentasPago: true }
         });
 
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
 
         const nuevoTurno = await prisma.turno.create({
             data: {
-                tenantId: usuario.tenantId,
+                tenantId: PSYCHOLOGY_TENANT_ID,
                 usuarioId: payload.userId,
                 fecha,
                 horaEntrada,

@@ -1,12 +1,16 @@
 # Axis Software
 
-Axis Software es una aplicacion web de gestion operativa construida con Next.js, React, TypeScript y Prisma. El sistema centraliza procesos de servicios, clientes, tecnicos, citas, contabilidad, insumos, referidos, auditoria, monitoreo de actividad y mensajeria.
+Axis es el espacio de trabajo exclusivo de **Psicólogos en Colombia**, construido con Next.js, React, TypeScript y Prisma. Organiza agenda, pacientes, psicólogos, reservas de consultorio, terapias, paquetes, caja, auditoría y WhatsApp.
 
-El proyecto funciona como una plataforma multi-tenant: un mismo codigo sirve a varios sistemas o empresas, y la mayoria de consultas se filtran por `tenantId` para separar datos. Tambien tiene comportamientos especificos por tenant, por ejemplo:
+La operación activa usa únicamente `tenantId = 4`. El identificador interno separa los registros históricos; el acceso y los módulos activos requieren pertenecer a Psicólogos. El cambio de sistema está deshabilitado.
 
-- `tenantId = 1`: operacion principal de servicios tipo fumigacion/control de plagas y modulo legacy Servilution.
-- `tenantId = 2`: modulo legacy de servicio tecnico.
-- `tenantId = 4`: operacion de citas/psicologia, consultorios, terapias y paquetes.
+El menú presenta **Inicio, Agenda, Pacientes, Equipo, Pagos y contabilidad, WhatsApp, Actividad del equipo y Configuración**, según el rol. Conserva recepción, Caja diaria, cuentas de cobro por turnos, referidos y usuarios y accesos. Las rutas antiguas de servicios generales, insumos y otras empresas redirigen al inicio; los datos históricos se conservan.
+
+En Citas y reservas, **Facturado en el periodo** suma todas las citas y alquileres que cumplen los filtros, por fecha de cita en Colombia, excluyendo canceladas. **Hoy** selecciona el día actual. Incluye valores pendientes de pago y el precio histórico por sesión del paquete adquirido; el total es independiente de la página visible y de las tarifas actuales. Si faltan valores, presenta un subtotal y la cantidad de registros pendientes de valorar. Los cobros efectivos y abonos siguen en el libro de Caja diaria.
+
+WhatsApp identifica la cuenta exacta `PSICOLOGOS` o `Psicólogos en Colombia`. Si tiene otro nombre o varias coincidencias, configurar `NEXT_PUBLIC_PSICOLOGOS_CHATWOOT_ACCOUNT_ID` con el ID verificado de la cuenta del equipo.
+
+Los nombres técnicos `Cliente`, `TECNICO` y las rutas `/clientes` y `/usuarios/tecnicos` se conservan por compatibilidad; la interfaz los presenta como pacientes y psicólogos. La documentación también describe integraciones históricas que ya no aparecen en el menú.
 
 ## Documentacion del proyecto
 

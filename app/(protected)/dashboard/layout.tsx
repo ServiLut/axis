@@ -1,5 +1,4 @@
 import { DashboardLayoutClient } from "@/components/dashboard/dashboard-layout-client";
-import { RealtimeNotifications } from "@/components/dashboard/realtime-notifications";
 
 export default function DashboardLayout({
   children,
@@ -7,9 +6,6 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <>
-      <RealtimeNotifications />
-      <DashboardLayoutClient>{children}</DashboardLayoutClient>
-    </>
+    <DashboardLayoutClient>{children}</DashboardLayoutClient>
   );
 }

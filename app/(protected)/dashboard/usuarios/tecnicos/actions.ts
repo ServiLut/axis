@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
+import { PSYCHOLOGY_TENANT_ID } from "@/lib/constants/tenants";
 import { setUserAccess } from "../accesos/actions";
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@/prisma/generated/prisma/client";
@@ -15,7 +16,7 @@ export async function getTecnicos(token: string) {
 
   try {
     const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
       select: { tenantId: true, rol: true },
     });
 
@@ -23,9 +24,7 @@ export async function getTecnicos(token: string) {
       return { error: "Usuario no encontrado" };
     }
 
-    const where: Prisma.UsuarioWhereInput = usuario.rol === "SU_ADMIN" 
-      ? { rol: "TECNICO" } 
-      : { tenantId: usuario.tenantId, rol: "TECNICO" };
+    const where: Prisma.UsuarioWhereInput = { tenantId: PSYCHOLOGY_TENANT_ID, rol: "TECNICO" };
 
     const tecnicos = await prisma.usuario.findMany({
       where,
@@ -46,8 +45,8 @@ export async function getTecnicos(token: string) {
 
     return { tecnicos };
   } catch (error) {
-    console.error("Error obteniendo técnicos:", error);
-    return { error: "Error al cargar los técnicos" };
+    console.error("Error obteniendo psicólogos:", error);
+    return { error: "Error al cargar los psicólogos" };
   }
 }
 
@@ -60,7 +59,7 @@ export async function getTecnico(token: string, id: number) {
 
   try {
     const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
       select: { tenantId: true, rol: true },
     });
 
@@ -69,9 +68,7 @@ export async function getTecnico(token: string, id: number) {
     }
 
     const where: Prisma.UsuarioWhereInput = { id, rol: "TECNICO" };
-    if (usuario.rol !== "SU_ADMIN") {
-      where.tenantId = usuario.tenantId;
-    }
+    where.tenantId = PSYCHOLOGY_TENANT_ID;
 
     const tecnico = await prisma.usuario.findFirst({
       where,
@@ -88,13 +85,13 @@ export async function getTecnico(token: string, id: number) {
     });
 
     if (!tecnico) {
-      return { error: "Técnico no encontrado" };
+      return { error: "Psicólogo no encontrado" };
     }
 
     return { tecnico };
   } catch (error) {
-    console.error("Error obteniendo técnico:", error);
-    return { error: "Error al cargar el técnico" };
+    console.error("Error obteniendo psicólogo:", error);
+    return { error: "Error al cargar el psicólogo" };
   }
 }
 
@@ -107,7 +104,7 @@ export async function toggleTecnicoStatus(token: string, id: number, activo: boo
 
   try {
     const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
       select: { tenantId: true, rol: true },
     });
 
@@ -116,9 +113,7 @@ export async function toggleTecnicoStatus(token: string, id: number, activo: boo
     }
 
     const where: Prisma.UsuarioWhereInput = { id, rol: "TECNICO" };
-    if (usuario.rol !== "SU_ADMIN") {
-      where.tenantId = usuario.tenantId;
-    }
+    where.tenantId = PSYCHOLOGY_TENANT_ID;
 
     // Verificar permiso
     const tecnico = await prisma.usuario.findFirst({
@@ -126,13 +121,13 @@ export async function toggleTecnicoStatus(token: string, id: number, activo: boo
     });
 
     if (!tecnico) {
-      return { error: "Técnico no encontrado" };
+      return { error: "Psicólogo no encontrado" };
     }
 
-    return await setUserAccess(token, id, activo, "Cambio de acceso desde el listado de técnicos.");
+    return await setUserAccess(token, id, activo, "Cambio de acceso desde el listado de psicólogos.");
   } catch (error) {
-    console.error("Error cambiando estado técnico:", error);
-    return { error: "Error al cambiar el estado del técnico" };
+    console.error("Error cambiando estado psicólogo:", error);
+    return { error: "Error al cambiar el estado del psicólogo" };
   }
 }
 
@@ -145,7 +140,7 @@ export async function deleteTecnico(token: string, id: number) {
 
   try {
     const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
       select: { tenantId: true, rol: true },
     });
 
@@ -154,9 +149,7 @@ export async function deleteTecnico(token: string, id: number) {
     }
 
     const where: Prisma.UsuarioWhereInput = { id, rol: "TECNICO" };
-    if (usuario.rol !== "SU_ADMIN") {
-      where.tenantId = usuario.tenantId;
-    }
+    where.tenantId = PSYCHOLOGY_TENANT_ID;
 
     // Verificar que el usuario a eliminar sea un técnico y pertenezca al tenant (si no es SU_ADMIN)
     const tecnicoToDelete = await prisma.usuario.findFirst({
@@ -164,7 +157,7 @@ export async function deleteTecnico(token: string, id: number) {
     });
 
     if (!tecnicoToDelete) {
-      return { error: "Técnico no encontrado o no autorizado para eliminar" };
+      return { error: "Psicólogo no encontrado o no autorizado para eliminar" };
     }
 
     await prisma.usuario.delete({
@@ -174,12 +167,12 @@ export async function deleteTecnico(token: string, id: number) {
     });
 
     revalidatePath("/dashboard/usuarios/tecnicos");
-    return { success: true, message: "Técnico eliminado exitosamente" };
+    return { success: true, message: "Psicólogo eliminado exitosamente" };
   } catch (error) {
-    console.error("Error eliminando técnico:", error);
+    console.error("Error eliminando psicólogo:", error);
     return {
       error:
-        "Error al eliminar el técnico. Verifique que no tenga órdenes o asignaciones asociadas.",
+        "Error al eliminar el psicólogo. Verifique que no tenga órdenes o asignaciones asociadas.",
     };
   }
 }
@@ -193,7 +186,7 @@ export async function updateTecnico(token: string, id: number, formData: FormDat
 
   try {
     const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
       select: { tenantId: true, rol: true },
     });
 
@@ -207,9 +200,7 @@ export async function updateTecnico(token: string, id: number, formData: FormDat
     const rol = formData.get("rol") as "SU_ADMIN" | "ADMIN" | "TECNICO" | "ASESOR";
     
     const where: Prisma.UsuarioWhereInput = { id, rol: "TECNICO" };
-    if (usuario.rol !== "SU_ADMIN") {
-      where.tenantId = usuario.tenantId;
-    }
+    where.tenantId = PSYCHOLOGY_TENANT_ID;
 
     // Verify tenant and role
     const tecnico = await prisma.usuario.findFirst({
@@ -217,7 +208,7 @@ export async function updateTecnico(token: string, id: number, formData: FormDat
     });
 
     if (!tecnico) {
-      return { error: "Técnico no encontrado" };
+      return { error: "Psicólogo no encontrado" };
     }
 
     await prisma.usuario.update({
@@ -231,9 +222,9 @@ export async function updateTecnico(token: string, id: number, formData: FormDat
     });
 
     revalidatePath("/dashboard/usuarios/tecnicos");
-    return { success: true, message: "Técnico actualizado exitosamente" };
+    return { success: true, message: "Psicólogo actualizado exitosamente" };
   } catch (error) {
-    console.error("Error actualizando técnico:", error);
-    return { error: "Error al actualizar el técnico" };
+    console.error("Error actualizando psicólogo:", error);
+    return { error: "Error al actualizar el psicólogo" };
   }
 }

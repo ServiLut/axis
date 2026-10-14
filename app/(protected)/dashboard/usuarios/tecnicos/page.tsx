@@ -195,9 +195,9 @@ export default function TecnicosPage() {
       <div className="flex-none bg-white border-b border-slate-200 px-8 py-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 max-w-7xl mx-auto">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Técnicos</h1>
+            <h1 className="text-2xl font-bold text-slate-900">Psicólogos</h1>
             <p className="text-sm text-slate-600 mt-1">
-              Gestiona tu equipo de técnicos
+              Gestiona tu equipo de psicólogos
             </p>
           </div>
           <div className="flex gap-2">
@@ -215,7 +215,7 @@ export default function TecnicosPage() {
               className="bg-blue-600 hover:bg-blue-700"
             >
               <Plus className="h-4 w-4 mr-2" />
-              Nuevo Técnico
+              Nuevo Psicólogo
             </Button>
           </div>
         </div>
@@ -227,7 +227,8 @@ export default function TecnicosPage() {
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
-              placeholder="Buscar por nombre, email o teléfono..."
+              aria-label="Buscar en el equipo por nombre, correo o teléfono"
+              placeholder="Nombre, correo o teléfono..."
               className="pl-10 bg-white"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -246,15 +247,15 @@ export default function TecnicosPage() {
           ) : filteredTecnicos.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-slate-500 bg-white rounded-lg border border-slate-200 border-dashed">
               <User className="h-12 w-12 mb-3 text-slate-300" />
-              <p className="font-medium">No se encontraron técnicos</p>
-              <p className="text-sm">Agrega un nuevo técnico para comenzar</p>
+              <p className="font-medium">No se encontraron psicólogos</p>
+              <p className="text-sm">Agrega un nuevo psicólogo para comenzar</p>
             </div>
           ) : (
             <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
               <table className="w-full text-sm text-left">
                 <thead className="bg-slate-50 text-slate-700 border-b border-slate-200 font-medium">
                   <tr>
-                    <th className="px-6 py-4">Técnico</th>
+                    <th className="px-6 py-4">Psicólogo</th>
                     <th className="px-6 py-4">Contacto</th>
                     <th className="px-6 py-4">Rol</th>
                     <th className="px-6 py-4">Estado</th>
@@ -302,7 +303,7 @@ export default function TecnicosPage() {
                       </td>
                       <td className="px-6 py-4">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          {tecnico.rol}
+                          Psicólogo
                         </span>
                       </td>
                       <td className="px-6 py-4">
@@ -384,9 +385,9 @@ export default function TecnicosPage() {
       <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Detalles del Técnico</DialogTitle>
+            <DialogTitle>Detalles del Psicólogo</DialogTitle>
             <DialogDescription>
-              Información completa del técnico
+              Información completa del psicólogo
             </DialogDescription>
           </DialogHeader>
 
@@ -409,7 +410,7 @@ export default function TecnicosPage() {
                   <div>
                     <span className="text-sm text-slate-500 block">Rol</span>
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      {selectedTecnico.rol}
+                      Psicólogo
                     </span>
                   </div>
                   <div>
@@ -476,7 +477,7 @@ export default function TecnicosPage() {
             <DialogTitle>¿Estás seguro?</DialogTitle>
             <DialogDescription>
               Esta acción no se puede deshacer. Esto eliminará permanentemente
-              al técnico.
+              al psicólogo.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex gap-2 sm:justify-end">

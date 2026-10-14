@@ -107,6 +107,7 @@ export default function EditarAsesorPage() {
             <Button
               variant="ghost"
               size="icon"
+              aria-label="Volver al equipo"
               onClick={() => router.push("/dashboard/usuarios/asesores")}
               className="hover:bg-slate-100"
             >
@@ -195,17 +196,17 @@ export default function EditarAsesorPage() {
                   htmlFor="rol"
                   className="text-sm font-medium text-slate-700"
                 >
-                  Rol <span className="text-red-500">*</span>
+                  Función en el equipo <span className="text-red-500">*</span>
                 </Label>
                 <Select name="rol" defaultValue={asesor?.rol || "ASESOR"}>
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger id="rol" className="h-11">
                     <SelectValue placeholder="Seleccione un rol" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="SU_ADMIN">Super Administrador</SelectItem>
                     <SelectItem value="ADMIN">Administrador</SelectItem>
                     <SelectItem value="ASESOR">Asesor</SelectItem>
-                    <SelectItem value="TECNICO">Técnico</SelectItem>
+                    <SelectItem value="TECNICO">Psicólogo</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

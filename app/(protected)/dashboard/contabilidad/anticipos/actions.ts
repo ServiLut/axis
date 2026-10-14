@@ -2,12 +2,13 @@
 
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
+import { PSYCHOLOGY_TENANT_ID } from "@/lib/psychology";
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@/prisma/generated/prisma/client";
+import type { Prisma } from "@/prisma/generated/prisma/client";
 
 export async function getAnticipos(token: string) {
   const payload = await verifyToken(token);
-  if (!payload) return { success: false as const, error: "No autorizado" };
+  if (!payload || !["ADMIN", "SU_ADMIN", "ASESOR"].includes(payload.role)) return { success: false as const, error: "No autorizado" };
 
   try {
     const user = await prisma.usuario.findUnique({
@@ -15,12 +16,10 @@ export async function getAnticipos(token: string) {
       select: { tenantId: true, rol: true },
     });
 
-    if (!user) return { success: false as const, error: "Usuario no encontrado" };
+    if (!user || user.tenantId !== PSYCHOLOGY_TENANT_ID) return { success: false as const, error: "No autorizado" };
 
     const whereClause: Prisma.AnticiposWhereInput = {};
-    if (user.rol !== "SU_ADMIN") {
-      whereClause.tenantId = user.tenantId;
-    }
+    whereClause.tenantId = PSYCHOLOGY_TENANT_ID;
 
     const anticipos = await prisma.anticipos.findMany({
       where: whereClause,
@@ -53,7 +52,7 @@ export async function getAnticipos(token: string) {
 
 export async function getTecnicos(token: string) {
   const payload = await verifyToken(token);
-  if (!payload) return { success: false as const, error: "No autorizado" };
+  if (!payload || !["ADMIN", "SU_ADMIN", "ASESOR"].includes(payload.role)) return { success: false as const, error: "No autorizado" };
 
   try {
     const user = await prisma.usuario.findUnique({
@@ -61,15 +60,13 @@ export async function getTecnicos(token: string) {
       select: { tenantId: true, rol: true },
     });
 
-    if (!user) return { success: false as const, error: "Usuario no encontrado" };
+    if (!user || user.tenantId !== PSYCHOLOGY_TENANT_ID) return { success: false as const, error: "No autorizado" };
 
     const whereClause: Prisma.UsuarioWhereInput = {
       activo: true,
     };
 
-    if (user.rol !== "SU_ADMIN") {
-      whereClause.tenantId = user.tenantId;
-    }
+    whereClause.tenantId = PSYCHOLOGY_TENANT_ID;
 
     const tecnicos = await prisma.usuario.findMany({
       where: whereClause,
@@ -95,7 +92,7 @@ export async function createAnticipo(
   data: { usuarioId: number; monto: number; razon: string }
 ) {
   const payload = await verifyToken(token);
-  if (!payload) return { success: false as const, error: "No autorizado" };
+  if (!payload || !["ADMIN", "SU_ADMIN", "ASESOR"].includes(payload.role)) return { success: false as const, error: "No autorizado" };
 
   try {
     const user = await prisma.usuario.findUnique({
@@ -103,7 +100,13 @@ export async function createAnticipo(
       select: { tenantId: true },
     });
 
-    if (!user) return { success: false as const, error: "Usuario no encontrado" };
+    if (!user || user.tenantId !== PSYCHOLOGY_TENANT_ID) return { success: false as const, error: "No autorizado" };
+
+    const targetUser = await prisma.usuario.findFirst({
+      where: { id: data.usuarioId, tenantId: PSYCHOLOGY_TENANT_ID, activo: true },
+      select: { id: true },
+    });
+    if (!targetUser) return { success: false as const, error: "La persona seleccionada no pertenece al equipo de Psicólogos" };
 
     const anticipo = await prisma.anticipos.create({
       data: {
@@ -128,11 +131,17 @@ export async function updateAnticipo(
   data: { usuarioId: number; monto: number; razon: string }
 ) {
   const payload = await verifyToken(token);
-  if (!payload) return { success: false as const, error: "No autorizado" };
+  if (!payload || !["ADMIN", "SU_ADMIN", "ASESOR"].includes(payload.role)) return { success: false as const, error: "No autorizado" };
 
   try {
+    const targetUser = await prisma.usuario.findFirst({
+      where: { id: data.usuarioId, tenantId: PSYCHOLOGY_TENANT_ID, activo: true },
+      select: { id: true },
+    });
+    if (!targetUser) return { success: false as const, error: "La persona seleccionada no pertenece al equipo de Psicólogos" };
+
     const anticipo = await prisma.anticipos.update({
-      where: { id: BigInt(id) },
+      where: { id: BigInt(id), tenantId: PSYCHOLOGY_TENANT_ID },
       data: {
         usuarioId: data.usuarioId,
         monto: data.monto,
@@ -150,11 +159,11 @@ export async function updateAnticipo(
 
 export async function deleteAnticipo(token: string, id: string) {
   const payload = await verifyToken(token);
-  if (!payload) return { success: false as const, error: "No autorizado" };
+  if (!payload || !["ADMIN", "SU_ADMIN", "ASESOR"].includes(payload.role)) return { success: false as const, error: "No autorizado" };
 
   try {
     await prisma.anticipos.delete({
-      where: { id: BigInt(id) },
+      where: { id: BigInt(id), tenantId: PSYCHOLOGY_TENANT_ID },
     });
 
     revalidatePath("/dashboard/contabilidad/anticipos");

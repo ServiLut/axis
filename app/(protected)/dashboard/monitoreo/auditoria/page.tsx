@@ -73,13 +73,13 @@ type ReferencesMap = Record<string, Record<string, string>>;
 // --- Helper Functions ---
 const fieldLabels: Record<string, string> = {
   usuarioId: "ID Usuario",
-  clienteId: "ID Cliente",
-  tecnicoId: "ID Técnico",
+  clienteId: "ID Paciente",
+  tecnicoId: "ID Profesional",
   servicioId: "ID Servicio",
   tipoServicioId: "ID Tipo Servicio",
   estadoServicioId: "ID Estado",
   empresaId: "ID Empresa",
-  tenantId: "ID Sistema",
+  tenantId: "ID Psicólogos",
   metodoPagoId: "ID Método Pago",
   zonaId: "ID Zona",
   direccionId: "ID Dirección",

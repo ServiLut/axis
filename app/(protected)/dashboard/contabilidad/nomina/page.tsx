@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -341,7 +343,7 @@ export default function NominaContabilidadPage() {
 
       const res = await createNomina(token, payload);
       if (res.success) {
-          toast.success("Nómina creada exitosamente");
+          toast.success("Corte de pago guardado");
           setIsModalOpen(false);
           fetchNominas();
       } else {
@@ -386,7 +388,7 @@ export default function NominaContabilidadPage() {
     setUpdatingEstado(true);
     const res = await updateNominaEstado(token, id, nuevoEstado);
     if (res.success) {
-        toast.success(`Nómina marcada como ${nuevoEstado}`);
+        toast.success(`Corte de pago marcado como ${nuevoEstado}`);
         // Actualizar vista local
         setViewNomina((prev) => prev ? { ...prev, estado: nuevoEstado } : null);
         fetchNominas();
@@ -411,7 +413,7 @@ export default function NominaContabilidadPage() {
           <div>
             <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
               <Calculator className="h-6 w-6 text-indigo-600" />
-              Nómina y Pagos
+              Liquidación de pagos
             </h1>
             <p className="text-sm text-slate-600 mt-1">
               Historial de pagos y generación de nuevos cortes.
@@ -419,7 +421,7 @@ export default function NominaContabilidadPage() {
           </div>
           <Button onClick={handleOpenModal} className="bg-indigo-600 hover:bg-indigo-700">
             <Plus className="h-4 w-4 mr-2" />
-            Nueva Nómina
+            Nuevo corte de pago
           </Button>
         </div>
       </div>
@@ -431,7 +433,7 @@ export default function NominaContabilidadPage() {
                 <FileText className="h-12 w-12 text-slate-300 mx-auto mb-3" />
                 <h3 className="text-lg font-medium text-slate-900">No hay nóminas registradas</h3>
                 <p className="text-slate-500 max-w-sm mx-auto mt-1">
-                    Comienza generando el primer corte de pago para tus técnicos.
+                    Comienza generando el primer corte de pago para el equipo de Psicólogos.
                 </p>
             </div>
           ) : (
@@ -440,7 +442,7 @@ export default function NominaContabilidadPage() {
                     <TableHeader className="bg-slate-50">
                         <TableRow>
                             <TableHead>ID</TableHead>
-                            <TableHead>Técnico</TableHead>
+                            <TableHead>Persona del equipo</TableHead>
                             <TableHead>Periodo</TableHead>
                             <TableHead>Estado</TableHead>
                             <TableHead className="text-right">Total Pagado</TableHead>
@@ -489,23 +491,23 @@ export default function NominaContabilidadPage() {
         </div>
       </div>
 
-      {/* Modal Nueva Nómina */}
+      {/* Modal Nuevo corte de pago */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-                <DialogTitle>Generar Nueva Nómina</DialogTitle>
+                <DialogTitle>Generar corte de pago</DialogTitle>
                 <DialogDescription>
-                    {step === 1 ? "Selecciona el técnico y el periodo a liquidar." : "Revisa el detalle antes de guardar."}
+                    {step === 1 ? "Selecciona la persona y el periodo que deseas liquidar." : "Revisa el detalle antes de guardar."}
                 </DialogDescription>
             </DialogHeader>
 
             {step === 1 && (
                 <div className="space-y-4 py-4">
                     <div className="space-y-2">
-                        <Label>Técnico</Label>
+                        <Label>Persona del equipo</Label>
                         <Select value={selectedTecnico} onValueChange={setSelectedTecnico}>
                             <SelectTrigger>
-                                <SelectValue placeholder="Seleccionar técnico..." />
+                                <SelectValue placeholder="Seleccionar persona..." />
                             </SelectTrigger>
                             <SelectContent>
                                 {tecnicos.map(t => (
@@ -548,7 +550,7 @@ export default function NominaContabilidadPage() {
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                         <Card className="bg-slate-50 border-slate-200">
                             <CardHeader className="pb-1 pt-3 px-4">
-                                <CardTitle className="text-xs uppercase tracking-wider font-semibold text-slate-500">Recaudo Total</CardTitle>
+                                <CardTitle className="text-xs uppercase tracking-wider font-semibold text-slate-500">Valor aplicado total</CardTitle>
                             </CardHeader>
                             <CardContent className="px-4 pb-3">
                                 <div className="text-xl font-bold text-slate-700">
@@ -613,7 +615,7 @@ export default function NominaContabilidadPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="border rounded-md overflow-hidden">
                             <div className="bg-slate-50 px-4 py-2 border-b font-medium text-sm flex justify-between items-center">
-                                <span className="font-semibold text-slate-700">Detalle de Servicios</span>
+                                <span className="font-semibold text-slate-700">Citas para liquidar</span>
                                 <Badge variant="outline" className="bg-white">{previewData.servicios.length} encontrados</Badge>
                             </div>
                             <div className="max-h-60 overflow-y-auto">
@@ -716,7 +718,7 @@ export default function NominaContabilidadPage() {
             <DialogFooter>
                 {step === 1 ? (
                     <Button onClick={handleCalculate} disabled={calculating}>
-                        {calculating ? "Calculando..." : "Calcular Nómina"}
+                        {calculating ? "Calculando..." : "Calcular pago"}
                     </Button>
                 ) : (
                     <div className="flex w-full justify-between">
@@ -736,7 +738,7 @@ export default function NominaContabilidadPage() {
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
                 <DialogTitle className="flex items-center gap-2 text-xl">
-                    Detalle de Nómina #{viewNomina?.id}
+                    Detalle del pago #{viewNomina?.id}
                     <Badge variant={viewNomina?.estado === "PAGADO" ? "default" : "secondary"} className={
                         viewNomina?.estado === "PAGADO" ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100" :
                         viewNomina?.estado === "BORRADOR" ? "bg-amber-100 text-amber-700 hover:bg-amber-100" : 
@@ -746,7 +748,7 @@ export default function NominaContabilidadPage() {
                     </Badge>
                 </DialogTitle>
                 <DialogDescription>
-                    Resumen financiero y listado de servicios liquidados.
+                    Resumen del corte de pago y registros incluidos.
                 </DialogDescription>
             </DialogHeader>
 
@@ -757,7 +759,7 @@ export default function NominaContabilidadPage() {
                             <div className="text-base font-semibold text-slate-900">
                                 {viewNomina.usuario.nombre} {viewNomina.usuario.apellido}
                             </div>
-                            <div className="text-sm text-slate-500">{viewNomina.usuario.rol}</div>
+                            <div className="text-sm text-slate-500">{viewNomina.usuario.rol === "TECNICO" ? "Psicólogo/a" : viewNomina.usuario.rol === "ASESOR" ? "Asesor/a" : "Administración"}</div>
                         </div>
                         <div className="text-right">
                             <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Periodo de Liquidación</div>
@@ -770,7 +772,7 @@ export default function NominaContabilidadPage() {
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                         <Card className="bg-slate-50 border-slate-200">
                             <CardHeader className="pb-1 pt-3 px-4">
-                                <CardTitle className="text-xs uppercase tracking-wider font-semibold text-slate-500">Recaudo</CardTitle>
+                                <CardTitle className="text-xs uppercase tracking-wider font-semibold text-slate-500">Valor aplicado</CardTitle>
                             </CardHeader>
                             <CardContent className="px-4 pb-3">
                                 <div className="text-xl font-bold text-slate-700">
@@ -778,7 +780,7 @@ export default function NominaContabilidadPage() {
                                 </div>
                             </CardContent>
                         </Card>
-                        <Card className="bg-slate-50 border-slate-200">
+                        {viewNomina.totalRepuestos > 0 && <Card className="bg-slate-50 border-slate-200">
                             <CardHeader className="pb-1 pt-3 px-4">
                                 <CardTitle className="text-xs uppercase tracking-wider font-semibold text-slate-500">Repuestos</CardTitle>
                             </CardHeader>
@@ -787,7 +789,7 @@ export default function NominaContabilidadPage() {
                                     -${viewNomina.totalRepuestos.toLocaleString()}
                                 </div>
                             </CardContent>
-                        </Card>
+                        </Card>}
                         <Card className="bg-slate-50 border-slate-200">
                             <CardHeader className="pb-1 pt-3 px-4">
                                 <CardTitle className="text-xs uppercase tracking-wider font-semibold text-slate-500">Base</CardTitle>
@@ -805,8 +807,8 @@ export default function NominaContabilidadPage() {
                                 <CardTitle className="text-xs uppercase tracking-wider font-semibold text-slate-500">Anticipos</CardTitle>
                             </CardHeader>
                             <CardContent className="px-4 pb-3">
-                                <div className="text-xl font-bold text-rose-600">
-                                    -${viewNomina.anticipos ? viewNomina.anticipos.reduce((acc, a) => acc + a.monto, 0).toLocaleString() : "0"}
+                                <div className="text-sm font-medium text-slate-700">
+                                    {viewNomina.anticipos && viewNomina.anticipos.length > 0 ? `-$${viewNomina.anticipos.reduce((acc, a) => acc + a.monto, 0).toLocaleString()}` : <Link className="text-indigo-600 underline" href="/dashboard/contabilidad/anticipos">Consultar registro de anticipos</Link>}
                                 </div>
                             </CardContent>
                         </Card>
@@ -829,10 +831,10 @@ export default function NominaContabilidadPage() {
                             <div>
                                 <h4 className="font-semibold text-amber-800 flex items-center gap-2">
                                     <FileText className="h-4 w-4" />
-                                    Servicios Pendientes / Excluidos
+                                    Citas pendientes o excluidas
                                 </h4>
                                 <p className="text-sm text-amber-600 mt-1">
-                                    Servicios finalizados en este periodo que no fueron incluidos en el pago.
+                                    Citas realizadas en este periodo que no fueron incluidas en este pago.
                                 </p>
                             </div>
                             <div className="text-right">
@@ -847,7 +849,7 @@ export default function NominaContabilidadPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="border rounded-md overflow-hidden">
                              <div className="bg-slate-50 px-4 py-2 border-b font-medium text-sm flex justify-between items-center">
-                                <span className="font-semibold text-slate-700">Detalle de Servicios Pagados</span>
+                                <span className="font-semibold text-slate-700">Registros incluidos en el pago</span>
                             </div>
                             <div className="max-h-60 overflow-y-auto">
                                 <Table>
@@ -897,7 +899,7 @@ export default function NominaContabilidadPage() {
                                         <TableBody>
                                             {!viewNomina.anticipos || viewNomina.anticipos.length === 0 ? (
                                                 <TableRow>
-                                                    <TableCell colSpan={3} className="text-center text-slate-500 py-4">No hay anticipos en este periodo</TableCell>
+                                                    <TableCell colSpan={3} className="text-center text-slate-500 py-4">El desglose de anticipos de este corte no está disponible aquí. <Link className="text-indigo-600 underline" href="/dashboard/contabilidad/anticipos">Consultar anticipos</Link></TableCell>
                                                 </TableRow>
                                             ) : (
                                                 viewNomina.anticipos.map((a, i) => (
@@ -922,7 +924,7 @@ export default function NominaContabilidadPage() {
                             {viewNomina.serviciosPendientes && viewNomina.serviciosPendientes.length > 0 && (
                                 <div className="border rounded-md overflow-hidden border-amber-200">
                                     <div className="bg-amber-50 px-4 py-2 border-b border-amber-200 font-medium text-sm flex justify-between items-center">
-                                        <span className="font-semibold text-amber-800">Servicios Pendientes de Pago</span>
+                                        <span className="font-semibold text-amber-800">Citas pendientes de liquidación</span>
                                         <Badge variant="secondary" className="bg-white text-amber-700 border-amber-200">
                                             {viewNomina.serviciosPendientes.length}
                                         </Badge>

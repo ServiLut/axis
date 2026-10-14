@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import jwt from "jsonwebtoken";
 import { loadServerModule } from "./load-server-module";
+import * as psychology from "../lib/psychology";
 import type * as Auth from "../lib/auth";
 import type * as Actions from "../app/(protected)/dashboard/usuarios/accesos/actions";
 
@@ -9,15 +10,20 @@ const secret="unit-test-only-never-production";
 const base={userId:149,tenantId:4,tenantName:"PSICOLOGOS",username:"unit-test",nombre:"Test",apellido:"Test",role:"ADMIN",aprobado:true};
 function authFixture(){
   const user={username:'unit-test',activo:true,aprobado:true,tenantId:4,rol:"ADMIN",authVersion:0};
-  const module=loadServerModule<typeof Auth>("lib/auth.ts",{
+  const authModule=loadServerModule<typeof Auth>("lib/auth.ts",{
+    './psychology':psychology,
     './psychology-bot-operator':{isLuisaServiceUser:(v:unknown)=>v==='luisa.fernanda.bot'},
     jsonwebtoken:jwt,"../prisma/generated/prisma/client":{},"./prisma":{usuario:{findUnique:async()=>user}},
   },{JWT_SECRET:secret});
-  return {user,module,token:(extra:Record<string,unknown>={})=>jwt.sign({...base,...extra},secret,{expiresIn:"1h"})};
+  return {user,module:authModule,token:(extra:Record<string,unknown>={})=>jwt.sign({...base,...extra},secret,{expiresIn:"1h"})};
 }
 test("a suspended account loses access with an otherwise valid JWT",async()=>{
   const f=authFixture(),token=f.token();assert.ok(await f.module.verifyToken(token));
   f.user.activo=false;assert.equal(await f.module.verifyToken(token),null);
+});
+test("a valid matching account and JWT from another company cannot access psychology",async()=>{
+  const f=authFixture();f.user.tenantId=1;
+  assert.equal(await f.module.verifyToken(f.token({tenantId:1})),null);
 });
 test('Luisa service account cannot turn an otherwise valid staff JWT into interactive access',async()=>{
  const f=authFixture();f.user.username='luisa.fernanda.bot';assert.equal(await f.module.verifyToken(f.token()),null);
@@ -48,12 +54,13 @@ function actionsFixture(){
     },
   };
   const api=loadServerModule<typeof Actions>("app/(protected)/dashboard/usuarios/accesos/actions.ts",{
+    "@/lib/psychology":psychology,
     "@/lib/auth":{verifyToken:async()=>actor},
     "@/lib/prisma":{$transaction:async(fn:(t:typeof tx)=>Promise<unknown>)=>{const before=structuredClone(state);try{return await fn(tx)}catch(err){state=before;throw err}},usuario:{findMany:async(q:{where:{tenantId:number}})=>{assert.equal(q.where.tenantId,actor.tenantId);return []}}},
     bcrypt:{hash:async()=>"bcrypt-unit-test-hash"},
     "node:buffer":{Buffer},
     "next/cache":{revalidatePath(){}},
-    "@/lib/audit":{createAuditLog:async(q:Record<string,unknown>)=>{if(failAudit)throw Error("Audit failed");const {tx:unused,...safe}=q;state.audits.push(safe)}},
+    "@/lib/audit":{createAuditLog:async(q:Record<string,unknown>)=>{if(failAudit)throw Error("Audit failed");const safe={...q};delete safe.tx;state.audits.push(safe)}},
     "@/prisma/generated/prisma/client":{},
   });
   return {api,state:()=>state,actor:(x:typeof actor)=>actor=x,failAudit:()=>failAudit=true};

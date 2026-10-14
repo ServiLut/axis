@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
+import { PSYCHOLOGY_TENANT_ID } from "@/lib/psychology";
 import { Prisma } from "@/prisma/generated/prisma/client";
 
 export async function getAuditoria(
@@ -19,13 +20,13 @@ export async function getAuditoria(
 ) {
   const payload = await verifyToken(token);
 
-  if (!payload) {
+  if (!payload || !["ADMIN", "SU_ADMIN"].includes(payload.role)) {
     return { error: "No autorizado" };
   }
 
   try {
     const where: Prisma.AuditoriaWhereInput = {
-      tenantId: payload.tenantId,
+      tenantId: PSYCHOLOGY_TENANT_ID,
     };
 
     if (filtros.entidad) {
@@ -132,16 +133,16 @@ export async function getAuditoria(
       direcciones,
       vehiculos
     ] = await Promise.all([
-      collectedIds.empresaIds.size > 0 ? prisma.empresa.findMany({ where: { id: { in: Array.from(collectedIds.empresaIds) } }, select: { id: true, nombre: true } }) : [],
-      collectedIds.clienteIds.size > 0 ? prisma.cliente.findMany({ where: { id: { in: Array.from(collectedIds.clienteIds) } }, select: { id: true, nombre: true, apellido: true } }) : [],
-      collectedIds.usuarioIds.size > 0 ? prisma.usuario.findMany({ where: { id: { in: Array.from(collectedIds.usuarioIds) } }, select: { id: true, nombre: true, apellido: true } }) : [],
-      collectedIds.servicioIds.size > 0 ? prisma.servicio.findMany({ where: { id: { in: Array.from(collectedIds.servicioIds) } }, select: { id: true, nombre: true } }) : [],
-      collectedIds.tipoServicioIds.size > 0 ? prisma.tipoServicio.findMany({ where: { id: { in: Array.from(collectedIds.tipoServicioIds) } }, select: { id: true, nombre: true } }) : [],
-      collectedIds.estadoServicioIds.size > 0 ? prisma.estadoServicio.findMany({ where: { id: { in: Array.from(collectedIds.estadoServicioIds) } }, select: { id: true, nombre: true } }) : [],
-      collectedIds.metodoPagoIds.size > 0 ? prisma.metodoPago.findMany({ where: { id: { in: Array.from(collectedIds.metodoPagoIds) } }, select: { id: true, nombre: true } }) : [],
-      collectedIds.zonaIds.size > 0 ? prisma.zona.findMany({ where: { id: { in: Array.from(collectedIds.zonaIds) } }, select: { id: true, nombre: true } }) : [],
-      collectedIds.direccionIds.size > 0 ? prisma.direccion.findMany({ where: { id: { in: Array.from(collectedIds.direccionIds) } }, select: { id: true, direccion: true, municipio: true } }) : [],
-      collectedIds.vehiculoIds.size > 0 ? prisma.vehiculo.findMany({ where: { id: { in: Array.from(collectedIds.vehiculoIds) } }, select: { id: true, placa: true, marca: true } }) : [],
+      collectedIds.empresaIds.size > 0 ? prisma.empresa.findMany({ where: { tenantId: PSYCHOLOGY_TENANT_ID, id: { in: Array.from(collectedIds.empresaIds) } }, select: { id: true, nombre: true } }) : [],
+      collectedIds.clienteIds.size > 0 ? prisma.cliente.findMany({ where: { tenantId: PSYCHOLOGY_TENANT_ID, id: { in: Array.from(collectedIds.clienteIds) } }, select: { id: true, nombre: true, apellido: true } }) : [],
+      collectedIds.usuarioIds.size > 0 ? prisma.usuario.findMany({ where: { tenantId: PSYCHOLOGY_TENANT_ID, id: { in: Array.from(collectedIds.usuarioIds) } }, select: { id: true, nombre: true, apellido: true } }) : [],
+      collectedIds.servicioIds.size > 0 ? prisma.servicio.findMany({ where: { tenantId: PSYCHOLOGY_TENANT_ID, id: { in: Array.from(collectedIds.servicioIds) } }, select: { id: true, nombre: true } }) : [],
+      collectedIds.tipoServicioIds.size > 0 ? prisma.tipoServicio.findMany({ where: { tenantId: PSYCHOLOGY_TENANT_ID, id: { in: Array.from(collectedIds.tipoServicioIds) } }, select: { id: true, nombre: true } }) : [],
+      collectedIds.estadoServicioIds.size > 0 ? prisma.estadoServicio.findMany({ where: { tenantId: PSYCHOLOGY_TENANT_ID, id: { in: Array.from(collectedIds.estadoServicioIds) } }, select: { id: true, nombre: true } }) : [],
+      collectedIds.metodoPagoIds.size > 0 ? prisma.metodoPago.findMany({ where: { tenantId: PSYCHOLOGY_TENANT_ID, id: { in: Array.from(collectedIds.metodoPagoIds) } }, select: { id: true, nombre: true } }) : [],
+      collectedIds.zonaIds.size > 0 ? prisma.zona.findMany({ where: { tenantId: PSYCHOLOGY_TENANT_ID, id: { in: Array.from(collectedIds.zonaIds) } }, select: { id: true, nombre: true } }) : [],
+      collectedIds.direccionIds.size > 0 ? prisma.direccion.findMany({ where: { tenantId: PSYCHOLOGY_TENANT_ID, id: { in: Array.from(collectedIds.direccionIds) } }, select: { id: true, direccion: true, municipio: true } }) : [],
+      collectedIds.vehiculoIds.size > 0 ? prisma.vehiculo.findMany({ where: { tenantId: PSYCHOLOGY_TENANT_ID, id: { in: Array.from(collectedIds.vehiculoIds) } }, select: { id: true, placa: true, marca: true } }) : [],
     ]);
 
     // --- Build Reference Map ---
@@ -174,12 +175,12 @@ export async function getAuditoria(
 
 export async function getEntidadesAuditadas(token: string) {
     const payload = await verifyToken(token);
-    if (!payload) return { error: "No autorizado" };
+    if (!payload || !["ADMIN", "SU_ADMIN"].includes(payload.role)) return { error: "No autorizado" };
 
     try {
         const entidades = await prisma.auditoria.groupBy({
             by: ['entidad'],
-            where: { tenantId: payload.tenantId }
+            where: { tenantId: PSYCHOLOGY_TENANT_ID }
         });
         return { entidades: entidades.map(e => e.entidad) };
     } catch {
@@ -189,18 +190,18 @@ export async function getEntidadesAuditadas(token: string) {
 
 export async function getAuditFilterOptions(token: string) {
   const payload = await verifyToken(token);
-  if (!payload) return { error: "No autorizado" };
+  if (!payload || !["ADMIN", "SU_ADMIN"].includes(payload.role)) return { error: "No autorizado" };
 
   try {
     const [usuarios, entidadesGroup] = await Promise.all([
       prisma.usuario.findMany({
-        where: { tenantId: payload.tenantId },
+        where: { tenantId: PSYCHOLOGY_TENANT_ID },
         select: { id: true, nombre: true, apellido: true, username: true },
         orderBy: { nombre: 'asc' }
       }),
       prisma.auditoria.groupBy({
         by: ['entidad'],
-        where: { tenantId: payload.tenantId },
+        where: { tenantId: PSYCHOLOGY_TENANT_ID },
         orderBy: { entidad: 'asc' }
       })
     ]);
@@ -227,11 +228,11 @@ export async function getAuditoriaForExport(
   } = {}
 ) {
   const payload = await verifyToken(token);
-  if (!payload) return { error: "No autorizado" };
+  if (!payload || !["ADMIN", "SU_ADMIN"].includes(payload.role)) return { error: "No autorizado" };
 
   try {
     const where: Prisma.AuditoriaWhereInput = {
-      tenantId: payload.tenantId,
+      tenantId: PSYCHOLOGY_TENANT_ID,
     };
 
     if (filtros.entidad && filtros.entidad !== "all") where.entidad = filtros.entidad;

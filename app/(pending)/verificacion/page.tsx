@@ -91,16 +91,16 @@ export default function VerificacionPage() {
                   <Clock className="h-12 w-12 text-blue-500" />
                 </div>
                 <h1 className="text-3xl font-bold tracking-tight text-stone-900 dark:text-white">
-                  Verificación Pendiente
+                  Solicitud de acceso pendiente
                 </h1>
                 <p className="text-stone-500 dark:text-stone-400 text-lg leading-relaxed">
-                  Tu cuenta ha sido creada exitosamente. Para mantener la
-                  seguridad, un administrador revisará y aprobará tu cuenta en
-                  las próximas 24 horas.
+                  Tu solicitud para el equipo de Psicólogos en Colombia fue
+                  registrada. Administración debe revisarla y asignar tu rol
+                  antes de que puedas entrar.
                 </p>
                 <div className="p-4 bg-stone-50 dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-800">
                   <p className="text-sm text-stone-600 dark:text-stone-400 font-medium">
-                    Recibirás una notificación una vez tu cuenta esté activa.
+                    Consulta con administración el estado de tu solicitud.
                   </p>
                 </div>
               </div>

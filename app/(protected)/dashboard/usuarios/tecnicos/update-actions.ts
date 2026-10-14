@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
+import { PSYCHOLOGY_TENANT_ID } from "@/lib/constants/tenants";
 import { Expo } from "expo-server-sdk";
 
 export async function sendUpdateNotification(token: string) {
@@ -15,7 +16,7 @@ export async function sendUpdateNotification(token: string) {
 
   try {
     const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
       select: { tenantId: true },
     });
 
@@ -24,7 +25,7 @@ export async function sendUpdateNotification(token: string) {
     // Fetch all technicians with push tokens in this tenant
     const technicians = await prisma.usuario.findMany({
       where: {
-        tenantId: usuario.tenantId,
+        tenantId: PSYCHOLOGY_TENANT_ID,
         rol: "TECNICO",
         pushToken: { not: null },
         activo: true,
@@ -45,7 +46,7 @@ export async function sendUpdateNotification(token: string) {
       return {
         success: true,
         count: 0,
-        message: "No hay técnicos con tokens válidos",
+        message: "No hay psicólogos con tokens válidos",
       };
     }
 

@@ -57,8 +57,8 @@ export default function MiCodigoPage() {
     if (codigo && navigator.share) {
       try {
         await navigator.share({
-          title: 'Únete con mi código',
-          text: `Usa mi código de referido: ${codigo} para registrarte.`,
+          title: 'Psicólogos en Colombia',
+          text: `Registra tus datos para que Psicólogos en Colombia te contacte. Mi código de referido es ${codigo}.`,
           url: getShareUrl()
         });
       } catch (err) {
@@ -84,9 +84,9 @@ export default function MiCodigoPage() {
           <div className="mx-auto w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4">
              <Ticket className="h-6 w-6 text-blue-600" />
           </div>
-          <CardTitle className="text-2xl text-blue-900">Tu Código de Referido</CardTitle>
+          <CardTitle className="text-2xl text-blue-900">Tu enlace de referidos</CardTitle>
           <CardDescription>
-            Comparte este código o el QR para que tus referidos se registren.
+            Comparte el enlace o el QR con quienes deseen recibir información de Psicólogos en Colombia.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6 pt-6">
@@ -111,18 +111,18 @@ export default function MiCodigoPage() {
               <Input
                 id="code"
                 readOnly
-                value={codigo || "Generando..."}
+                value={codigo || "No disponible"}
                 className="text-center text-2xl font-mono tracking-widest h-14 bg-slate-50 border-blue-200 pl-10"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <Button variant="outline" className="w-full" onClick={copyToClipboard}>
+            <Button variant="outline" className="w-full" disabled={!codigo} onClick={copyToClipboard}>
               <Copy className="mr-2 h-4 w-4" />
-              Copiar Link
+              Copiar enlace
             </Button>
-            <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={shareCode}>
+            <Button className="w-full bg-blue-600 hover:bg-blue-700" disabled={!codigo} onClick={shareCode}>
               <Share2 className="mr-2 h-4 w-4" />
               Compartir
             </Button>

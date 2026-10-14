@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
+import { isPsychologyTenant } from "@/lib/psychology";
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("Authorization");
@@ -21,11 +22,15 @@ export async function GET(req: NextRequest) {
   try {
     const user = await prisma.usuario.findUnique({
       where: { id: payload.userId },
-      select: { aprobado: true, activo: true }
+      select: { aprobado: true, activo: true, tenantId: true }
     });
 
     if (!user) {
       return NextResponse.json({ valid: false, message: "User not found" }, { status: 401 });
+    }
+
+    if (!isPsychologyTenant(user.tenantId) || user.tenantId !== payload.tenantId) {
+      return NextResponse.json({ valid: false, message: "Psychology workspace access required" }, { status: 403 });
     }
 
     if (!user.aprobado) {

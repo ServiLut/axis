@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';import {test} from 'node:test';import {loadServerModule} from './load-server-module';
 import type * as Actions from '../app/(protected)/dashboard/citas/actions';
+import * as psychology from '../lib/psychology';
+import * as billingSummary from '../lib/citas/billing-summary';
+import * as appointmentFilters from '../lib/citas/filters';
 test('receipt checks scope and size before storage; failed storage never reports success or changes payment',async()=>{
  let exists=true,storageError=false,uploads=0,writes=0,audits=0;let data:unknown;
  const storage={upload:async()=>{uploads++;return {error:storageError?{name:'StorageError'}:null}},getPublicUrl:()=>({data:{publicUrl:'https://example.invalid/receipt.pdf'}})};
  const tx={citasPsicologos:{updateMany:async(q:unknown)=>{writes++;data=q;return {count:1}}}};
  const prisma={citasPsicologos:{findFirst:async({where}:any)=>{assert.equal(where.tenantId,4);assert.equal(where.empresaId,3);return exists?{comprobantePath:'previous'}:null}},$transaction:async(fn:any)=>fn(tx)};
  const action=loadServerModule<typeof Actions>('app/(protected)/dashboard/citas/actions.ts',{
+  '@/lib/psychology':psychology,'@/lib/citas/billing-summary':billingSummary,'@/lib/citas/filters':appointmentFilters,
   '@/lib/prisma':prisma,'@/lib/auth':{verifyToken:(t:string)=>t==='valid'?{userId:10}:null},'next/cache':{revalidatePath(){}},
   '@/prisma/generated/prisma/client':{Prisma:{},Rol:{},EstadoPagoOrden:{}},'date-fns-tz':{},'@supabase/supabase-js':{createClient:()=>({storage:{from:()=>storage}})},
   '@/lib/audit':{createAuditLog:async()=>{audits++}},'@/lib/psychology-access':{requireFinanceUser:async()=>({tenantId:4,id:10})},

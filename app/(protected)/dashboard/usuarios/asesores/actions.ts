@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
+import { PSYCHOLOGY_TENANT_ID } from "@/lib/constants/tenants";
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@/prisma/generated/prisma/client";
 
@@ -14,7 +15,7 @@ export async function getAsesores(token: string) {
 
   try {
     const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
       select: { tenantId: true, rol: true },
     });
 
@@ -22,9 +23,7 @@ export async function getAsesores(token: string) {
       return { error: "Usuario no encontrado" };
     }
 
-    const where: Prisma.UsuarioWhereInput = usuario.rol === "SU_ADMIN" 
-      ? { rol: "ASESOR" } 
-      : { tenantId: usuario.tenantId, rol: "ASESOR" };
+    const where: Prisma.UsuarioWhereInput = { tenantId: PSYCHOLOGY_TENANT_ID, rol: "ASESOR" };
 
     const asesores = await prisma.usuario.findMany({
       where,
@@ -58,7 +57,7 @@ export async function getAsesor(token: string, id: number) {
 
   try {
     const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
       select: { tenantId: true, rol: true },
     });
 
@@ -67,9 +66,7 @@ export async function getAsesor(token: string, id: number) {
     }
 
     const where: Prisma.UsuarioWhereInput = { id, rol: "ASESOR" };
-    if (usuario.rol !== "SU_ADMIN") {
-      where.tenantId = usuario.tenantId;
-    }
+    where.tenantId = PSYCHOLOGY_TENANT_ID;
 
     const asesor = await prisma.usuario.findFirst({
       where,
@@ -104,7 +101,7 @@ export async function deleteAsesor(token: string, id: number) {
 
   try {
     const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
       select: { tenantId: true, rol: true },
     });
 
@@ -113,9 +110,7 @@ export async function deleteAsesor(token: string, id: number) {
     }
 
     const where: Prisma.UsuarioWhereInput = { id, rol: "ASESOR" };
-    if (usuario.rol !== "SU_ADMIN") {
-      where.tenantId = usuario.tenantId;
-    }
+    where.tenantId = PSYCHOLOGY_TENANT_ID;
 
     // Verificar que el usuario a eliminar sea un asesor y pertenezca al tenant (si no es SU_ADMIN)
     const asesorToDelete = await prisma.usuario.findFirst({
@@ -152,7 +147,7 @@ export async function updateAsesor(token: string, id: number, formData: FormData
 
   try {
     const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
       select: { tenantId: true, rol: true },
     });
 
@@ -166,9 +161,7 @@ export async function updateAsesor(token: string, id: number, formData: FormData
     const rol = formData.get("rol") as "SU_ADMIN" | "ADMIN" | "TECNICO" | "ASESOR";
     
     const where: Prisma.UsuarioWhereInput = { id, rol: "ASESOR" };
-    if (usuario.rol !== "SU_ADMIN") {
-      where.tenantId = usuario.tenantId;
-    }
+    where.tenantId = PSYCHOLOGY_TENANT_ID;
 
     // Verificar tenant y rol
     const asesor = await prisma.usuario.findFirst({
@@ -213,6 +206,7 @@ export async function getServiciosFinalizadosPorAsesor(
 
   try {
     const where: Prisma.OrdenServicioWhereInput = {
+      tenantId: PSYCHOLOGY_TENANT_ID,
       creadoPorId: asesorId,
       estadoServicioId: 4, // 4 = Finalizado
     };
@@ -281,6 +275,7 @@ export async function getReporteServiciosFinalizados(
 
   try {
     const where: Prisma.OrdenServicioWhereInput = {
+      tenantId: PSYCHOLOGY_TENANT_ID,
       estadoServicioId: 4, // Finalizado
     };
 

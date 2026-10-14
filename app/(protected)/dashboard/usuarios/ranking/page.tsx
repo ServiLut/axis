@@ -183,7 +183,7 @@ export default function RankingPage() {
       worksheet.columns = [
         { header: "N° Orden", key: "numeroOrden", width: 15 },
         { header: "Fecha Visita", key: "fechaVisita", width: 15 },
-        { header: "Cliente", key: "cliente", width: 30 },
+        { header: "Paciente", key: "cliente", width: 30 },
         { header: "Estado", key: "estado", width: 15 },
         { header: "Tipo", key: "tipo", width: 20 },
         { header: "Valor Pagado", key: "valorPagado", width: 15 },
@@ -567,7 +567,7 @@ export default function RankingPage() {
                     <Card>
                       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">
-                          Total Clientes Creados
+                          Total Pacientes Creados
                         </CardTitle>
                         <UserPlus className="h-4 w-4 text-purple-500" />
                       </CardHeader>
@@ -665,7 +665,7 @@ export default function RankingPage() {
                       <tr>
                         <th className="px-4 py-3">Orden</th>
                         <th className="px-4 py-3">Fecha</th>
-                        <th className="px-4 py-3">Cliente</th>
+                        <th className="px-4 py-3">Paciente</th>
                         <th className="px-4 py-3">Estado</th>
                         <th className="px-4 py-3 text-right">Valor Pagado</th>
                       </tr>

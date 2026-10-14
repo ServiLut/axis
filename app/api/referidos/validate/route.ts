@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { PSYCHOLOGY_TENANT_ID } from "@/lib/psychology";
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,7 +11,7 @@ export async function POST(req: NextRequest) {
     }
 
     const usuario = await prisma.usuario.findFirst({
-      where: { codigoReferido: codigo },
+      where: { codigoReferido: codigo, tenantId: PSYCHOLOGY_TENANT_ID, activo: true, aprobado: true },
       select: { nombre: true, apellido: true }
     });
 

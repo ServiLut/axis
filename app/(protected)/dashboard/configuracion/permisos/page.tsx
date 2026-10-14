@@ -208,11 +208,11 @@ export default function PermisosPage() {
   const getPermissionLabel = (tipo: string) => {
     switch (tipo) {
       case "EDITAR_VALOR_COTIZADO":
-        return "Editar Valor Cotizado";
+        return "Ajustar valor de la atención";
       case "EDITAR_TIPO_SERVICIO":
-        return "Editar Tipo de Servicio";
+        return "Cambiar tipo de atención";
       case "DESCARGAR_EXCEL":
-        return "Descargar Excel";
+        return "Exportar listado a Excel";
       default:
         return tipo;
     }
@@ -361,7 +361,7 @@ export default function PermisosPage() {
                         {permiso.entidadId && (
                           <div className="bg-slate-50 p-3 rounded-md border border-slate-100">
                             <span className="text-xs font-medium text-slate-500 block mb-1">
-                              ID Entidad (Servicio)
+                              Registro relacionado
                             </span>
                             <p className="text-sm font-mono text-slate-700">
                               #{permiso.entidadId}

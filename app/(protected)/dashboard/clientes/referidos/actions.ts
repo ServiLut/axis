@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
+import { PSYCHOLOGY_TENANT_ID } from "@/lib/constants/tenants";
 import { Prisma } from "@/prisma/generated/prisma/client";
 
 export async function getReferidos(token: string) {
@@ -10,19 +11,15 @@ export async function getReferidos(token: string) {
 
   try {
     const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
       select: { tenantId: true, rol: true },
     });
 
     if (!usuario) return { error: "Usuario no encontrado" };
 
-    const whereClause: Prisma.ReferidosWhereInput = {};
-
-    if (usuario.rol !== "SU_ADMIN") {
-      whereClause.Usuario = {
-        tenantId: usuario.tenantId,
-      };
-    }
+    const whereClause: Prisma.ReferidosWhereInput = {
+      Usuario: { tenantId: PSYCHOLOGY_TENANT_ID },
+    };
 
     const referidos = await prisma.referidos.findMany({
       where: whereClause,

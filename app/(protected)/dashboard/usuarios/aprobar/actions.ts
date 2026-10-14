@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
+import { PSYCHOLOGY_TENANT_ID } from "@/lib/constants/tenants";
 import { revalidatePath } from "next/cache";
 import { createAuditLog } from "@/lib/audit";
 
@@ -10,11 +11,12 @@ import { Rol } from "@/prisma/generated/prisma/client";
 export async function getUsuariosPendientes(token: string, status: boolean | null = false) {
   const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
+  if (payload.role !== "ADMIN" && payload.role !== "SU_ADMIN") return { error: "Solo administradores pueden gestionar solicitudes de acceso." };
 
   try {
     // Verify admin role if necessary, or just tenant isolation
     const usuarioAdmin = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
       select: { tenantId: true, rol: true },
     });
 
@@ -25,7 +27,7 @@ export async function getUsuariosPendientes(token: string, status: boolean | nul
 
     const usuarios = await prisma.usuario.findMany({
       where: {
-        tenantId: usuarioAdmin.tenantId,
+        tenantId: PSYCHOLOGY_TENANT_ID,
         aprobado: {
           equals: status
         },
@@ -65,34 +67,44 @@ export async function getUsuariosPendientes(token: string, status: boolean | nul
 export async function aprobarUsuario(token: string, userId: number, data: { rol: Rol; empresaId: number | null }) {
   const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
+  if (payload.role !== "ADMIN" && payload.role !== "SU_ADMIN") return { error: "Solo administradores pueden gestionar solicitudes de acceso." };
 
   try {
     const usuarioAdmin = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
       select: { tenantId: true },
     });
 
     if (!usuarioAdmin) return { error: "Usuario no encontrado" };
 
+    const companyOptions = await getEmpresasOptions(token);
+    if (companyOptions.error) return { error: companyOptions.error };
+    const normalizeCompanyName = (name: string) => name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase().replace(/\s+/g, " ");
+    const exactCompanies = companyOptions.empresas?.filter((empresa) => normalizeCompanyName(empresa.nombre) === "PSICOLOGOS") || [];
+    const companies = exactCompanies.length ? exactCompanies : companyOptions.empresas?.filter((empresa) => normalizeCompanyName(empresa.nombre) === "PSICOLOGOS EN COLOMBIA") || [];
+    if (companies.length !== 1) return { error: "No se pudo identificar la empresa Psicólogos en Colombia. Revisa su configuración antes de aprobar el acceso." };
+
     const usuarioPrevio = await prisma.usuario.findUnique({
-      where: { id: userId, tenantId: usuarioAdmin.tenantId }
+      where: { id: userId, tenantId: PSYCHOLOGY_TENANT_ID }
     });
+
+    if (!usuarioPrevio) return { error: "Solicitud no encontrada en Psicólogos en Colombia." };
 
     const updatedUser = await prisma.usuario.update({
       where: {
         id: userId,
-        tenantId: usuarioAdmin.tenantId // Ensure same tenant
+        tenantId: PSYCHOLOGY_TENANT_ID // Ensure same tenant
       },
       data: {
         aprobado: true,
         activo: true, // Ensure they are active too upon approval
         rol: data.rol,
-        empresaId: data.empresaId
+        empresaId: companies[0].id
       }
     });
 
     await createAuditLog({
-      tenantId: usuarioAdmin.tenantId,
+      tenantId: PSYCHOLOGY_TENANT_ID,
       usuarioId: payload.userId,
       accion: "UPDATE",
       entidad: "Usuario",
@@ -116,10 +128,11 @@ export async function aprobarUsuario(token: string, userId: number, data: { rol:
 export async function getEmpresasOptions(token: string) {
   const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
+  if (payload.role !== "ADMIN" && payload.role !== "SU_ADMIN") return { error: "Solo administradores pueden gestionar solicitudes de acceso." };
 
   try {
     const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
       select: { tenantId: true },
     });
 
@@ -127,7 +140,8 @@ export async function getEmpresasOptions(token: string) {
 
     const empresas = await prisma.empresa.findMany({
       where: {
-        tenantId: usuario.tenantId,
+        tenantId: PSYCHOLOGY_TENANT_ID,
+        estado: true,
       },
       select: {
         id: true,
@@ -148,24 +162,27 @@ export async function getEmpresasOptions(token: string) {
 export async function rechazarUsuario(token: string, userId: number) {
   const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
+  if (payload.role !== "ADMIN" && payload.role !== "SU_ADMIN") return { error: "Solo administradores pueden gestionar solicitudes de acceso." };
 
   try {
     const usuarioAdmin = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
       select: { tenantId: true },
     });
 
     if (!usuarioAdmin) return { error: "Usuario no encontrado" };
 
     const usuarioPrevio = await prisma.usuario.findUnique({
-      where: { id: userId, tenantId: usuarioAdmin.tenantId }
+      where: { id: userId, tenantId: PSYCHOLOGY_TENANT_ID }
     });
+
+    if (!usuarioPrevio) return { error: "Solicitud no encontrada en Psicólogos en Colombia." };
 
     // We mark as rejected (aprobado: null) instead of deleting.
     await prisma.usuario.update({
       where: {
         id: userId,
-        tenantId: usuarioAdmin.tenantId
+        tenantId: PSYCHOLOGY_TENANT_ID
       },
       data: {
         aprobado: null // New Logic: null is Rejected
@@ -173,7 +190,7 @@ export async function rechazarUsuario(token: string, userId: number) {
     });
 
     await createAuditLog({
-      tenantId: usuarioAdmin.tenantId,
+      tenantId: PSYCHOLOGY_TENANT_ID,
       usuarioId: payload.userId,
       accion: "UPDATE",
       entidad: "Usuario",

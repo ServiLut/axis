@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
+import { PSYCHOLOGY_TENANT_ID } from "@/lib/constants/tenants";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcrypt";
 import { Rol } from "@/prisma/generated/prisma/client";
@@ -14,9 +15,11 @@ export async function createUsuario(token: string, formData: FormData) {
     return { error: "No autorizado" };
   }
 
+  if (payload.role !== "ADMIN" && payload.role !== "SU_ADMIN") return { error: "Solo administradores pueden crear accesos al equipo." };
+
   try {
     const usuarioAdmin = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
       select: { tenantId: true },
     });
 
@@ -33,7 +36,13 @@ export async function createUsuario(token: string, formData: FormData) {
     const tipoDocumento = formData.get("tipoDocumento") as string;
     const numeroDocumento = formData.get("numeroDocumento") as string;
     const rol = formData.get("rol") as Rol;
-    const empresaId = formData.get("empresaId") ? parseInt(formData.get("empresaId") as string) : null;
+    const companyOptions = await getEmpresasOptions(token);
+    if (companyOptions.error) return { error: companyOptions.error };
+    const normalizeCompanyName = (name: string) => name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase().replace(/\s+/g, " ");
+    const exactCompanies = companyOptions.empresas?.filter((empresa) => normalizeCompanyName(empresa.nombre) === "PSICOLOGOS") || [];
+    const companies = exactCompanies.length ? exactCompanies : companyOptions.empresas?.filter((empresa) => normalizeCompanyName(empresa.nombre) === "PSICOLOGOS EN COLOMBIA") || [];
+    if (companies.length !== 1) return { error: "No se pudo identificar la empresa Psicólogos en Colombia. Revisa su configuración antes de crear el acceso." };
+    const empresaId = companies[0].id;
     const activo = formData.get("activo") === "on";
 
     // Validaciones básicas
@@ -53,7 +62,7 @@ export async function createUsuario(token: string, formData: FormData) {
           { email },
           { numeroDocumento: numeroDocumento || undefined } // Solo busca si hay numeroDocumento
         ],
-        tenantId: usuarioAdmin.tenantId
+        tenantId: PSYCHOLOGY_TENANT_ID
       }
     });
 
@@ -67,7 +76,7 @@ export async function createUsuario(token: string, formData: FormData) {
 
     const nuevoUsuario = await prisma.usuario.create({
       data: {
-        tenantId: usuarioAdmin.tenantId,
+        tenantId: PSYCHOLOGY_TENANT_ID,
         username,
         email,
         password: hashedPassword,
@@ -84,7 +93,7 @@ export async function createUsuario(token: string, formData: FormData) {
     });
 
     await createAuditLog({
-      tenantId: usuarioAdmin.tenantId,
+      tenantId: PSYCHOLOGY_TENANT_ID,
       usuarioId: payload.userId,
       accion: "CREATE",
       entidad: "Usuario",
@@ -111,13 +120,13 @@ export async function getEmpresasOptions(token: string) {
 
   try {
     const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
       select: { tenantId: true },
     });
     if (!usuario) return { error: "Usuario no encontrado" };
 
     const empresas = await prisma.empresa.findMany({
-      where: { tenantId: usuario.tenantId },
+      where: { tenantId: PSYCHOLOGY_TENANT_ID, estado: true },
       select: { id: true, nombre: true },
       orderBy: { nombre: "asc" }
     });

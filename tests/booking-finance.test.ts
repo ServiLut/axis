@@ -3,6 +3,9 @@ import { test } from "node:test";
 import { fromZonedTime } from "date-fns-tz";
 import { Prisma } from "../prisma/generated/prisma/client";
 import { loadServerModule } from "./load-server-module";
+import * as psychology from "../lib/psychology";
+import * as billingSummary from "../lib/citas/billing-summary";
+import * as appointmentFilters from "../lib/citas/filters";
 import type * as Calendar from "../app/(protected)/dashboard/citas/programacion/actions";
 import type * as Appointments from "../app/(protected)/dashboard/citas/actions";
 import type * as Balances from "../app/(protected)/dashboard/contabilidad/balances/actions";
@@ -40,7 +43,8 @@ function bookingFixture() {
     $queryRaw: async () => { state.locks++; return [{ id: 4 }]; },
     $transaction: async <T>(fn: (tx: unknown) => Promise<T>) => fn(prisma),
   };
-  const mocks = { "@/lib/prisma": prisma, "./prisma": prisma, "@/lib/auth": auth, "./auth": auth,
+  const mocks = { "@/lib/prisma": prisma, "./prisma": prisma, "@/lib/auth": auth, "./auth": auth, "@/lib/psychology": psychology,
+    "@/lib/citas/billing-summary": billingSummary, "@/lib/citas/filters": appointmentFilters,
     "@/lib/audit": { createAuditLog: async () => { state.audits++; } }, "next/cache": { revalidatePath() {} },
     "@/prisma/generated/prisma/client": mockEnums, "date-fns-tz": { fromZonedTime }, "@supabase/supabase-js": {} };
   return { state, calendar: loadServerModule<typeof Calendar>("app/(protected)/dashboard/citas/programacion/actions.ts", mocks),

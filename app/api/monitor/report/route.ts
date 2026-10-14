@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
+import { PSYCHOLOGY_TENANT_ID } from "@/lib/psychology";
+import { getBogotaDayRange } from "@/lib/bogota-date";
 
 // Función auxiliar para log de debug
 const debugLog = (msg: string) => {
@@ -28,21 +30,12 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const dateParam = searchParams.get("date");
     
-    let startOfDay = new Date();
-    let endOfDay = new Date();
-
-    if (dateParam) {
-       const [year, month, day] = dateParam.split("-").map(Number);
-       startOfDay = new Date(year, month - 1, day);
-       endOfDay = new Date(year, month - 1, day);
-    }
-    
-    startOfDay.setHours(0, 0, 0, 0);
-    endOfDay.setHours(23, 59, 59, 999);
+    const { start: startOfDay, end: endOfDay } = getBogotaDayRange(dateParam || undefined);
 
     const allUsers = await prisma.usuario.findMany({
       where: {
         activo: true,
+        tenantId: PSYCHOLOGY_TENANT_ID,
         rol: { in: ["SU_ADMIN", "ADMIN", "ASESOR"] },
       },
       select: {
@@ -59,7 +52,7 @@ export async function GET(request: Request) {
     const activeSessions = await prisma.sesionActividad.findMany({
       where: {
         usuarioId: { in: userIds },
-        fechaInicio: { gte: startOfDay, lte: endOfDay },
+        fechaInicio: { gte: startOfDay, lt: endOfDay },
       },
       include: {
         LogEvento: {

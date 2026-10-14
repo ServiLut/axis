@@ -24,7 +24,6 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  Car,
   MoreVertical,
   Briefcase,
   ExternalLink,
@@ -102,13 +101,18 @@ interface Cliente {
   }[];
 }
 
+const optionalValue = (value: string | null | undefined) => {
+  if (!value || ["no concretado", "noconcretado@noconcretado.com"].includes(value.trim().toLowerCase())) return "";
+  return value;
+};
+
+const patientName = (patient: Pick<Cliente, "nombre" | "apellido"> | null) =>
+  [optionalValue(patient?.nombre), optionalValue(patient?.apellido)].filter(Boolean).join(" ") || "Paciente sin nombre";
+
 interface ClienteServicio {
   id: number;
   numeroOrden: string | null;
   fechaVisita: Date | null;
-  valorPagado: number;
-  valorCotizado: number;
-  valorRepuestos: number;
   servicio: {
     nombre: string;
   };
@@ -119,9 +123,7 @@ interface ClienteServicio {
     nombre: string;
     apellido: string;
   } | null;
-  vehiculo: {
-    placa: string;
-  } | null;
+
 }
 
 interface Stats {
@@ -199,13 +201,13 @@ export default function ClientesPage() {
     const clientesParaExportar = result.clientes as Cliente[];
 
     if (!clientesParaExportar || clientesParaExportar.length === 0) {
-      toast.error("No hay clientes para exportar");
+      toast.error("No hay pacientes para exportar");
       setIsExporting(false);
       return;
     }
 
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet("Clientes");
+    const worksheet = workbook.addWorksheet("Pacientes");
 
     const columns = [
       { header: "Nombre", key: "nombre", width: 20 },
@@ -217,7 +219,6 @@ export default function ClientesPage() {
       { header: "Correo", key: "correo", width: 25 },
       { header: "Fecha Registro", key: "createdAt", width: 20 },
       { header: "Direcciones", key: "direcciones", width: 50 },
-      { header: "Vehículos", key: "vehiculos", width: 50 },
     ];
 
     if (tenantId === 4) {
@@ -243,9 +244,6 @@ export default function ClientesPage() {
         createdAt: new Date(cliente.createdAt).toLocaleString(),
         direcciones: cliente.direcciones
           .map((d) => `${d.direccion} (${d.municipio || ""})`)
-          .join(" | "),
-        vehiculos: cliente.vehiculos
-          .map((v) => `${v.placa} ${v.marca || ""} ${v.modelo || ""}`)
           .join(" | "),
       };
 
@@ -427,9 +425,9 @@ export default function ClientesPage() {
       <div className="flex-none bg-white border-b border-slate-200 px-8 py-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 max-w-7xl mx-auto">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Clientes</h1>
+            <h1 className="text-2xl font-bold text-slate-900">Pacientes</h1>
             <p className="text-sm text-slate-600 mt-1">
-              Gestiona tu base de datos de clientes
+              Busca pacientes, consulta sus datos y agenda sus citas.
             </p>
           </div>
           <div className="flex gap-3">
@@ -466,7 +464,7 @@ export default function ClientesPage() {
               className="bg-blue-600 hover:bg-blue-700"
             >
               <Plus className="h-4 w-4 mr-2" />
-              Nuevo Cliente
+              Nuevo Paciente
             </Button>
           </div>
         </div>
@@ -479,7 +477,7 @@ export default function ClientesPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
-                  Total Clientes
+                  Total Pacientes
                 </CardTitle>
                 <Users className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
@@ -560,7 +558,8 @@ export default function ClientesPage() {
           <div className="relative w-full md:w-[250px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
-              placeholder="Buscar cliente..."
+              aria-label="Buscar paciente por nombre, documento o teléfono"
+              placeholder="Nombre, documento o teléfono..."
               className="pl-10 bg-white"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -568,6 +567,7 @@ export default function ClientesPage() {
           </div>
 
           <Combobox
+            aria-label="Filtrar pacientes por municipio"
             options={[
               { value: "all", label: "Todos los municipios" },
               ...Array.from(
@@ -584,6 +584,7 @@ export default function ClientesPage() {
           />
 
           <Input
+            aria-label="Filtrar pacientes por barrio"
             placeholder="Filtrar por barrio..."
             value={barrioFilter}
             onChange={(e) => setBarrioFilter(e.target.value)}
@@ -596,6 +597,7 @@ export default function ClientesPage() {
             </span>
             <Input
               type="date"
+              aria-label="Registrados desde"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
               className="w-[130px] border-0 focus-visible:ring-0 h-7 p-1 text-xs"
@@ -603,6 +605,7 @@ export default function ClientesPage() {
             <span className="text-slate-300">-</span>
             <Input
               type="date"
+              aria-label="Registrados hasta"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
               className="w-[130px] border-0 focus-visible:ring-0 h-7 p-1 text-xs"
@@ -622,7 +625,7 @@ export default function ClientesPage() {
               htmlFor="no-services"
               className="text-xs font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer whitespace-nowrap"
             >
-              Sin servicios
+              Sin citas
             </Label>
           </div>
 
@@ -661,7 +664,7 @@ export default function ClientesPage() {
               <table className="w-full text-sm text-left">
                 <thead className="bg-slate-50 text-slate-700 border-b border-slate-200 font-medium">
                   <tr>
-                    <th className="px-6 py-4">Cliente</th>
+                    <th className="px-6 py-4">Paciente</th>
                     {tenantId === 4 && (
                       <>
                         <th className="px-6 py-4">Paquete</th>
@@ -728,8 +731,8 @@ export default function ClientesPage() {
           ) : clientes.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-slate-500 bg-white rounded-lg border border-slate-200 border-dashed">
               <User className="h-12 w-12 mb-3 text-slate-300" />
-              <p className="font-medium">No se encontraron clientes</p>
-              <p className="text-sm">Agrega un nuevo cliente para comenzar</p>
+              <p className="font-medium">No se encontraron pacientes</p>
+              <p className="text-sm">Agrega un nuevo paciente para comenzar</p>
             </div>
           ) : (
             <>
@@ -737,7 +740,7 @@ export default function ClientesPage() {
                 <table className="w-full text-sm text-left">
                   <thead className="bg-slate-50 text-slate-700 border-b border-slate-200 font-medium">
                     <tr>
-                      <th className="px-6 py-4">Cliente</th>
+                      <th className="px-6 py-4">Paciente</th>
                       {tenantId === 4 && (
                         <>
                           <th className="px-6 py-4">Paquete</th>
@@ -764,7 +767,7 @@ export default function ClientesPage() {
                             </div>
                             <div>
                               <div className="font-medium text-slate-900">
-                                {cliente.nombre} {cliente.apellido}
+                                {patientName(cliente)}
                               </div>
                               <div className="text-slate-500 text-xs mt-0.5">
                                 Registrado el{" "}
@@ -815,10 +818,10 @@ export default function ClientesPage() {
                             <FileText className="h-4 w-4 text-slate-400 shrink-0" />
                             <div className="flex flex-col">
                               <span className="font-medium text-slate-900">
-                                {cliente.numeroDocumento}
+                                {optionalValue(cliente.numeroDocumento) || "Sin registrar"}
                               </span>
                               <span className="text-xs text-slate-500">
-                                {cliente.tipoDocumento}
+                                {optionalValue(cliente.tipoDocumento)}
                               </span>
                             </div>
                           </div>
@@ -836,7 +839,7 @@ export default function ClientesPage() {
                                   <ClientPhoneLink phone={cliente.telefono2} enabled={tenantId === 4} />
                                 </div>
                               )}
-                            {cliente.correo && (
+                            {cliente.correo && cliente.correo !== "noconcretado@noconcretado.com" && cliente.correo !== "No Concretado" && (
                               <div className="flex items-center gap-2 text-slate-600">
                                 <Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                                 <span className="truncate max-w-[180px]">
@@ -881,7 +884,7 @@ export default function ClientesPage() {
                                 onClick={() => handleViewServices(cliente)}
                               >
                                 <Briefcase className="mr-2 h-4 w-4" />
-                                Servicios
+                                Ver citas
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={() =>
@@ -952,7 +955,7 @@ export default function ClientesPage() {
                     <div>
                       <nav
                         className="isolate inline-flex -space-x-px rounded-md shadow-sm"
-                        aria-label="Pagination"
+                        aria-label="Páginas de pacientes"
                       >
                         <Button
                           variant="outline"
@@ -1013,10 +1016,9 @@ export default function ClientesPage() {
       <Dialog open={isServicesModalOpen} onOpenChange={setIsServicesModalOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Historial de Servicios</DialogTitle>
+            <DialogTitle>Historial de citas</DialogTitle>
             <DialogDescription>
-              Servicios realizados para {selectedCliente?.nombre}{" "}
-              {selectedCliente?.apellido}
+              Citas registradas para {patientName(selectedCliente)}
             </DialogDescription>
           </DialogHeader>
 
@@ -1026,10 +1028,10 @@ export default function ClientesPage() {
                 <table className="w-full text-sm text-left">
                   <thead className="bg-slate-50 border-b font-medium text-slate-500">
                     <tr>
-                      <th className="px-4 py-3">No. Orden</th>
+                      <th className="px-4 py-3">Cita</th>
                       <th className="px-4 py-3">Fecha</th>
-                      <th className="px-4 py-3">Servicio</th>
-                      <th className="px-4 py-3">Técnico</th>
+                      <th className="px-4 py-3">Atención</th>
+                      <th className="px-4 py-3">Psicólogo</th>
                       <th className="px-4 py-3">Estado</th>
                     </tr>
                   </thead>
@@ -1057,7 +1059,7 @@ export default function ClientesPage() {
                         <td className="px-4 py-3">
                           <Badge
                             variant={
-                              servicio.estadoServicio?.nombre === "Terminado"
+                              servicio.estadoServicio?.nombre === "Realizada"
                                 ? "default"
                                 : "secondary"
                             }
@@ -1074,7 +1076,7 @@ export default function ClientesPage() {
               <div className="flex flex-col items-center justify-center py-10 text-slate-500 border rounded-md border-dashed">
                 <Briefcase className="h-10 w-10 mb-2 opacity-50" />
                 <p>
-                  No se encontraron servicios registrados para este cliente.
+                  No se encontraron citas registradas para este paciente.
                 </p>
               </div>
             )}
@@ -1086,7 +1088,7 @@ export default function ClientesPage() {
       <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Detalles del Cliente</DialogTitle>
+            <DialogTitle>Detalles del Paciente</DialogTitle>
             <DialogDescription>
               Información completa registrada en el sistema
             </DialogDescription>
@@ -1105,7 +1107,7 @@ export default function ClientesPage() {
                       Nombre Completo
                     </span>
                     <span className="text-base font-medium text-slate-900">
-                      {selectedCliente.nombre} {selectedCliente.apellido}
+                      {patientName(selectedCliente)}
                     </span>
                   </div>
                   <div>
@@ -1113,8 +1115,8 @@ export default function ClientesPage() {
                       Documento
                     </span>
                     <span className="text-base font-medium text-slate-900">
-                      {selectedCliente.tipoDocumento}:{" "}
-                      {selectedCliente.numeroDocumento}
+                      {optionalValue(selectedCliente.tipoDocumento)}{" "}
+                      {optionalValue(selectedCliente.numeroDocumento) || "Sin registrar"}
                     </span>
                   </div>
                 </div>
@@ -1122,8 +1124,7 @@ export default function ClientesPage() {
 
               {/* Documentos */}
               {tenantId === 4 &&
-                (selectedCliente.documentoPath ||
-                  selectedCliente.registroDocumento) && (
+                selectedCliente.documentoPath && (
                   <div className="space-y-3">
                     <h3 className="text-sm font-medium text-slate-500 uppercase tracking-wider border-b pb-2">
                       Documentos
@@ -1140,21 +1141,6 @@ export default function ClientesPage() {
                               className="text-sm text-blue-600 hover:underline font-medium"
                             >
                               Ver Documento de Identidad
-                            </a>
-                          </div>
-                        )}
-                      {selectedCliente.registroDocumento &&
-                        selectedCliente.registroDocumento !==
-                          "No Concretado" && (
-                          <div className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-blue-600" />
-                            <a
-                              href={selectedCliente.registroDocumento}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sm text-blue-600 hover:underline font-medium"
-                            >
-                              Ver Registro (RUT/Cámara)
                             </a>
                           </div>
                         )}
@@ -1190,7 +1176,7 @@ export default function ClientesPage() {
                         )}
                     </div>
                   </div>
-                  {selectedCliente.correo && (
+                  {selectedCliente.correo && selectedCliente.correo !== "noconcretado@noconcretado.com" && selectedCliente.correo !== "No Concretado" && (
                     <div>
                       <span className="text-sm text-slate-500 block">
                         Correo Electrónico
@@ -1271,50 +1257,6 @@ export default function ClientesPage() {
                 </div>
               </div>
 
-              {/* Vehículos */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-medium text-slate-500 uppercase tracking-wider border-b pb-2">
-                  Vehículos Registrados ({selectedCliente.vehiculos.length})
-                </h3>
-                {selectedCliente.vehiculos.length > 0 ? (
-                  <div className="grid grid-cols-1 gap-4">
-                    {selectedCliente.vehiculos.map((vehiculo, idx) => (
-                      <div
-                        key={idx}
-                        className="bg-slate-50 p-4 rounded-lg border border-slate-100"
-                      >
-                        <div className="flex items-start gap-3">
-                          <Car className="h-5 w-5 text-slate-400 mt-0.5 shrink-0" />
-                          <div className="space-y-1">
-                            <p className="font-medium text-slate-900">
-                              Placa: {vehiculo.placa}
-                            </p>
-                            <div className="text-sm text-slate-600 flex flex-wrap gap-x-4 gap-y-1">
-                              {vehiculo.marca && (
-                                <span>Marca: {vehiculo.marca}</span>
-                              )}
-                              {vehiculo.modelo && (
-                                <span>Modelo: {vehiculo.modelo}</span>
-                              )}
-                              {vehiculo.color && (
-                                <span>Color: {vehiculo.color}</span>
-                              )}
-                              {vehiculo.tipo && (
-                                <span>Tipo: {vehiculo.tipo}</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-sm text-slate-500 italic">
-                    No hay vehículos registrados.
-                  </div>
-                )}
-              </div>
-
               <div className="pt-4 border-t border-slate-100">
                 <div className="text-xs text-slate-400 text-right">
                   Registrado el{" "}
@@ -1345,10 +1287,10 @@ export default function ClientesPage() {
       <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>¿Estás seguro?</DialogTitle>
+            <DialogTitle>Retirar paciente de la lista</DialogTitle>
             <DialogDescription>
-              Esta acción no se puede deshacer. Esto eliminará permanentemente
-              al cliente y todas sus direcciones asociadas.
+              El paciente dejará de aparecer en la lista. Sus registros se conservarán
+              para el historial y la auditoría.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex gap-2 sm:justify-end">

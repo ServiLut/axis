@@ -156,10 +156,10 @@ export default function NominaPage() {
         <div className="max-w-5xl mx-auto">
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
             <Settings2 className="h-6 w-6 text-indigo-600" />
-            Configuración de Pagos
+            Pagos del equipo
           </h1>
           <p className="text-sm text-slate-600 mt-1">
-            Gestiona el modelo de pago (Porcentaje vs Salario Fijo) para técnicos y asesores.
+            Define el porcentaje o salario fijo de cada integrante del equipo.
           </p>
         </div>
       </div>
@@ -170,7 +170,8 @@ export default function NominaPage() {
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
-              placeholder="Buscar usuario..."
+              placeholder="Buscar por nombre o correo..."
+              aria-label="Buscar integrante del equipo"
               className="pl-10 bg-white"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -196,8 +197,7 @@ export default function NominaPage() {
               <Table>
                 <TableHeader className="bg-slate-50">
                   <TableRow>
-                    <TableHead>Usuario</TableHead>
-                    <TableHead>Empresa</TableHead>
+                    <TableHead>Integrante del equipo</TableHead>
                     <TableHead>Rol</TableHead>
                     <TableHead>Modelo de Pago</TableHead>
                     <TableHead>Valor Configurado</TableHead>
@@ -214,11 +214,8 @@ export default function NominaPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <span className="text-sm text-slate-700">{user.empresaName}</span>
-                      </TableCell>
-                      <TableCell>
                         <Badge variant="outline" className="bg-slate-50">
-                            {user.rol}
+                            {user.rol === "TECNICO" ? "Psicólogo/a" : user.rol === "ASESOR" ? "Atención" : "Administración"}
                         </Badge>
                       </TableCell>
                       <TableCell>

@@ -2,7 +2,15 @@
 
 import prisma from "@/lib/prisma-fresh";
 import { verifyToken } from "@/lib/auth";
+import { PSYCHOLOGY_TENANT_ID } from "@/lib/psychology";
 import { revalidatePath } from "next/cache";
+
+const isAccountAdmin = (role: string | null) => role === "ADMIN" || role === "SU_ADMIN";
+const accountAccessWhere = (userId: number, role: string | null) => ({
+  tenantId: PSYCHOLOGY_TENANT_ID,
+  usuario: { tenantId: PSYCHOLOGY_TENANT_ID },
+  ...(isAccountAdmin(role) ? {} : { usuarioId: userId }),
+});
 
 export async function getTurnos(token: string) {
   const payload = await verifyToken(token);
@@ -13,7 +21,7 @@ export async function getTurnos(token: string) {
 
   try {
     const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID, activo: true, aprobado: true },
       select: { tenantId: true, rol: true },
     });
 
@@ -23,6 +31,7 @@ export async function getTurnos(token: string) {
 
     const turnos = await prisma.turno.findMany({
       where: {
+        tenantId: PSYCHOLOGY_TENANT_ID,
         usuarioId: payload.userId,
         cuentaCobroId: null, // Only fetch active turnos
       },
@@ -68,7 +77,7 @@ export async function updateTurno(token: string, id: number, formData: FormData)
 
   try {
     const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID, activo: true, aprobado: true },
       select: { tenantId: true, rol: true },
     });
 
@@ -76,8 +85,8 @@ export async function updateTurno(token: string, id: number, formData: FormData)
       return { error: "Usuario no encontrado" };
     }
 
-    const existingTurno = await prisma.turno.findUnique({
-        where: { id },
+    const existingTurno = await prisma.turno.findFirst({
+        where: { id, tenantId: PSYCHOLOGY_TENANT_ID, usuarioId: payload.userId },
     });
 
     if (!existingTurno) {
@@ -118,7 +127,7 @@ export async function updateTurno(token: string, id: number, formData: FormData)
     const tiempoDescanso = parseInt(tiempoDescansoStr) || 0;
 
     const turnoOwner = await prisma.usuario.findUnique({
-        where: { id: existingTurno.usuarioId },
+        where: { id: existingTurno.usuarioId, tenantId: PSYCHOLOGY_TENANT_ID },
         include: { CuentasPago: true }
     });
 
@@ -134,7 +143,7 @@ export async function updateTurno(token: string, id: number, formData: FormData)
     const valorTotal = hoursWorked * valorHora;
 
     await prisma.turno.update({
-      where: { id },
+      where: { id, tenantId: PSYCHOLOGY_TENANT_ID, usuarioId: payload.userId, cuentaCobroId: null },
       data: {
         fecha,
         horaEntrada,
@@ -162,7 +171,7 @@ export async function deleteTurno(token: string, id: number) {
   
     try {
       const usuario = await prisma.usuario.findUnique({
-        where: { id: payload.userId },
+        where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID, activo: true, aprobado: true },
         select: { tenantId: true, rol: true },
       });
   
@@ -173,12 +182,15 @@ export async function deleteTurno(token: string, id: number) {
       
       const where = { 
         id, 
-        usuarioId: payload.userId
+        tenantId: PSYCHOLOGY_TENANT_ID,
+        usuarioId: payload.userId,
+        cuentaCobroId: null,
       };
   
-      await prisma.turno.deleteMany({
+      const deleted = await prisma.turno.deleteMany({
         where,
       });
+      if (deleted.count !== 1) return { error: "Turno no encontrado o perteneciente a un periodo cerrado" };
   
       revalidatePath("/dashboard/contabilidad/cuenta-cobro");
       return { success: true, message: "Registro eliminado exitosamente" };
@@ -197,7 +209,7 @@ export async function createCuentaCobroGroup(token: string) {
 
     try {
         const usuario = await prisma.usuario.findUnique({
-            where: { id: payload.userId },
+            where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID, activo: true, aprobado: true },
             select: { tenantId: true },
         });
 
@@ -208,6 +220,7 @@ export async function createCuentaCobroGroup(token: string) {
         // 1. Get all unassigned turnos
         const turnos = await prisma.turno.findMany({
             where: {
+                tenantId: PSYCHOLOGY_TENANT_ID,
                 usuarioId: payload.userId,
                 cuentaCobroId: null,
             },
@@ -227,7 +240,7 @@ export async function createCuentaCobroGroup(token: string) {
         await prisma.$transaction(async (tx) => {
             const cuentaCobro = await tx.cuentaCobro.create({
                 data: {
-                    tenantId: usuario.tenantId,
+                    tenantId: PSYCHOLOGY_TENANT_ID,
                     usuarioId: payload.userId,
                     fechaInicio,
                     fechaFin,
@@ -236,14 +249,18 @@ export async function createCuentaCobroGroup(token: string) {
                 }
             });
 
-            await tx.turno.updateMany({
+            const assigned = await tx.turno.updateMany({
                 where: {
-                    id: { in: turnos.map(t => t.id) }
+                    id: { in: turnos.map(t => t.id) },
+                    tenantId: PSYCHOLOGY_TENANT_ID,
+                    usuarioId: payload.userId,
+                    cuentaCobroId: null,
                 },
                 data: {
                     cuentaCobroId: cuentaCobro.id
                 }
             });
+            if (assigned.count !== turnos.length) throw new Error("Los turnos cambiaron. Actualiza la página antes de cerrar el periodo.");
         });
 
         revalidatePath("/dashboard/contabilidad/cuenta-cobro");
@@ -264,7 +281,7 @@ export async function getCuentasCobro(token: string) {
 
     try {
         const usuario = await prisma.usuario.findUnique({
-            where: { id: payload.userId },
+            where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID, activo: true, aprobado: true },
             select: { tenantId: true, rol: true },
         });
 
@@ -273,15 +290,13 @@ export async function getCuentasCobro(token: string) {
         }
 
         const cuentas = await prisma.cuentaCobro.findMany({
-            where: {
-                usuarioId: payload.userId,
-            },
+            where: accountAccessWhere(payload.userId, usuario.rol),
             orderBy: {
                 createdAt: "desc",
             },
             include: {
                 _count: {
-                    select: { turnos: true }
+                    select: { turnos: { where: { tenantId: PSYCHOLOGY_TENANT_ID } } }
                 },
                 usuario: {
                     select: {
@@ -308,7 +323,7 @@ export async function getCuentaCobroDetails(token: string, cuentaId: number) {
 
     try {
         const usuario = await prisma.usuario.findUnique({
-            where: { id: payload.userId },
+            where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID, activo: true, aprobado: true },
             select: { tenantId: true, rol: true },
         });
 
@@ -318,8 +333,9 @@ export async function getCuentaCobroDetails(token: string, cuentaId: number) {
 
         const turnos = await prisma.turno.findMany({
             where: {
+                ...accountAccessWhere(payload.userId, usuario.rol),
                 cuentaCobroId: cuentaId,
-                usuarioId: payload.userId
+                cuentaCobro: { tenantId: PSYCHOLOGY_TENANT_ID },
             },
             select: {
                 id: true,
@@ -363,7 +379,7 @@ export async function getCuentaCobroPdfData(token: string, cuentaId: number) {
 
     try {
         const usuario = await prisma.usuario.findUnique({
-            where: { id: payload.userId },
+            where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID, activo: true, aprobado: true },
             select: { tenantId: true, rol: true },
         });
 
@@ -371,9 +387,10 @@ export async function getCuentaCobroPdfData(token: string, cuentaId: number) {
             return { error: "Usuario no encontrado" };
         }
 
-        const cuenta = await prisma.cuentaCobro.findUnique({
+        const cuenta = await prisma.cuentaCobro.findFirst({
             where: {
-                id: cuentaId
+                id: cuentaId,
+                ...accountAccessWhere(payload.userId, usuario.rol),
             },
             include: {
                 usuario: {
@@ -393,6 +410,7 @@ export async function getCuentaCobroPdfData(token: string, cuentaId: number) {
                     }
                 },
                 turnos: {
+                    where: { tenantId: PSYCHOLOGY_TENANT_ID, usuario: { tenantId: PSYCHOLOGY_TENANT_ID } },
                     orderBy: {
                         fecha: 'asc'
                     }
@@ -404,7 +422,7 @@ export async function getCuentaCobroPdfData(token: string, cuentaId: number) {
             return { error: "Cuenta de cobro no encontrada" };
         }
 
-        if (cuenta.usuarioId !== payload.userId) {
+        if (!isAccountAdmin(usuario.rol) && cuenta.usuarioId !== payload.userId) {
             return { error: "No autorizado" };
         }
 
@@ -424,7 +442,7 @@ export async function sendCuentaCobro(token: string, cuentaId: number) {
 
     try {
         const usuario = await prisma.usuario.findUnique({
-            where: { id: payload.userId },
+            where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID, activo: true, aprobado: true },
             select: { tenantId: true },
         });
 
@@ -432,8 +450,8 @@ export async function sendCuentaCobro(token: string, cuentaId: number) {
             return { error: "Usuario no encontrado" };
         }
 
-        const cuenta = await prisma.cuentaCobro.findUnique({
-            where: { id: cuentaId }
+        const cuenta = await prisma.cuentaCobro.findFirst({
+            where: { id: cuentaId, tenantId: PSYCHOLOGY_TENANT_ID, usuarioId: payload.userId, estado: "GENERADA", usuario: { tenantId: PSYCHOLOGY_TENANT_ID } }
         });
 
         if (!cuenta) {
@@ -445,7 +463,7 @@ export async function sendCuentaCobro(token: string, cuentaId: number) {
         }
 
         await prisma.cuentaCobro.update({
-            where: { id: cuentaId },
+            where: { id: cuentaId, tenantId: PSYCHOLOGY_TENANT_ID, usuarioId: payload.userId, estado: "GENERADA" },
             data: {
                 estado: "PENDIENTE"
             }
@@ -469,7 +487,7 @@ export async function updateCuentaCobroStatus(token: string, cuentaId: number, e
 
     try {
         const usuario = await prisma.usuario.findUnique({
-            where: { id: payload.userId },
+            where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID, activo: true, aprobado: true },
             select: { tenantId: true, rol: true }, // Need rol to verify permission if strict check needed
         });
 
@@ -477,15 +495,13 @@ export async function updateCuentaCobroStatus(token: string, cuentaId: number, e
             return { error: "Usuario no encontrado" };
         }
 
-        // Ideally check if user has permission to approve/reject (e.g. is ADMIN)
-        // Since the UI protects this, we assume the token holder is authorized if they can call this, 
-        // but adding a role check is safer.
-        if (usuario.rol !== "ADMIN" && usuario.rol !== "SU_ADMIN") {
+        if (!isAccountAdmin(usuario.rol)) {
              return { error: "No tienes permisos para realizar esta acción" };
         }
+        if (estado !== "PAGADA" && estado !== "RECHAZADA") return { error: "Estado inválido" };
 
         await prisma.cuentaCobro.update({
-            where: { id: cuentaId },
+            where: { id: cuentaId, tenantId: PSYCHOLOGY_TENANT_ID, estado: "PENDIENTE", usuario: { tenantId: PSYCHOLOGY_TENANT_ID } },
             data: { estado }
         });
 

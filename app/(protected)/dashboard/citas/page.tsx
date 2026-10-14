@@ -2,7 +2,7 @@
 
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -46,6 +46,7 @@ import {
   getCitas,
   deleteCita,
   getCitasStats,
+  getCitasBillingSummary,
   getCita,
   getFormDataCitas,
   uploadComprobantePagoCita,
@@ -56,7 +57,6 @@ import {
   toggleCitaPago,
   updateCitaPago,
   getAllCitasForExport,
-  getTenantsList,
 } from "./actions";
 import {
   Dialog,
@@ -67,6 +67,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { BillingSummaryCard } from "@/components/citas/billing-summary-card";
 import {
   Select,
   SelectContent,
@@ -84,7 +85,9 @@ import { EstadoPagoOrden } from "@/prisma/generated/prisma/enums";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { useUserRole } from "@/hooks/use-user-role";
 import { checkPermission, requestPermission, getMyPermissionStatus } from "@/app/(protected)/dashboard/configuracion/permisos/actions";
-import {ConciliarCita} from '@/components/contabilidad/conciliar-cita';
+import { ConciliarCita } from "@/components/contabilidad/conciliar-cita";
+import { resolveSerializedAppliedValue } from "@/lib/citas/applied-value";
+
 
 type PaqueteCita = PaqueteAdquirido & {
   TerapiasPsicologos: TerapiasPsicologos;
@@ -185,6 +188,37 @@ const getSesionesBadgeClass = (paquete: PaqueteCita) => {
     : "bg-blue-50 text-blue-700";
 };
 
+const getAppliedValue = (cita: Cita) =>
+  resolveSerializedAppliedValue({
+    valorAplicado: null,
+    packageSnapshot: cita.PaqueteAdquirido
+      ? {
+          totalPrice: cita.PaqueteAdquirido.precioPagado,
+          sessions: cita.PaqueteAdquirido.sesionesTotales,
+        }
+      : null,
+    legacyValue: cita.valorCotizado,
+  });
+
+const getPackageUnitReference = (paquete: PaqueteCita) =>
+  resolveSerializedAppliedValue({
+    valorAplicado: null,
+    packageSnapshot: {
+      totalPrice: paquete.precioPagado,
+      sessions: paquete.sesionesTotales,
+    },
+    legacyValue: null,
+  });
+
+const formatCurrency = (value: string | null) =>
+  value === null
+    ? "Sin información"
+    : new Intl.NumberFormat("es-CO", {
+        style: "currency",
+        currency: "COP",
+        maximumFractionDigits: 2,
+      }).format(Number(value));
+
 // Centraliza la etiqueta para que tabla/export no traten `null` como "Programada".
 const getEstadoCitaLabel = (realizada: boolean | null) => {
   if (realizada === true) return "Realizada";
@@ -221,7 +255,7 @@ export default function CitasPage() {
     const checkExcelPermission = async () => {
         const token = localStorage.getItem("token");
         if (!token) return;
-        
+
         const [check, status] = await Promise.all([
             checkPermission(token, "DESCARGAR_EXCEL"),
             getMyPermissionStatus(token, "DESCARGAR_EXCEL")
@@ -246,10 +280,14 @@ export default function CitasPage() {
 
     setSendingRequest(true);
     const token = localStorage.getItem("token");
-    if (!token) return;
+    if (!token) {
+      setSendingRequest(false);
+      router.push("/sign-in");
+      return;
+    }
 
     const res = await requestPermission(token, "DESCARGAR_EXCEL", undefined, requestMotivo);
-    
+
     if (res.error) {
         toast.error(res.error);
     } else if (res.message) {
@@ -268,8 +306,6 @@ export default function CitasPage() {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [exportStartDate, setExportStartDate] = useState("");
   const [exportEndDate, setExportEndDate] = useState("");
-  const [exportTenantId, setExportTenantId] = useState("all");
-  const [tenants, setTenants] = useState<{ id: number; nombre: string }[]>([]);
   const [isExporting, setIsExporting] = useState(false);
 
   const termParam = searchParams.get("term");
@@ -288,10 +324,10 @@ export default function CitasPage() {
     };
 
     if (typeof window === "undefined") return defaultFilters;
-    
+
     const saved = localStorage.getItem("citasFilters");
     let parsed = { ...defaultFilters };
-    
+
     if (saved) {
       try {
         parsed = { ...parsed, ...JSON.parse(saved) };
@@ -325,11 +361,67 @@ export default function CitasPage() {
 
   const [citas, setCitas] = useState<Cita[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [billingRevision, setBillingRevision] = useState(0);
+  const [listRevision, setListRevision] = useState(0);
+  const [billingResult, setBillingResult] = useState<{
+    key: string;
+    summary: { total: string; citas: number; sinValor: number } | null;
+    error: string | null;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
 
   const [isRestored, setIsRestored] = useState(false);
+
+  const billingFilters = useMemo(() => ({
+    term: debouncedSearchTerm,
+    psicologoId: selectedPsicologo,
+    consultorioId: selectedConsultorio,
+    paqueteId: selectedPaquete,
+    estadoCita: selectedEstadoCita,
+    estadoPago: selectedEstadoPago,
+    startDate,
+    endDate,
+  }), [debouncedSearchTerm, selectedPsicologo, selectedConsultorio, selectedPaquete, selectedEstadoCita, selectedEstadoPago, startDate, endDate]);
+  const filtersKey = JSON.stringify(billingFilters);
+  const billingKey = `${filtersKey}:${billingRevision}`;
+  const billingLoading = !isRestored || billingResult?.key !== billingKey;
+  const listFiltersKey = useRef(filtersKey);
+  const listRequestId = useRef(0);
+
+  useEffect(() => {
+    if (!isRestored) return;
+    let current = true;
+    async function loadBilling() {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) throw new Error("Inicia sesión para consultar el importe.");
+        const result = await getCitasBillingSummary(token, billingFilters);
+        if (!current) return;
+        setBillingResult({
+          key: billingKey,
+          summary: "summary" in result ? result.summary ?? null : null,
+          error: "error" in result ? result.error ?? "No se pudo calcular el importe." : null,
+        });
+      } catch (error) {
+        if (current) setBillingResult({ key: billingKey, summary: null, error: error instanceof Error ? error.message : "No se pudo calcular el importe. Intenta nuevamente." });
+      }
+    }
+    void loadBilling();
+    return () => { current = false; };
+  }, [billingFilters, billingKey, isRestored]);
+
+  const refreshBilling = () => setBillingRevision((revision) => revision + 1);
+  const refreshList = () => setListRevision((revision) => revision + 1);
+
+  const selectToday = () => {
+    const today = format(toZonedTime(new Date(), TIMEZONE), "yyyy-MM-dd");
+    setStartDate(today);
+    setEndDate(today);
+    router.replace(pathname);
+  };
 
   // Aux Data
   const [psicologos, setPsicologos] = useState<{id: number, nombre: string, apellido: string}[]>([]);
@@ -360,7 +452,7 @@ export default function CitasPage() {
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     setIsRestored(true);
   }, []);
 
@@ -414,34 +506,45 @@ export default function CitasPage() {
 
   const fetchCitasData = useCallback(async () => {
     if (!isRestored) return;
+    const requestId = ++listRequestId.current;
     setLoading(true);
+    if (listFiltersKey.current !== filtersKey) {
+      listFiltersKey.current = filtersKey;
+      if (currentPage > 1) {
+        router.replace(pathname);
+        return;
+      }
+    }
     const token = localStorage.getItem("token");
     if (!token) {
       router.push("/sign-in");
       return;
     }
 
-    const filters = {
-      term: debouncedSearchTerm,
-      psicologoId: selectedPsicologo,
-      consultorioId: selectedConsultorio,
-      paqueteId: selectedPaquete,
-      estadoCita: selectedEstadoCita,
-      estadoPago: selectedEstadoPago,
-      startDate,
-      endDate,
-    };
-
-    const result = await getCitas(token, currentPage, itemsPerPage, filters);
-    if (result.error) {
-      toast.error(result.error);
-    } else if (result.ordenes) {
-      setCitas(result.ordenes as unknown as Cita[]);
-      setTotalPages(result.totalPages || 1);
-      setTotalRecords(result.total || 0);
+    setLoadError(null);
+    let changingPage = false;
+    try {
+      const result = await getCitas(token, currentPage, itemsPerPage, billingFilters);
+      if (listRequestId.current !== requestId) return;
+      if (result.error) {
+        setLoadError(result.error);
+      } else if (result.ordenes) {
+        const lastPage = Math.max(1, result.totalPages || 1);
+        if (currentPage > lastPage) {
+          changingPage = true;
+          router.replace(lastPage === 1 ? pathname : `${pathname}?page=${lastPage}`);
+          return;
+        }
+        setCitas(result.ordenes as unknown as Cita[]);
+        setTotalPages(lastPage);
+        setTotalRecords(result.total || 0);
+      }
+    } catch {
+      if (listRequestId.current === requestId) setLoadError("No se pudieron cargar las citas. Revise su conexión e intente nuevamente.");
+    } finally {
+      if (listRequestId.current === requestId && !changingPage) setLoading(false);
     }
-    setLoading(false);
-  }, [currentPage, debouncedSearchTerm, selectedPsicologo, selectedConsultorio, selectedPaquete, selectedEstadoCita, selectedEstadoPago, startDate, endDate, router, isRestored]);
+  }, [currentPage, billingFilters, filtersKey, pathname, router, isRestored]);
 
   const fetchAux = useCallback(async () => {
     const token = localStorage.getItem("token");
@@ -458,20 +561,6 @@ export default function CitasPage() {
       setMetodosPago((formRes.metodosPago as { id: number; nombre: string }[]) || []);
     }
   }, []);
-
-  // Load tenants for SU_ADMIN export
-  useEffect(() => {
-    if (role === "SU_ADMIN" && isExportModalOpen && tenants.length === 0) {
-      const loadTenants = async () => {
-        const token = localStorage.getItem("token");
-        if (token) {
-          const res = await getTenantsList(token);
-          if (res.tenants) setTenants(res.tenants);
-        }
-      };
-      loadTenants();
-    }
-  }, [role, isExportModalOpen, tenants.length]);
 
   const generateAndDownloadExcel = async (
     dataToExport: Cita[],
@@ -493,7 +582,7 @@ export default function CitasPage() {
       { header: "Teléfono", key: "telefono", width: 15 },
       { header: "Correo", key: "correo", width: 25 },
       { header: "Paquete", key: "paquete", width: 25 },
-      { header: "Valor x Sesión", key: "valorSesion", width: 15 },
+      { header: "Valor por sesión", key: "valorAplicado", width: 18 },
       { header: "Sesiones Realizadas", key: "sesionesRealizadas", width: 18 },
       { header: "Consultorio", key: "consultorio", width: 20 },
       { header: "Fecha", key: "fecha", width: 15 },
@@ -503,19 +592,9 @@ export default function CitasPage() {
       { header: "Realizada", key: "realizada", width: 12 },
       { header: "Método Pago", key: "metodoPago", width: 15 },
       { header: "Estado Pago", key: "estadoPago", width: 15 },
-      { header: "Valor", key: "valor", width: 15 },
       { header: "Observaciones", key: "observaciones", width: 30 },
       { header: "Creado Por", key: "creadoPor", width: 25 },
     ];
-
-    // Add Tenant column if it exists in data (for SU_ADMIN exports)
-    if (dataToExport.some((d) => d.tenantNombre)) {
-      columns.splice(1, 0, {
-        header: "Sistema (Tenant)",
-        key: "tenantNombre",
-        width: 20,
-      });
-    }
 
     worksheet.columns = columns;
 
@@ -523,23 +602,21 @@ export default function CitasPage() {
     dataToExport.forEach((cita) => {
       worksheet.addRow({
         nroCita: cita.numeroOrden || `CITA-${cita.id}`,
-        tenantNombre: cita.tenantNombre || "",
         paciente: `${cita.cliente?.nombre || ""} ${cita.cliente?.apellido || ""}`.trim(),
         documento: `${cita.cliente?.tipoDocumento || ""} ${cita.cliente?.numeroDocumento || ""}`.trim(),
-        telefono: cita.cliente?.telefono || "N/A",
-        correo: cita.cliente?.correo || "N/A",
-        paquete: cita.paqueteNombre || "N/A",
-        valorSesion: cita.PaqueteAdquirido ? (cita.PaqueteAdquirido.precioPagado / cita.PaqueteAdquirido.sesionesTotales) : 0,
-        sesionesRealizadas: cita.PaqueteAdquirido ? `${getSesionesRealizadas(cita.PaqueteAdquirido)} / ${cita.PaqueteAdquirido.sesionesTotales}` : "N/A",
-        consultorio: cita.consultorioNombre || "N/A",
+        telefono: cita.cliente?.telefono || "Sin información",
+        correo: cita.cliente?.correo || "Sin información",
+        paquete: cita.paqueteNombre || "Sin información",
+        valorAplicado: getAppliedValue(cita),
+        sesionesRealizadas: cita.PaqueteAdquirido ? `${getSesionesRealizadas(cita.PaqueteAdquirido)} / ${cita.PaqueteAdquirido.sesionesTotales}` : "Sin información",
+        consultorio: cita.consultorioNombre || "Sin información",
         fecha: formatDateBogota(cita.fechaVisita),
         hora: formatTimeBogota(cita.horaInicio),
         psicologo: cita.tecnico ? `${cita.tecnico.nombre} ${cita.tecnico.apellido}` : "Sin asignar",
         estado: getEstadoCitaLabel(cita.realizada),
         realizada: cita.realizada ? "SÍ" : "NO",
-        metodoPago: cita.metodoPago || "N/A",
+        metodoPago: cita.metodoPago || "Sin información",
         estadoPago: cita.estadoPago || "PENDIENTE",
-        valor: cita.valorCotizado || 0,
         observaciones: cita.observacion || "",
         creadoPor: cita.creadoPor ? `${cita.creadoPor.nombre} ${cita.creadoPor.apellido}` : "Sistema",
       });
@@ -640,6 +717,10 @@ export default function CitasPage() {
   };
 
   const handleConfirmExport = async () => {
+    if (exportStartDate && exportEndDate && exportStartDate > exportEndDate) {
+      toast.error("La fecha de fin debe ser igual o posterior a la fecha de inicio.");
+      return;
+    }
     setIsExporting(true);
     const token = localStorage.getItem("token");
     if (!token) {
@@ -650,7 +731,6 @@ export default function CitasPage() {
     const res = await getAllCitasForExport(token, {
       startDate: exportStartDate,
       endDate: exportEndDate,
-      tenantId: exportTenantId,
       estadoCita: selectedEstadoCita,
       estadoPago: selectedEstadoPago,
     });
@@ -668,11 +748,12 @@ export default function CitasPage() {
   };
 
   useEffect(() => { 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     fetchCitasData(); 
-  }, [fetchCitasData]);
+    return () => { listRequestId.current += 1; };
+  }, [fetchCitasData, listRevision]);
   useEffect(() => { 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     fetchAux(); 
   }, [fetchAux]);
 
@@ -691,7 +772,8 @@ export default function CitasPage() {
         toast.error(res.error);
       } else {
         toast.success(res.message);
-        fetchCitasData();
+        refreshList();
+        refreshBilling();
         fetchAux(); // update stats
       }
     }
@@ -728,7 +810,8 @@ export default function CitasPage() {
               toast.error(res.error);
           } else {
               toast.success(res.message);
-              fetchCitasData();
+              refreshList();
+              refreshBilling();
               setIsPaymentModalOpen(false);
           }
       }
@@ -738,13 +821,14 @@ export default function CitasPage() {
   const handleMarkAsRealizada = async (id: number) => {
       const token = localStorage.getItem("token");
       if (!token) return;
-      
+
       const res = await markCitaAsRealizada(token, id);
-      if (res.error) {
+      if ("error" in res) {
           toast.error(res.error);
-      } else {
+      } else if ("message" in res) {
           toast.success(res.message);
-          fetchCitasData();
+          refreshList();
+          refreshBilling();
           fetchAux();
       }
   };
@@ -756,7 +840,8 @@ export default function CitasPage() {
       const res = await markCitaAsProgramada(token, id);
       if ("message" in res) {
           toast.success(res.message);
-          fetchCitasData();
+          refreshList();
+          refreshBilling();
           fetchAux();
       } else {
           toast.error(res.error);
@@ -766,13 +851,14 @@ export default function CitasPage() {
   const handleMarkAsCancelada = async (id: number) => {
       const token = localStorage.getItem("token");
       if (!token) return;
-      
+
       const res = await markCitaAsCancelada(token, id);
-      if (res.error) {
+      if ("error" in res) {
           toast.error(res.error);
-      } else {
+      } else if ("message" in res) {
           toast.success(res.message);
-          fetchCitasData();
+          refreshList();
+          refreshBilling();
           fetchAux(); // Update stats
       }
   };
@@ -784,7 +870,8 @@ export default function CitasPage() {
       const res = await restoreCitaCancelada(token, id);
       if ("message" in res) {
           toast.success(res.message);
-          fetchCitasData();
+          refreshList();
+          refreshBilling();
           fetchAux(); // Update stats
       } else {
           toast.error(res.error);
@@ -794,13 +881,14 @@ export default function CitasPage() {
   const handleTogglePago = async (id: number) => {
       const token = localStorage.getItem("token");
       if (!token) return;
-      
+
       const res = await toggleCitaPago(token, id);
       if (res.error) {
           toast.error(res.error);
       } else {
           toast.success(res.message);
-          fetchCitasData();
+          refreshList();
+          refreshBilling();
       }
   };
 
@@ -818,29 +906,28 @@ export default function CitasPage() {
 
       const formData = new FormData();
       formData.append("file", file);
-      
-      toast.promise(uploadComprobantePagoCita(token, uploadingCitaId, formData).then(result=>{if('error' in result)throw Error(result.error);return result}), {
+
+      toast.promise(uploadComprobantePagoCita(token, uploadingCitaId, formData), {
           loading: "Subiendo...",
           success: () => {
-            fetchCitasData();
+            refreshList();
             return "Comprobante subido";
           },
-          error: (error:unknown) => error instanceof Error?error.message:"Error al subir"
+          error: "Error al subir"
       });
       setUploadingCitaId(null);
-      e.target.value='';
   };
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="flex-none bg-white border-b border-slate-200 px-8 py-6">
+      <div className="flex-none bg-white border-b border-slate-200 px-4 sm:px-8 py-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 max-w-7xl mx-auto">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Gestión de Citas</h1>
-            <p className="text-sm text-slate-600 mt-1">Administra las citas de psicología</p>
+            <h1 className="text-2xl font-bold text-slate-900">Citas y reservas</h1>
+            <p className="text-sm text-slate-600 mt-1">Consulte las sesiones, las reservas de consultorio y sus pagos.</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <Button
               variant="outline"
               onClick={() => setShowKPIs(!showKPIs)}
@@ -849,7 +936,7 @@ export default function CitasPage() {
             >
               {showKPIs ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               <span className="hidden sm:inline">
-                {showKPIs ? "Ocultar KPIs" : "Mostrar KPIs"}
+                {showKPIs ? "Ocultar resumen" : "Mostrar resumen"}
               </span>
             </Button>
             <Button
@@ -875,9 +962,10 @@ export default function CitasPage() {
       </div>
 
       {/* Stats */}
-      {stats && showKPIs && (
-        <div className="flex-none px-8 py-6 bg-slate-50 border-b border-slate-200 animate-in fade-in slide-in-from-top-2 duration-300">
-           <div className="max-w-7xl mx-auto grid gap-4 grid-cols-2 md:grid-cols-5">
+      {showKPIs && (
+        <div className="flex-none px-4 sm:px-8 py-6 bg-slate-50 border-b border-slate-200 animate-in fade-in slide-in-from-top-2 duration-300">
+           <div className="max-w-7xl mx-auto grid gap-4 grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+              {stats && <>
               <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-4">
                       <CardTitle className="text-sm font-medium">Total Citas</CardTitle>
@@ -940,19 +1028,28 @@ export default function CitasPage() {
                       </div>
                   </CardContent>
               </Card>
+              </>}
+              <BillingSummaryCard
+                summary={billingLoading ? null : billingResult?.summary ?? null}
+                loading={billingLoading}
+                error={billingLoading ? null : billingResult?.error ?? null}
+                startDate={startDate}
+                endDate={endDate}
+                onRetry={refreshBilling}
+              />
            </div>
         </div>
       )}
 
       {/* Toolbar */}
-      <div className="flex-none px-8 py-4 bg-slate-50 border-b border-slate-200">
+      <div className="flex-none px-4 sm:px-8 py-4 bg-slate-50 border-b border-slate-200">
         <div className="max-w-7xl mx-auto space-y-3">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div className="relative min-w-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <Input placeholder="Buscar paciente..." className="pl-10 bg-white" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+              <Input aria-label="Buscar paciente" placeholder="Nombre, documento o teléfono del paciente" className="pl-10 bg-white" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
             </div>
-           
+
            <div className="flex min-w-0 items-center gap-2">
              <span className="shrink-0 text-xs font-medium text-slate-500">Paquete:</span>
              <Select value={selectedPaquete} onValueChange={setSelectedPaquete}>
@@ -969,7 +1066,7 @@ export default function CitasPage() {
                </SelectContent>
              </Select>
            </div>
-           
+
            <div className="flex min-w-0 items-center gap-2">
              <span className="shrink-0 text-xs font-medium text-slate-500">Consultorio:</span>
              <Select value={selectedConsultorio} onValueChange={setSelectedConsultorio}>
@@ -1043,12 +1140,13 @@ export default function CitasPage() {
               <div className="flex items-center gap-2">
                 <span className="shrink-0 text-xs font-medium text-slate-500">Fecha:</span>
                 <div className="flex min-w-0 flex-1 items-center gap-1 rounded border bg-white p-1 shadow-sm sm:flex-none">
-                  <Input type="date" className="h-8 min-w-0 flex-1 border-0 text-xs focus-visible:ring-0 sm:w-32 sm:flex-none" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                  <Input type="date" aria-label="Fecha inicial del filtro" className="h-8 min-w-0 flex-1 border-0 text-xs focus-visible:ring-0 sm:w-32 sm:flex-none" value={startDate} onChange={e => { setStartDate(e.target.value); router.replace(pathname); }} />
                   <span className="text-slate-400">-</span>
-                  <Input type="date" className="h-8 min-w-0 flex-1 border-0 text-xs focus-visible:ring-0 sm:w-32 sm:flex-none" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                  <Input type="date" aria-label="Fecha final del filtro" className="h-8 min-w-0 flex-1 border-0 text-xs focus-visible:ring-0 sm:w-32 sm:flex-none" value={endDate} onChange={e => { setEndDate(e.target.value); router.replace(pathname); }} />
                 </div>
               </div>
 
+              <Button type="button" variant="outline" size="sm" className="h-8" onClick={selectToday}>Hoy</Button>
               <Button
                 variant="ghost"
                 size="sm"
@@ -1057,7 +1155,7 @@ export default function CitasPage() {
                 title="Borrar filtros"
               >
                 <Trash2 className="h-4 w-4 mr-1" />
-                Borrar
+                Limpiar filtros
               </Button>
             </div>
           </div>
@@ -1065,21 +1163,23 @@ export default function CitasPage() {
       </div>
 
       {/* Table */}
-      <div className="flex-1 overflow-auto bg-slate-50 px-8 py-6">
+      <div className="flex-1 overflow-auto bg-slate-50 px-4 sm:px-8 py-6">
         <div className="max-w-7xl mx-auto">
            {loading ? (
              <div className="flex justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>
+           ) : loadError ? (
+             <div role="alert" className="space-y-3 rounded-lg border bg-white p-6 text-center"><p className="text-sm text-slate-700">{loadError}</p><Button variant="outline" onClick={fetchCitasData}>Reintentar</Button></div>
            ) : citas.length === 0 ? (
-             <div className="text-center p-10 text-slate-500">No se encontraron citas</div>
+             <div className="text-center p-10 text-slate-500"><p>No hay citas que coincidan con estos filtros.</p><Button variant="link" onClick={clearFilters}>Ver todas las citas</Button></div>
            ) : (
              <div className="bg-white rounded-lg border shadow-sm">
-               <table className="w-full text-sm text-left">
+               <table className="min-w-[1100px] w-full text-sm text-left">
                  <thead className="bg-slate-50 font-medium border-b">
                    <tr>
                      <th className="px-6 py-4">Paciente</th>
                      <th className="px-6 py-4">Paquete</th>
-                     <th className="px-6 py-4">Valor x Sesión</th>
-                     <th className="px-6 py-4 text-center">Sesiones Real.</th>
+                     <th className="px-6 py-4">Valor por sesión</th>
+                     <th className="px-6 py-4 text-center">Sesiones realizadas</th>
                      <th className="px-6 py-4">Consultorio</th>
                      <th className="px-6 py-4">Fecha</th>
                      <th className="px-6 py-4">Psicólogo</th>
@@ -1092,22 +1192,21 @@ export default function CitasPage() {
                    {citas.map(cita => (
                      <tr key={cita.id} className={`hover:bg-slate-50 ${cita.realizada === true ? "bg-green-50/50" : cita.realizada === null ? "bg-slate-50/80 opacity-60" : ""}`}>
                        <td className="px-6 py-4 font-medium">
-                           {cita.cliente?.nombre || 'Paciente'} {cita.cliente?.apellido || 'Externo'}
+                           {cita.cliente ? `${cita.cliente.nombre || ''} ${cita.cliente.apellido || ''}`.trim() : 'Reserva de consultorio'}
                        </td>
-                       <td className="px-6 py-4 font-medium text-blue-600">{cita.paqueteNombre || 'N/A'}</td>
+                       <td className="px-6 py-4 font-medium text-blue-600">{cita.paqueteNombre || 'Sin información'}</td>
                        <td className="px-6 py-4 font-semibold text-slate-700">
-                          {cita.PaqueteAdquirido ? (
-                            new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(cita.PaqueteAdquirido.precioPagado / cita.PaqueteAdquirido.sesionesTotales)
-                          ) : 'N/A'}
+                          <div>{formatCurrency(getAppliedValue(cita))}</div>
+
                        </td>
                        <td className="px-6 py-4 text-center">
                           {cita.PaqueteAdquirido ? (
                             <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${getSesionesBadgeClass(cita.PaqueteAdquirido)}`}>
                                {getSesionesRealizadas(cita.PaqueteAdquirido)} / {cita.PaqueteAdquirido.sesionesTotales}
                             </span>
-                          ) : 'N/A'}
+                          ) : 'Sin información'}
                        </td>
-                       <td className="px-6 py-4">{cita.consultorioNombre || 'N/A'}</td>
+                       <td className="px-6 py-4">{cita.consultorioNombre || 'Sin información'}</td>
                        <td className="px-6 py-4">
                          {formatDateBogota(cita.fechaVisita)}
                          <div className="text-xs text-slate-500">
@@ -1131,10 +1230,11 @@ export default function CitasPage() {
                            )}
                        </td>
                        <td className="px-6 py-4">
-                           <div 
-                             className="flex flex-col gap-1 cursor-pointer hover:bg-slate-100 p-1 rounded transition-colors group relative"
+                           <button
+                             type="button"
+                             className="text-left flex flex-col gap-1 cursor-pointer hover:bg-slate-100 p-1 rounded transition-colors group relative"
                              onClick={() => handleEditPayment(cita)}
-                             title={tenantId === 4 ? "Conciliar pago y adjuntar comprobante" : "Editar estado de pago"}
+                             title="Conciliar pago y adjuntar comprobante"
                            >
                                <div className="flex items-center justify-between">
                                  <span className="text-xs text-slate-600">{cita.metodoPago || 'No especificado'}</span>
@@ -1157,12 +1257,12 @@ export default function CitasPage() {
                                        PENDIENTE
                                    </span>
                                )}
-                           </div>
+                           </button>
                        </td>
                        <td className="px-6 py-4 text-right">
                          <DropdownMenu>
                            <DropdownMenuTrigger asChild>
-                             <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+                             <Button variant="ghost" size="icon" aria-label="Acciones de la cita"><MoreHorizontal className="h-4 w-4" /></Button>
                            </DropdownMenuTrigger>
                            <DropdownMenuContent align="end">
                              <DropdownMenuItem onClick={() => handleViewCita(cita.id)}><Eye className="mr-2 h-4 w-4" /> Ver detalle</DropdownMenuItem>
@@ -1174,7 +1274,7 @@ export default function CitasPage() {
                              )}
                              {cita.realizada === true && (
                                  <DropdownMenuItem onClick={() => handleMarkAsProgramada(cita.id)} className="text-blue-600">
-                                     <RotateCcw className="mr-2 h-4 w-4" /> Volver a Pendiente
+                                     <RotateCcw className="mr-2 h-4 w-4" /> Volver a programada
                                  </DropdownMenuItem>
                              )}
                              {cita.realizada === false && (
@@ -1192,15 +1292,13 @@ export default function CitasPage() {
                                      <RotateCcw className="mr-2 h-4 w-4" /> Restaurar como Programada
                                  </DropdownMenuItem>
                              )}
-                             <DropdownMenuItem onClick={() => tenantId === 4 && process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true"
-                               ? handleEditPayment(cita) : handleTogglePago(cita.id)} className={cita.estadoPago === EstadoPagoOrden.CONCILIADO ? "text-orange-600" : "text-green-600"}>
+                             <DropdownMenuItem onClick={() => tenantId === 4 && process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true" ? handleEditPayment(cita) : handleTogglePago(cita.id)} className={cita.estadoPago === EstadoPagoOrden.CONCILIADO ? "text-orange-600" : "text-green-600"}>
                                  <CheckCircle className="mr-2 h-4 w-4" /> 
-                                 {tenantId === 4 && process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true" ? "Conciliar pago / comprobante" :
-                                   cita.estadoPago === EstadoPagoOrden.CONCILIADO ? "Marcar como Pendiente" : "Marcar como Conciliado"}
+                                 {tenantId === 4 && process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true" ? "Conciliar pago / comprobante" : cita.estadoPago === EstadoPagoOrden.CONCILIADO ? "Pago pendiente" : "Pago conciliado"}
                              </DropdownMenuItem>
                              <DropdownMenuItem onClick={() => handleCopy(cita)}><Copy className="mr-2 h-4 w-4" /> Copiar info</DropdownMenuItem>
                              <DropdownMenuItem onClick={() => {
-                                if(tenantId===4&&process.env.NEXT_PUBLIC_RECEPCION_ENABLED==='true'){handleEditPayment(cita);return;}
+                                if (tenantId === 4 && process.env.NEXT_PUBLIC_RECEPCION_ENABLED === "true") { handleEditPayment(cita); return; }
                                 setUploadingCitaId(cita.id);
                                 fileInputRef.current?.click();
                              }}>
@@ -1234,7 +1332,7 @@ export default function CitasPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Eliminar Cita</DialogTitle>
-            <DialogDescription>¿Eliminar esta cita? Si está programada, la sesión vuelve al saldo de su paquete. Las citas realizadas o con pagos, comprobantes o registros vinculados se conservan para revisión. Esta acción no se puede deshacer.</DialogDescription>
+            <DialogDescription>¿Estás seguro de eliminar esta cita? Esta acción no se puede deshacer.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDeleteModalOpen(false)}>Cancelar</Button>
@@ -1245,7 +1343,7 @@ export default function CitasPage() {
 
       {/* View Modal */}
       <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>Detalle de Cita</DialogTitle>
           </DialogHeader>
@@ -1255,19 +1353,19 @@ export default function CitasPage() {
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-b pb-4">
                  <div>
                     <span className="text-xs text-slate-500 block uppercase tracking-wider">Paciente</span>
-                    <span className="font-medium text-lg">{selectedCita.cliente?.nombre || 'N/A'} {selectedCita.cliente?.apellido || ''}</span>
+                    <span className="font-medium text-lg">{selectedCita.cliente ? `${selectedCita.cliente.nombre || ''} ${selectedCita.cliente.apellido || ''}`.trim() : 'Reserva de consultorio'}</span>
                  </div>
                  <div>
                     <span className="text-xs text-slate-500 block uppercase tracking-wider">Documento</span>
-                    <span className="font-medium">{selectedCita.cliente?.tipoDocumento} {selectedCita.cliente?.numeroDocumento || 'N/A'}</span>
+                    <span className="font-medium">{selectedCita.cliente?.tipoDocumento} {selectedCita.cliente?.numeroDocumento || 'Sin información'}</span>
                  </div>
                  <div>
                     <span className="text-xs text-slate-500 block uppercase tracking-wider">Teléfono</span>
-                    <span className="font-medium">{selectedCita.cliente?.telefono || 'N/A'}</span>
+                    <span className="font-medium">{selectedCita.cliente?.telefono || 'Sin información'}</span>
                  </div>
                  <div>
                     <span className="text-xs text-slate-500 block uppercase tracking-wider">Correo</span>
-                    <span className="font-medium">{selectedCita.cliente?.correo || 'N/A'}</span>
+                    <span className="font-medium">{selectedCita.cliente?.correo || 'Sin información'}</span>
                  </div>
                </div>
 
@@ -1279,23 +1377,20 @@ export default function CitasPage() {
                  </div>
                  <div>
                     <span className="text-xs text-slate-500 block uppercase tracking-wider">Tipo de Servicio</span>
-                    <span className="font-medium">{selectedCita.tipoServicio?.nombre || 'N/A'}</span>
+                    <span className="font-medium">{selectedCita.tipoServicio?.nombre || 'Sin información'}</span>
                  </div>
                  <div>
-                    <span className="text-xs text-slate-500 block uppercase tracking-wider">Profesional</span>
+                    <span className="text-xs text-slate-500 block uppercase tracking-wider">Psicólogo</span>
                     <span className="font-medium">{selectedCita.tecnico?.nombre || 'Sin asignar'} {selectedCita.tecnico?.apellido || ''}</span>
                  </div>
-                 <div>
-                    <span className="text-xs text-slate-500 block uppercase tracking-wider">Empresa</span>
-                    <span className="font-medium">{selectedCita.empresa?.nombre || 'N/A'}</span>
-                 </div>
+
                </div>
-               
+
                {/* Package Information if available */}
                {selectedCita.PaqueteAdquirido && (
                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 mb-4">
                        <h3 className="text-sm font-semibold text-blue-900 flex items-center gap-2 mb-2">
-                           <Package className="h-4 w-4" /> Información del Paquete
+                            <Package className="h-4 w-4" /> Referencia histórica del paquete
                        </h3>
                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                            <div>
@@ -1317,15 +1412,15 @@ export default function CitasPage() {
                                <span className="font-medium text-blue-900">{selectedCita.PaqueteAdquirido.saldoRestante}</span>
                            </div>
                            <div>
-                               <span className="text-xs text-blue-500 block uppercase tracking-wider">Valor del paquete</span>
+                               <span className="text-xs text-blue-500 block uppercase tracking-wider">Valor Pagado</span>
                                <span className="font-medium text-blue-900">
                                    {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP' }).format(selectedCita.PaqueteAdquirido.precioPagado)}
                                </span>
                            </div>
                            <div>
-                               <span className="text-xs text-blue-500 block uppercase tracking-wider">Valor x Sesión</span>
-                               <span className="font-medium text-blue-900">
-                                   {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP' }).format(selectedCita.PaqueteAdquirido.precioPagado / selectedCita.PaqueteAdquirido.sesionesTotales)}
+                                <span className="text-xs text-blue-500 block uppercase tracking-wider">Referencia unitaria</span>
+                                <span className="font-medium text-blue-900">
+                                    {formatCurrency(getPackageUnitReference(selectedCita.PaqueteAdquirido))}
                                </span>
                            </div>
                            <div>
@@ -1357,12 +1452,11 @@ export default function CitasPage() {
                     </span>
                  </div>
                  <div>
-                    <span className="text-xs text-slate-500 block uppercase tracking-wider">Valor de esta Cita</span>
-                    <span className="font-medium text-green-600">
-                        {selectedCita.valorCotizado !== null 
-                            ? new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP' }).format(selectedCita.valorCotizado) 
-                            : 'N/A'}
-                    </span>
+                     <span className="text-xs text-slate-500 block uppercase tracking-wider">Valor aplicado</span>
+                     <span className="font-medium text-green-600">
+                        {formatCurrency(getAppliedValue(selectedCita))}
+                     </span>
+
                  </div>
                </div>
 
@@ -1448,7 +1542,7 @@ export default function CitasPage() {
             </DialogDescription>
           </DialogHeader>
           {tenantId===4&&process.env.NEXT_PUBLIC_RECEPCION_ENABLED==='true'&&paymentCita?
-           <ConciliarCita key={paymentCita.id} citaId={paymentCita.id} comprobante={paymentCita.comprobantePath} onCancel={()=>setIsPaymentModalOpen(false)} onSaved={()=>{fetchCitasData();fetchAux();}}/>:
+           <ConciliarCita key={paymentCita.id} citaId={paymentCita.id} comprobante={paymentCita.comprobantePath} onCancel={()=>setIsPaymentModalOpen(false)} onSaved={()=>{refreshList();fetchAux();refreshBilling();}}/>:
           <><div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label htmlFor="metodo-pago">Método de Pago</Label>
@@ -1495,9 +1589,9 @@ export default function CitasPage() {
       <Dialog open={isExportModalOpen} onOpenChange={setIsExportModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Exportar Reporte General de Citas</DialogTitle>
+            <DialogTitle>Exportar citas de Psicólogos</DialogTitle>
             <DialogDescription>
-              Selecciona los filtros para generar el archivo Excel de todos los sistemas.
+              Elija el rango de fechas para descargar las citas de Psicólogos en Colombia.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -1521,22 +1615,7 @@ export default function CitasPage() {
                 />
               </div>
             </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="export-tenant">Sistema (Tenant)</Label>
-              <Select value={exportTenantId} onValueChange={setExportTenantId}>
-                <SelectTrigger id="export-tenant">
-                  <SelectValue placeholder="Seleccionar sistema" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los sistemas</SelectItem>
-                  {tenants.map((t) => (
-                    <SelectItem key={t.id} value={t.id.toString()}>
-                      {t.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsExportModalOpen(false)}>

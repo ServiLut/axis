@@ -197,6 +197,7 @@ export default function ReferidosPage() {
           <div className="relative w-full lg:max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
+              aria-label="Buscar referidos por nombre, teléfono, código o referente"
               placeholder="Buscar por nombre, teléfono, código o referente..."
               className="pl-10 bg-white"
               value={searchTerm}
@@ -209,6 +210,7 @@ export default function ReferidosPage() {
                 <Calendar className="h-4 w-4 text-slate-400 ml-2" />
                 <Input 
                    type="date" 
+                   aria-label="Referidos desde"
                    value={startDate}
                    onChange={(e) => setStartDate(e.target.value)}
                    className="border-0 shadow-none focus-visible:ring-0 w-[140px] text-sm"
@@ -217,13 +219,14 @@ export default function ReferidosPage() {
                 <span className="text-slate-300">-</span>
                 <Input 
                    type="date" 
+                   aria-label="Referidos hasta"
                    value={endDate}
                    onChange={(e) => setEndDate(e.target.value)}
                    className="border-0 shadow-none focus-visible:ring-0 w-[140px] text-sm"
                    placeholder="Hasta"
                 />
                 {(startDate || endDate) && (
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-600 mr-1" onClick={() => { setStartDate(""); setEndDate(""); }}>
+                  <Button type="button" aria-label="Limpiar fechas de referidos" variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-600 mr-1" onClick={() => { setStartDate(""); setEndDate(""); }}>
                      <X className="h-4 w-4" />
                   </Button>
                 )}

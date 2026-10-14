@@ -96,7 +96,7 @@ export default function BalancesPage() {
               Balance y Conciliación
             </h1>
             <p className="text-sm text-slate-600 mt-1">
-              Resumen financiero de ingresos por servicios y egresos por nómina.
+              Resumen de citas realizadas, pagos al equipo, anticipos y gastos registrados.
             </p>
           </div>
           
@@ -155,7 +155,7 @@ export default function BalancesPage() {
                         <Card className="border-emerald-100 shadow-sm">
                             <CardHeader className="flex flex-row items-center justify-between pb-2">
                                 <CardTitle className="text-sm font-medium text-emerald-600 uppercase tracking-wider">
-                                    {balance.isTenant4 ? "Servicios marcados conciliados" : "Total Ingresos"}
+                                    {balance.isTenant4 ? "Citas marcadas como conciliadas" : "Total Ingresos"}
                                 </CardTitle>
                                 <TrendingUp className="h-4 w-4 text-emerald-600" />
                             </CardHeader>
@@ -164,7 +164,7 @@ export default function BalancesPage() {
                                     ${balance.ingresos.totalRecaudado.toLocaleString("es-CO", { maximumFractionDigits: 2 })}
                                 </div>
                                 <p className="text-xs text-slate-500 mt-1 mb-3">
-                                    {balance.ingresos.cantidadServicios} servicios finalizados
+                                    {balance.ingresos.cantidadServicios} citas y reservas realizadas
                                 </p>
                                 <div className="space-y-1 pt-3 border-t border-slate-100">
                                     {balance.ingresos.desglosePorMetodo.map((item, idx) => (

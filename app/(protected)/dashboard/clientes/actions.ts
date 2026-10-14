@@ -48,12 +48,13 @@ export async function getClientes(
 
   try {
     const where: Prisma.ClienteWhereInput = {
+      tenantId: PSYCHOLOGY_TENANT_ID,
       deletedAt: null,
     };
 
     if (onlyWithNoServices) {
-      where.servicios = {
-        none: {}
+      where.CitasPsicologos = {
+        none: { tenantId: PSYCHOLOGY_TENANT_ID }
       };
     }
 
@@ -145,8 +146,8 @@ export async function getClientes(
       totalPages: Math.ceil(total / limit),
     };
   } catch (error) {
-    console.error("Error obteniendo clientes:", error);
-    return { error: "Error al cargar los clientes" };
+    console.error("Error obteniendo pacientes:", error);
+    return { error: "Error al cargar los pacientes" };
   }
 }
 
@@ -159,6 +160,7 @@ export async function getCliente(token: string, id: number) {
 
   try {
     const where: Prisma.ClienteWhereInput = {
+      tenantId: PSYCHOLOGY_TENANT_ID,
       id: id,
       deletedAt: null,
     };
@@ -172,13 +174,13 @@ export async function getCliente(token: string, id: number) {
     });
 
     if (!cliente) {
-      return { error: "Cliente no encontrado" };
+      return { error: "Paciente no encontrado" };
     }
 
     return { cliente };
   } catch (error) {
-    console.error("Error obteniendo cliente:", error);
-    return { error: "Error al cargar el cliente" };
+    console.error("Error obteniendo paciente:", error);
+    return { error: "Error al cargar el paciente" };
   }
 }
 
@@ -191,7 +193,7 @@ export async function deleteCliente(token: string, id: number) {
 
   try {
     const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
       select: { tenantId: true, rol: true },
     });
 
@@ -200,12 +202,11 @@ export async function deleteCliente(token: string, id: number) {
     }
 
     const where: Prisma.ClienteWhereInput = {
+      tenantId: PSYCHOLOGY_TENANT_ID,
       id: id,
     };
 
-    if (usuario.rol !== "SU_ADMIN") {
-      where.tenantId = usuario.tenantId;
-    }
+    where.tenantId = PSYCHOLOGY_TENANT_ID;
 
     // Primero verificamos que el cliente pertenezca al tenant
     const cliente = await prisma.cliente.findFirst({
@@ -213,7 +214,7 @@ export async function deleteCliente(token: string, id: number) {
     });
 
     if (!cliente) {
-      return { error: "Cliente no encontrado o no autorizado" };
+      return { error: "Paciente no encontrado o no autorizado" };
     }
 
     // Soft delete del cliente
@@ -228,23 +229,23 @@ export async function deleteCliente(token: string, id: number) {
       });
 
       await createAuditLog({
-        tenantId: usuario.tenantId,
+        tenantId: PSYCHOLOGY_TENANT_ID,
         usuarioId: payload.userId,
         accion: "DELETE",
         entidad: "Cliente",
         entidadId: id,
         detalles: {
-          descripcion: "Cliente eliminado (Soft Delete)",
+          descripcion: "Paciente eliminado (Soft Delete)",
           antes: cliente,
         },
         tx,
       });
     });
 
-    return { success: true, message: "Cliente eliminado exitosamente" };
+    return { success: true, message: "Paciente eliminado exitosamente" };
   } catch (error) {
-    console.error("Error eliminando cliente:", error);
-    return { error: "Error al eliminar el cliente. Verifique que no tenga órdenes de servicio asociadas." };
+    console.error("Error eliminando paciente:", error);
+    return { error: "Error al eliminar el paciente. Verifique que no tenga órdenes de servicio asociadas." };
   }
 }
 
@@ -277,12 +278,12 @@ export async function updateCliente(token: string, id: number, formData: FormDat
 
   try {
     const cliente = await prisma.cliente.findUnique({
-      where: { id },
+      where: { id, tenantId: PSYCHOLOGY_TENANT_ID },
       select: { tenantId: true }
     });
 
     if (!cliente) {
-      return { error: "Cliente no encontrado" };
+      return { error: "Paciente no encontrado" };
     }
 
     const targetTenantId = cliente.tenantId;
@@ -347,7 +348,7 @@ export async function updateCliente(token: string, id: number, formData: FormDat
         });
 
         if (existingCliente) {
-            return { error: "Ya existe otro cliente registrado con este número de teléfono." };
+            return { error: "Ya existe otro paciente registrado con este número de teléfono." };
         }
     }
 
@@ -498,21 +499,21 @@ export async function updateCliente(token: string, id: number, formData: FormDat
                 direcciones: direccionesForm,
                 vehiculos: vehiculosForm
             },
-            descripcion: "Actualización completa de cliente"
+            descripcion: "Actualización completa de paciente"
         },
         tx
       });
     });
 
     revalidatePath("/dashboard/clientes");
-    return { success: true, message: "Cliente actualizado exitosamente.", clienteId: id };
+    return { success: true, message: "Paciente actualizado exitosamente.", clienteId: id };
   } catch (error) {
-    console.error("Error actualizando cliente:", error);
+    console.error("Error actualizando paciente:", error);
     // Verificar error de FK
     if (JSON.stringify(error).includes("Foreign key constraint failed")) {
        return { error: "No se pueden eliminar direcciones que tienen órdenes de servicio asociadas." };
     }
-    return { error: "Error al actualizar el cliente." };
+    return { error: "Error al actualizar el paciente." };
   }
 }
 
@@ -525,12 +526,14 @@ export async function getClientesStats(token: string) {
 
   try {
     const whereBase = {
+      tenantId: PSYCHOLOGY_TENANT_ID,
       deletedAt: null
     };
 
     const whereCliente: Prisma.ClienteWhereInput = { ...whereBase };
     const whereDireccion: Prisma.DireccionWhereInput = {
-      cliente: { deletedAt: null }
+      tenantId: PSYCHOLOGY_TENANT_ID,
+      cliente: { tenantId: PSYCHOLOGY_TENANT_ID, deletedAt: null }
     };
 
     // Total clientes
@@ -605,40 +608,31 @@ export async function getClienteServicios(token: string, clienteId: number) {
   }
 
   try {
-    const where: Prisma.OrdenServicioWhereInput = {
-      clienteId: clienteId,
-    };
-
-    const servicios = await prisma.ordenServicio.findMany({
-      where,
+    const citas = await prisma.citasPsicologos.findMany({
+      where: {
+        tenantId: PSYCHOLOGY_TENANT_ID,
+        pacienteId: clienteId,
+        Cliente: { tenantId: PSYCHOLOGY_TENANT_ID, deletedAt: null },
+      },
       include: {
-        servicio: true,
-        estadoServicio: true,
-        tecnico: {
-          select: {
-            nombre: true,
-            apellido: true,
-          },
-        },
-        vehiculo: true,
+        Servicio_CitasPsicologos_servicioIdToServicio: { select: { nombre: true } },
+        Usuario_CitasPsicologos_psicologoIdToUsuario: { select: { nombre: true, apellido: true } },
       },
-      orderBy: {
-        createdAt: "desc",
-      },
+      orderBy: { fechaCita: "desc" },
     });
-
-    const serializedServicios = servicios.map(servicio => ({
-      ...servicio,
-      valorCotizado: servicio.valorCotizado ? servicio.valorCotizado.toNumber() : 0,
-      valorPagado: servicio.valorPagado ? servicio.valorPagado.toNumber() : 0,
-      valorRepuestos: servicio.valorRepuestos ? servicio.valorRepuestos.toNumber() : 0,
-      valorRepuestosTecnico: servicio.valorRepuestosTecnico ? servicio.valorRepuestosTecnico.toNumber() : 0,
+    const serializedServicios = citas.map((cita) => ({
+      id: Number(cita.id),
+      numeroOrden: `CITA-${cita.id}`,
+      fechaVisita: cita.fechaCita,
+      servicio: { nombre: cita.Servicio_CitasPsicologos_servicioIdToServicio?.nombre || "Cita psicológica" },
+      tecnico: cita.Usuario_CitasPsicologos_psicologoIdToUsuario,
+      estadoServicio: { nombre: cita.realizada === null ? "Cancelada" : cita.realizada ? "Realizada" : "Programada" },
     }));
 
     return { servicios: serializedServicios };
   } catch (error) {
-    console.error("Error obteniendo servicios del cliente:", error);
-    return { error: "Error al cargar los servicios del cliente" };
+    console.error("Error obteniendo servicios del paciente:", error);
+    return { error: "Error al cargar los servicios del paciente" };
   }
 }
 
@@ -656,12 +650,13 @@ export async function getAllClientesForExport(
 
   try {
     const where: Prisma.ClienteWhereInput = {
+      tenantId: PSYCHOLOGY_TENANT_ID,
       deletedAt: null,
     };
 
     if (onlyWithNoServices) {
-      where.servicios = {
-        none: {}
+      where.CitasPsicologos = {
+        none: { tenantId: PSYCHOLOGY_TENANT_ID }
       };
     }
 
@@ -736,7 +731,7 @@ export async function getAllClientesForExport(
 
     return { clientes: serializeBigInt(clientes) };
   } catch (error) {
-    console.error("Error exportando clientes:", error);
-    return { error: "Error al exportar los clientes" };
+    console.error("Error exportando pacientes:", error);
+    return { error: "Error al exportar los pacientes" };
   }
 }

@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import {bookingTimes,rentalQuote} from '../lib/booking';
 import {normalizedRental,lockAndValidateBooking} from '../lib/booking-server';
 import {loadServerModule} from './load-server-module';
+import * as psychology from '../lib/psychology';
+import * as billingSummary from '../lib/citas/billing-summary';
+import * as appointmentFilters from '../lib/citas/filters';
 
 test('each chosen minute is preserved and the operator specifies the additional charge',async()=>{
  const tx:any={terapiasPsicologos:{findFirst:async()=>({nombre:'Alquiler',cantidadSesiones:1,precioBase:18900})}};
@@ -39,6 +42,7 @@ function fixture(){
   citasPsicologos:{findFirst:async()=>state.occupied?{id:2n}:null,findUnique:async()=>state.current,count:async()=>1,create:async({data}:any)=>{state.rows.push(data);return {id:2n,...data};},update:async({data}:any)=>{state.rows.push(data);return {id:1n,...data};}},
   paqueteAdquirido:{findFirst:async()=>null,create:async()=>({id:1n}),update:async()=>({id:1n})},$transaction:async(fn:any)=>fn(tx)};
  const api:any=loadServerModule('app/(protected)/dashboard/citas/actions.ts',{
+  '@/lib/psychology':psychology,'@/lib/citas/billing-summary':billingSummary,'@/lib/citas/filters':appointmentFilters,
   '@/lib/prisma':tx,'@/lib/auth':{verifyToken:(t:string)=>t==='valid'?{userId:10}:null},'next/cache':{revalidatePath(){}},
   '@/prisma/generated/prisma/client':{Prisma:{Decimal:{isDecimal:()=>false}},Rol:{},EstadoPagoOrden:{}},
   'date-fns-tz':{fromZonedTime:(s:string)=>new Date(s+'-05:00')},'@supabase/supabase-js':{},

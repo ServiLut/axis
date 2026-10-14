@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
+import { PSYCHOLOGY_TENANT_ID } from "@/lib/constants/tenants";
 import { startOfDay, endOfDay } from "date-fns";
 
 export async function getUserRanking(token: string, startDate?: string, endDate?: string) {
@@ -10,18 +11,18 @@ export async function getUserRanking(token: string, startDate?: string, endDate?
 
   try {
     const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
       select: { tenantId: true, rol: true },
     });
 
     if (!usuario) return { error: "Usuario no encontrado" };
 
-    const baseWhere =
-      usuario.rol === "SU_ADMIN" ? {} : { tenantId: usuario.tenantId };
+    const baseWhere = { tenantId: PSYCHOLOGY_TENANT_ID };
 
     // Fetch all eligible users first
     const users = await prisma.usuario.findMany({
       where: {
+        ...baseWhere,
         rol: { in: ["ADMIN", "SU_ADMIN", "ASESOR"] },
         activo: true,
       },
@@ -97,14 +98,13 @@ export async function getUserDetails(token: string, targetUserId: number, startD
 
   try {
     const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
       select: { tenantId: true, rol: true },
     });
 
     if (!usuario) return { error: "Usuario no encontrado" };
 
-    const baseWhere =
-      usuario.rol === "SU_ADMIN" ? {} : { tenantId: usuario.tenantId };
+    const baseWhere = { tenantId: PSYCHOLOGY_TENANT_ID };
 
     const start = startDate ? startOfDay(new Date(startDate)) : new Date("2026-01-01T00:00:00");
     const end = endDate ? endOfDay(new Date(endDate)) : new Date();

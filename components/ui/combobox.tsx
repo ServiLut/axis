@@ -20,6 +20,8 @@ import {
 } from "@/components/ui/popover"
 
 interface ComboboxProps {
+  id?: string
+  "aria-label"?: string
   options: { value: string; label: string; category?: string }[]
   value?: string
   onChange: (value: string) => void
@@ -33,6 +35,8 @@ interface ComboboxProps {
 }
 
 export function Combobox({
+  id,
+  "aria-label": ariaLabel,
   options,
   value,
   onChange,
@@ -58,6 +62,9 @@ export function Combobox({
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
+          id={id}
+          type="button"
+          aria-label={ariaLabel}
           variant="outline"
           role="combobox"
           aria-expanded={open}

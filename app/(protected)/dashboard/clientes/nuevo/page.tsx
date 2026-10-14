@@ -22,7 +22,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Car,
   User,
   Mail,
   Phone,
@@ -43,6 +42,11 @@ import { normalizeClientPhone } from "@/lib/client-phone";
 
 const showClientDocumentUploads = false;
 
+const optionalValue = (value: string | null | undefined) => {
+  if (!value || ["no concretado", "noconcretado@noconcretado.com"].includes(value.trim().toLowerCase())) return "";
+  return value;
+};
+
 export default function AnadirClientePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -57,18 +61,16 @@ export default function AnadirClientePage() {
   const [isFetching, setIsFetching] = useState(
     !!fixClientId || !!migrateClientId,
   );
-  const [direcciones, setDirecciones] = useState([
-    {
-      id: Date.now(),
-      direccion: "",
-      barrio: "",
-      municipio: "",
-      piso: "",
-      bloque: "",
-      unidad: "",
-      linkMaps: "",
-    },
-  ]);
+  const [direcciones, setDirecciones] = useState<{
+    id: number;
+    direccion: string;
+    barrio: string;
+    municipio: string;
+    piso: string;
+    bloque: string;
+    unidad: string;
+    linkMaps: string;
+  }[]>([]);
   const [vehiculos, setVehiculos] = useState<
     {
       id: number;
@@ -117,7 +119,7 @@ export default function AnadirClientePage() {
       if (res.error) {
         if ("existingClientId" in res && res.existingClientId) {
           toast.warning(
-            "Este cliente ya ha sido migrado. Redirigiendo a edición...",
+            "Este paciente ya ha sido migrado. Redirigiendo a edición...",
           );
           // Redirect to the edit page of the EXISTING client to prevent duplicates
           // We use setTimeout to ensure the toast is visible before redirecting
@@ -131,15 +133,15 @@ export default function AnadirClientePage() {
         return;
       }
 
-      if (res.cliente) {
+      if ("cliente" in res && res.cliente) {
         setInitialData({
-          nombre: res.cliente.nombre || "",
-          apellido: res.cliente.apellido || "",
-          tipoDocumento: res.cliente.tipoDocumento || "",
-          numeroDocumento: res.cliente.numeroDocumento || "",
+          nombre: optionalValue(res.cliente.nombre),
+          apellido: optionalValue(res.cliente.apellido),
+          tipoDocumento: optionalValue(res.cliente.tipoDocumento),
+          numeroDocumento: optionalValue(res.cliente.numeroDocumento),
           telefono: res.cliente.telefono || "",
-          telefono2: res.cliente.telefono2 || "",
-          correo: res.cliente.correo || "",
+          telefono2: optionalValue(res.cliente.telefono2),
+          correo: optionalValue(res.cliente.correo),
         });
 
         const mergedDirecciones = [];
@@ -280,10 +282,6 @@ export default function AnadirClientePage() {
   };
 
   const eliminarDireccion = (id: number) => {
-    if (direcciones.length === 1) {
-      toast.error("Debe registrar al menos una dirección principal.");
-      return;
-    }
     setDirecciones(direcciones.filter((d) => d.id !== id));
   };
 
@@ -302,37 +300,10 @@ export default function AnadirClientePage() {
     );
   };
 
-  const agregarVehiculo = () => {
-    setVehiculos([
-      ...vehiculos,
-      {
-        id: Date.now(),
-        placa: "",
-        marca: "",
-        modelo: "",
-        color: "",
-        tipo: "",
-      },
-    ]);
-  };
-
-  const eliminarVehiculo = (id: number) => {
-    setVehiculos(vehiculos.filter((v) => v.id !== id));
-  };
-
-  const handleVehiculoChange = (id: number, field: string, value: string) => {
-    setVehiculos(
-      vehiculos.map((v) => {
-        if (v.id === id) {
-          return { ...v, [field]: value };
-        }
-        return v;
-      }),
-    );
-  };
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const scheduleAfterSave = (event.nativeEvent as SubmitEvent).submitter?.getAttribute("data-next") === "cita";
     setLoading(true);
 
     const formData = new FormData(event.currentTarget);
@@ -378,17 +349,7 @@ export default function AnadirClientePage() {
       }
     };
 
-    const numeroDocumento = formData.get("numeroDocumento") as string;
     const telefono = formData.get("telefono") as string;
-
-    // Validar que solo contengan números
-    if (numeroDocumento && !/^\d+$/.test(numeroDocumento)) {
-      toast.error(
-        "El número de documento solo debe contener números sin espacios",
-      );
-      setLoading(false);
-      return;
-    }
 
     if (tenantId === 4) {
       try {
@@ -467,12 +428,6 @@ export default function AnadirClientePage() {
       }
     }
 
-    if (direcciones.length === 0) {
-      toast.error("Debe registrar al menos una dirección principal.");
-      setLoading(false);
-      return;
-    }
-
     // Agregar las direcciones y vehiculos al FormData como un JSON string
     formData.append("direcciones", JSON.stringify(direcciones));
     formData.append("vehiculos", JSON.stringify(vehiculos));
@@ -490,12 +445,8 @@ export default function AnadirClientePage() {
       } else {
         toast.success(result.message);
         // Redirect to new service/appointment page with the client selected
-        if (result.clienteId) {
-          const redirectPath = tenantId === 4 
-            ? `/dashboard/citas/nuevo?clienteId=${result.clienteId}`
-            : `/dashboard/servicios/nuevo?clienteId=${result.clienteId}`;
-          
-          router.push(redirectPath);
+        if (result.clienteId && scheduleAfterSave) {
+          router.push(`/dashboard/citas/nuevo?clienteId=${result.clienteId}`);
         } else {
           router.push("/dashboard/clientes");
         }
@@ -524,6 +475,7 @@ export default function AnadirClientePage() {
             <Button
               variant="ghost"
               size="icon"
+              aria-label="Volver a pacientes"
               onClick={() => router.push("/dashboard/clientes")}
               className="hover:bg-slate-100"
             >
@@ -532,15 +484,15 @@ export default function AnadirClientePage() {
             <div>
               <h1 className="text-2xl font-bold text-slate-900">
                 {fixClientId
-                  ? "Actualizar Cliente (Migración)"
+                  ? "Completar datos del paciente"
                   : migrateClientId
-                    ? "Migrar Cliente desde Servilution"
-                    : "Nuevo Cliente"}
+                    ? "Importar paciente"
+                    : "Nuevo paciente"}
               </h1>
               <p className="text-sm text-slate-600 mt-0.5">
                 {fixClientId || migrateClientId
                   ? "Complete la información y verifique las direcciones recuperadas del historial"
-                  : "Complete la información para registrar un nuevo cliente"}
+                  : "Complete la información para registrar un nuevo paciente"}
               </p>
             </div>
           </div>
@@ -554,22 +506,8 @@ export default function AnadirClientePage() {
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3 shadow-sm">
             <Info className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
             <p className="text-sm text-amber-800 leading-relaxed">
-              <span className="font-semibold text-amber-900">
-                Nota importante:
-              </span>{" "}
-              Todos los campos que <span className="font-bold">no</span> estén
-              marcados con un asterisco rojo (
-              <span className="text-red-500 font-bold">*</span>) son opcionales.
-              Si decide dejarlos vacíos, el sistema los guardará automáticamente
-              con el valor{" "}
-              <span className="font-bold italic">
-                &quot;No Concretado&quot;
-              </span>{" "}
-              (o{" "}
-              <span className="font-bold italic">
-                &quot;noconcretado@noconcretado.com&quot;
-              </span>{" "}
-              para el correo) para mantener la integridad de los registros.
+              Los campos con <span className="text-red-500 font-bold">*</span> son obligatorios.
+              Puedes guardar el paciente o guardar y continuar a su cita.
             </p>
           </div>
         </div>
@@ -579,7 +517,7 @@ export default function AnadirClientePage() {
           onSubmit={handleSubmit}
           className="max-w-5xl mx-auto space-y-8"
         >
-          {/* Información Personal */}
+          {/* Datos del paciente */}
           <div className="space-y-6">
             <div className="flex items-center gap-3 pb-3 border-b-2 border-slate-200">
               <div className="p-2 bg-blue-50 rounded-lg">
@@ -587,10 +525,10 @@ export default function AnadirClientePage() {
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">
-                  Información Personal
+                  Datos del paciente
                 </h2>
                 <p className="text-sm text-slate-600">
-                  Datos básicos del cliente
+                  Datos básicos del paciente
                 </p>
               </div>
             </div>
@@ -601,7 +539,7 @@ export default function AnadirClientePage() {
                   htmlFor="nombre"
                   className="text-sm font-medium text-slate-700"
                 >
-                  Nombre
+                  Nombre (opcional)
                 </Label>
                 <Input
                   id="nombre"
@@ -617,7 +555,7 @@ export default function AnadirClientePage() {
                   htmlFor="apellido"
                   className="text-sm font-medium text-slate-700"
                 >
-                  Apellido
+                  Apellido (opcional)
                 </Label>
                 <Input
                   id="apellido"
@@ -630,7 +568,7 @@ export default function AnadirClientePage() {
             </div>
           </div>
 
-          {/* Documentación */}
+          {/* Identificación */}
           <div className="space-y-6">
             <div className="flex items-center gap-3 pb-3 border-b-2 border-slate-200">
               <div className="p-2 bg-indigo-50 rounded-lg">
@@ -638,10 +576,10 @@ export default function AnadirClientePage() {
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">
-                  Documentación
+                  Identificación
                 </h2>
                 <p className="text-sm text-slate-600">
-                  Documento de identidad del cliente
+                  Documento de identidad del paciente
                 </p>
               </div>
             </div>
@@ -652,13 +590,13 @@ export default function AnadirClientePage() {
                   htmlFor="tipoDocumento"
                   className="text-sm font-medium text-slate-700"
                 >
-                  Tipo de Documento
+                  Tipo de documento (opcional)
                 </Label>
                 <Select
                   name="tipoDocumento"
                   defaultValue={initialData?.tipoDocumento}
                 >
-                  <SelectTrigger className="h-11 w-full">
+                  <SelectTrigger id="tipoDocumento" className="h-11 w-full">
                     <SelectValue placeholder="Seleccione un tipo" />
                   </SelectTrigger>
                   <SelectContent>
@@ -676,7 +614,7 @@ export default function AnadirClientePage() {
                   htmlFor="numeroDocumento"
                   className="text-sm font-medium text-slate-700"
                 >
-                  Número de Documento
+                  Número de documento (opcional)
                 </Label>
                 <Input
                   id="numeroDocumento"
@@ -684,13 +622,6 @@ export default function AnadirClientePage() {
                   defaultValue={initialData?.numeroDocumento}
                   placeholder="Ej. 1234567890"
                   className="h-11"
-                  onInput={(e) => {
-                    e.currentTarget.value = e.currentTarget.value.replace(
-                      /\D/g,
-                      "",
-                    );
-                  }}
-                  inputMode="numeric"
                 />
               </div>
             </div>
@@ -794,7 +725,7 @@ export default function AnadirClientePage() {
             )}
           </div>
 
-          {/* Información de Contacto */}
+          {/* Contacto */}
           <div className="space-y-6">
             <div className="flex items-center gap-3 pb-3 border-b-2 border-slate-200">
               <div className="p-2 bg-green-50 rounded-lg">
@@ -802,10 +733,10 @@ export default function AnadirClientePage() {
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">
-                  Información de Contacto
+                  Contacto
                 </h2>
                 <p className="text-sm text-slate-600">
-                  Medios de comunicación con el cliente
+                  Medios de comunicación con el paciente
                 </p>
               </div>
             </div>
@@ -846,7 +777,7 @@ export default function AnadirClientePage() {
                   htmlFor="telefono2"
                   className="text-sm font-medium text-slate-700"
                 >
-                  Teléfono 2{" "}
+                  Teléfono adicional{" "}
                   <span className="text-slate-400 font-normal">(Opcional)</span>
                 </Label>
                 {tenantId === 4 ? (
@@ -876,7 +807,7 @@ export default function AnadirClientePage() {
                   htmlFor="correo"
                   className="text-sm font-medium text-slate-700"
                 >
-                  Correo Electrónico
+                  Correo electrónico (opcional)
                 </Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -885,7 +816,7 @@ export default function AnadirClientePage() {
                     name="correo"
                     type="email"
                     defaultValue={initialData?.correo}
-                    placeholder="Ej. cliente@ejemplo.com"
+                    placeholder="Ej. paciente@ejemplo.com"
                     className="h-11 pl-10"
                   />
                 </div>
@@ -902,10 +833,10 @@ export default function AnadirClientePage() {
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">
-                    Direcciones
+                    Direcciones (opcional)
                   </h2>
                   <p className="text-sm text-slate-600">
-                    Ubicaciones asociadas al cliente
+                    Agrega una dirección solo si la necesitas para el contacto.
                   </p>
                 </div>
               </div>
@@ -939,11 +870,12 @@ export default function AnadirClientePage() {
                     key={dir.id}
                     className="p-5 bg-slate-50 rounded-lg border border-slate-200 relative"
                   >
-                    {direcciones.length > 1 && (
+                    {direcciones.length > 0 && (
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon"
+                        aria-label="Eliminar dirección"
                         onClick={() => eliminarDireccion(dir.id)}
                         className="absolute top-3 right-3 text-slate-400 hover:text-red-500 hover:bg-red-50"
                       >
@@ -953,11 +885,12 @@ export default function AnadirClientePage() {
 
                     <div className="grid grid-cols-1 gap-4 mb-4">
                       <div className="space-y-2">
-                        <Label className="text-sm font-medium text-slate-700">
-                          Dirección Principal{" "}
+                        <Label htmlFor={`direccion-${dir.id}-direccion`} className="text-sm font-medium text-slate-700">
+                          Dirección{" "}
                           <span className="text-red-500">*</span>
                         </Label>
                         <Input
+                          id={`direccion-${dir.id}-direccion`}
                           value={dir.direccion}
                           onChange={(e) =>
                             handleDireccionChange(
@@ -973,10 +906,11 @@ export default function AnadirClientePage() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label className="text-sm font-medium text-slate-700">
-                          Link de Maps
+                        <Label htmlFor={`direccion-${dir.id}-linkMaps`} className="text-sm font-medium text-slate-700">
+                          Enlace de Google Maps (opcional)
                         </Label>
                         <Input
+                          id={`direccion-${dir.id}-linkMaps`}
                           value={dir.linkMaps}
                           onChange={(e) =>
                             handleDireccionChange(
@@ -1029,10 +963,11 @@ export default function AnadirClientePage() {
                       </>)}
 
                       <div className="space-y-2">
-                        <Label className="text-sm font-medium text-slate-700">
-                          Apto / Piso / Casa / Local
+                        <Label htmlFor={`direccion-${dir.id}-piso`} className="text-sm font-medium text-slate-700">
+                          Apartamento / Piso (opcional)
                         </Label>
                         <Input
+                          id={`direccion-${dir.id}-piso`}
                           value={dir.piso}
                           onChange={(e) =>
                             handleDireccionChange(
@@ -1047,10 +982,11 @@ export default function AnadirClientePage() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label className="text-sm font-medium text-slate-700">
-                          Bloque / Torre / Conjunto
+                        <Label htmlFor={`direccion-${dir.id}-bloque`} className="text-sm font-medium text-slate-700">
+                          Bloque / Torre (opcional)
                         </Label>
                         <Input
+                          id={`direccion-${dir.id}-bloque`}
                           value={dir.bloque}
                           onChange={(e) =>
                             handleDireccionChange(
@@ -1064,10 +1000,11 @@ export default function AnadirClientePage() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label className="text-sm font-medium text-slate-700">
-                          Unidad / Vereda / Edificio
+                        <Label htmlFor={`direccion-${dir.id}-unidad`} className="text-sm font-medium text-slate-700">
+                          Unidad / Edificio (opcional)
                         </Label>
                         <Input
+                          id={`direccion-${dir.id}-unidad`}
                           value={dir.unidad}
                           onChange={(e) =>
                             handleDireccionChange(
@@ -1087,158 +1024,14 @@ export default function AnadirClientePage() {
             </div>
           </div>
 
-          {/* Vehículos */}
-          {tenantId !== 4 && <div className="space-y-6">
-            <div className="flex items-center justify-between pb-3 border-b-2 border-slate-200">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-50 rounded-lg">
-                  <Car className="h-5 w-5 text-purple-600" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-900">
-                    Vehículos
-                  </h2>
-                  <p className="text-sm text-slate-600">
-                    Vehículos asociados al cliente
-                  </p>
-                </div>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={agregarVehiculo}
-                className="text-purple-600 border-purple-200 hover:bg-purple-50"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Agregar Vehículo
-              </Button>
-            </div>
-
-            <div className="space-y-4">
-              {vehiculos.map((veh) => {
-                return (
-                  <div
-                    key={veh.id}
-                    className="p-5 bg-slate-50 rounded-lg border border-slate-200 relative"
-                  >
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => eliminarVehiculo(veh.id)}
-                      className="absolute top-3 right-3 text-slate-400 hover:text-red-500 hover:bg-red-50"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium text-slate-700">
-                          Placa
-                        </Label>
-                        <Input
-                          value={veh.placa}
-                          onChange={(e) =>
-                            handleVehiculoChange(
-                              veh.id,
-                              "placa",
-                              e.target.value,
-                            )
-                          }
-                          placeholder="Ej. AAA-123"
-                          className="bg-white h-11"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium text-slate-700">
-                          Marca
-                        </Label>
-                        <Input
-                          value={veh.marca}
-                          onChange={(e) =>
-                            handleVehiculoChange(
-                              veh.id,
-                              "marca",
-                              e.target.value,
-                            )
-                          }
-                          placeholder="Ej. Chevrolet"
-                          className="bg-white h-11"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium text-slate-700">
-                          Modelo (Año)
-                        </Label>
-                        <Input
-                          value={veh.modelo}
-                          onChange={(e) =>
-                            handleVehiculoChange(
-                              veh.id,
-                              "modelo",
-                              e.target.value,
-                            )
-                          }
-                          placeholder="Ej. 2020"
-                          className="bg-white h-11"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium text-slate-700">
-                          Color
-                        </Label>
-                        <Input
-                          value={veh.color}
-                          onChange={(e) =>
-                            handleVehiculoChange(
-                              veh.id,
-                              "color",
-                              e.target.value,
-                            )
-                          }
-                          placeholder="Ej. Rojo"
-                          className="bg-white h-11"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium text-slate-700">
-                          Tipo
-                        </Label>
-                        <Input
-                          value={veh.tipo}
-                          onChange={(e) =>
-                            handleVehiculoChange(veh.id, "tipo", e.target.value)
-                          }
-                          placeholder="Ej. Automóvil"
-                          className="bg-white h-11"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-              {vehiculos.length === 0 && (
-                <div className="text-center py-8 text-slate-500 bg-slate-50 border-2 border-dashed border-slate-200 rounded-lg">
-                  No hay vehículos registrados.
-                </div>
-              )}
-            </div>
-          </div>}
-
           {/* Botones de acción */}
-          <div className="flex items-center justify-between pt-6 border-t-2 border-slate-200">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pt-6 border-t-2 border-slate-200">
             <div className="flex items-center gap-2 text-sm text-slate-600">
               <span className="text-red-500">*</span>
               <span>Campos obligatorios</span>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
               <Button
                 type="button"
                 variant="outline"
@@ -1248,8 +1041,12 @@ export default function AnadirClientePage() {
               >
                 Cancelar
               </Button>
+              <Button type="submit" variant="outline" disabled={loading}>
+                {loading ? "Guardando..." : "Guardar paciente"}
+              </Button>
               <Button
                 type="submit"
+                data-next="cita"
                 disabled={loading}
                 className="bg-blue-600 hover:bg-blue-700 min-w-[160px]"
               >
@@ -1261,7 +1058,7 @@ export default function AnadirClientePage() {
                 ) : (
                   <span className="flex items-center gap-2">
                     <Save className="h-4 w-4" />
-                    Guardar Cliente
+                    Guardar y agendar cita
                   </span>
                 )}
               </Button>

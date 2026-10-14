@@ -63,17 +63,17 @@ export default function SignUpPage() {
 
   const validateStep1 = () => {
     const newErrors: Record<string, string> = {};
-    if (!formData.username) newErrors.username = "Requerido";
-    if (!formData.email) newErrors.email = "Requerido";
+    if (!formData.username) newErrors.username = "Escribe un nombre de usuario.";
+    if (!formData.email) newErrors.email = "Escribe tu correo electrónico.";
     else if (!/\S+@\S+\.\S+/.test(formData.email))
       newErrors.email = "Correo inválido";
 
-    if (!formData.password) newErrors.password = "Requerido";
+    if (!formData.password) newErrors.password = "Escribe una contraseña.";
     else if (formData.password.length < 6)
       newErrors.password = "Mínimo 6 caracteres";
 
     if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = "No coinciden";
+      newErrors.confirmPassword = "Las contraseñas no coinciden.";
     }
 
     setErrors(newErrors);
@@ -82,12 +82,12 @@ export default function SignUpPage() {
 
   const validateStep2 = () => {
     const newErrors: Record<string, string> = {};
-    if (!formData.nombre) newErrors.nombre = "Requerido";
-    if (!formData.apellido) newErrors.apellido = "Requerido";
-    if (!formData.tipoDocumento) newErrors.tipoDocumento = "Requerido";
-    if (!formData.numeroDocumento) newErrors.numeroDocumento = "Requerido";
+    if (!formData.nombre) newErrors.nombre = "Escribe tus nombres.";
+    if (!formData.apellido) newErrors.apellido = "Escribe tus apellidos.";
+    if (!formData.tipoDocumento) newErrors.tipoDocumento = "Selecciona el tipo de documento.";
+    if (!formData.numeroDocumento) newErrors.numeroDocumento = "Escribe el número de documento.";
     if (formData.telefono && formData.telefono.length < 7)
-      newErrors.telefono = "Inválido";
+      newErrors.telefono = "Revisa el número de teléfono.";
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -112,7 +112,9 @@ export default function SignUpPage() {
         body: JSON.stringify(formData),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => {
+        throw new Error("No se pudo enviar tu solicitud. Intenta nuevamente o contacta a administración.");
+      });
 
       if (!response.ok) {
         throw new Error(data.message || "Error al registrarse");
@@ -120,7 +122,7 @@ export default function SignUpPage() {
 
       localStorage.setItem("user", JSON.stringify(data.user));
 
-      toast.success("Cuenta creada exitosamente");
+      toast.success("Solicitud enviada. Administración revisará tu acceso.");
       router.push("/verificacion");
     } catch (error) {
       const message =
@@ -160,13 +162,14 @@ export default function SignUpPage() {
             {/* Barra de Progreso */}
             <div className="flex items-center justify-between mb-2">
               <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">
-                {step === 1 ? "Crea tu cuenta" : "Datos personales"}
+                {step === 1 ? "Solicita acceso al equipo" : "Completa tus datos"}
               </h1>
               <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100 uppercase tracking-wider">
                 Paso {step} de 2
               </span>
             </div>
 
+            <p className="text-sm text-slate-500">Para el equipo de Psicólogos en Colombia. Administración revisará tu solicitud antes de habilitar el acceso.</p>
             {/* Visual Progress Bar */}
             <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden shadow-inner">
               <div
@@ -176,8 +179,8 @@ export default function SignUpPage() {
             </div>
             <p className="text-slate-500 text-[15px] pt-1">
               {step === 1
-                ? "Ingresa tus credenciales para comenzar."
-                : "Casi terminamos, necesitamos algunos detalles más."}
+                ? "Elige tu usuario, correo y contraseña."
+                : "Completa tus datos para que administración revise tu solicitud."}
             </p>
           </div>
 
@@ -197,6 +200,8 @@ export default function SignUpPage() {
                     <User className="absolute left-4 top-3.5 h-5 w-5 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
                     <Input
                       id="username"
+                      aria-invalid={!!errors.username}
+                      aria-describedby={errors.username ? "username-error" : undefined}
                       placeholder="juanperez"
                       className={`pl-12 h-12 rounded-xl bg-white border-slate-200 shadow-sm hover:border-indigo-300 focus:bg-white focus:ring-4 focus:ring-indigo-500/15 focus:border-indigo-600 transition-all text-[15px] font-medium text-slate-900 ${errors.username ? "border-red-500 focus:ring-red-500/15 focus:border-red-500" : ""}`}
                       value={formData.username}
@@ -204,7 +209,7 @@ export default function SignUpPage() {
                     />
                   </div>
                   {errors.username && (
-                    <p className="text-sm text-red-500 mt-1 font-medium">
+                    <p id="username-error" role="alert" className="text-sm text-red-500 mt-1 font-medium">
                       {errors.username}
                     </p>
                   )}
@@ -222,6 +227,8 @@ export default function SignUpPage() {
                     <Mail className="absolute left-4 top-3.5 h-5 w-5 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
                     <Input
                       id="email"
+                      aria-invalid={!!errors.email}
+                      aria-describedby={errors.email ? "email-error" : undefined}
                       type="email"
                       placeholder="juan@ejemplo.com"
                       className={`pl-12 h-12 rounded-xl bg-white border-slate-200 shadow-sm hover:border-indigo-300 focus:bg-white focus:ring-4 focus:ring-indigo-500/15 focus:border-indigo-600 transition-all text-[15px] font-medium text-slate-900 ${errors.email ? "border-red-500 focus:ring-red-500/15 focus:border-red-500" : ""}`}
@@ -230,7 +237,7 @@ export default function SignUpPage() {
                     />
                   </div>
                   {errors.email && (
-                    <p className="text-sm text-red-500 mt-1 font-medium">
+                    <p id="email-error" role="alert" className="text-sm text-red-500 mt-1 font-medium">
                       {errors.email}
                     </p>
                   )}
@@ -249,6 +256,8 @@ export default function SignUpPage() {
                       <Lock className="absolute left-4 top-3.5 h-5 w-5 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
                       <Input
                         id="password"
+                      aria-invalid={!!errors.password}
+                      aria-describedby={errors.password ? "password-error" : undefined}
                         type={showPassword ? "text" : "password"}
                         placeholder="••••••••"
                         className={`pl-12 pr-12 h-12 rounded-xl bg-white border-slate-200 shadow-sm hover:border-indigo-300 focus:bg-white focus:ring-4 focus:ring-indigo-500/15 focus:border-indigo-600 transition-all tracking-widest text-[15px] font-medium text-slate-900 ${errors.password ? "border-red-500 focus:ring-red-500/15 focus:border-red-500" : ""}`}
@@ -257,6 +266,8 @@ export default function SignUpPage() {
                       />
                       <button
                         type="button"
+                        aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                        aria-pressed={showPassword}
                         onClick={() => setShowPassword(!showPassword)}
                         className="absolute right-4 top-3.5 text-slate-400 hover:text-indigo-600 focus:outline-none transition-colors"
                       >
@@ -268,7 +279,7 @@ export default function SignUpPage() {
                       </button>
                     </div>
                     {errors.password && (
-                      <p className="text-sm text-red-500 mt-1 font-medium">
+                      <p id="password-error" role="alert" className="text-sm text-red-500 mt-1 font-medium">
                         {errors.password}
                       </p>
                     )}
@@ -284,6 +295,8 @@ export default function SignUpPage() {
                       <Lock className="absolute left-4 top-3.5 h-5 w-5 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
                       <Input
                         id="confirmPassword"
+                      aria-invalid={!!errors.confirmPassword}
+                      aria-describedby={errors.confirmPassword ? "confirmPassword-error" : undefined}
                         type={showConfirmPassword ? "text" : "password"}
                         placeholder="••••••••"
                         className={`pl-12 pr-12 h-12 rounded-xl bg-white border-slate-200 shadow-sm hover:border-indigo-300 focus:bg-white focus:ring-4 focus:ring-indigo-500/15 focus:border-indigo-600 transition-all tracking-widest text-[15px] font-medium text-slate-900 ${errors.confirmPassword ? "border-red-500 focus:ring-red-500/15 focus:border-red-500" : ""}`}
@@ -292,6 +305,8 @@ export default function SignUpPage() {
                       />
                       <button
                         type="button"
+                        aria-label={showConfirmPassword ? "Ocultar confirmación de contraseña" : "Mostrar confirmación de contraseña"}
+                        aria-pressed={showConfirmPassword}
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                         className="absolute right-4 top-3.5 text-slate-400 hover:text-indigo-600 focus:outline-none transition-colors"
                       >
@@ -303,7 +318,7 @@ export default function SignUpPage() {
                       </button>
                     </div>
                     {errors.confirmPassword && (
-                      <p className="text-sm text-red-500 mt-1 font-medium">
+                      <p id="confirmPassword-error" role="alert" className="text-sm text-red-500 mt-1 font-medium">
                         {errors.confirmPassword}
                       </p>
                     )}
@@ -345,13 +360,15 @@ export default function SignUpPage() {
                   </Label>
                   <Input
                     id="nombre"
+                      aria-invalid={!!errors.nombre}
+                      aria-describedby={errors.nombre ? "nombre-error" : undefined}
                     placeholder="Juan"
                     className={`h-12 rounded-xl bg-white border-slate-200 shadow-sm hover:border-indigo-300 focus:bg-white focus:ring-4 focus:ring-indigo-500/15 focus:border-indigo-600 transition-all text-[15px] font-medium text-slate-900 ${errors.nombre ? "border-red-500 focus:ring-red-500/15 focus:border-red-500" : ""}`}
                     value={formData.nombre}
                     onChange={handleInputChange}
                   />
                   {errors.nombre && (
-                    <p className="text-sm text-red-500 mt-1 font-medium">
+                    <p id="nombre-error" role="alert" className="text-sm text-red-500 mt-1 font-medium">
                       {errors.nombre}
                     </p>
                   )}
@@ -365,13 +382,15 @@ export default function SignUpPage() {
                   </Label>
                   <Input
                     id="apellido"
+                      aria-invalid={!!errors.apellido}
+                      aria-describedby={errors.apellido ? "apellido-error" : undefined}
                     placeholder="Pérez"
                     className={`h-12 rounded-xl bg-white border-slate-200 shadow-sm hover:border-indigo-300 focus:bg-white focus:ring-4 focus:ring-indigo-500/15 focus:border-indigo-600 transition-all text-[15px] font-medium text-slate-900 ${errors.apellido ? "border-red-500 focus:ring-red-500/15 focus:border-red-500" : ""}`}
                     value={formData.apellido}
                     onChange={handleInputChange}
                   />
                   {errors.apellido && (
-                    <p className="text-sm text-red-500 mt-1 font-medium">
+                    <p id="apellido-error" role="alert" className="text-sm text-red-500 mt-1 font-medium">
                       {errors.apellido}
                     </p>
                   )}
@@ -390,6 +409,9 @@ export default function SignUpPage() {
                   value={formData.tipoDocumento}
                 >
                   <SelectTrigger
+                    id="tipoDocumento"
+                    aria-invalid={!!errors.tipoDocumento}
+                    aria-describedby={errors.tipoDocumento ? "tipoDocumento-error" : undefined}
                     className={`w-full h-12 rounded-xl bg-white border-slate-200 shadow-sm hover:border-indigo-300 focus:ring-4 focus:ring-indigo-500/15 focus:border-indigo-600 transition-all text-[15px] font-medium text-slate-900 ${errors.tipoDocumento ? "border-red-500 focus:ring-red-500/15 focus:border-red-500" : ""}`}
                   >
                     <SelectValue placeholder="Seleccionar tipo" />
@@ -402,7 +424,7 @@ export default function SignUpPage() {
                   </SelectContent>
                 </Select>
                 {errors.tipoDocumento && (
-                  <p className="text-sm text-red-500 mt-1 font-medium">
+                  <p id="tipoDocumento-error" role="alert" className="text-sm text-red-500 mt-1 font-medium">
                     {errors.tipoDocumento}
                   </p>
                 )}
@@ -420,6 +442,8 @@ export default function SignUpPage() {
                   <CreditCard className="absolute left-4 top-3.5 h-5 w-5 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
                   <Input
                     id="numeroDocumento"
+                      aria-invalid={!!errors.numeroDocumento}
+                      aria-describedby={errors.numeroDocumento ? "numeroDocumento-error" : undefined}
                     placeholder="1234567890"
                     className={`pl-12 h-12 rounded-xl bg-white border-slate-200 shadow-sm hover:border-indigo-300 focus:bg-white focus:ring-4 focus:ring-indigo-500/15 focus:border-indigo-600 transition-all text-[15px] font-medium text-slate-900 ${errors.numeroDocumento ? "border-red-500 focus:ring-red-500/15 focus:border-red-500" : ""}`}
                     value={formData.numeroDocumento}
@@ -427,7 +451,7 @@ export default function SignUpPage() {
                   />
                 </div>
                 {errors.numeroDocumento && (
-                  <p className="text-sm text-red-500 mt-1 font-medium">
+                  <p id="numeroDocumento-error" role="alert" className="text-sm text-red-500 mt-1 font-medium">
                     {errors.numeroDocumento}
                   </p>
                 )}
@@ -444,6 +468,8 @@ export default function SignUpPage() {
                   <Phone className="absolute left-4 top-3.5 h-5 w-5 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
                   <Input
                     id="telefono"
+                      aria-invalid={!!errors.telefono}
+                      aria-describedby={errors.telefono ? "telefono-error" : undefined}
                     placeholder="+57 300 123 4567"
                     className={`pl-12 h-12 rounded-xl bg-white border-slate-200 shadow-sm hover:border-indigo-300 focus:bg-white focus:ring-4 focus:ring-indigo-500/15 focus:border-indigo-600 transition-all text-[15px] font-medium text-slate-900 ${errors.telefono ? "border-red-500 focus:ring-red-500/15 focus:border-red-500" : ""}`}
                     value={formData.telefono}
@@ -451,7 +477,7 @@ export default function SignUpPage() {
                   />
                 </div>
                 {errors.telefono && (
-                  <p className="text-sm text-red-500 mt-1 font-medium">
+                  <p id="telefono-error" role="alert" className="text-sm text-red-500 mt-1 font-medium">
                     {errors.telefono}
                   </p>
                 )}
@@ -474,11 +500,11 @@ export default function SignUpPage() {
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-5 w-5 animate-spin" />{" "}
-                      Registrando...
+                      Enviando solicitud...
                     </>
                   ) : (
                     <>
-                      Finalizar Registro{" "}
+                      Enviar solicitud{" "}
                       <CheckCircle2 className="ml-2 h-5 w-5" />
                     </>
                   )}
@@ -514,25 +540,25 @@ export default function SignUpPage() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-300"></span>
             </span>
-            Únete a más de 10,000 usuarios
+            Psicólogos en Colombia
           </div>
           <h2 className="text-4xl xl:text-5xl font-bold tracking-tight leading-tight text-white drop-shadow-lg">
-            Comienza tu viaje <br />
+            Un espacio para <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-purple-300">
-              con nosotros hoy.
+              nuestro equipo.
             </span>
           </h2>
           <p className="text-lg text-indigo-100/80 max-w-md leading-relaxed font-light">
-            Crea una cuenta en segundos y accede a herramientas exclusivas
-            diseñadas para potenciar tu productividad y gestión.
+            Registra tus datos para solicitar acceso. Una vez aprobada tu cuenta,
+            podrás utilizar las herramientas correspondientes a tu rol.
           </p>
 
           {/* Feature List Premium */}
           <ul className="space-y-5 pt-6">
             {[
-              "Acceso ilimitado al panel de control",
-              "Soporte prioritario 24/7",
-              "Seguridad de datos nivel empresarial",
+              "Agenda de citas y consultorios",
+              "Pacientes y equipo de atención",
+              "Acceso según las funciones de tu rol",
             ].map((item, i) => (
               <li
                 key={i}

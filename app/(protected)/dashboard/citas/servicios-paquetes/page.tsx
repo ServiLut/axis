@@ -91,15 +91,13 @@ const formatCurrency = (value: number | null | undefined) =>
 export default function TerapiasTratamientosPage() {
   const router = useRouter();
   const { role, tenantId, loading: roleLoading } = useUserRole();
-  const isSuperAdmin = role === "SU_ADMIN";
   const canManage = role === "ADMIN" || role === "SU_ADMIN";
 
   const [loading, setLoading] = useState(true);
   const [options, setOptions] = useState<OptionsState>(emptyOptions);
   const [terapias, setTerapias] = useState<TerapiaRow[]>([]);
-  const [tenantFilter, setTenantFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
-  const [categoriaFilter, setCategoriaFilter] = useState("all");
+  const [categoriaFilter, setCategoríaFilter] = useState("all");
   const [estadoFilter, setEstadoFilter] = useState("all");
   const [debouncedSearchTerm] = useDebounce(searchTerm, 400);
 
@@ -120,8 +118,7 @@ export default function TerapiasTratamientosPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const selectedTenantForOptions =
-    tenantFilter !== "all" ? tenantFilter : tenantId?.toString() || "";
+  const selectedTenantForOptions = tenantId?.toString() || "";
 
   const defaultTenantId = () =>
     options.currentTenantId?.toString() || tenantId?.toString() || "";
@@ -167,7 +164,7 @@ export default function TerapiasTratamientosPage() {
       getTerapiasPsicologos(token, {
         term: debouncedSearchTerm,
         estado: estadoFilter,
-        tenantId: tenantFilter,
+        tenantId: selectedTenantForOptions,
       }),
       getManagementOptions(token, selectedTenantForOptions),
     ]);
@@ -194,7 +191,6 @@ export default function TerapiasTratamientosPage() {
     estadoFilter,
     router,
     selectedTenantForOptions,
-    tenantFilter,
   ]);
 
   const refreshOptionsForTenant = useCallback(
@@ -244,7 +240,7 @@ export default function TerapiasTratamientosPage() {
 
   const handleOpenModal = (
     terapia?: TerapiaRow,
-    defaultCategoria: "Terapia" | "Tratamiento" = "Terapia",
+    defaultCategoría: "Terapia" | "Tratamiento" = "Terapia",
   ) => {
     if (terapia) {
       setEditingTerapia(terapia);
@@ -252,7 +248,7 @@ export default function TerapiasTratamientosPage() {
         tenantId: terapia.tenantId.toString(),
         nombre: terapia.nombre,
         descripcion: terapia.descripcion || "",
-        categoria: terapia.categoria || defaultCategoria,
+        categoria: terapia.categoria || defaultCategoría,
         cantidadSesiones: terapia.cantidadSesiones.toString(),
         precioBase: terapia.precioBase.toString(),
         empresaId: terapia.empresaId?.toString() || "none",
@@ -266,7 +262,7 @@ export default function TerapiasTratamientosPage() {
         tenantId: tenant,
         nombre: "",
         descripcion: "",
-        categoria: defaultCategoria,
+        categoria: defaultCategoría,
         cantidadSesiones: "1",
         precioBase: "0",
         empresaId: "none",
@@ -276,15 +272,6 @@ export default function TerapiasTratamientosPage() {
     }
 
     setIsModalOpen(true);
-  };
-
-  const handleTenantChange = (value: string) => {
-    setFormData((current) => ({
-      ...current,
-      tenantId: value,
-      empresaId: "none",
-    }));
-    refreshOptionsForTenant(value);
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -355,11 +342,11 @@ export default function TerapiasTratamientosPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex-none border-b border-slate-200 bg-white px-8 py-6">
+      <div className="flex-none border-b border-slate-200 bg-white px-4 sm:px-8 py-6">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">
-              Terapias y Tratamientos
+              Servicios y paquetes
             </h1>
             <p className="mt-1 text-sm text-slate-600">
               Gestiona las terapias y tratamientos del centro psicológico,
@@ -376,7 +363,7 @@ export default function TerapiasTratamientosPage() {
               onClick={() => handleOpenModal(undefined, "Terapia")}
             >
               <Plus className="mr-2 h-4 w-4" />
-              Nueva Terapia
+              Nuevo servicio
             </Button>
             <Button
               type="button"
@@ -384,27 +371,27 @@ export default function TerapiasTratamientosPage() {
               onClick={() => handleOpenModal(undefined, "Tratamiento")}
             >
               <Plus className="mr-2 h-4 w-4" />
-              Nuevo Tratamiento
+              Nuevo tratamiento
             </Button>
           </div>
         </div>
       </div>
 
-      <div className="flex-none border-b border-slate-200 bg-slate-50 px-8 py-4">
+      <div className="flex-none border-b border-slate-200 bg-slate-50 px-4 sm:px-8 py-4">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="relative w-full md:max-w-md">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <Input
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Buscar por nombre o categoría..."
+              aria-label="Buscar servicio" placeholder="Nombre del servicio o categoría"
               className="bg-white pl-10"
             />
           </div>
           <div className="flex flex-col gap-3 md:flex-row">
             <Select
               value={categoriaSeleccionada}
-              onValueChange={setCategoriaFilter}
+              onValueChange={setCategoríaFilter}
             >
               <SelectTrigger className="w-full bg-white md:w-56">
                 <SelectValue placeholder="Categoría" />
@@ -428,26 +415,12 @@ export default function TerapiasTratamientosPage() {
                 <SelectItem value="inactive">Inactivos</SelectItem>
               </SelectContent>
             </Select>
-            {isSuperAdmin && (
-              <Select value={tenantFilter} onValueChange={setTenantFilter}>
-                <SelectTrigger className="w-full bg-white md:w-64">
-                  <SelectValue placeholder="Sistema" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los sistemas</SelectItem>
-                  {options.tenants.map((tenant) => (
-                    <SelectItem key={tenant.id} value={tenant.id.toString()}>
-                      {tenant.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+
           </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto bg-slate-50 px-8 py-6">
+      <div className="flex-1 overflow-auto bg-slate-50 px-4 sm:px-8 py-6">
         <div className="mx-auto max-w-7xl">
           <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
             {loading ? (
@@ -469,11 +442,11 @@ export default function TerapiasTratamientosPage() {
                 <thead className="border-b border-slate-200 bg-slate-50 text-slate-700">
                   <tr>
                     <th className="px-5 py-3">Nombre</th>
-                    <th className="px-5 py-3">Categoria</th>
+                    <th className="px-5 py-3">Categoría</th>
                     <th className="px-5 py-3 text-center">
                       Cantidad de Sesiones
                     </th>
-                    <th className="px-5 py-3">Precio Base</th>
+                    <th className="px-5 py-3">Precio total (COP)</th>
                     <th className="px-5 py-3">Estado</th>
                     <th className="px-5 py-3 text-right">Acciones</th>
                   </tr>
@@ -485,16 +458,7 @@ export default function TerapiasTratamientosPage() {
                         <div className="font-medium text-slate-900">
                           {terapia.nombre}
                         </div>
-                        {isSuperAdmin &&
-                          terapia.Empresa_TerapiasPsicologos_tenantIdToEmpresa && (
-                            <div className="mt-1 text-xs text-slate-500">
-                              {
-                                terapia
-                                  .Empresa_TerapiasPsicologos_tenantIdToEmpresa
-                                  .nombre
-                              }
-                            </div>
-                          )}
+
                       </td>
                       <td className="px-5 py-4 text-slate-700">
                         {terapia.categoria || "Sin categoría"}
@@ -566,39 +530,19 @@ export default function TerapiasTratamientosPage() {
           <DialogHeader>
             <DialogTitle>
               {editingTerapia
-                ? "Editar Terapia o Tratamiento"
-                : "Nueva Terapia o Tratamiento"}
+                ? "Editar servicio"
+                : "Nuevo servicio o Tratamiento"}
             </DialogTitle>
             <DialogDescription>
-              Estos campos se guardan en la tabla TerapiasPsicologos.
+              Defina un nombre fácil de identificar, las sesiones incluidas y el precio total del servicio.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {isSuperAdmin && (
-              <div className="space-y-2">
-                <Label>Sistema</Label>
-                <Select
-                  value={formData.tenantId}
-                  onValueChange={handleTenantChange}
-                  disabled={Boolean(editingTerapia)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar sistema" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {options.tenants.map((tenant) => (
-                      <SelectItem key={tenant.id} value={tenant.id.toString()}>
-                        {tenant.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="nombre">Nombre</Label>
+                <Label htmlFor="nombre">Nombre del servicio *</Label>
                 <Input
                   id="nombre"
                   value={formData.nombre}
@@ -612,7 +556,7 @@ export default function TerapiasTratamientosPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="categoria">Categoria</Label>
+                <Label htmlFor="categoria">Categoría</Label>
                 <Input
                   id="categoria"
                   value={formData.categoria}
@@ -626,7 +570,7 @@ export default function TerapiasTratamientosPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="cantidadSesiones">Cantidad Sesiones</Label>
+                <Label htmlFor="cantidadSesiones">Sesiones incluidas</Label>
                 <Input
                   id="cantidadSesiones"
                   type="number"
@@ -642,7 +586,7 @@ export default function TerapiasTratamientosPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="precioBase">Precio Base</Label>
+                <Label htmlFor="precioBase">Precio total (COP)</Label>
                 <Input
                   id="precioBase"
                   type="number"
@@ -702,7 +646,7 @@ export default function TerapiasTratamientosPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="descripcion">Descripción</Label>
+              <Label htmlFor="descripcion">Descripción (opcional)</Label>
               <Textarea
                 id="descripcion"
                 value={formData.descripcion}
@@ -726,7 +670,7 @@ export default function TerapiasTratamientosPage() {
                 Cancelar
               </Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Guardando..." : "Guardar"}
+                {isSubmitting ? "Guardando..." : "Guardar servicio"}
               </Button>
             </DialogFooter>
           </form>

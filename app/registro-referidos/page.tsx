@@ -95,7 +95,7 @@ function RegistrationForm() {
           </div>
           <h2 className="text-2xl font-bold text-slate-900">¡Registro Exitoso!</h2>
           <p className="text-slate-600 max-w-xs">
-            Gracias por registrarte. Pronto nos pondremos en contacto contigo.
+            Recibimos tus datos. El equipo de Psicólogos en Colombia podrá contactarte para continuar.
           </p>
         </CardContent>
       </Card>
@@ -105,9 +105,9 @@ function RegistrationForm() {
   return (
     <Card className="w-full max-w-md shadow-xl">
       <CardHeader className="space-y-1">
-        <CardTitle className="text-2xl font-bold text-center">Registro de Referido</CardTitle>
+        <CardTitle className="text-2xl font-bold text-center">Psicólogos en Colombia</CardTitle>
         <CardDescription className="text-center">
-          Ingresa tus datos para completar el registro
+          Ingresa tu código de referido y tus datos para solicitar información. Este registro no confirma una cita.
         </CardDescription>
       </CardHeader>
       <CardContent>

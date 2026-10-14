@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
+import { PSYCHOLOGY_TENANT_ID } from "@/lib/psychology";
 import { createAuditLog } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
 import { EstadoPaquete, Prisma, Rol } from "@/prisma/generated/prisma/client";
@@ -41,10 +42,10 @@ const getAdminUser = async (token: string): Promise<AdminContext> => {
 
   const usuario = await prisma.usuario.findUnique({
     where: { id: payload.userId },
-    select: { id: true, tenantId: true, rol: true, activo: true },
+    select: { id: true, tenantId: true, rol: true, activo: true, aprobado: true },
   });
 
-  if (!usuario || !usuario.rol || !usuario.activo) return { error: "Usuario no encontrado o inactivo" };
+  if (!usuario || !usuario.rol || !usuario.activo || !usuario.aprobado || usuario.tenantId !== PSYCHOLOGY_TENANT_ID) return { error: "Usuario no encontrado o inactivo" };
   if (!ADMIN_ROLES.includes(usuario.rol)) {
     return { error: "Acceso denegado" };
   }
@@ -95,34 +96,16 @@ const parseEstadoPaquete = (value: string) => {
     : EstadoPaquete.ACTIVO;
 };
 
-const tenantWhere = (
-  user: AdminUser,
-  requestedTenantId?: string,
-): { tenantId?: number } => {
-  if (user.rol !== Rol.SU_ADMIN) {
-    return { tenantId: user.tenantId };
+const tenantWhere = (user: AdminUser, requestedTenantId?: string): { tenantId: number } => {
+  const requested = parseOptionalInt(requestedTenantId || "");
+  if (user.tenantId !== PSYCHOLOGY_TENANT_ID || (requested !== null && requested !== PSYCHOLOGY_TENANT_ID)) {
+    throw new Error("Los servicios y paquetes deben pertenecer a Psicólogos.");
   }
-
-  const parsedTenantId = parseOptionalInt(requestedTenantId || "");
-  return parsedTenantId ? { tenantId: parsedTenantId } : {};
+  return { tenantId: PSYCHOLOGY_TENANT_ID };
 };
 
-const terapiasCatalogWhere = (
-  user: AdminUser,
-  requestedTenantId?: string,
-): { tenantId?: number } => {
-  if (user.rol === Rol.SU_ADMIN) {
-    const parsedTenantId = parseOptionalInt(requestedTenantId || "");
-    return parsedTenantId ? { tenantId: parsedTenantId } : {};
-  }
-
-  return { tenantId: user.tenantId };
-};
-
-const writableTenantId = (user: AdminUser, requestedTenantId: string) => {
-  if (user.rol !== Rol.SU_ADMIN) return user.tenantId;
-  return parseOptionalInt(requestedTenantId) || user.tenantId;
-};
+const terapiasCatalogWhere = tenantWhere;
+const writableTenantId = (user: AdminUser, requestedTenantId: string) => tenantWhere(user, requestedTenantId).tenantId;
 
 const getOwnedTerapia = async (
   id: number,
@@ -132,9 +115,7 @@ const getOwnedTerapia = async (
   return prisma.terapiasPsicologos.findFirst({
     where: {
       id: BigInt(id),
-      ...(user.rol === Rol.SU_ADMIN && targetTenantId
-        ? { tenantId: targetTenantId }
-        : tenantWhere(user)),
+      ...tenantWhere(user, targetTenantId?.toString()),
     },
   });
 };
@@ -147,9 +128,7 @@ const getOwnedPaquete = async (
   return prisma.paqueteAdquirido.findFirst({
     where: {
       id: BigInt(id),
-      ...(user.rol === Rol.SU_ADMIN && targetTenantId
-        ? { tenantId: targetTenantId }
-        : tenantWhere(user)),
+      ...tenantWhere(user, targetTenantId?.toString()),
     },
   });
 };
@@ -189,14 +168,11 @@ export async function getManagementOptions(token: string, tenantId?: string) {
   if ("error" in context) return context;
 
   try {
-    const targetTenantId =
-      context.user.rol === Rol.SU_ADMIN
-        ? parseOptionalInt(tenantId || "") || context.user.tenantId
-        : context.user.tenantId;
+    const targetTenantId = writableTenantId(context.user, tenantId || "");
 
     const [empresas, terapias, psicologos, tenants] = await Promise.all([
       prisma.empresa.findMany({
-        where: { tenantId: targetTenantId },
+        where: { tenantId: targetTenantId, estado: true },
         select: { id: true, nombre: true },
         orderBy: { nombre: "asc" },
       }),
@@ -221,6 +197,7 @@ export async function getManagementOptions(token: string, tenantId?: string) {
       }),
       context.user.rol === Rol.SU_ADMIN
         ? prisma.tenant.findMany({
+            where: { id: PSYCHOLOGY_TENANT_ID },
             select: { id: true, nombre: true },
             orderBy: { id: "asc" },
           })

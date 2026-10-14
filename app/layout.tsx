@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Axis",
-  description: "Sistema de gestión para servicios profesional.",
+  title: "Axis | Psicólogos en Colombia",
+  description: "Agenda, pacientes, consultorios y pagos de Psicólogos en Colombia.",
 };
 
 import { Toaster } from "@/components/ui/sonner";
@@ -26,7 +26,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="es">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning

@@ -13,6 +13,9 @@ import { lockAndValidateBooking, normalizedRental } from "@/lib/booking-server";
 import { cajaAmountInCents } from "@/lib/caja";
 import { getPackagePaymentState } from "@/lib/package-payment";
 import { deletePsychologyAppointment } from "@/lib/psychology-appointment-delete";
+import { PSYCHOLOGY_TENANT_ID } from "@/lib/psychology";
+import { aggregateCitasBillingSummary, type CitasBillingSummary } from "@/lib/citas/billing-summary";
+import { buildCitasWhere, type CitasFilters, type EstadoCitaFilter } from "@/lib/citas/filters";
 
 // Helper to serialize BigInt and Decimal
 const serializeBigInt = (obj: unknown): unknown => {
@@ -186,25 +189,11 @@ type CitaSerialized = {
   paqueteNombre?: string | null;
 };
 
-// Estado que llega desde el filtro de la UI; se traduce al campo nullable `realizada`.
-type EstadoCitaFilter = "all" | "programada" | "realizada" | "cancelada";
-
 export async function getCitas(
   token: string,
   page: number = 1,
   limit: number = 10,
-  filters: {
-    term?: string;
-    empresaId?: string;
-    psicologoId?: string; // equivalent to tecnicoId
-    consultorioId?: string;
-    paqueteId?: string; // actually terapiaId (catalogoId)
-    estadoCita?: EstadoCitaFilter;
-    estadoPago?: EstadoPagoOrden | "all";
-    startDate?: string;
-    endDate?: string;
-    tenantId?: string;
-  } = {}
+  filters: CitasFilters = {}
 ) {
   const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
@@ -216,107 +205,8 @@ export async function getCitas(
     });
     if (!usuario) return { error: "Usuario no encontrado" };
 
-    const where: Prisma.CitasPsicologosWhereInput = {};
-    const appendAndFilter = (filter: Prisma.CitasPsicologosWhereInput) => {
-      const currentAnd = where.AND;
-      where.AND = currentAnd
-        ? Array.isArray(currentAnd)
-          ? [...currentAnd, filter]
-          : [currentAnd, filter]
-        : [filter];
-    };
-
-    if (usuario.rol === Rol.SU_ADMIN && usuario.tenantId !== 4) {
-        if (filters.tenantId && filters.tenantId !== "all") {
-            where.tenantId = Number(filters.tenantId);
-        }
-    } else {
-        where.tenantId = usuario.tenantId;
-    }
-
-    // Search filter
-    if (filters.term) {
-      const term = filters.term;
-      const searchWords = term.split(/\s+/).filter(word => word.length > 0);
-      const isNumeric = /^\d+$/.test(term);
-
-      where.OR = [
-        {
-          Cliente: {
-            AND: searchWords.map(word => ({
-              OR: [
-                { nombre: { contains: word, mode: "insensitive" } },
-                { apellido: { contains: word, mode: "insensitive" } },
-              ]
-            }))
-          }
-        },
-        { Cliente: { numeroDocumento: { contains: term, mode: "insensitive" } } },
-        { Cliente: { telefono: { contains: term, mode: "insensitive" } } },
-      ];
-
-      if (isNumeric) {
-        where.OR.push({ id: BigInt(term) });
-      }
-    }
-
-    if (filters.empresaId && filters.empresaId !== "all") {
-      where.empresaId = Number(filters.empresaId);
-    }
-
-    if (filters.psicologoId && filters.psicologoId !== "all") {
-      where.psicologoId = Number(filters.psicologoId);
-    }
-
-    if (filters.consultorioId && filters.consultorioId !== "all") {
-        where.consultorioId = BigInt(filters.consultorioId);
-    }
-
-    if (filters.paqueteId && filters.paqueteId !== "all") {
-        // Filter by the type of therapy (catalogoId) in the acquired package
-        where.PaqueteAdquirido = { catalogoId: BigInt(filters.paqueteId) };
-    }
-
-    // La tabla guarda el estado en `realizada`: false = programada, true = realizada,
-    // null = cancelada. Por eso el filtro no necesita una columna nueva.
-    if (filters.estadoCita && filters.estadoCita !== "all") {
-      if (filters.estadoCita === "programada") {
-        where.realizada = false;
-      } else if (filters.estadoCita === "realizada") {
-        where.realizada = true;
-      } else if (filters.estadoCita === "cancelada") {
-        where.realizada = null;
-      }
-    }
-
-    if (
-      filters.estadoPago &&
-      filters.estadoPago !== "all" &&
-      Object.values(EstadoPagoOrden).includes(filters.estadoPago)
-    ) {
-      if (filters.estadoPago === EstadoPagoOrden.PENDIENTE) {
-        appendAndFilter({
-          OR: [
-            { estadoPago: EstadoPagoOrden.PENDIENTE },
-            { estadoPago: null },
-          ],
-        });
-      } else {
-        appendAndFilter({ estadoPago: filters.estadoPago });
-      }
-    }
-
-    // Date Filter
-    if (filters.startDate || filters.endDate) {
-      where.fechaCita = {};
-      const TIMEZONE = "America/Bogota";
-      if (filters.startDate) {
-        where.fechaCita.gte = fromZonedTime(`${filters.startDate}T00:00:00`, TIMEZONE);
-      }
-      if (filters.endDate) {
-        where.fechaCita.lte = fromZonedTime(`${filters.endDate}T23:59:59.999`, TIMEZONE);
-      }
-    }
+    if (usuario.tenantId !== PSYCHOLOGY_TENANT_ID) return { error: "Acceso exclusivo para Psicólogos" };
+    const where = buildCitasWhere(filters);
 
     const skip = (page - 1) * limit;
 
@@ -369,6 +259,7 @@ export async function getCitas(
             where: {
               paqueteId: { in: paqueteIds },
               realizada: true,
+              tenantId: PSYCHOLOGY_TENANT_ID,
             },
             orderBy: [
               { fechaCita: "asc" },
@@ -427,7 +318,7 @@ export async function getCitas(
         fechaVisita: serialized['fechaCita'],
         horaInicio: serialized['horaInicio'],
         horaFin: serialized['horaFin'],
-        valorCotizado: serialized['valor'] ? Number(serialized['valor']) : null,
+        valorCotizado: serialized['valor'] == null ? null : Number(serialized['valor']),
         observacion: (serialized['observacion'] as string) || null,
         direccionTexto: "Consultorio",
         municipio: "",
@@ -449,6 +340,57 @@ export async function getCitas(
   } catch (error) {
     console.error("Error obteniendo citas:", error);
     return { error: "Error al cargar las citas" };
+  }
+}
+
+/** Complete value by appointment date; cash receipts remain in the existing Caja ledger. */
+export async function getCitasBillingSummary(
+  token: string,
+  filters: CitasFilters = {},
+): Promise<{ summary: CitasBillingSummary } | { error: string }> {
+  const payload = await verifyToken(token);
+  if (!payload) return { error: "No autorizado" };
+  try {
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: payload.userId },
+      select: { tenantId: true, rol: true, activo: true, aprobado: true },
+    });
+    if (!usuario || usuario.tenantId !== PSYCHOLOGY_TENANT_ID || !usuario.activo || !usuario.aprobado ||
+      !usuario.rol || ![Rol.ADMIN, Rol.ASESOR, Rol.SU_ADMIN].some((role) => role === usuario.rol)) {
+      return { error: "No autorizado" };
+    }
+    let where: Prisma.CitasPsicologosWhereInput;
+    try {
+      where = buildCitasWhere(filters, { excludeCanceladas: true });
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : "Revise las fechas y los filtros." };
+    }
+    // No pagination or export cap. Only existing production columns are selected.
+    const citas = await prisma.citasPsicologos.findMany({
+      where, select: { id: true, valor: true, paqueteId: true },
+    });
+    const packageIds = [...new Set(citas.flatMap((cita) => cita.paqueteId === null ? [] : [cita.paqueteId]))];
+    const packages: { id: bigint; precioPagado: Prisma.Decimal; sesionesTotales: number }[] = [];
+    for (let offset = 0; offset < packageIds.length; offset += 1000) {
+      packages.push(...await prisma.paqueteAdquirido.findMany({
+        where: { id: { in: packageIds.slice(offset, offset + 1000) }, tenantId: PSYCHOLOGY_TENANT_ID },
+        select: { id: true, precioPagado: true, sesionesTotales: true },
+      }));
+    }
+    const packagesById = new Map(packages.map((item) => [item.id.toString(), item]));
+    return { summary: aggregateCitasBillingSummary(citas.map((cita) => {
+      const acquiredPackage = cita.paqueteId === null ? undefined : packagesById.get(cita.paqueteId.toString());
+      // Same semantics as the production table: historical package price per session,
+      // then the recorded appointment value. No current catalog or new schema fields.
+      return {
+        valorAplicado: null,
+        packageSnapshot: acquiredPackage ? { totalPrice: acquiredPackage.precioPagado, sessions: acquiredPackage.sesionesTotales } : null,
+        legacyValue: cita.valor,
+      };
+    })) };
+  } catch (error) {
+    console.error("Error al calcular el total del periodo de citas:", error);
+    return { error: "No se pudo calcular el total del periodo. Intente nuevamente." };
   }
 }
 
@@ -882,9 +824,7 @@ export async function getClientPackages(token: string, clientId: number) {
             saldoRestante: { gt: 0 },
         };
 
-        if (usuario.rol !== Rol.SU_ADMIN) {
-            where.tenantId = usuario.tenantId;
-        }
+        where.tenantId = PSYCHOLOGY_TENANT_ID;
 
         const packages = await prisma.paqueteAdquirido.findMany({
             where,
@@ -976,7 +916,7 @@ export async function getTenantsList(token: string) {
     const payload = await verifyToken(token);
     if (!payload) return { error: "No autorizado" };
     
-    const tenants = await prisma.tenant.findMany({ select: { id: true, nombre: true }});
+    const tenants = await prisma.tenant.findMany({ where: { id: PSYCHOLOGY_TENANT_ID }, select: { id: true, nombre: true }});
     return { tenants };
 }
 

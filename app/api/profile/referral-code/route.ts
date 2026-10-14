@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import prisma from "@/lib/prisma";
+import { PSYCHOLOGY_TENANT_ID } from "@/lib/psychology";
 import { verifyToken } from "@/lib/auth";
 
 // Helper to generate code
@@ -35,7 +36,7 @@ export async function GET() {
 
   try {
     const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID, activo: true, aprobado: true },
       select: { id: true, codigoReferido: true }
     });
 
@@ -70,7 +71,7 @@ export async function GET() {
     }
 
     const updatedUser = await prisma.usuario.update({
-      where: { id: payload.userId },
+      where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
       data: { codigoReferido: newCode }
     });
 

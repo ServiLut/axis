@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
+import { getBogotaDayRange } from "@/lib/bogota-date";
 
 // Función auxiliar para log de debug
 const debugLog = (msg: string) => {
@@ -30,8 +31,7 @@ export async function POST(request: Request) {
     }
 
     // 1. Buscar sesión abierta de hoy (sin fechaFin)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const { start: today } = getBogotaDayRange();
 
     let session = await prisma.sesionActividad.findFirst({
       where: {

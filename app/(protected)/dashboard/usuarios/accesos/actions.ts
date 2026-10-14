@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
+import { PSYCHOLOGY_TENANT_ID } from "@/lib/constants/tenants";
 import bcrypt from "bcrypt";
 import { Buffer } from "node:buffer";
 import { revalidatePath } from "next/cache";
@@ -12,6 +13,7 @@ const managementRoles = ["ADMIN", "SU_ADMIN"];
 async function administrator(token: string) {
   const actor = await verifyToken(token);
   if (!actor || !managementRoles.includes(actor.role)) throw Error("Acceso reservado a administradores activos.");
+  if (actor.tenantId !== PSYCHOLOGY_TENANT_ID) throw Error("Axis solo permite gestionar el equipo de Psicólogos en Colombia.");
   return actor;
 }
 

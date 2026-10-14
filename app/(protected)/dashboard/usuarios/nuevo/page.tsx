@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   ArrowLeft,
   Save,
   User,
-  Building2,
   Shield,
   Lock,
   Mail,
@@ -25,18 +24,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createUsuario, getEmpresasOptions } from "../actions";
+import { createUsuario } from "../actions";
 import { useUserRole } from "@/hooks/use-user-role";
-
-interface Empresa {
-  id: number;
-  nombre: string;
-}
 
 export default function NuevoUsuarioPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { role, loading: roleLoading } = useUserRole();
-  const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     nombre: "",
@@ -47,8 +41,7 @@ export default function NuevoUsuarioPage() {
     username: "",
     email: "",
     password: "",
-    rol: "TECNICO",
-    empresaId: "",
+    rol: searchParams.get("rol") === "ASESOR" ? "ASESOR" : "TECNICO",
     activo: true,
   });
 
@@ -60,24 +53,6 @@ export default function NuevoUsuarioPage() {
       router.push("/dashboard");
     }
   }, [role, roleLoading, router]);
-
-  useEffect(() => {
-    const fetchOptions = async () => {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        router.push("/sign-in");
-        return;
-      }
-      const res = await getEmpresasOptions(token);
-      if (res.empresas) {
-        setEmpresas(res.empresas);
-      }
-    };
-
-    if (role === "ADMIN" || role === "SU_ADMIN") {
-      fetchOptions();
-    }
-  }, [router, role]);
 
   if (roleLoading || (role !== "ADMIN" && role !== "SU_ADMIN")) {
     return (
@@ -105,8 +80,7 @@ export default function NuevoUsuarioPage() {
     Object.entries(formData).forEach(([key, value]) => {
       if (key === "activo") {
         if (value) data.append(key, "on");
-      } else if (key === "empresaId" && value === "null") {
-        data.append(key, "");
+
       } else {
         data.append(key, value.toString());
       }
@@ -118,9 +92,7 @@ export default function NuevoUsuarioPage() {
       toast.error(result.error);
     } else {
       toast.success(result.message);
-      // Redirigir a la lista de usuarios (cuando exista) o limpiar
-      // Por ahora redirigimos atrás o a un dashboard
-      router.back();
+      router.push(formData.rol === "TECNICO" ? "/dashboard/usuarios/tecnicos" : "/dashboard/usuarios/asesores");
     }
     setIsSubmitting(false);
   };
@@ -134,6 +106,7 @@ export default function NuevoUsuarioPage() {
             <Button
               variant="ghost"
               size="icon"
+              aria-label="Volver al equipo"
               onClick={() => router.back()}
               className="hover:bg-slate-100"
             >
@@ -141,10 +114,10 @@ export default function NuevoUsuarioPage() {
             </Button>
             <div>
               <h1 className="text-2xl font-bold text-slate-900">
-                Nuevo Usuario
+                Nuevo integrante
               </h1>
               <p className="text-sm text-slate-600">
-                Registra un nuevo usuario en el sistema
+                Crea el acceso de un psicólogo, asesor o administrador de Psicólogos en Colombia.
               </p>
             </div>
           </div>
@@ -191,12 +164,12 @@ export default function NuevoUsuarioPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="tipoDocumento">Tipo Documento</Label>
+                  <Label htmlFor="tipoDocumento">Tipo de documento (opcional)</Label>
                   <Select
                     value={formData.tipoDocumento}
                     onValueChange={(val) => handleChange("tipoDocumento", val)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="tipoDocumento">
                       <SelectValue placeholder="Seleccione" />
                     </SelectTrigger>
                     <SelectContent>
@@ -208,7 +181,7 @@ export default function NuevoUsuarioPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="numeroDocumento">Número Documento</Label>
+                  <Label htmlFor="numeroDocumento">Número de documento (opcional)</Label>
                   <div className="relative">
                     <FileText className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                     <Input
@@ -224,7 +197,7 @@ export default function NuevoUsuarioPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="telefono">Teléfono</Label>
+                  <Label htmlFor="telefono">Teléfono (opcional)</Label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                     <Input
@@ -271,7 +244,7 @@ export default function NuevoUsuarioPage() {
                       id="email"
                       type="email"
                       className="pl-9"
-                      placeholder="juan.perez@empresa.com"
+                      placeholder="juan.perez@ejemplo.com"
                       value={formData.email}
                       onChange={(e) => handleChange("email", e.target.value)}
                       required
@@ -302,59 +275,31 @@ export default function NuevoUsuarioPage() {
               <div className="flex items-center gap-2 mb-6 border-b border-slate-100 pb-2">
                 <Shield className="h-5 w-5 text-blue-600" />
                 <h2 className="text-lg font-semibold text-slate-900">
-                  Permisos y Asignación
+                  Acceso y permisos
                 </h2>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="rol">
-                    Rol <span className="text-red-500">*</span>
+                    Función en el equipo <span className="text-red-500">*</span>
                   </Label>
                   <Select
                     value={formData.rol}
                     onValueChange={(val) => handleChange("rol", val)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="rol">
                       <SelectValue placeholder="Seleccione un rol" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="SU_ADMIN">Super Administrador</SelectItem>
                       <SelectItem value="ADMIN">Administrador</SelectItem>
                       <SelectItem value="ASESOR">Asesor</SelectItem>
-                      <SelectItem value="TECNICO">Técnico</SelectItem>
+                      <SelectItem value="TECNICO">Psicólogo</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-slate-500">
                     Define el nivel de acceso al sistema.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="empresa">Empresa Asociada</Label>
-                  <div className="relative">
-                    <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 z-10" />
-                    <Select
-                      value={formData.empresaId}
-                      onValueChange={(val) => handleChange("empresaId", val)}
-                    >
-                      <SelectTrigger className="pl-9">
-                        <SelectValue placeholder="Seleccione una empresa" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {empresas.map((emp) => (
-                          <SelectItem key={emp.id} value={emp.id.toString()}>
-                            {emp.nombre}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    Empresa a la que pertenece el usuario.
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    Si es un asesor, cualquier empresa esta bien.
                   </p>
                 </div>
 
@@ -372,7 +317,7 @@ export default function NuevoUsuarioPage() {
                         htmlFor="activo"
                         className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                       >
-                        Usuario Activo
+                        Permitir el ingreso a Axis
                       </label>
                       <p className="text-sm text-muted-foreground">
                         Si está desactivado, el usuario no podrá ingresar al
@@ -407,7 +352,7 @@ export default function NuevoUsuarioPage() {
                 ) : (
                   <div className="flex items-center gap-2">
                     <Save className="h-4 w-4" />
-                    <span>Guardar Usuario</span>
+                    <span>Crear acceso</span>
                   </div>
                 )}
               </Button>

@@ -107,6 +107,7 @@ export default function EditarTecnicoPage() {
             <Button
               variant="ghost"
               size="icon"
+              aria-label="Volver al equipo"
               onClick={() => router.push("/dashboard/usuarios/tecnicos")}
               className="hover:bg-slate-100"
             >
@@ -114,10 +115,10 @@ export default function EditarTecnicoPage() {
             </Button>
             <div>
               <h1 className="text-2xl font-bold text-slate-900">
-                Editar Técnico
+                Editar Psicólogo
               </h1>
               <p className="text-sm text-slate-600 mt-0.5">
-                Modifique la información del técnico
+                Modifique la información del psicólogo
               </p>
             </div>
           </div>
@@ -150,7 +151,7 @@ export default function EditarTecnicoPage() {
                   Información Personal
                 </h2>
                 <p className="text-sm text-slate-600">
-                  Datos básicos del técnico
+                  Datos básicos del psicólogo
                 </p>
               </div>
             </div>
@@ -195,17 +196,17 @@ export default function EditarTecnicoPage() {
                   htmlFor="rol"
                   className="text-sm font-medium text-slate-700"
                 >
-                  Rol <span className="text-red-500">*</span>
+                  Función en el equipo <span className="text-red-500">*</span>
                 </Label>
                 <Select name="rol" defaultValue={tecnico?.rol || "TECNICO"}>
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger id="rol" className="h-11">
                     <SelectValue placeholder="Seleccione un rol" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="SU_ADMIN">Super Administrador</SelectItem>
                     <SelectItem value="ADMIN">Administrador</SelectItem>
                     <SelectItem value="ASESOR">Asesor</SelectItem>
-                    <SelectItem value="TECNICO">Técnico</SelectItem>
+                    <SelectItem value="TECNICO">Psicólogo</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

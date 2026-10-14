@@ -2,7 +2,8 @@
 
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
-import { TipoPermiso } from "@/prisma/generated/prisma/client";
+import { PSYCHOLOGY_TENANT_ID } from "@/lib/psychology";
+import type { TipoPermiso } from "@/prisma/generated/prisma/client";
 import { revalidatePath } from "next/cache";
 import { sendPermissionRequestEmail } from "@/lib/mail";
 
@@ -52,20 +53,13 @@ export async function requestPermission(
       }
     });
 
-    // Enviar correo a los admins:
-    // 1. SU_ADMIN globales
-    // 2. ADMIN del tenant actual
-    // 3. ADMIN del tenant principal (ID 1) - para soporte centralizado
+    // Las solicitudes se notifican a la administración del equipo de Psicólogos.
     const admins = await prisma.usuario.findMany({
       where: {
         activo: true,
-        OR: [
-          { rol: "SU_ADMIN" },
-          { 
-            rol: "ADMIN",
-            tenantId: { in: [payload.tenantId, 1] } 
-          }
-        ]
+        aprobado: true,
+        tenantId: PSYCHOLOGY_TENANT_ID,
+        rol: { in: ["ADMIN", "SU_ADMIN"] },
       },
       select: { email: true }
     });
@@ -152,7 +146,7 @@ export async function approvePermission(
     fechaExpiracion.setMinutes(fechaExpiracion.getMinutes() + durationMinutes);
 
     await prisma.permiso.update({
-      where: { id: permisoId },
+      where: { id: permisoId, tenantId: PSYCHOLOGY_TENANT_ID },
       data: {
         estado: "APROBADO",
         adminId: payload.userId,
@@ -178,7 +172,7 @@ export async function rejectPermission(token: string, permisoId: number) {
 
   try {
     await prisma.permiso.update({
-      where: { id: permisoId },
+      where: { id: permisoId, tenantId: PSYCHOLOGY_TENANT_ID },
       data: {
         estado: "RECHAZADO",
         adminId: payload.userId,

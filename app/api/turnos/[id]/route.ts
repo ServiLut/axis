@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
+import { PSYCHOLOGY_TENANT_ID } from "@/lib/psychology";
 
 export async function PUT(
     request: Request,
@@ -20,9 +21,15 @@ export async function PUT(
         
         if (!payload) return NextResponse.json({ message: "Token inválido" }, { status: 401 });
 
+        const actor = await prisma.usuario.findUnique({
+            where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID, activo: true, aprobado: true },
+            select: { id: true },
+        });
+        if (!actor) return NextResponse.json({ message: "No autorizado" }, { status: 403 });
+
         // Get User & Check ownership
-        const existingTurno = await prisma.turno.findUnique({
-            where: { id: turnoId },
+        const existingTurno = await prisma.turno.findFirst({
+            where: { id: turnoId, tenantId: PSYCHOLOGY_TENANT_ID, usuarioId: payload.userId },
         });
 
         if (!existingTurno) return NextResponse.json({ message: "Turno no encontrado" }, { status: 404 });
@@ -64,7 +71,7 @@ export async function PUT(
 
         // Calculate Totals
         const userWithCuenta = await prisma.usuario.findUnique({
-            where: { id: payload.userId },
+            where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
             include: { CuentasPago: true }
         });
 
@@ -117,7 +124,7 @@ export async function PUT(
         }
 
         const updatedTurno = await prisma.turno.update({
-            where: { id: turnoId },
+            where: { id: turnoId, tenantId: PSYCHOLOGY_TENANT_ID, usuarioId: payload.userId, cuentaCobroId: null },
             data: updateData
         });
 

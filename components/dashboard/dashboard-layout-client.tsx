@@ -7,6 +7,7 @@ import { Header } from "@/components/dashboard/header";
 import { useUserRole } from "@/hooks/use-user-role";
 import { useActivityMonitor } from "@/hooks/use-activity-monitor";
 import { toast } from "sonner";
+import { isPsychologyTenant, isPsychologyDashboardPath } from "@/lib/psychology";
 
 export function DashboardLayoutClient({
   children,
@@ -16,21 +17,32 @@ export function DashboardLayoutClient({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
-  const { role, userId, loading } = useUserRole();
+  const { role, userId, tenantId, loading } = useUserRole();
   const { isIdle, showReconnected } = useActivityMonitor(userId);
 
   const isMensajeria = pathname === "/dashboard/mensajeria";
 
   useEffect(() => {
+    if (!isSidebarOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsSidebarOpen(false);
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [isSidebarOpen]);
+
+  useEffect(() => {
     if (!loading) {
-      if (!role) {
-        router.push("/sign-in");
+      if (!role || !isPsychologyTenant(tenantId)) {
+        router.replace("/sign-in");
       } else if (role !== "ADMIN" && role !== "ASESOR" && role !== "SU_ADMIN") {
-        toast.error("No tienes permisos para acceder al dashboard");
-        router.push("/sign-in");
+        toast.error("Tu cuenta no tiene acceso al panel de administración.");
+        router.replace("/sign-in");
+      } else if (!isPsychologyDashboardPath(pathname)) {
+        router.replace("/dashboard");
       }
     }
-  }, [loading, role, router]);
+  }, [loading, role, tenantId, pathname, router]);
 
   useEffect(() => {
     const validateSession = async () => {
@@ -77,11 +89,16 @@ export function DashboardLayoutClient({
   if (
     loading ||
     !role ||
+    !isPsychologyTenant(tenantId) ||
+    !isPsychologyDashboardPath(pathname) ||
     (role !== "ADMIN" && role !== "ASESOR" && role !== "SU_ADMIN")
   ) {
     return (
       <div className="flex h-screen items-center justify-center bg-stone-50 dark:bg-stone-950">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+        <div role="status" className="flex items-center gap-3 text-sm text-muted-foreground">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" aria-hidden="true" />
+          Cargando tu espacio de trabajo…
+        </div>
       </div>
     );
   }
@@ -103,24 +120,26 @@ export function DashboardLayoutClient({
         className={`fixed inset-y-0 left-0 z-40 w-64 transform border-r border-stone-200 bg-stone-100 transition-transform duration-200 ease-in-out dark:border-stone-800 dark:bg-stone-900 ${
           isMensajeria
             ? isSidebarOpen
-              ? "translate-x-0 shadow-xl"
-              : "-translate-x-full"
-            : `md:static md:translate-x-0 ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`
+              ? "visible translate-x-0 shadow-xl"
+              : "invisible -translate-x-full"
+            : `md:static md:visible md:translate-x-0 ${isSidebarOpen ? "visible translate-x-0" : "invisible -translate-x-full"}`
         }`}
       >
-        <Sidebar className="h-full overflow-y-auto" />
+        <Sidebar className="h-full overflow-y-auto" onNavigate={() => setIsSidebarOpen(false)} />
       </aside>
 
       {/* Mobile Overlay (or Desktop Overlay when in Mensajeria mode) */}
       {isSidebarOpen && (
-        <div
+        <button
+          type="button"
+          aria-label="Cerrar menú"
           className={`fixed inset-0 z-30 bg-black/50 ${isMensajeria ? "" : "md:hidden"}`}
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
 
       {/* Main Content Wrapper */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Header
           onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
           showMenuButtonOnDesktop={isMensajeria}

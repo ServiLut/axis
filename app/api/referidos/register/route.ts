@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { PSYCHOLOGY_TENANT_ID } from "@/lib/psychology";
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,7 +12,7 @@ export async function POST(req: NextRequest) {
 
     // Find referrer
     const referrer = await prisma.usuario.findFirst({
-      where: { codigoReferido: codigoReferido }
+      where: { codigoReferido: codigoReferido, tenantId: PSYCHOLOGY_TENANT_ID, activo: true, aprobado: true }
     });
 
     if (!referrer) {

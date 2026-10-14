@@ -1,7 +1,7 @@
 "use server";
 
 import prisma from "@/lib/prisma";
-import { verifyToken, signToken } from "@/lib/auth";
+import { verifyToken } from "@/lib/auth";
 import { PSYCHOLOGY_TENANT_ID } from "@/lib/constants/tenants";
 import { EstadoPagoOrden, Prisma } from "@/prisma/generated/prisma/client";
 import { getBogotaDayRange } from "@/lib/bogota-date";
@@ -188,7 +188,7 @@ export async function getDashboardStats(token: string, selectedDate?: string) {
     
     // If user is SU_ADMIN, they see data from ALL tenants.
     // Otherwise, they only see data from their assigned tenant.
-    const baseWhere = usuario.rol === "SU_ADMIN" ? {} : { tenantId: usuario.tenantId };
+    const baseWhere = { tenantId: PSYCHOLOGY_TENANT_ID };
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -536,6 +536,7 @@ export async function getAllTenants(token: string) {
 
   try {
     const tenants = await prisma.tenant.findMany({
+      where: { id: PSYCHOLOGY_TENANT_ID },
       select: {
         id: true,
         nombre: true,
@@ -554,40 +555,9 @@ export async function getAllTenants(token: string) {
 export async function switchUserTenant(token: string, newTenantId: number) {
   const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
-
-  try {
-    const tenant = await prisma.tenant.findUnique({
-      where: { id: newTenantId },
-    });
-
-    if (!tenant) return { error: "Sistema no encontrado" };
-
-    const updatedUser = await prisma.usuario.update({
-      where: { id: payload.userId },
-      data: { tenantId: newTenantId },
-      include: { tenant: true },
-    });
-
-    // Generar nuevo token con la información actualizada
-    const newToken = signToken({
-      userId: updatedUser.id,
-      tenantId: updatedUser.tenantId,
-      tenantName: updatedUser.tenant.nombre,
-      username: updatedUser.username,
-      nombre: updatedUser.nombre,
-      apellido: updatedUser.apellido,
-      role: updatedUser.rol!,
-      aprobado: updatedUser.aprobado || false,
-      authVersion: updatedUser.authVersion,
-    });
-
-    return { success: true, newToken };
-  } catch (error) {
-    console.error("Error switching tenant:", error);
-    return { error: "Error al cambiar de sistema" };
-  }
+  if (newTenantId !== PSYCHOLOGY_TENANT_ID) return { error: "Axis funciona exclusivamente para Psicólogos en Colombia." };
+  return { error: "Tu cuenta ya pertenece al equipo de Psicólogos en Colombia." };
 }
-
 export async function getUnpaidServicesDetails(token: string, type: 'today' | 'total') {
   const payload = await verifyToken(token);
   if (!payload) return { error: "No autorizado" };
@@ -600,7 +570,7 @@ export async function getUnpaidServicesDetails(token: string, type: 'today' | 't
 
     if (!usuario) return { error: "Usuario no encontrado" };
 
-    const baseWhere = usuario.rol === "SU_ADMIN" ? {} : { tenantId: usuario.tenantId };
+    const baseWhere = { tenantId: PSYCHOLOGY_TENANT_ID };
     
     const today = new Date();
     today.setHours(0, 0, 0, 0);

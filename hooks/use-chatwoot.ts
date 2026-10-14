@@ -4,13 +4,15 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { AuthHeaders, Conversation, Inbox, Message, Account } from "@/lib/chatwoot-types";
 import { chatwootService } from "@/lib/chatwoot";
+import { resolvePsychologyChatAccount } from "@/lib/chatwoot-account";
 
 export type ChatStatus = "open" | "resolved" | "pending" | "snoozed" | "all";
 
 export function useChatwoot() {
   // Auth State
   const [auth, setAuth] = useState<AuthHeaders | null>(null);
-  const [accountId, setAccountId] = useState<number>(1);
+  const [accountId, setAccountId] = useState<number | null>(null);
+  const [accountError, setAccountError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [myAccounts, setMyAccounts] = useState<Account[]>([]);
 
@@ -37,6 +39,11 @@ export function useChatwoot() {
 
   const handleLogout = useCallback(() => {
     setAuth(null);
+    setAccountId(null);
+    setAccountError(null);
+    setMyAccounts([]);
+    setSelectedChat(null);
+    setSelectedInbox(null);
     localStorage.removeItem("cw_auth");
     localStorage.removeItem("cw_accounts");
     localStorage.removeItem("cw_account_id");
@@ -45,40 +52,38 @@ export function useChatwoot() {
     setInboxes([]);
   }, []);
 
+  const selectPsychologyAccount = useCallback((accounts: Account[]) => {
+    const account = resolvePsychologyChatAccount(accounts, process.env.NEXT_PUBLIC_PSICOLOGOS_CHATWOOT_ACCOUNT_ID);
+    setAccountId(account?.id ?? null);
+    setMyAccounts(account ? [account] : []);
+    setAccountError(account ? null : "No se pudo identificar la cuenta de Psicólogos en Colombia. Solicita a administración revisar tu acceso a WhatsApp.");
+    if (account) localStorage.setItem("cw_account_id", String(account.id));
+    else localStorage.removeItem("cw_account_id");
+  }, []);
+
   // Load Session
   useEffect(() => {
     const savedAuth = localStorage.getItem("cw_auth");
-    const savedAccounts = localStorage.getItem("cw_accounts");
-    const savedAccountId = localStorage.getItem("cw_account_id");
     
     if (savedAuth) {
-      const parsedAuth = JSON.parse(savedAuth);
-      setAuth(parsedAuth);
-      
-      if (savedAccounts) setMyAccounts(JSON.parse(savedAccounts));
-      if (savedAccountId) setAccountId(Number(savedAccountId));
-      
-      // Validate session
+      let parsedAuth: AuthHeaders;
+      try { parsedAuth = JSON.parse(savedAuth); } catch { handleLogout(); return; }
+      setLoading(true);
+      // Confirm current account access before loading conversations.
       chatwootService.getProfile(parsedAuth)
         .then(user => {
             const accounts = user?.accounts || [];
-            setMyAccounts(accounts);
-            localStorage.setItem("cw_accounts", JSON.stringify(accounts));
-            
-            if (accounts.length > 0) {
-                 const currentId = savedAccountId ? Number(savedAccountId) : null;
-                 const exists = accounts.find(a => a.id === currentId);
-                 if (!exists) {
-                    setAccountId(accounts[0].id);
-                    localStorage.setItem("cw_account_id", String(accounts[0].id));
-                 }
-            }
+            selectPsychologyAccount(accounts);
+            setAuth(parsedAuth);
+            localStorage.removeItem("cw_accounts");
         })
         .catch(err => {
             if (err.message === "Unauthorized") handleLogout();
-        });
+            else toast.error("No se pudo verificar WhatsApp. Intenta conectarte nuevamente.");
+        })
+        .finally(() => setLoading(false));
     }
-  }, [handleLogout]);
+  }, [handleLogout, selectPsychologyAccount]);
 
   const handleLogin = async (
     e: React.FormEvent,
@@ -90,17 +95,14 @@ export function useChatwoot() {
     try {
       const { headers, data } = await chatwootService.signIn(email, pass);
       const userAccounts = data.data.accounts || data.data.user?.accounts || [];
-      const firstAccountId = userAccounts[0]?.id || 1;
-
-      setMyAccounts(userAccounts);
-      setAccountId(firstAccountId);
+      const selectedAccount = resolvePsychologyChatAccount(userAccounts, process.env.NEXT_PUBLIC_PSICOLOGOS_CHATWOOT_ACCOUNT_ID);
+      selectPsychologyAccount(userAccounts);
       setAuth(headers);
 
       localStorage.setItem("cw_auth", JSON.stringify(headers));
-      localStorage.setItem("cw_accounts", JSON.stringify(userAccounts));
-      localStorage.setItem("cw_account_id", String(firstAccountId));
+      localStorage.removeItem("cw_accounts");
       
-      toast.success("Conectado");
+      if (selectedAccount) toast.success("Conectado a WhatsApp de Psicólogos en Colombia");
     } catch (error) {
       console.error(error);
       toast.error("Error al iniciar sesión");
@@ -110,7 +112,7 @@ export function useChatwoot() {
   };
 
   const fetchInboxes = useCallback(async () => {
-    if (!auth) return;
+    if (!auth || !accountId) return;
     try {
       const data = await chatwootService.getInboxes(accountId, auth);
       setInboxes(data);
@@ -125,7 +127,7 @@ export function useChatwoot() {
 
   const fetchConversations = useCallback(
     async (silent = false) => {
-      if (!auth) return;
+      if (!auth || !accountId) return;
       if (!silent) setIsRefreshing(true);
 
       try {
@@ -151,7 +153,7 @@ export function useChatwoot() {
 
   // Effect when Account Changes
   useEffect(() => {
-    if (!auth) return;
+    if (!auth || !accountId) return;
     setConversations([]);
     setMessages([]);
     setSelectedChat(null);
@@ -166,7 +168,7 @@ export function useChatwoot() {
 
   const fetchMessages = useCallback(
     async (conversationId: number, silent = false) => {
-      if (!auth) return;
+      if (!auth || !accountId) return;
       try {
         const payload = await chatwootService.getMessages(
           accountId,
@@ -192,7 +194,7 @@ export function useChatwoot() {
   );
 
   const sendMessage = async (content: string) => {
-    if (!content.trim() || !selectedChat || !auth) return;
+    if (!content.trim() || !selectedChat || !auth || !accountId) return;
     try {
       await chatwootService.sendMessage(
         accountId,
@@ -210,7 +212,7 @@ export function useChatwoot() {
 
   // Poll Conversations
   useEffect(() => {
-    if (!auth) return;
+    if (!auth || !accountId) return;
     
     fetchConversations(false);
 
@@ -218,20 +220,20 @@ export function useChatwoot() {
       if (!isRefreshingRef.current) fetchConversations(true);
     }, 5000);
     return () => clearInterval(interval);
-  }, [auth, fetchConversations]);
+  }, [auth, accountId, fetchConversations]);
 
   // Poll Messages
   useEffect(() => {
-    if (!selectedChat || !auth) return;
+    if (!selectedChat || !auth || !accountId) return;
     fetchMessages(selectedChat);
     const interval = setInterval(() => {
       fetchMessages(selectedChat, true);
     }, 3000);
     return () => clearInterval(interval);
-  }, [selectedChat, auth, fetchMessages]);
+  }, [selectedChat, auth, accountId, fetchMessages]);
 
   const toggleChatStatus = async (chatId: number, newStatus: string) => {
-      if (!auth) return;
+      if (!auth || !accountId) return;
       try {
           await chatwootService.toggleStatus(accountId, auth, chatId, newStatus);
           toast.success(`Chat ${newStatus === 'resolved' ? 'resuelto' : 'reabierto'}`);
@@ -249,7 +251,7 @@ export function useChatwoot() {
     loading,
     myAccounts,
     accountId,
-    setAccountId,
+    accountError,
     conversations,
     messages,
     inboxes,

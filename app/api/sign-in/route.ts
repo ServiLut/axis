@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcrypt";
 import { signToken } from "@/lib/auth";
+import { isPsychologyTenant, PSYCHOLOGY_NAME } from "@/lib/psychology";
 import {isLuisaServiceUser} from '@/lib/psychology-bot-operator';
 
 export async function POST(request: Request) {
@@ -30,8 +31,6 @@ export async function POST(request: Request) {
       );
     }
 
-    console.log("Login attempt:", { username: user.username, activo: user.activo, aprobado: user.aprobado });
-
     if (!user.activo) {
       return NextResponse.json(
         { message: "Cuenta inactiva. Contacte al administrador." },
@@ -56,11 +55,15 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!isPsychologyTenant(user.tenantId)) {
+      return NextResponse.json({ message: "Axis está disponible exclusivamente para el equipo de Psicólogos en Colombia. Contacta a la administración para revisar tu acceso." }, { status: 403 });
+    }
+
     // Generar token
     const token = signToken({
       userId: user.id,
       tenantId: user.tenantId,
-      tenantName: user.tenant.nombre,
+      tenantName: PSYCHOLOGY_NAME,
       username: user.username,
       nombre: user.nombre,
       apellido: user.apellido,
