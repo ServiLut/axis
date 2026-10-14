@@ -31,6 +31,8 @@ import {restoreProgramSetup,installProgramSetup,registrationStatus,MARIA_PROGRAM
 import {initializeInactivityFollowup,inactivityStatus,responseTimingStatus,recordDeliveryTiming} from './inactivity-followup.mjs';
 import {initializeTesaStore,tesaStatus,reviewTesaSources} from './tesa-operations.mjs';
 import {ingestTesaWebhook,refreshTesaMembership} from './tesa-transport.mjs';
+import {queueTesaGuidanceList,guidanceListStatus} from './tesa-guidance-list.mjs';
+import {MARIA_TESA_QUESTION_WORDING_GUARD} from './tesa-question-wording.mjs';
 import {operationalLines,operationalLineAllowed,operationalCoverage} from './line-scope.mjs';
 import {initializeIntakeJournal,recordIntakeWebhook,recordIntakeBinding,recordIntakeIngressGap,intakeAudit,intakeJournalStatus} from './intake-journal.mjs';
 import {restoreProgramSupervision,programSupervisionStatus,installProgramSupervision,dailyProgramCross,readRetentionCandidates} from './program-supervision.mjs';
@@ -198,6 +200,16 @@ export function createBotServer(config,store,transport,engine) {
         if(body.company!==config.company)return reply(400,{error:'TESA_OWN_COMPANY_REQUIRED'});
         return reply(200,reviewTesaSources(store,body));
       }
+      if(req.url==='/notify-tesa-guidance'){
+        if(config.company!=='fumigacion')return reply(403,{error:'TESA_GUIDANCE_OWN_FUM_REQUIRED'});
+        try{const queued=queueTesaGuidanceList(store,config,body);if(queued.queued)scheduler.wake();return reply(202,queued);}
+        catch(error){return reply(409,{error:/^TESA_GUIDANCE_[A-Z_]+$/.test(error.message??'')?error.message:'TESA_GUIDANCE_NOT_QUEUED'});}
+      }
+      if(req.url==='/tesa-guidance-status'){
+        if(config.company!=='fumigacion')return reply(403,{error:'TESA_GUIDANCE_OWN_FUM_REQUIRED'});
+        if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).join(',')!=='key'||!/^[a-z0-9_-]{8,100}$/.test(body.key||''))return reply(400,{error:'TESA_GUIDANCE_EXACT_KEY_REQUIRED'});
+        return reply(200,guidanceListStatus(store,config,body));
+      }
       if(req.url==='/ai-setup'){
         if(draining||settingUpAi)return reply(409,{error:'AI_SETUP_BUSY'});
         settingUpAi=true;
@@ -218,7 +230,7 @@ export function createBotServer(config,store,transport,engine) {
         return reply(200,reviewChiefActions(store,config,body));
       }
       if(req.url==='/status')return reply(200,{company:config.name,bot:config.bot,enabled:config.enabled,mode:'reception-with-human-review',operationalCoverage:operationalCoverage(config),fullyAutonomous:false,intakeJournal:intakeJournalStatus(store,config),programSupervision:programSupervisionStatus(config),preventiveRetention:config.company==='fumigacion'?{guard:PREVENTIVE_RETENTION_GUARD,prepared:true,sendsEnabled:false,notesEnabled:false,required:'own-complete-both-line-history-and-separate-expiring-access',proofAccess:retentionProofAccessStatus(config),eligibilityAdapter:retentionEligibility.status(),dispatch:retentionDispatch.status(),deliveryProof:retentionDelivery.status()}:null,tesaOperations:tesaStatus(store,config),programRegistration:registrationStatus(config,store),privateNativeIdentity:privateIdentityStatus(store,config),inactivityFollowup:inactivityStatus(config,store),responseTiming:responseTimingStatus(config,store),drainIntervalMs:scheduler.intervalMs,semanticUnderstandingGuard:config.company==='fumigacion'?MARIA_UNDERSTANDING_GUARD:MIGUEL_UNDERSTANDING_GUARD,ownQuoteClarificationGuard:config.company==='fumigacion'?OWN_QUOTE_CLARIFICATION_GUARD:null,aiUsage:ownAiUsage(config,store),approvedAiKnowledge:mariaKnowledgeStatus(config,store),
-        chiefActionsGuard:config.company==='fumigacion'?CHIEF_ACTIONS_GUARD:null,chiefCommandAiGuard:config.company==='fumigacion'?CHIEF_COMMAND_AI_GUARD:null,chiefActions:config.company==='fumigacion'?chiefActionsStatus(store,config):null,
+        chiefActionsGuard:config.company==='fumigacion'?CHIEF_ACTIONS_GUARD:null,chiefCommandAiGuard:config.company==='fumigacion'?CHIEF_COMMAND_AI_GUARD:null,chiefActions:config.company==='fumigacion'?chiefActionsStatus(store,config):null,tesaQuestionWordingGuard:config.company==='fumigacion'?MARIA_TESA_QUESTION_WORDING_GUARD:null,tesaGuidanceLists:config.company==='fumigacion'?guidanceListStatus(store,config):null,
         events:store.db.prepare('SELECT state,COUNT(*) n FROM events GROUP BY state').all(),outbox:store.db.prepare('SELECT state,COUNT(*) n FROM outbox GROUP BY state').all(),
         communicationGuard:'private-routing-and-media-work-v2',requestedContactGuard:'explicit-technician-contact-before-intake-v1',confirmationRecipient:config.tesaOperations?.enabled?config.tesaOperations.groupJid:questionRecipients(config,'disponibilidad-y-tecnico')[0],operationalConfirmationRecipients:config.tesaOperations?.enabled?[config.tesaOperations.groupJid]:questionRecipients(config,'disponibilidad-y-tecnico'),chiefRecipient:SANDRA,operatorRouting:config.tesaOperations?.enabled?'tesa-group-case-operations-20261008':config.operatorRouting||'sandra',privateHistoricalOperatorRouting:config.operatorRouting||'sandra',operatorRoutingGuard:'scoped-new-question-fanout-and-exact-line-answer-v1',operatorRoutingActive:operatorRoutingActive(config),chiefDocumentGuard:'fixed-chief-encrypted-hash-and-idempotency-v1',internalConversationGuard:'verified-internal-per-line-v2',chiefStatusGuard:'exact-directed-status-and-active-mode-v2',quotationQuestionGuard:'scoped-price-followup-and-existing-question-v1',internalConversationEnabled:Boolean(config.chiefOnly),customerResponsesEnabled:config.enabled,
         literalReceptionGuard:config.company==='fumigacion'?MARIA_LITERAL_RECEPTION_GUARD:null,stagedGreetingGuard:config.company==='fumigacion'?MARIA_STAGED_GREETING_GUARD:null,intakeRequestedTimingGuard:config.company==='fumigacion'?MARIA_INTAKE_TIMING_GUARD:null,

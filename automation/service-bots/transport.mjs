@@ -10,6 +10,7 @@ import {routeCaseQuestion} from './engine.mjs';
 import {initializeInactivityFollowup,queueInactivityFollowups,inactivityDeliveryValid,recordResponseTiming} from './inactivity-followup.mjs';
 import {tesaCaseAnswers} from './tesa-operations.mjs';
 import {drainTesaGroup,tesaCustomerReplyStillValid} from './tesa-transport.mjs';
+import {drainTesaGuidanceLists} from './tesa-guidance-list.mjs';
 import {assertOperationalLineScope,operationalLines,operationalLineAllowed,operationalHistoryGuard,operationalCoverage} from './line-scope.mjs';
 import {drainChiefActions} from './chief-actions.mjs';
 import {decodeWebhook} from './webhook.mjs';
@@ -299,7 +300,8 @@ export async function drain(store,config,transport,engine) {
   const followup=pending.length?{enabled:Boolean(config.inactivityFollowupEnabled),queued:0,deferredForActiveReception:true}:await queueInactivityFollowups(store,config,transport);
   const followed=followup.queued?await flushOutbox(store,config,transport):{accepted:0,suppressed:0,uncertain:0};
   const groupOperations=await drainTesaGroup(store,config,transport);
-  return {processed:pending.length,accepted:before.accepted+after.accepted+followed.accepted+chiefResults.accepted,suppressed:before.suppressed+after.suppressed+followed.suppressed+chiefResults.suppressed,uncertain:before.uncertain+after.uncertain+followed.uncertain+chiefResults.uncertain,followup,groupOperations,chiefActions};
+  const guidanceLists=config.company==='fumigacion'?(pending.length?{deferredForActiveReception:true}:await drainTesaGuidanceLists(store,config,transport)):null;
+  return {processed:pending.length,accepted:before.accepted+after.accepted+followed.accepted+chiefResults.accepted,suppressed:before.suppressed+after.suppressed+followed.suppressed+chiefResults.suppressed,uncertain:before.uncertain+after.uncertain+followed.uncertain+chiefResults.uncertain,followup,groupOperations,chiefActions,...(guidanceLists?{guidanceLists}:{})};
 }
 
 export async function flushOutbox(store,config,transport){
