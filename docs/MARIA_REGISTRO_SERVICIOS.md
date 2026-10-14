@@ -1,5 +1,13 @@
 # Registro propio de servicios nuevos de María
 
+## Claridad de consultas, sin cambios al permiso de registro — 14/10/2026 23:42Z
+
+Sólo María instaló `58be39450b923978b307c82357e4b0b0f5c84c4b`, DONE 3 s; API propia a las 23:42:20Z confirmó formato numerado y cola de dudas generales TESA. Pruebas: **1087/1087**, 79 archivos, cero omitidas; nueve probes independientes. Petición, hechos y preguntas pendientes se muestran por separado, con ejemplos de cómo responder. Nombre genérico de inmueble, habitación pequeña, medida desconocida, número de colchones y cita del cliente conservan sus límites literales; no se infieren plaga, superficie, precio, técnico o agenda.
+
+El listado general de tres dudas pregunta sobre duración, identificación del técnico y práctica de observaciones de mascotas. Su respuesta no crea un permiso ni completa una integración técnica: la programación automática y la nota en el resumen/DTO/observación de Tenaxis siguen pendientes. No se modifica el recibo BF23DF14, el contrato cerrado ni el Backend por este cambio. SAVED=1 histórico y demás colas de registro=0 al corte.
+
+Listado general con cola y ledger propios: clave `maria-tesa-current-guidance-20261014-v1`, MID `3EB0D7C5C3F7DE5092FDBF`, ACCEPTED con texto/ruta nativos exactos a las 23:42:35Z, **sin acuse de entrega aún**. No reenviar o usar otra clave. Consultar el checkpoint privado vigente para cambios de estado. Las preguntas de casos y sus respuestas citadas mantienen su proceso independiente; históricos, atención humana, credenciales/vencimiento, roja suspendida y reactivación OFF preservados. Fuentes en `.tmp/maria-tesa-clear-20261014/` y apartado actual de `BOTS_MARIA_MIGUEL.md`.
+
 ## Confirmación posterior al recibo y límites del formulario — 14/10/2026 23:21Z
 
 Sólo María instaló `bdaef650030e393f2f347c2122ceff556bce043f` (Dokploy DONE 4 s), confirmado por tarjeta exacta y por API propia a las 23:21:32Z. Gate final: **981/981 pruebas**, 76 archivos, cero omisiones; incluye cotización propia, fuentes literales de formulario, confirmación de resumen, una alta en memoria a su nombre, respuesta operativa citada entregada y confirmación final sin repetir consulta. No se crearon servicios productivos de prueba ni se acreditó una nueva venta real. Registro activo con SAVED=1 histórico BF23DF14; otras colas de registro=0.
