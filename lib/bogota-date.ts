@@ -13,3 +13,16 @@ export function getBogotaDayRange(date = bogotaToday()) {
   const start = new Date(`${date}T00:00:00-05:00`);
   return { date, start, end: new Date(start.getTime() + 24 * 60 * 60 * 1000) };
 }
+
+/** Inclusive calendar dates in Colombia, with an exclusive upper timestamp. */
+export function getBogotaDateRange(startDate?: string, endDate?: string) {
+  const start = startDate ? getBogotaDayRange(startDate) : undefined;
+  const end = endDate ? getBogotaDayRange(endDate) : undefined;
+  if (start && end && start.start > end.start) {
+    throw new Error("La fecha final debe ser igual o posterior a la fecha inicial.");
+  }
+  return {
+    ...(start ? { gte: start.start } : {}),
+    ...(end ? { lt: end.end } : {}),
+  };
+}

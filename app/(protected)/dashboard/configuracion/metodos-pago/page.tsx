@@ -48,6 +48,7 @@ export default function MetodosPagoPage() {
   const [metodos, setMetodos] = useState<MetodoPago[]>([]);
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const { role, loading: roleLoading } = useUserRole();
   
@@ -80,6 +81,9 @@ export default function MetodosPagoPage() {
   }, [role, roleLoading, router]);
 
   const fetchData = useCallback(async () => {
+    setLoading(true);
+    setLoadError("");
+    try {
     const token = localStorage.getItem("token");
     if (!token) {
       router.push("/sign-in");
@@ -92,7 +96,7 @@ export default function MetodosPagoPage() {
     ]);
 
     if (metodosRes.error) {
-      toast.error(metodosRes.error);
+      setLoadError(metodosRes.error);
       if (metodosRes.error === "No autorizado") router.push("/sign-in");
     } else if (metodosRes.metodosPago) {
       setMetodos(metodosRes.metodosPago);
@@ -100,14 +104,20 @@ export default function MetodosPagoPage() {
 
     if (empresasRes.empresas) {
       setEmpresas(empresasRes.empresas);
+    } else if (empresasRes.error) {
+      setLoadError(empresasRes.error);
     }
 
     setLoading(false);
+    } catch {
+      setLoadError("No se pudieron cargar los medios de pago. Intenta nuevamente.");
+    } finally {
+      setLoading(false);
+    }
   }, [router]);
 
   useEffect(() => {
     if (role === "ADMIN" || role === "SU_ADMIN") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchData();
     }
   }, [role, fetchData]);
@@ -136,6 +146,7 @@ export default function MetodosPagoPage() {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
+    try {
     e.preventDefault();
     setIsSubmitting(true);
     
@@ -162,6 +173,11 @@ export default function MetodosPagoPage() {
       fetchData(); // Refresh list
     }
     setIsSubmitting(false);
+    } catch {
+      toast.error("No se pudo guardar el medio de pago. Revisa tu conexión.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleToggleActive = async (metodo: MetodoPago) => {
@@ -195,6 +211,7 @@ export default function MetodosPagoPage() {
   };
 
   const confirmDelete = async () => {
+    try {
     if (!metodoToDelete) return;
     setIsDeleting(true);
     const token = localStorage.getItem("token");
@@ -210,6 +227,11 @@ export default function MetodosPagoPage() {
       fetchData(); // Refresh list
     }
     setIsDeleting(false);
+    } catch {
+      toast.error("No se pudo eliminar el medio de pago. Intenta nuevamente.");
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const filteredMetodos = metodos.filter(m => 
@@ -220,7 +242,7 @@ export default function MetodosPagoPage() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="flex-none bg-white border-b border-slate-200 px-8 py-6">
+      <div className="flex-none bg-white border-b border-slate-200 px-4 sm:px-8 py-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 max-w-5xl mx-auto">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Métodos de Pago</h1>
@@ -239,12 +261,13 @@ export default function MetodosPagoPage() {
       </div>
 
       {/* Toolbar */}
-      <div className="flex-none px-8 py-4 bg-slate-50 border-b border-slate-200">
+      <div className="flex-none px-4 sm:px-8 py-4 bg-slate-50 border-b border-slate-200">
         <div className="max-w-5xl mx-auto">
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
-              placeholder="Buscar método o empresa..."
+              placeholder="Buscar medio de pago o entidad..."
+              aria-label="Buscar medio de pago o entidad"
               className="pl-10 bg-white"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -254,12 +277,14 @@ export default function MetodosPagoPage() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto bg-slate-50 px-8 py-6">
+      <div className="flex-1 overflow-auto bg-slate-50 px-4 sm:px-8 py-6">
         <div className="max-w-5xl mx-auto">
             {loading ? (
                  <div className="flex items-center justify-center h-64">
                  <div className="h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
                </div>
+            ) : loadError ? (
+                <div role="alert" className="space-y-3 rounded-lg border bg-white p-6 text-center"><p className="text-sm text-slate-700">{loadError}</p><Button variant="outline" onClick={fetchData}>Reintentar</Button></div>
             ) : filteredMetodos.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-64 text-slate-500 bg-white rounded-lg border border-slate-200 border-dashed">
                   <CreditCard className="h-12 w-12 mb-3 text-slate-300" />
@@ -267,12 +292,12 @@ export default function MetodosPagoPage() {
                   <p className="text-sm">Agrega un nuevo método para comenzar</p>
                 </div>
             ) : (
-                <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+                <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-x-auto">
                     <table className="w-full text-sm text-left">
                         <thead className="bg-slate-50 text-slate-700 border-b border-slate-200 font-medium">
                             <tr>
                                 <th className="px-6 py-4">Nombre</th>
-                                <th className="px-6 py-4">Empresa</th>
+                                <th className="px-6 py-4">Entidad</th>
                                 <th className="px-6 py-4">Estado</th>
                                 <th className="px-6 py-4 text-right">Acciones</th>
                             </tr>
@@ -316,6 +341,7 @@ export default function MetodosPagoPage() {
                                                 variant="ghost" 
                                                 size="icon" 
                                                 className="hover:bg-slate-200"
+                                                aria-label={`Editar ${metodo.nombre}`}
                                                 onClick={() => handleOpenModal(metodo)}
                                             >
                                                 <Edit className="h-4 w-4 text-slate-500" />
@@ -367,7 +393,7 @@ export default function MetodosPagoPage() {
                     
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="empresa" className="text-right">
-                            Empresa
+                            Entidad
                         </Label>
                         <div className="col-span-3">
                             <Select 
@@ -375,7 +401,7 @@ export default function MetodosPagoPage() {
                                 onValueChange={(val) => setFormData({...formData, empresaId: val})}
                             >
                                 <SelectTrigger>
-                                    <SelectValue placeholder="Seleccione una empresa" />
+                                    <SelectValue placeholder="Sin asignar" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="null">Ninguna</SelectItem>

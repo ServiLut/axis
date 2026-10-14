@@ -30,7 +30,11 @@ export function ClientLocationFields({ municipality, neighborhood, onChange }: {
         <select
           id={`${id}-location`}
           value={external ? "external" : "local"}
-          onChange={(e) => setExternalOverride(e.target.value === "external")}
+          onChange={(e) => {
+            const nextExternal = e.target.value === "external";
+            setExternalOverride(nextExternal);
+            if (nextExternal !== external) onChange("municipio", "");
+          }}
           className="block h-11 w-full rounded-md border border-input bg-white px-3 text-sm md:max-w-sm"
         >
           <option value="local">Antioquia, Colombia</option>

@@ -1,5 +1,6 @@
 "use server";
 import { clientPhoneVariants, normalizeClientPhone } from "@/lib/client-phone";
+import { getBogotaDateRange } from "@/lib/bogota-date";
 import { PSYCHOLOGY_TENANT_ID } from "@/lib/constants/tenants";
 
 import prisma from "@/lib/prisma";
@@ -32,6 +33,30 @@ interface ClientFilters {
   endDate?: string;
 }
 
+function patientPhoneSearch(term: string): Prisma.ClienteWhereInput[] {
+  const conditions: Prisma.ClienteWhereInput[] = [];
+  try {
+    const variants = clientPhoneVariants(term);
+    if (variants.length) conditions.push({ telefono: { in: variants } }, { telefono2: { in: variants } });
+  } catch {
+    // Names, documents and incomplete phones still use the existing text search.
+  }
+  if (/^[+\d\s().-]+$/.test(term)) {
+    const compact = term.replace(/[\s().-]/g, "");
+    if (compact && compact !== term) conditions.push({ telefono: { contains: compact } }, { telefono2: { contains: compact } });
+  }
+  return conditions;
+}
+
+function registrationDateFilter(filters: ClientFilters): { createdAt?: { gte?: Date; lt?: Date }; error?: string } {
+  try {
+    const createdAt = getBogotaDateRange(filters.startDate, filters.endDate);
+    return Object.keys(createdAt).length ? { createdAt } : {};
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Selecciona fechas válidas para el filtro de registro." };
+  }
+}
+
 export async function getClientes(
   token: string,
   page: number = 1,
@@ -58,6 +83,7 @@ export async function getClientes(
       };
     }
 
+    term = term.trim();
     if (term) {
       const searchWords = term.trim().split(/\s+/).filter(word => word.length > 0);
       
@@ -75,6 +101,7 @@ export async function getClientes(
           { telefono: { contains: term, mode: "insensitive" } },
           { telefono2: { contains: term, mode: "insensitive" } },
           { correo: { contains: term, mode: "insensitive" } },
+          ...patientPhoneSearch(term),
         ];
       }
     }
@@ -94,19 +121,9 @@ export async function getClientes(
       };
     }
 
-    // Filtros de Fecha de Creación
-    if (filters.startDate || filters.endDate) {
-      where.createdAt = {};
-      if (filters.startDate) {
-        where.createdAt.gte = new Date(filters.startDate);
-      }
-      if (filters.endDate) {
-        // Ajustar endDate para incluir todo el día
-        const end = new Date(filters.endDate);
-        end.setHours(23, 59, 59, 999);
-        where.createdAt.lte = end;
-      }
-    }
+    const dateFilter = registrationDateFilter(filters);
+    if (dateFilter.error) return { error: dateFilter.error };
+    if (dateFilter.createdAt) where.createdAt = dateFilter.createdAt;
 
     const skip = (page - 1) * limit;
 
@@ -660,6 +677,7 @@ export async function getAllClientesForExport(
       };
     }
 
+    term = term.trim();
     if (term) {
       const searchWords = term.trim().split(/\s+/).filter(word => word.length > 0);
       
@@ -677,6 +695,7 @@ export async function getAllClientesForExport(
           { telefono: { contains: term, mode: "insensitive" } },
           { telefono2: { contains: term, mode: "insensitive" } },
           { correo: { contains: term, mode: "insensitive" } },
+          ...patientPhoneSearch(term),
         ];
       }
     }
@@ -695,17 +714,9 @@ export async function getAllClientesForExport(
       };
     }
 
-    if (filters.startDate || filters.endDate) {
-      where.createdAt = {};
-      if (filters.startDate) {
-        where.createdAt.gte = new Date(filters.startDate);
-      }
-      if (filters.endDate) {
-        const end = new Date(filters.endDate);
-        end.setHours(23, 59, 59, 999);
-        where.createdAt.lte = end;
-      }
-    }
+    const dateFilter = registrationDateFilter(filters);
+    if (dateFilter.error) return { error: dateFilter.error };
+    if (dateFilter.createdAt) where.createdAt = dateFilter.createdAt;
 
     const clientes = await prisma.cliente.findMany({
       where,

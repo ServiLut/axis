@@ -3,6 +3,7 @@
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
 import { PSYCHOLOGY_TENANT_ID } from "@/lib/psychology";
+import { getBogotaDateRange } from "@/lib/bogota-date";
 import { Prisma } from "@/prisma/generated/prisma/client";
 
 export async function getAuditoria(
@@ -46,12 +47,10 @@ export async function getAuditoria(
     }
 
     if (filtros.fechaInicio || filtros.fechaFin) {
-      where.createdAt = {};
-      if (filtros.fechaInicio) {
-        where.createdAt.gte = new Date(filtros.fechaInicio);
-      }
-      if (filtros.fechaFin) {
-        where.createdAt.lte = new Date(filtros.fechaFin);
+      try {
+        where.createdAt = getBogotaDateRange(filtros.fechaInicio, filtros.fechaFin);
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : "Revise las fechas seleccionadas." };
       }
     }
 
@@ -241,15 +240,10 @@ export async function getAuditoriaForExport(
     if (filtros.entidadId) where.entidadId = filtros.entidadId;
 
     if (filtros.fechaInicio || filtros.fechaFin) {
-      where.createdAt = {};
-      if (filtros.fechaInicio) {
-        where.createdAt.gte = new Date(filtros.fechaInicio);
-      }
-      if (filtros.fechaFin) {
-        // Adjust end date to end of day
-        const end = new Date(filtros.fechaFin);
-        end.setHours(23, 59, 59, 999);
-        where.createdAt.lte = end;
+      try {
+        where.createdAt = getBogotaDateRange(filtros.fechaInicio, filtros.fechaFin);
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : "Revise las fechas seleccionadas." };
       }
     }
 

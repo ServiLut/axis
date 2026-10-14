@@ -64,10 +64,12 @@ interface Egreso {
 export default function EgresosPage() {
   const { role, tenantId, loading: roleLoading } = useUserRole();
   const router = useRouter();
+  const canManage = role === "ADMIN" || role === "SU_ADMIN";
 
   const [egresos, setEgresos] = useState<Egreso[]>([]);
   const [usuarios, setUsuarios] = useState<{ id: number; nombre: string; apellido: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [editingEgreso, setEditingEgreso] = useState<Egreso | null>(null);
@@ -82,18 +84,27 @@ export default function EgresosPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const fetchEgresos = useCallback(async () => {
+    setLoading(true);
+    setLoadError("");
+    try {
     const token = localStorage.getItem("token");
     if (!token) return;
     const res = await getEgresos(token);
     if (res.success) {
       setEgresos(res.data);
     } else {
-      toast.error(res.error || "Error al cargar egresos");
+      setLoadError(res.error || "No se pudieron cargar los gastos. Intenta nuevamente.");
     }
     setLoading(false);
+    } catch {
+      setLoadError("No se pudieron cargar los gastos. Intenta nuevamente.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   const fetchUsuarios = useCallback(async () => {
+    try {
     const token = localStorage.getItem("token");
     if (!token) return;
     const res = await getUsuarios(token);
@@ -101,6 +112,9 @@ export default function EgresosPage() {
       setUsuarios(res.data);
     } else {
       // Handle error silently or log
+    }
+    } catch {
+      toast.error("No se pudo cargar el equipo. Intenta nuevamente.");
     }
   }, []);
 
@@ -138,6 +152,7 @@ export default function EgresosPage() {
   };
 
   const handleSave = async () => {
+    try {
     if (!monto || !razon || !titulo) {
       toast.error("Complete los campos requeridos (Título, Monto, Razón)");
       return;
@@ -169,6 +184,11 @@ export default function EgresosPage() {
       toast.error(res.error || "Error al guardar");
     }
     setSubmitting(false);
+    } catch {
+      toast.error("No se pudo guardar el gasto. Revisa tu conexión.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleOpenDeleteModal = (id: string) => {
@@ -178,6 +198,7 @@ export default function EgresosPage() {
   };
 
   const handleDelete = async () => {
+    try {
     if (!deletingEgresoId) return;
 
     setSubmitting(true);
@@ -193,6 +214,11 @@ export default function EgresosPage() {
       toast.error(res.error || "Error al anular");
     }
     setSubmitting(false);
+    } catch {
+      toast.error("No se pudo anular el gasto. Intenta nuevamente.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (loading || roleLoading) {
@@ -205,7 +231,7 @@ export default function EgresosPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-none bg-white border-b border-slate-200 px-8 py-6">
+      <div className="flex-none bg-white border-b border-slate-200 px-4 sm:px-8 py-6">
         <div className="max-w-6xl mx-auto flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -226,9 +252,9 @@ export default function EgresosPage() {
         </div>
       </div>
 
-      <div className="flex-1 p-8 bg-slate-50 overflow-auto">
+      <div className="flex-1 p-4 sm:p-8 bg-slate-50 overflow-auto">
         <div className="max-w-6xl mx-auto">
-          {egresos.length === 0 ? (
+          {loadError ? (<div role="alert" className="space-y-3 rounded-lg border bg-white p-6 text-center"><p className="text-sm text-slate-700">{loadError}</p><Button variant="outline" onClick={fetchEgresos}>Reintentar</Button></div>) : egresos.length === 0 ? (
             <div className="text-center py-12 bg-white rounded-lg border border-dashed border-slate-300">
               <Wallet className="h-12 w-12 text-slate-300 mx-auto mb-3" />
               <h3 className="text-lg font-medium text-slate-900">No hay egresos registrados</h3>
@@ -280,10 +306,12 @@ export default function EgresosPage() {
                         ${(egreso.monto || 0).toLocaleString()}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
+                        {canManage && (egreso.monto || 0) > 0 && <div className="flex justify-end gap-2">
                           <Button
                             variant="ghost"
                             size="sm"
+                            aria-label="Editar gasto"
+                            title="Editar gasto"
                             onClick={() => handleOpenEditModal(egreso)}
                           >
                             <Edit className="h-4 w-4 text-slate-500" />
@@ -291,11 +319,13 @@ export default function EgresosPage() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            aria-label="Anular gasto"
+                            title="Anular gasto"
                             onClick={() => handleOpenDeleteModal(egreso.id)}
                           >
                             <Trash2 className="h-4 w-4 text-rose-500" />
                           </Button>
-                        </div>
+                        </div>}
                       </TableCell>
                     </TableRow>
                   ))}

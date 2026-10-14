@@ -146,6 +146,7 @@ export default function ClientesPage() {
     : false;
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Search & Pagination State
   const [searchTerm, setSearchTerm] = useState("");
@@ -172,102 +173,116 @@ export default function ClientesPage() {
   const [isServicesModalOpen, setIsServicesModalOpen] = useState(false);
   const router = useRouter();
 
+  const hasFilters = Boolean(searchTerm || selectedMunicipio !== "all" || barrioFilter || startDate || endDate || showOnlyNoServices);
+  const clearFilters = () => {
+    setSearchTerm("");
+    setDebouncedSearchTerm("");
+    setSelectedMunicipio("all");
+    setBarrioFilter("");
+    setStartDate("");
+    setEndDate("");
+    setShowOnlyNoServices(false);
+    setCurrentPage(1);
+  };
+
   const handleExportExcel = async () => {
     setIsExporting(true);
-    const token = localStorage.getItem("token");
-    if (!token) {
-      setIsExporting(false);
-      return;
-    }
-
-    const result = await getAllClientesForExport(
-      token,
-      debouncedSearchTerm,
-      showOnlyNoServices,
-      {
-        municipio: selectedMunicipio,
-        barrio: barrioFilter,
-        startDate,
-        endDate,
-      },
-    );
-
-    if (result.error) {
-      toast.error(result.error);
-      setIsExporting(false);
-      return;
-    }
-
-    const clientesParaExportar = result.clientes as Cliente[];
-
-    if (!clientesParaExportar || clientesParaExportar.length === 0) {
-      toast.error("No hay pacientes para exportar");
-      setIsExporting(false);
-      return;
-    }
-
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet("Pacientes");
-
-    const columns = [
-      { header: "Nombre", key: "nombre", width: 20 },
-      { header: "Apellido", key: "apellido", width: 20 },
-      { header: "Tipo Documento", key: "tipoDocumento", width: 15 },
-      { header: "Número Documento", key: "numeroDocumento", width: 20 },
-      { header: "Teléfono", key: "telefono", width: 15 },
-      { header: "Teléfono 2", key: "telefono2", width: 15 },
-      { header: "Correo", key: "correo", width: 25 },
-      { header: "Fecha Registro", key: "createdAt", width: 20 },
-      { header: "Direcciones", key: "direcciones", width: 50 },
-    ];
-
-    if (tenantId === 4) {
-      columns.splice(
-        8,
-        0,
-        { header: "Paquete", key: "paquete", width: 25 },
-        { header: "Sesiones Restantes", key: "sesiones", width: 15 },
-      );
-    }
-
-    worksheet.columns = columns;
-
-    clientesParaExportar.forEach((cliente: Cliente) => {
-      const rowData: Record<string, unknown> = {
-        nombre: cliente.nombre || "",
-        apellido: cliente.apellido || "",
-        tipoDocumento: cliente.tipoDocumento || "",
-        numeroDocumento: cliente.numeroDocumento || "",
-        telefono: cliente.telefono || "",
-        telefono2: cliente.telefono2 || "",
-        correo: cliente.correo || "",
-        createdAt: new Date(cliente.createdAt).toLocaleString(),
-        direcciones: cliente.direcciones
-          .map((d) => `${d.direccion} (${d.municipio || ""})`)
-          .join(" | "),
-      };
-
-      if (tenantId === 4 && cliente.PaqueteAdquirido?.[0]) {
-        rowData.paquete = cliente.PaqueteAdquirido[0].TerapiasPsicologos.nombre;
-        rowData.sesiones = `${cliente.PaqueteAdquirido[0].saldoRestante} / ${cliente.PaqueteAdquirido[0].sesionesTotales}`;
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        return;
       }
 
-      worksheet.addRow(rowData);
-    });
+      const result = await getAllClientesForExport(
+        token,
+        searchTerm.trim(),
+        showOnlyNoServices,
+        {
+          municipio: selectedMunicipio,
+          barrio: barrioFilter,
+          startDate,
+          endDate,
+        },
+      );
 
-    worksheet.getRow(1).font = { bold: true };
-    worksheet.getRow(1).fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "F2F2F2" },
-    };
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
 
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    });
-    saveAs(blob, `clientes_${new Date().toISOString().split("T")[0]}.xlsx`);
-    setIsExporting(false);
+      const clientesParaExportar = result.clientes as Cliente[];
+
+      if (!clientesParaExportar || clientesParaExportar.length === 0) {
+        toast.error("No hay pacientes para exportar");
+        return;
+      }
+
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Pacientes");
+
+      const columns = [
+        { header: "Nombre", key: "nombre", width: 20 },
+        { header: "Apellido", key: "apellido", width: 20 },
+        { header: "Tipo Documento", key: "tipoDocumento", width: 15 },
+        { header: "Número Documento", key: "numeroDocumento", width: 20 },
+        { header: "Teléfono", key: "telefono", width: 15 },
+        { header: "Teléfono 2", key: "telefono2", width: 15 },
+        { header: "Correo", key: "correo", width: 25 },
+        { header: "Fecha Registro", key: "createdAt", width: 20 },
+        { header: "Direcciones", key: "direcciones", width: 50 },
+      ];
+
+      if (tenantId === 4) {
+        columns.splice(
+          8,
+          0,
+          { header: "Paquete", key: "paquete", width: 25 },
+          { header: "Sesiones Restantes", key: "sesiones", width: 15 },
+        );
+      }
+
+      worksheet.columns = columns;
+
+      clientesParaExportar.forEach((cliente: Cliente) => {
+        const rowData: Record<string, unknown> = {
+          nombre: cliente.nombre || "",
+          apellido: cliente.apellido || "",
+          tipoDocumento: cliente.tipoDocumento || "",
+          numeroDocumento: cliente.numeroDocumento || "",
+          telefono: cliente.telefono || "",
+          telefono2: cliente.telefono2 || "",
+          correo: cliente.correo || "",
+          createdAt: new Date(cliente.createdAt).toLocaleString(),
+          direcciones: cliente.direcciones
+            .map((d) => `${d.direccion} (${d.municipio || ""})`)
+            .join(" | "),
+        };
+
+        if (tenantId === 4 && cliente.PaqueteAdquirido?.[0]) {
+          rowData.paquete = cliente.PaqueteAdquirido[0].TerapiasPsicologos.nombre;
+          rowData.sesiones = `${cliente.PaqueteAdquirido[0].saldoRestante} / ${cliente.PaqueteAdquirido[0].sesionesTotales}`;
+        }
+
+        worksheet.addRow(rowData);
+      });
+
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "F2F2F2" },
+      };
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      saveAs(blob, `pacientes_${new Date().toISOString().split("T")[0]}.xlsx`);
+    } catch {
+      toast.error("No se pudo exportar el listado de pacientes. Intenta nuevamente.");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const [showKPIs, setShowKPIs] = useState(() => {
@@ -305,56 +320,47 @@ export default function ClientesPage() {
     fetchStats();
   }, [refreshTrigger]); // Reload stats on refresh too
 
-  // Fetch clients on page/search/refresh change
+  // Ignore earlier requests when filters or pages change while a response is pending.
   useEffect(() => {
+    let cancelled = false;
     const fetchClientes = async () => {
       setLoading(true);
-      const token = localStorage.getItem("token");
-      if (!token) {
-        router.push("/sign-in");
-        return;
-      }
-
-      const result = await getClientes(
-        token,
-        currentPage,
-        itemsPerPage,
-        debouncedSearchTerm,
-        showOnlyNoServices,
-        {
+      setLoadError(null);
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          router.push("/sign-in");
+          return;
+        }
+        const result = await getClientes(token, currentPage, itemsPerPage, debouncedSearchTerm, showOnlyNoServices, {
           municipio: selectedMunicipio,
           barrio: barrioFilter,
           startDate,
           endDate,
-        },
-      );
-
-      if (result.error) {
-        toast.error(result.error);
-        if (result.error === "No autorizado") {
-          router.push("/sign-in");
+        });
+        if (cancelled) return;
+        if (result.error) {
+          setLoadError(result.error);
+          if (result.error === "No autorizado") router.push("/sign-in");
+        } else if (result.clientes) {
+          const pages = Math.max(result.totalPages || 1, 1);
+          setTotalPages(pages);
+          setTotalRecords(result.total || 0);
+          if (currentPage > pages) {
+            setCurrentPage(pages);
+            return;
+          }
+          setClientes(result.clientes as Cliente[]);
         }
-      } else if (result.clientes) {
-        setClientes(result.clientes as Cliente[]);
-        setTotalPages(result.totalPages || 1);
-        setTotalRecords(result.total || 0);
+      } catch {
+        if (!cancelled) setLoadError("No se pudieron cargar los pacientes. Reintenta la consulta.");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-
-      setLoading(false);
     };
-
-    fetchClientes();
-  }, [
-    router,
-    currentPage,
-    debouncedSearchTerm,
-    refreshTrigger,
-    showOnlyNoServices,
-    selectedMunicipio,
-    barrioFilter,
-    startDate,
-    endDate,
-  ]);
+    void fetchClientes();
+    return () => { cancelled = true; };
+  }, [router, currentPage, debouncedSearchTerm, refreshTrigger, showOnlyNoServices, selectedMunicipio, barrioFilter, startDate, endDate]);
 
   const handleViewCliente = async (id: number) => {
     const token = localStorage.getItem("token");
@@ -405,6 +411,7 @@ export default function ClientesPage() {
     } else {
       toast.success(result.message);
       // Actualizar la lista localmente
+      if (clientes.length === 1 && currentPage > 1) setCurrentPage((page) => page - 1);
       setRefreshTrigger((prev) => prev + 1); // Trigger refresh
       // Also update stats if needed or just decrement locally
       if (stats) {
@@ -578,7 +585,7 @@ export default function ClientesPage() {
               })),
             ]}
             value={selectedMunicipio}
-            onChange={setSelectedMunicipio}
+            onChange={(value) => { setSelectedMunicipio(value); setCurrentPage(1); }}
             placeholder="Municipio"
             className="w-full md:w-[180px]"
           />
@@ -587,7 +594,7 @@ export default function ClientesPage() {
             aria-label="Filtrar pacientes por barrio"
             placeholder="Filtrar por barrio..."
             value={barrioFilter}
-            onChange={(e) => setBarrioFilter(e.target.value)}
+            onChange={(e) => { setBarrioFilter(e.target.value); setCurrentPage(1); }}
             className="w-full md:w-[180px] bg-white"
           />
 
@@ -599,7 +606,7 @@ export default function ClientesPage() {
               type="date"
               aria-label="Registrados desde"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={(e) => { setStartDate(e.target.value); setCurrentPage(1); }}
               className="w-[130px] border-0 focus-visible:ring-0 h-7 p-1 text-xs"
             />
             <span className="text-slate-300">-</span>
@@ -607,7 +614,7 @@ export default function ClientesPage() {
               type="date"
               aria-label="Registrados hasta"
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
+              onChange={(e) => { setEndDate(e.target.value); setCurrentPage(1); }}
               className="w-[130px] border-0 focus-visible:ring-0 h-7 p-1 text-xs"
             />
           </div>
@@ -629,23 +636,11 @@ export default function ClientesPage() {
             </Label>
           </div>
 
-          {(searchTerm ||
-            selectedMunicipio !== "all" ||
-            barrioFilter ||
-            startDate ||
-            endDate ||
-            showOnlyNoServices) && (
+          {hasFilters && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => {
-                setSearchTerm("");
-                setSelectedMunicipio("all");
-                setBarrioFilter("");
-                setStartDate("");
-                setEndDate("");
-                setShowOnlyNoServices(false);
-              }}
+              onClick={clearFilters}
               className="text-slate-500 hover:text-red-600 hover:bg-red-50 h-8 px-2"
               title="Borrar filtros"
             >
@@ -728,11 +723,17 @@ export default function ClientesPage() {
                 </tbody>
               </table>
             </div>
+          ) : loadError ? (
+            <div role="alert" className="space-y-3 rounded-lg border border-slate-200 bg-white p-6 text-center">
+              <p className="text-sm text-slate-700">{loadError}</p>
+              <Button variant="outline" onClick={() => setRefreshTrigger((previous) => previous + 1)}>Reintentar</Button>
+            </div>
           ) : clientes.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-slate-500 bg-white rounded-lg border border-slate-200 border-dashed">
               <User className="h-12 w-12 mb-3 text-slate-300" />
               <p className="font-medium">No se encontraron pacientes</p>
-              <p className="text-sm">Agrega un nuevo paciente para comenzar</p>
+              <p className="text-sm">{hasFilters ? "Prueba con otros datos o limpia los filtros." : "Registra un paciente para comenzar."}</p>
+              {hasFilters && <Button variant="link" onClick={clearFilters}>Limpiar filtros</Button>}
             </div>
           ) : (
             <>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -34,37 +34,50 @@ export default function BalancesPage() {
 
   const [balance, setBalance] = useState<BalanceSummary | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [resultKey, setResultKey] = useState("");
+  const requestId = useRef(0);
+  const periodKey = `${startDate}:${endDate}`;
+  const isAdmin = role === "ADMIN" || role === "SU_ADMIN";
 
   const updateFilters = (start: string, end: string) => {
     setStartDate(start);
     setEndDate(end);
     const params = new URLSearchParams(searchParams);
-    if (start) params.set("startDate", start);
-    if (end) params.set("endDate", end);
+    if (start) params.set("startDate", start); else params.delete("startDate");
+    if (end) params.set("endDate", end); else params.delete("endDate");
     router.replace(`?${params.toString()}`);
   };
 
   const fetchBalance = useCallback(async () => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
+    if (roleLoading || !isAdmin) return;
+    const currentRequest = ++requestId.current;
+    const key = `${startDate}:${endDate}`;
     setLoading(true);
-    // Ensure we send Date objects or valid ISO strings
-    // The input type="date" returns "yyyy-mm-dd" which works with new Date()
-    const start = new Date(startDate);
-    // Add time to end date to cover the full day
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
-
-    const res = await getBalanceGeneral(token, start, end);
-    
-    if (res.success) {
+    setLoadError("");
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Inicia sesión para consultar el resumen.");
+      // The server interprets these ISO calendar dates as whole Bogotá days.
+      const start = new Date(`${startDate}T00:00:00.000Z`);
+      const end = new Date(`${endDate}T00:00:00.000Z`);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate) || !Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || start.toISOString().slice(0, 10) !== startDate || end.toISOString().slice(0, 10) !== endDate || start > end) {
+        throw new Error("Selecciona un periodo válido: la fecha final debe ser igual o posterior a la inicial.");
+      }
+      const res = await getBalanceGeneral(token, start, end);
+      if (requestId.current !== currentRequest) return;
+      if (!res.success) throw new Error(res.error || "No se pudo calcular el resumen.");
       setBalance(res.data);
-    } else {
-      toast.error(res.error || "Error al calcular balance");
+      setResultKey(key);
+    } catch (error) {
+      if (requestId.current !== currentRequest) return;
+      setBalance(null);
+      setResultKey(key);
+      setLoadError(error instanceof Error ? error.message : "No se pudo cargar el resumen. Revisa tu conexión e intenta nuevamente.");
+    } finally {
+      if (requestId.current === currentRequest) setLoading(false);
     }
-    setLoading(false);
-  }, [startDate, endDate]);
+  }, [startDate, endDate, roleLoading, isAdmin]);
 
   useEffect(() => {
     if (!roleLoading && role !== "ADMIN" && role !== "SU_ADMIN") {
@@ -74,11 +87,11 @@ export default function BalancesPage() {
   }, [role, roleLoading, router]);
 
   useEffect(() => {
-    fetchBalance();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    void fetchBalance();
+    return () => { requestId.current += 1; };
+  }, [fetchBalance]);
 
-  if (roleLoading) {
+  if (roleLoading || !isAdmin) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="h-8 w-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
@@ -88,7 +101,7 @@ export default function BalancesPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-none bg-white border-b border-slate-200 px-8 py-6">
+      <div className="flex-none bg-white border-b border-slate-200 px-4 sm:px-8 py-6">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -100,13 +113,14 @@ export default function BalancesPage() {
             </p>
           </div>
           
-          <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-lg border border-slate-200">
+          <div className="flex w-full flex-wrap items-center gap-2 bg-slate-50 p-1 rounded-lg border border-slate-200 md:w-auto">
             <div className="flex items-center gap-2 px-2">
                 <Calendar className="w-4 h-4 text-slate-500" />
                 <span className="text-xs font-medium text-slate-700">Periodo:</span>
             </div>
             <Input
                 type="date"
+                aria-label="Fecha inicial del resumen"
                 value={startDate}
                 onChange={(e) => updateFilters(e.target.value, endDate)}
                 className="w-32 h-8 text-xs border-slate-200"
@@ -114,6 +128,7 @@ export default function BalancesPage() {
             <span className="text-slate-400">-</span>
             <Input
                 type="date"
+                aria-label="Fecha final del resumen"
                 value={endDate}
                 onChange={(e) => updateFilters(startDate, e.target.value)}
                 className="w-32 h-8 text-xs border-slate-200"
@@ -130,15 +145,20 @@ export default function BalancesPage() {
         </div>
       </div>
 
-      <div className="flex-1 p-8 bg-slate-50 overflow-auto">
+      <div className="flex-1 p-4 sm:p-8 bg-slate-50 overflow-auto">
         <div className="max-w-6xl mx-auto space-y-6">
             
-            {loading ? (
+            {loading || resultKey !== periodKey ? (
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {[1, 2, 3].map((i) => (
                         <div key={i} className="h-32 bg-slate-200 animate-pulse rounded-xl" />
                     ))}
                  </div>
+            ) : loadError ? (
+                <div role="alert" className="space-y-3 rounded-lg border bg-white p-6 text-center">
+                  <p className="text-sm text-slate-700">{loadError}</p>
+                  <Button variant="outline" onClick={fetchBalance}>Reintentar</Button>
+                </div>
             ) : balance ? (
                 <>
                     {balance.isTenant4 && <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">

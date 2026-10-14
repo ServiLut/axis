@@ -103,6 +103,7 @@ export default function CuentaCobroPage() {
   const [selectedCuentaTurnos, setSelectedCuentaTurnos] = useState<Turno[]>([]);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
+  const [loadError, setLoadError] = useState("");
   
   // PDF state
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -116,6 +117,9 @@ export default function CuentaCobroPage() {
   const router = useRouter();
 
   const fetchData = useCallback(async () => {
+    setLoading(true);
+    setLoadError("");
+    try {
     const token = localStorage.getItem("token");
     if (!token) {
       router.push("/sign-in");
@@ -127,13 +131,20 @@ export default function CuentaCobroPage() {
         getCuentasCobro(token)
     ]);
 
-    if (resTurnos.error) toast.error(resTurnos.error);
-    if (resCuentas.error) toast.error(resCuentas.error);
+    if (resTurnos.error || resCuentas.error) {
+      setLoadError(resTurnos.error || resCuentas.error || "No se pudieron cargar las cuentas.");
+      return;
+    }
 
     if (resTurnos.turnos) setTurnos(resTurnos.turnos as Turno[]);
     if (resCuentas.cuentas) setCuentas(resCuentas.cuentas as CuentaCobro[]);
     
     setLoading(false);
+    } catch {
+      setLoadError("No se pudieron cargar los turnos y las cuentas. Intenta nuevamente.");
+    } finally {
+      setLoading(false);
+    }
   }, [router]);
 
   useEffect(() => {
@@ -161,7 +172,7 @@ export default function CuentaCobroPage() {
         setEditingId(null);
         setCurrentTurno(null);
         setFormData({
-            fecha: new Date().toISOString().split('T')[0],
+            fecha: formatInTimeZone(new Date(), "America/Bogota", "yyyy-MM-dd"),
             horaEntrada: "",
             horaSalida: "",
             tiempoDescanso: "0",
@@ -235,6 +246,7 @@ export default function CuentaCobroPage() {
             try {
                 const compressedFile = await imageCompression(fotoLlegada, options);
                 const url = await uploadImage(compressedFile, "fotoEntrada");
+                if (!url) throw new Error("No se pudo subir la foto de llegada");
                 if (url) data.append("fotoEntradaUrl", url);
             } catch (error) {
                 console.error("Error processing fotoLlegada:", error);
@@ -248,6 +260,7 @@ export default function CuentaCobroPage() {
             try {
                  const compressedFile = await imageCompression(fotoSalida, options);
                  const url = await uploadImage(compressedFile, "fotoSalida");
+                 if (!url) throw new Error("No se pudo subir la foto de salida");
                  if (url) data.append("fotoSalidaUrl", url);
             } catch (error) {
                 console.error("Error processing fotoSalida:", error);
@@ -305,6 +318,7 @@ export default function CuentaCobroPage() {
   };
 
   const confirmDelete = async () => {
+    try {
     if (!turnoToDelete) return;
     setIsDeleting(true);
     const token = localStorage.getItem("token");
@@ -320,9 +334,15 @@ export default function CuentaCobroPage() {
       fetchData();
     }
     setIsDeleting(false);
+    } catch {
+      toast.error("No se pudo eliminar el turno. Intenta nuevamente.");
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleClosePeriod = async () => {
+    try {
     setIsClosingPeriod(true);
     const token = localStorage.getItem("token");
     if (!token) return;
@@ -336,11 +356,18 @@ export default function CuentaCobroPage() {
         fetchData();
     }
     setIsClosingPeriod(false);
+    } catch {
+      toast.error("No se pudo cerrar el periodo. Intenta nuevamente.");
+    } finally {
+      setIsClosingPeriod(false);
+    }
   };
 
   const handleViewDetails = async (id: number) => {
+    try {
       setIsDetailsModalOpen(true);
       setLoadingDetails(true);
+      setSelectedCuentaTurnos([]);
       
       const token = localStorage.getItem("token");
       if (token) {
@@ -348,13 +375,19 @@ export default function CuentaCobroPage() {
           if (res.turnos) {
               setSelectedCuentaTurnos(res.turnos as Turno[]);
           } else {
-              toast.error("Error cargando detalles");
+              toast.error(res.error || "Error cargando detalles");
           }
       }
       setLoadingDetails(false);
+    } catch {
+      toast.error("No se pudo cargar el detalle de los turnos. Intenta nuevamente.");
+    } finally {
+      setLoadingDetails(false);
+    }
   };
 
   const handleDownloadPdf = async (id: number) => {
+    try {
     setIsGeneratingPdf(true);
     const token = localStorage.getItem("token");
     if(!token) return;
@@ -590,9 +623,15 @@ export default function CuentaCobroPage() {
     } finally {
         setIsGeneratingPdf(false);
     }
+    } catch {
+      toast.error("No se pudo generar el PDF. Intenta nuevamente.");
+    } finally {
+      setIsGeneratingPdf(false);
+    }
   };
 
   const handleSendCuentaCobro = async (id: number) => {
+    try {
     setIsSending(true);
     const token = localStorage.getItem("token");
     if (!token) return;
@@ -605,9 +644,15 @@ export default function CuentaCobroPage() {
         fetchData();
     }
     setIsSending(false);
+    } catch {
+      toast.error("No se pudo enviar la cuenta a revisión. Intenta nuevamente.");
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const handleUpdateStatus = async (id: number, status: "PAGADA" | "RECHAZADA") => {
+    try {
     setIsUpdatingStatus(id);
     const token = localStorage.getItem("token");
     if (!token) return;
@@ -620,6 +665,11 @@ export default function CuentaCobroPage() {
         fetchData();
     }
     setIsUpdatingStatus(null);
+    } catch {
+      toast.error("No se pudo actualizar el estado de la cuenta. Intenta nuevamente.");
+    } finally {
+      setIsUpdatingStatus(null);
+    }
   };
 
   const filteredTurnos = turnos.filter(t => 
@@ -648,10 +698,12 @@ export default function CuentaCobroPage() {
     { days: 0, hours: 0, breakMinutes: 0, money: 0 }
   );
 
+  if (loadError) return <div role="alert" className="m-4 space-y-3 rounded-lg border bg-white p-6 text-center"><h1 className="text-lg font-semibold">Cuentas de cobro por turnos</h1><p className="text-sm text-slate-700">{loadError}</p><Button variant="outline" onClick={fetchData}>Reintentar</Button></div>;
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="flex-none bg-white border-b border-slate-200 px-8 py-6">
+      <div className="flex-none bg-white border-b border-slate-200 px-4 sm:px-8 py-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 max-w-5xl mx-auto">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Cuentas de cobro por turnos</h1>
@@ -662,7 +714,7 @@ export default function CuentaCobroPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto bg-slate-50 px-8 py-6">
+      <div className="flex-1 overflow-auto bg-slate-50 px-4 sm:px-8 py-6">
           <div className="max-w-5xl mx-auto">
               <Tabs defaultValue="actual" className="w-full">
                   <TabsList className={`grid w-full mb-6 ${isAdmin ? 'grid-cols-3 max-w-[600px]' : 'grid-cols-2 max-w-[400px]'}`}>
@@ -683,7 +735,7 @@ export default function CuentaCobroPage() {
                             onChange={(e) => setSearchTerm(e.target.value)}
                             />
                         </div>
-                        <div className="flex gap-3 w-full md:w-auto">
+                        <div className="flex flex-wrap gap-3 w-full md:w-auto">
                             {filteredTurnos.length > 0 && (
                                 <Button 
                                     variant="outline"

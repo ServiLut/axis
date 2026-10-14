@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -45,7 +45,13 @@ type ServiceSource = "PACKAGE" | "NEW_THERAPY" | "LEGACY";
 
 export default function NuevoCitaPage() {
   const [saving, setSaving] = useState(false);
+  const userSelectedClient = useRef(false);
   const [loadingData, setLoadingData] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadRevision, setLoadRevision] = useState(0);
+  const [loadingPackages, setLoadingPackages] = useState(false);
+  const [packagesError, setPackagesError] = useState<string | null>(null);
+  const [packagesRevision, setPackagesRevision] = useState(0);
   const [mode, setMode] = useState<AppointmentMode>(null);
   
   // Data State
@@ -108,12 +114,15 @@ export default function NuevoCitaPage() {
 
   // Handle pre-selected client from URL
   useEffect(() => {
+    let current = true;
+    userSelectedClient.current = false;
     const fetchPreSelectedClient = async () => {
       if (preSelectedClienteId) {
         const token = localStorage.getItem("token");
         if (!token) return;
 
         const result = await getCliente(token, Number(preSelectedClienteId));
+        if (!current || userSelectedClient.current) return;
         if (result.cliente) {
             const client = result.cliente as unknown as Cliente;
             setClientes(prev => {
@@ -125,7 +134,10 @@ export default function NuevoCitaPage() {
         }
       }
     };
-    fetchPreSelectedClient();
+    void fetchPreSelectedClient().catch(() => {
+      if (current && !userSelectedClient.current) toast.error("No se pudo cargar el paciente. Puede buscarlo en el formulario.");
+    });
+    return () => { current = false; };
   }, [preSelectedClienteId]);
 
   // Handle therapy selection and price update
@@ -140,6 +152,7 @@ export default function NuevoCitaPage() {
   };
 
   const handleModeChange = (newMode: AppointmentMode) => {
+      userSelectedClient.current = true;
       setMode(newMode);
       if (newMode === "ALQUILER") {
           const rentalPackage = rentalService;
@@ -192,113 +205,107 @@ export default function NuevoCitaPage() {
     label: `${p.nombre} ${p.apellido}`
   }));
 
-  // Initial data fetch
+  // A failed read must leave a recoverable form instead of a permanent spinner.
   useEffect(() => {
+    let current = true;
     const fetchData = async () => {
+      setLoadingData(true);
+      setLoadError(null);
       const token = localStorage.getItem("token");
-      if (!token) {
-        router.push("/sign-in");
-        return;
+      if (!token) { router.push("/sign-in"); return; }
+      try {
+        const data = await getFormDataCitas(token);
+        if (!current) return;
+        if (data.error) { setLoadError(data.error); return; }
+        setPsicologos((data.tecnicos as Usuario[]) || []);
+        setConsultoriosList((data.consultorios as consultorios[]) || []);
+        setMetodosPago((data.metodosPago as {id: number, nombre: string}[]) || []);
+        setTerapias((data.terapias as TerapiasPsicologos[]) || []);
+      } catch {
+        if (current) setLoadError("No se pudo cargar el formulario. Revise su conexión e intente nuevamente.");
+      } finally {
+        if (current) setLoadingData(false);
       }
-
-      const data = await getFormDataCitas(token);
-      
-      if (data.error) {
-        toast.error(data.error);
-        return;
-      }
-
-      setPsicologos((data.tecnicos as Usuario[]) || []);
-      setConsultoriosList((data.consultorios as consultorios[]) || []);
-      setMetodosPago((data.metodosPago as {id: number, nombre: string}[]) || []);
-      setTerapias((data.terapias as TerapiasPsicologos[]) || []);
-      
-      setLoadingData(false);
     };
+    void fetchData();
+    return () => { current = false; };
+  }, [router, loadRevision]);
 
-    fetchData();
-  }, [router]);
-
-  // Debounced client search
+  // Ignore responses belonging to an earlier search or patient selection.
   useEffect(() => {
+    let current = true;
     const search = async () => {
       if (debouncedClientSearchTerm.length < 6) {
-        if (selectedClienteId) {
-            setClientes(prev => {
-                const selectedClient = prev.find(c => c.id.toString() === selectedClienteId);
-                return selectedClient ? [selectedClient] : [];
-            });
-        } else {
-            setClientes([]);
-        }
-        return;
-      }
-
-      setIsSearchingClients(true);
-      const token = localStorage.getItem("token");
-      if (!token) {
+        setClientes((previous) => previous.filter((client) => client.id.toString() === selectedClienteId));
         setIsSearchingClients(false);
         return;
-      };
-
-      const result = await searchClientes(token, debouncedClientSearchTerm);
-      
-      if (result.error) {
-        toast.error(result.error);
-        setClientes([]);
-      } else if (result.clientes) {
-        setClientes(prev => {
-            const selectedClient = prev.find(c => c.id.toString() === selectedClienteId);
-            if (selectedClient && !result.clientes!.some((c: Cliente) => c.id === selectedClient.id)) {
-                return [selectedClient, ...result.clientes!];
-            }
-            return result.clientes!;
-        });
       }
-      setIsSearchingClients(false);
+      setIsSearchingClients(true);
+      const token = localStorage.getItem("token");
+      if (!token) { setIsSearchingClients(false); return; }
+      try {
+        const result = await searchClientes(token, debouncedClientSearchTerm);
+        if (!current) return;
+        if (result.error) { setClientes((previous) => previous.filter((client) => client.id.toString() === selectedClienteId)); toast.error(result.error); return; }
+        if (result.clientes) {
+          setClientes((previous) => {
+            const selectedClient = previous.find((client) => client.id.toString() === selectedClienteId);
+            return selectedClient && !result.clientes!.some((client) => client.id === selectedClient.id)
+              ? [selectedClient, ...result.clientes!] : result.clientes!;
+          });
+        }
+      } catch {
+        if (current) { setClientes((previous) => previous.filter((client) => client.id.toString() === selectedClienteId)); toast.error("No se pudo buscar el paciente. Intente nuevamente."); }
+      } finally {
+        if (current) setIsSearchingClients(false);
+      }
     };
-
-    search();
+    void search();
+    return () => { current = false; };
   }, [debouncedClientSearchTerm, selectedClienteId]);
 
-  // Fetch packages when client changes
+  // Package results must always belong to the patient currently selected.
   useEffect(() => {
-      const fetchPackages = async () => {
-          if (!selectedClienteId) {
-              setActivePackages([]);
-              return;
-          }
-          
-          const token = localStorage.getItem("token");
-          if (!token) return;
-
-          const res = await getClientPackages(token, Number(selectedClienteId));
-          if (res.packages) {
-              const packages = res.packages as unknown as (PaqueteAdquirido & { TerapiasPsicologos: TerapiasPsicologos })[];
-              setActivePackages(packages);
-              // Auto-select source if packages exist
-              if (packages.length > 0) {
-                  setServiceSource("PACKAGE");
-                  setSelectedPaqueteId(packages[0].id.toString());
-              } else {
-                  setServiceSource("NEW_THERAPY");
-                  setSelectedPaqueteId("");
-              }
-          }
-      };
-      
-      if (mode === "PLANTA") {
-        fetchPackages();
+    let current = true;
+    const fetchPackages = async () => {
+      setActivePackages([]);
+      setSelectedPaqueteId("");
+      setPackagesError(null);
+      if (mode !== "PLANTA" || !selectedClienteId) { setLoadingPackages(false); return; }
+      setLoadingPackages(true);
+      const token = localStorage.getItem("token");
+      if (!token) { setLoadingPackages(false); return; }
+      try {
+        const result = await getClientPackages(token, Number(selectedClienteId));
+        if (!current) return;
+        if (result.error) { setPackagesError(result.error); return; }
+        const packages = (result.packages || []) as unknown as (PaqueteAdquirido & { TerapiasPsicologos: TerapiasPsicologos })[];
+        setActivePackages(packages);
+        setServiceSource(packages.length ? "PACKAGE" : "NEW_THERAPY");
+        setSelectedPaqueteId(packages[0]?.id.toString() || "");
+      } catch {
+        if (current) setPackagesError("No se pudieron consultar los paquetes del paciente.");
+      } finally {
+        if (current) setLoadingPackages(false);
       }
-  }, [selectedClienteId, mode]);
+    };
+    void fetchPackages();
+    return () => { current = false; };
+  }, [selectedClienteId, mode, packagesRevision]);
 
   const handleClientChange = (clientId: string) => {
-      setSelectedClienteId(clientId);
-      setSelectedPaqueteId("");
-  }
+    userSelectedClient.current = true;
+    setSelectedClienteId(clientId);
+    setSelectedPaqueteId("");
+    setActivePackages([]);
+    setServiceSource("NEW_THERAPY");
+    setPackagesError(null);
+    setLoadingPackages(Boolean(clientId));
+  };
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (saving || (mode === "PLANTA" && (loadingPackages || packagesError))) return;
     setSaving(true);
     
     const formData = new FormData(event.currentTarget);
@@ -316,8 +323,10 @@ export default function NuevoCitaPage() {
         return;
     }
 
-    if (selectedClienteId) {
+    if (mode === "PLANTA" && selectedClienteId) {
       formData.set("cliente", selectedClienteId);
+    } else {
+      formData.delete("cliente");
     }
     
     if (!selectedPsicologoId) { toast.error("Asigna un profesional a la cita o reserva."); setSaving(false); return; }
@@ -355,15 +364,15 @@ export default function NuevoCitaPage() {
         formData.set("terapiaId", rentalService.id.toString());
     }
 
-    const result = await createCita(token, formData);
-
-    if (result.error) {
-      toast.error(result.error);
-    } else {
-      toast.success(result.message);
-      router.push("/dashboard/citas");
+    try {
+      const result = await createCita(token, formData);
+      if (result.error) toast.error(result.error);
+      else { toast.success(result.message); router.push("/dashboard/citas"); }
+    } catch {
+      toast.error("No se pudo guardar la cita. Sus datos se conservan para intentar nuevamente.");
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   }
 
   if (loadingData) {
@@ -373,6 +382,16 @@ export default function NuevoCitaPage() {
       </div>
     );
   }
+
+  if (loadError) return (
+    <div role="alert" className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
+      <p className="text-sm text-slate-700">{loadError}</p>
+      <div className="flex flex-wrap justify-center gap-3">
+        <Button type="button" variant="outline" onClick={() => router.push("/dashboard/citas")}>Volver a citas</Button>
+        <Button type="button" onClick={() => setLoadRevision((revision) => revision + 1)}>Reintentar</Button>
+      </div>
+    </div>
+  );
 
   if (!mode) {
       return (
@@ -573,7 +592,7 @@ export default function NuevoCitaPage() {
                   Consultorio
                 </Label>
                 <Select name="consultorio">
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger id="consultorio" className="h-11">
                     <SelectValue placeholder="Seleccione un consultorio" />
                   </SelectTrigger>
                   <SelectContent>
@@ -591,7 +610,7 @@ export default function NuevoCitaPage() {
                   htmlFor="tecnico"
                   className="text-sm font-medium text-slate-700"
                 >
-                  Psicólogo asignado
+                  Psicólogo asignado <span className="text-red-500">*</span>
                 </Label>
                 <Combobox
                   id="tecnico"
@@ -608,7 +627,11 @@ export default function NuevoCitaPage() {
               {mode === "PLANTA" ? (
                   <div className="md:col-span-2 space-y-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
                       <Label className="text-base font-semibold">Servicio para esta sesión</Label>
+                      {loadingPackages && <p role="status" className="text-sm text-slate-600">Consultando paquetes del paciente…</p>}
+                      {packagesError && <div role="alert" className="space-y-2 text-sm text-amber-800"><p>{packagesError}</p><Button type="button" variant="outline" size="sm" onClick={() => setPackagesRevision((revision) => revision + 1)}>Reintentar consulta</Button></div>}
                       <RadioGroup 
+                        disabled={loadingPackages || Boolean(packagesError)}
+                        aria-label="Cómo usar el servicio"
                         value={serviceSource} 
                         onValueChange={(val) => handleServiceSourceChange(val as ServiceSource)}
                         className="flex flex-col md:flex-row gap-4 mb-4"
@@ -629,6 +652,8 @@ export default function NuevoCitaPage() {
                           <div className="space-y-2">
                             <Label htmlFor="terapiaId">Servicio de psicología <span className="text-red-500">*</span></Label>
                             <Combobox 
+                                id="terapiaId"
+                                disabled={loadingPackages || Boolean(packagesError)}
                                 options={terapiaOptions}
                                 value={selectedTerapiaId} 
                                 onChange={handleTerapiaChange}
@@ -645,10 +670,11 @@ export default function NuevoCitaPage() {
                           <div className="space-y-2">
                             <Label htmlFor="paqueteId">Paquete disponible <span className="text-red-500">*</span></Label>
                             <Select 
+                                disabled={loadingPackages || Boolean(packagesError)}
                                 value={selectedPaqueteId} 
                                 onValueChange={setSelectedPaqueteId}
                             >
-                              <SelectTrigger className="h-11 bg-white">
+                              <SelectTrigger id="paqueteId" className="h-11 bg-white">
                                 <SelectValue placeholder="Seleccione un paquete activo" />
                               </SelectTrigger>
                               <SelectContent>
@@ -820,7 +846,7 @@ export default function NuevoCitaPage() {
                   Método de pago
                 </Label>
                 <Select name="metodoPago">
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger id="metodoPago" className="h-11">
                     <SelectValue placeholder="Seleccione un método" />
                   </SelectTrigger>
                   <SelectContent>
@@ -853,7 +879,7 @@ export default function NuevoCitaPage() {
               </Button>
               <Button
                 type="submit"
-                disabled={saving}
+                disabled={saving || (mode === "PLANTA" && (loadingPackages || Boolean(packagesError)))}
                 className="bg-blue-600 hover:bg-blue-700 min-w-[160px]"
               >
                 {saving ? (

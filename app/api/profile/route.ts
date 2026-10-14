@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
+import { PSYCHOLOGY_TENANT_ID } from "@/lib/psychology";
 import bcrypt from "bcrypt";
 import { Prisma } from "@/prisma/generated/prisma/client";
 
@@ -27,7 +28,7 @@ export async function GET() {
 
   try {
     const usuario = await prisma.usuario.findUnique({
-      where: { id: payload.userId },
+      where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
       select: {
         id: true,
         username: true,
@@ -42,6 +43,8 @@ export async function GET() {
         aprobado: true,
         activo: true,
         CuentasPago: {
+          where: { tenantId: PSYCHOLOGY_TENANT_ID },
+          orderBy: { id: "asc" },
           select: {
             id: true,
             banco: true,
@@ -115,6 +118,13 @@ export async function PUT(req: NextRequest) {
         return NextResponse.json({ error: "Campos obligatorios faltantes" }, { status: 400 });
     }
 
+    const hourlyValue = cuentaPago?.valorHora;
+    const valorHora = hourlyValue === undefined || hourlyValue === null || String(hourlyValue).trim() === ""
+      ? null : Number(hourlyValue);
+    if (valorHora !== null && (!Number.isFinite(valorHora) || valorHora < 0)) {
+      return NextResponse.json({ error: "El valor por hora debe ser un número igual o mayor que cero." }, { status: 400 });
+    }
+
     const dataToUpdate: Prisma.UsuarioUpdateInput = {
         username,
         email,
@@ -131,26 +141,21 @@ export async function PUT(req: NextRequest) {
         dataToUpdate.authVersion = { increment: 1 };
     }
 
-    // Update user info
-    await prisma.usuario.update({
-        where: { id: payload.userId },
-        data: dataToUpdate
-    });
-
-    // Handle CuentaPago update/create if provided
-    if (cuentaPago) {
-      const user = await prisma.usuario.findUnique({
-        where: { id: payload.userId },
-        include: { CuentasPago: true }
+    // A bank-account failure must not leave a partially changed profile or password.
+    await prisma.$transaction(async (tx) => {
+      await tx.usuario.update({
+        where: { id: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
+        data: dataToUpdate,
       });
-
-      if (user) {
-        const valorHora = cuentaPago.valorHora ? parseFloat(cuentaPago.valorHora) : null;
-
-        if (user.CuentasPago && user.CuentasPago.length > 0) {
-          // Update existing (first one)
-          await prisma.cuentasPago.update({
-            where: { id: user.CuentasPago[0].id },
+      if (cuentaPago) {
+        const account = await tx.cuentasPago.findFirst({
+          where: { userId: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
+          orderBy: { id: "asc" },
+          select: { id: true },
+        });
+        if (account) {
+          await tx.cuentasPago.update({
+            where: { id: account.id, userId: payload.userId, tenantId: PSYCHOLOGY_TENANT_ID },
             data: {
               banco: cuentaPago.banco,
               tipoCuenta: cuentaPago.tipoCuenta,
@@ -160,10 +165,10 @@ export async function PUT(req: NextRequest) {
           });
         } else {
           // Create new
-          await prisma.cuentasPago.create({
+          await tx.cuentasPago.create({
             data: {
-              userId: user.id,
-              tenantId: user.tenantId,
+              userId: payload.userId,
+              tenantId: PSYCHOLOGY_TENANT_ID,
               banco: cuentaPago.banco,
               tipoCuenta: cuentaPago.tipoCuenta,
               numeroCuenta: cuentaPago.numeroCuenta,
@@ -173,9 +178,9 @@ export async function PUT(req: NextRequest) {
           });
         }
       }
-    }
+    });
 
-    return NextResponse.json({ success: true, message: "Perfil actualizado exitosamente" });
+    return NextResponse.json({ success: true, message: "Perfil actualizado exitosamente", reauthenticate: Boolean(password && password.trim() !== "") });
   } catch (error) {
     console.error("Error actualizando perfil:", error);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {

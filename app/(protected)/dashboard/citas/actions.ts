@@ -637,8 +637,11 @@ export async function getCitasStats(token: string) {
     if (!payload) return { error: "No autorizado" };
     
     const usuario = await prisma.usuario.findUnique({ where: { id: payload.userId }});
-    const tenantId = usuario?.tenantId || 0;
-    const where: Prisma.CitasPsicologosWhereInput = usuario?.rol === Rol.SU_ADMIN ? {} : { tenantId };
+    if (!usuario || usuario.tenantId !== PSYCHOLOGY_TENANT_ID || !usuario.activo || !usuario.aprobado ||
+        !usuario.rol || ![Rol.ADMIN, Rol.ASESOR, Rol.SU_ADMIN].some((role) => role === usuario.rol)) {
+      return { error: "No autorizado" };
+    }
+    const where: Prisma.CitasPsicologosWhereInput = { tenantId: PSYCHOLOGY_TENANT_ID };
     
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);

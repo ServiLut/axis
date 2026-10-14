@@ -58,6 +58,8 @@ export default function EditarCitaPage() {
 
   const [saving, setSaving] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadRevision, setLoadRevision] = useState(0);
 
   // Form Data
   const [psicologos, setPsicologos] = useState<Usuario[]>([]);
@@ -124,6 +126,7 @@ export default function EditarCitaPage() {
   }
 
   useEffect(() => {
+    let current = true;
     const fetchData = async () => {
       const token = localStorage.getItem("token");
       if (!token) {
@@ -132,6 +135,8 @@ export default function EditarCitaPage() {
       }
 
       setLoadingData(true);
+      setLoadError(null);
+      try {
 
       // Load Form Data and Cita in parallel
       const [formDataRes, citaRes, consultoriosRes] = await Promise.all([
@@ -139,7 +144,10 @@ export default function EditarCitaPage() {
         getCita(token, id),
         getConsultorios(token)
       ]);
-      
+      if (!current) return;
+      const readError = formDataRes.error || citaRes.error || consultoriosRes.error;
+      if (readError) { setLoadError(readError); return; }
+
       if (formDataRes.error) {
         toast.error(formDataRes.error);
       } else {
@@ -180,8 +188,8 @@ export default function EditarCitaPage() {
         setCita(mappedCita);
         
         // Populate state
-        if (mappedCita.tecnico) setSelectedPsicologoId(mappedCita.tecnico.id.toString());
-        if (mappedCita.consultorioId) setSelectedConsultorioId(mappedCita.consultorioId.toString());
+        setSelectedPsicologoId(mappedCita.tecnico?.id.toString() || "");
+        setSelectedConsultorioId(mappedCita.consultorioId?.toString() || "");
         
         if (mappedCita.fechaVisita) {
            const date = new Date(mappedCita.fechaVisita);
@@ -207,20 +215,26 @@ export default function EditarCitaPage() {
             }
         }
 
-        setValorCita(mappedCita.valorCotizado ? mappedCita.valorCotizado.toString() : "");
+        setValorCita(mappedCita.valorCotizado != null ? mappedCita.valorCotizado.toString() : "");
         setSelectedMetodoPago(mappedCita.metodoPago || "");
         setObservacion(mappedCita.observacion || "");
       }
       
-      setLoadingData(false);
+      } catch {
+        if (current) setLoadError("No se pudo cargar la cita. Revise su conexión e intente nuevamente.");
+      } finally {
+        if (current) setLoadingData(false);
+      }
     };
 
-    fetchData();
-  }, [id, router]);
+    void fetchData();
+    return () => { current = false; };
+  }, [id, router, loadRevision]);
 
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (saving) return;
     setSaving(true);
     
     const formData = new FormData();
@@ -243,15 +257,15 @@ export default function EditarCitaPage() {
     if (selectedMetodoPago) formData.set("metodoPago", selectedMetodoPago);
     formData.set("observacion", observacion);
 
-    const result = await updateCita(token, id, formData);
-
-    if (result.error) {
-      toast.error(result.error);
-    } else {
-      toast.success(result.message);
-      router.push("/dashboard/citas");
+    try {
+      const result = await updateCita(token, id, formData);
+      if (result.error) toast.error(result.error);
+      else { toast.success(result.message); router.push("/dashboard/citas"); }
+    } catch {
+      toast.error("No se pudo guardar la cita. Sus cambios se conservan para intentar nuevamente.");
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   }
 
   if (loadingData) {
@@ -262,7 +276,15 @@ export default function EditarCitaPage() {
     );
   }
 
-  if (!cita) return null;
+  if (loadError || !cita) return (
+    <div role="alert" className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
+      <p className="text-sm text-slate-700">{loadError || "No se pudo abrir esta cita."}</p>
+      <div className="flex flex-wrap justify-center gap-3">
+        <Button type="button" variant="outline" onClick={() => router.push("/dashboard/citas")}>Volver a citas</Button>
+        <Button type="button" onClick={() => setLoadRevision((revision) => revision + 1)}>Reintentar</Button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
@@ -543,7 +565,7 @@ export default function EditarCitaPage() {
                   Método de pago
                 </Label>
                 <Select value={selectedMetodoPago} onValueChange={setSelectedMetodoPago}>
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger id="metodoPago" className="h-11">
                     <SelectValue placeholder="Seleccione un método" />
                   </SelectTrigger>
                   <SelectContent>

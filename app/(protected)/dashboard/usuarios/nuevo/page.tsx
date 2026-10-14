@@ -72,6 +72,7 @@ export default function NuevoUsuarioPage() {
 
     const token = localStorage.getItem("token");
     if (!token) {
+      setIsSubmitting(false);
       router.push("/sign-in");
       return;
     }
@@ -86,15 +87,19 @@ export default function NuevoUsuarioPage() {
       }
     });
 
-    const result = await createUsuario(token, data);
-
-    if (result.error) {
-      toast.error(result.error);
-    } else {
-      toast.success(result.message);
-      router.push(formData.rol === "TECNICO" ? "/dashboard/usuarios/tecnicos" : "/dashboard/usuarios/asesores");
+    try {
+      const result = await createUsuario(token, data);
+      if (result.error) {
+        toast.error(result.error);
+      } else {
+        toast.success(result.message);
+        router.push(formData.rol === "TECNICO" ? "/dashboard/usuarios/tecnicos" : formData.rol === "ASESOR" ? "/dashboard/usuarios/asesores" : "/dashboard/usuarios/accesos");
+      }
+    } catch {
+      toast.error("No se pudo confirmar el registro. Revisa la lista del equipo antes de volver a intentarlo.");
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   return (

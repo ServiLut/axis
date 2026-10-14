@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { bogotaToday, getBogotaDayRange } from "@/lib/bogota-date";
 import { getSessionEvents } from "./actions"; 
 import {
   Table,
@@ -52,9 +53,22 @@ export default function ActividadPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [selectedDate, setSelectedDate] = useState(bogotaToday);
+  const pendingRequest = useRef<{ date: string; controller: AbortController } | null>(null);
+  const validDate = useMemo(() => {
+    try { return getBogotaDayRange(selectedDate).date; } catch { return null; }
+  }, [selectedDate]);
 
   const loadData = useCallback(async () => {
+    if (!validDate) {
+      setSessions([]);
+      setError("Selecciona una fecha válida para consultar la actividad.");
+      setLoading(false);
+      return;
+    }
+    if (pendingRequest.current?.date === validDate && !pendingRequest.current.controller.signal.aborted) return;
+    const controller = new AbortController();
+    pendingRequest.current = { date: validDate, controller };
     try {
       const token = localStorage.getItem("token");
       if (!token) {
@@ -64,6 +78,7 @@ export default function ActividadPage() {
       }
 
       const res = await fetch(`/api/monitor/report?date=${selectedDate}&t=${Date.now()}`, {
+        signal: controller.signal,
         headers: {
           Authorization: `Bearer ${token}`,
           "Cache-Control": "no-cache, no-store, must-revalidate",
@@ -79,24 +94,31 @@ export default function ActividadPage() {
       }
 
       const result = await res.json();
-      if (result.success && result.data) {
+      if (controller.signal.aborted) return;
+      if (result.success && Array.isArray(result.data)) {
         setSessions(result.data);
         setError(null);
       } else {
         setError("Error al procesar datos");
       }
     } catch (err) {
-      console.error(err);
-      setError("Error de conexión");
+      if (!controller.signal.aborted) setError(err instanceof Error ? err.message : "No se pudo consultar la actividad. Intenta nuevamente.");
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
+      if (pendingRequest.current?.controller === controller) pendingRequest.current = null;
     }
-  }, [selectedDate]);
+  }, [selectedDate, validDate]);
 
   useEffect(() => {
-    loadData();
+    setSessions([]);
+    setLoading(true);
+    void loadData();
     const interval = setInterval(loadData, 5000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      pendingRequest.current?.controller.abort();
+      pendingRequest.current = null;
+    };
   }, [loadData]);
 
   const filteredSessions = useMemo(() => {
@@ -222,22 +244,24 @@ export default function ActividadPage() {
             type="date"
             className="w-full sm:w-[150px]"
             value={selectedDate}
+            aria-label="Fecha de actividad"
             onChange={(e) => setSelectedDate(e.target.value)}
           />
           <div className="relative w-full sm:w-[250px]">
             <SearchIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Buscar usuario..."
+              aria-label="Buscar integrante del equipo"
               className="pl-8"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <Button onClick={handleExportExcel} variant="outline" className="shrink-0">
+          <Button onClick={handleExportExcel} variant="outline" className="shrink-0" disabled={loading || !!error || !validDate || filteredSessions.length === 0}>
             <FileSpreadsheet className="h-4 w-4 mr-2" />
             Exportar
           </Button>
-          <Button onClick={() => { setLoading(true); loadData(); }} variant="default" className="shrink-0" disabled={loading}>
+          <Button onClick={() => { setLoading(true); void loadData(); }} variant="default" className="shrink-0" disabled={loading || !validDate}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
             Actualizar
           </Button>
@@ -252,7 +276,7 @@ export default function ActividadPage() {
 
       <Card className="flex-1 flex flex-col overflow-hidden min-h-0">
         <CardHeader className="flex-none">
-          <CardTitle>Estado de Usuarios ({format(parseISO(selectedDate), "d 'de' MMMM", { locale: es })})</CardTitle>
+          <CardTitle>{validDate ? `Estado del equipo (${format(parseISO(validDate), "d 'de' MMMM", { locale: es })})` : "Selecciona una fecha"}</CardTitle>
         </CardHeader>
         <CardContent className="flex-1 overflow-auto p-0 relative">
           {loading && filteredSessions.length === 0 ? (

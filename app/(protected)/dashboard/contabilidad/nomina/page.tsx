@@ -54,6 +54,7 @@ import {
   type NominaSummary,
 } from "./actions";
 import { format } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
 import { es } from "date-fns/locale";
 import { TipoPago } from "@/prisma/generated/prisma/enums";
 
@@ -125,6 +126,7 @@ export default function NominaContabilidadPage() {
   // State
   const [nominas, setNominas] = useState<NominaSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   
   // Modal State (Create)
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -145,6 +147,7 @@ export default function NominaContabilidadPage() {
   
   // Calculation State
   const [calculating, setCalculating] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [rawData, setRawData] = useState<{
       config: { tipo: TipoPago | null; valorParticipacion: number | null; salarioBase: number | null } | null;
       servicios: ServiceData[];
@@ -237,15 +240,23 @@ export default function NominaContabilidadPage() {
   }, [rawData, ivaPercentage, selectedServices]);
 
   const fetchNominas = useCallback(async () => {
+    setLoading(true);
+    setLoadError("");
+    try {
     const token = localStorage.getItem("token");
     if (!token) return;
     const res = await getNominas(token);
     if (res.success) {
       setNominas(res.data);
     } else {
-      toast.error(res.error);
+      setLoadError(res.error || "No se pudieron cargar los cortes de pago. Intenta nuevamente.");
     }
     setLoading(false);
+    } catch {
+      setLoadError("No se pudieron cargar los cortes de pago. Intenta nuevamente.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -263,6 +274,7 @@ export default function NominaContabilidadPage() {
   }, [fetchNominas]);
 
   const handleOpenModal = async () => {
+    try {
     setIsModalOpen(true);
     setStep(1);
     setRawData(null);
@@ -277,14 +289,22 @@ export default function NominaContabilidadPage() {
         if (res.success) {
             setTecnicos(res.data);
         } else {
-             toast.error(res.error);
+             toast.error(res.error || "No se pudo cargar el equipo. Intenta nuevamente.");
         }
+    }
+    } catch {
+      toast.error("No se pudo cargar el equipo. Intenta nuevamente.");
     }
   };
 
   const handleCalculate = async () => {
+    try {
     if (!selectedTecnico || !fechaInicio || !fechaFin) {
         toast.error("Complete todos los campos");
+        return;
+    }
+    if (fechaInicio > fechaFin || !Number.isFinite(new Date(fechaInicio).getTime()) || !Number.isFinite(new Date(fechaFin).getTime())) {
+        toast.error("Selecciona un periodo válido: la fecha final debe ser igual o posterior a la inicial.");
         return;
     }
 
@@ -316,13 +336,21 @@ export default function NominaContabilidadPage() {
             });
             setStep(2);
         } else {
-            toast.error(res.error);
+            toast.error(res.error || "No se pudo consultar el periodo. Intenta nuevamente.");
         }
     }
     setCalculating(false);
+    } catch {
+      toast.error("No se pudo consultar el periodo. Intenta nuevamente.");
+    } finally {
+      setCalculating(false);
+    }
   };
 
   const handleSave = async () => {
+    if (saving || !previewData) return;
+    setSaving(true);
+    try {
       if (!previewData) return;
       
       const token = localStorage.getItem("token");
@@ -349,6 +377,11 @@ export default function NominaContabilidadPage() {
       } else {
           toast.error(res.error || "Error al guardar");
       }
+    } catch {
+      toast.error("No se pudo guardar el corte de pago. Revisa tu conexión.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleUpdateRepuestoTecnico = async (ordenId: number, valor: number) => {
@@ -369,6 +402,7 @@ export default function NominaContabilidadPage() {
   };
 
   const handleViewNomina = async (id: number) => {
+    try {
     const token = localStorage.getItem("token");
     if (!token) return;
     
@@ -379,9 +413,13 @@ export default function NominaContabilidadPage() {
     } else {
         toast.error(res.error || "Error al cargar detalles");
     }
+    } catch {
+      toast.error("No se pudo consultar el detalle del pago. Intenta nuevamente.");
+    }
   };
 
   const handleUpdateEstado = async (id: number, nuevoEstado: "PAGADO" | "ANULADO") => {
+    try {
     const token = localStorage.getItem("token");
     if (!token) return;
 
@@ -396,6 +434,11 @@ export default function NominaContabilidadPage() {
         toast.error(res.error || "Error al actualizar");
     }
     setUpdatingEstado(false);
+    } catch {
+      toast.error("No se pudo actualizar el estado del pago. Intenta nuevamente.");
+    } finally {
+      setUpdatingEstado(false);
+    }
   };
 
   if (loading || roleLoading) {
@@ -408,7 +451,7 @@ export default function NominaContabilidadPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-none bg-white border-b border-slate-200 px-8 py-6">
+      <div className="flex-none bg-white border-b border-slate-200 px-4 sm:px-8 py-6">
         <div className="max-w-6xl mx-auto flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -426,9 +469,9 @@ export default function NominaContabilidadPage() {
         </div>
       </div>
       
-      <div className="flex-1 p-8 bg-slate-50 overflow-auto">
+      <div className="flex-1 p-4 sm:p-8 bg-slate-50 overflow-auto">
         <div className="max-w-6xl mx-auto">
-          {nominas.length === 0 ? (
+          {loadError ? (<div role="alert" className="space-y-3 rounded-lg border bg-white p-6 text-center"><p className="text-sm text-slate-700">{loadError}</p><Button variant="outline" onClick={fetchNominas}>Reintentar</Button></div>) : nominas.length === 0 ? (
             <div className="text-center py-12 bg-white rounded-lg border border-dashed border-slate-300">
                 <FileText className="h-12 w-12 text-slate-300 mx-auto mb-3" />
                 <h3 className="text-lg font-medium text-slate-900">No hay nóminas registradas</h3>
@@ -463,7 +506,7 @@ export default function NominaContabilidadPage() {
                                 <TableCell>
                                     <div className="flex items-center text-sm text-slate-600">
                                         <Calendar className="h-3 w-3 mr-1" />
-                                        {format(new Date(nomina.fechaInicio), "dd MMM")} - {format(new Date(nomina.fechaFin), "dd MMM yyyy", { locale: es })}
+                                        {formatInTimeZone(new Date(nomina.fechaInicio), "UTC", "dd MMM", { locale: es })} - {formatInTimeZone(new Date(nomina.fechaFin), "UTC", "dd MMM yyyy", { locale: es })}
                                     </div>
                                 </TableCell>
                                 <TableCell>
@@ -723,9 +766,9 @@ export default function NominaContabilidadPage() {
                 ) : (
                     <div className="flex w-full justify-between">
                         <Button variant="ghost" onClick={() => setStep(1)}>Atrás</Button>
-                        <Button onClick={handleSave} className="bg-indigo-600 hover:bg-indigo-700">
+                        <Button onClick={handleSave} disabled={saving} className="bg-indigo-600 hover:bg-indigo-700">
                             <CheckCircle className="w-4 h-4 mr-2" />
-                            Confirmar y Crear
+                            {saving ? "Guardando…" : "Confirmar y crear"}
                         </Button>
                     </div>
                 )}
@@ -764,7 +807,7 @@ export default function NominaContabilidadPage() {
                         <div className="text-right">
                             <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Periodo de Liquidación</div>
                             <div className="text-sm font-medium">
-                                {format(new Date(viewNomina.fechaInicio), "dd MMMM", { locale: es })} — {format(new Date(viewNomina.fechaFin), "dd MMMM yyyy", { locale: es })}
+                                {formatInTimeZone(new Date(viewNomina.fechaInicio), "UTC", "dd MMMM", { locale: es })} — {formatInTimeZone(new Date(viewNomina.fechaFin), "UTC", "dd MMMM yyyy", { locale: es })}
                             </div>
                         </div>
                     </div>

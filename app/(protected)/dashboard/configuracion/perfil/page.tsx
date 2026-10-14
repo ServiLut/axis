@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { User, Save, Lock, Loader2 } from "lucide-react";
@@ -45,6 +45,8 @@ interface UsuarioPerfil {
 export default function PerfilPage() {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const loadController = useRef<AbortController | null>(null);
   const [usuario, setUsuario] = useState<UsuarioPerfil | null>(null);
   const [formData, setFormData] = useState({
     username: "",
@@ -65,26 +67,33 @@ export default function PerfilPage() {
 
   const router = useRouter();
 
-  useEffect(() => {
-    const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+      loadController.current?.abort();
+      const controller = new AbortController();
+      loadController.current = controller;
+      setLoading(true);
+      setLoadError(null);
       const token = localStorage.getItem("token");
       if (!token) {
-        router.push("/sign-in");
+        setLoading(false);
+        router.replace("/sign-in");
         return;
       }
 
       try {
         const response = await fetch("/api/profile", {
+          signal: controller.signal,
           headers: {
             Authorization: `Bearer ${token}`,
           },
         });
 
         const data = await response.json();
+        if (controller.signal.aborted) return;
 
         if (!response.ok) {
-          toast.error(data.error || "Error cargando perfil");
-          if (response.status === 401) router.push("/sign-in");
+          if (response.status === 401 || response.status === 403) router.replace("/sign-in");
+          throw new Error(data.error || "No se pudo cargar tu perfil.");
         } else if (data.usuario) {
           setUsuario(data.usuario);
           const cuenta = data.usuario.CuentasPago?.[0] || {};
@@ -101,26 +110,35 @@ export default function PerfilPage() {
               banco: cuenta.banco || "",
               tipoCuenta: cuenta.tipoCuenta || "",
               numeroCuenta: cuenta.numeroCuenta || "",
-              valorHora: cuenta.valorHora ? cuenta.valorHora.toString() : "",
+              valorHora: cuenta.valorHora !== null && cuenta.valorHora !== undefined ? cuenta.valorHora.toString() : "",
             }
           });
+        } else {
+          throw new Error("No se recibió la información de tu perfil. Intenta nuevamente.");
         }
-      } catch {
-        toast.error("Error de conexión");
+      } catch (error) {
+        if (!controller.signal.aborted) setLoadError(error instanceof Error ? error.message : "No se pudo conectar con Axis.");
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
-    };
-
-    fetchData();
   }, [router]);
+
+  useEffect(() => {
+    void fetchData();
+    return () => loadController.current?.abort();
+  }, [fetchData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSaving(true);
+    if (isSaving || !usuario || loadError) return;
 
     const token = localStorage.getItem("token");
-    if (!token) return;
+    if (!token) {
+      toast.error("Tu sesión terminó. Vuelve a iniciar sesión.");
+      router.replace("/sign-in");
+      return;
+    }
+    setIsSaving(true);
 
     try {
       const response = await fetch("/api/profile", {
@@ -137,7 +155,12 @@ export default function PerfilPage() {
       if (!response.ok) {
         toast.error(result.error || "Error al actualizar perfil");
       } else {
-        toast.success(result.message);
+        toast.success(result.reauthenticate ? "Perfil actualizado. Inicia sesión con tu nueva contraseña." : result.message);
+        if (result.reauthenticate) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          router.replace("/sign-in");
+        }
         // Clear password field after successful update
         setFormData(prev => ({ ...prev, password: "" }));
       }
@@ -152,6 +175,18 @@ export default function PerfilPage() {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  if (loadError || !usuario) {
+    return (
+      <div className="h-full overflow-y-auto p-4 md:p-8">
+        <div role="alert" className="mx-auto max-w-2xl space-y-4 rounded-xl border bg-white p-6">
+          <h1 className="text-xl font-semibold">Mi perfil</h1>
+          <p className="text-sm text-slate-600">{loadError || "No se pudo cargar tu perfil."}</p>
+          <Button type="button" onClick={() => void fetchData()}>Reintentar</Button>
+        </div>
       </div>
     );
   }
@@ -228,6 +263,8 @@ export default function PerfilPage() {
                   <Label htmlFor="telefono">Teléfono / Celular</Label>
                   <Input
                     id="telefono"
+                    type="tel"
+                    autoComplete="tel"
                     value={formData.telefono}
                     onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
                   />
@@ -291,6 +328,8 @@ export default function PerfilPage() {
                   <Input
                     id="valorHora"
                     type="number"
+                    min="0"
+                    step="0.01"
                     value={formData.cuentaPago.valorHora}
                     onChange={(e) => setFormData({ ...formData, cuentaPago: { ...formData.cuentaPago, valorHora: e.target.value } })}
                     placeholder="Ej: 5000"
@@ -312,6 +351,7 @@ export default function PerfilPage() {
                   <Label htmlFor="username">Usuario</Label>
                   <Input
                     id="username"
+                    autoComplete="username"
                     value={formData.username}
                     onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                     required
@@ -322,6 +362,7 @@ export default function PerfilPage() {
                   <Input
                     id="email"
                     type="email"
+                    autoComplete="email"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     required
@@ -332,6 +373,7 @@ export default function PerfilPage() {
                   <Input
                     id="password"
                     type="password"
+                    autoComplete="new-password"
                     placeholder="Dejar en blanco para mantener la actual"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}

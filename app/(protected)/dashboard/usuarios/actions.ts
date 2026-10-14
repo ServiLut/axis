@@ -34,7 +34,7 @@ export async function createUsuario(token: string, formData: FormData) {
     const apellido = formData.get("apellido") as string;
     const telefono = formData.get("telefono") as string;
     const tipoDocumento = formData.get("tipoDocumento") as string;
-    const numeroDocumento = formData.get("numeroDocumento") as string;
+    const numeroDocumento = String(formData.get("numeroDocumento") || "").trim();
     const rol = formData.get("rol") as Rol;
     const companyOptions = await getEmpresasOptions(token);
     if (companyOptions.error) return { error: companyOptions.error };
@@ -60,7 +60,7 @@ export async function createUsuario(token: string, formData: FormData) {
         OR: [
           { username },
           { email },
-          { numeroDocumento: numeroDocumento || undefined } // Solo busca si hay numeroDocumento
+          ...(numeroDocumento ? [{ numeroDocumento }] : [])
         ],
         tenantId: PSYCHOLOGY_TENANT_ID
       }

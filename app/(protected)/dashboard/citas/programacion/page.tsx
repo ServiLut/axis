@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Clock, CalendarDays } from "lucide-react";
@@ -84,12 +84,18 @@ export default function ProgramacionCitasPage() {
   // viewMode removed, always "day" + "consultorios"
   const [ordenes, setOrdenes] = useState<CitaProgramacion[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadRevision, setLoadRevision] = useState(0);
+  const [optionsError, setOptionsError] = useState<string | null>(null);
+  const requestId = useRef(0);
+  const optionsRequestId = useRef(0);
   const [tecnicos, setTecnicos] = useState<Tecnico[]>([]);
   const [consultorios, setConsultorios] = useState<Consultorio[]>([]);
   const [selectedTecnicoId, setSelectedTecnicoId] = useState<string>("all");
 
   // Assign Modal State
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [savingAssignment, setSavingAssignment] = useState(false);
   const [selectedCita, setSelectedCita] = useState<CitaProgramacion | null>(
     null,
   );
@@ -103,49 +109,59 @@ export default function ProgramacionCitasPage() {
     return () => clearInterval(interval);
   }, []);
 
+  const invalidateOptions = useCallback(() => { optionsRequestId.current++; }, []);
+  const invalidateAppointments = useCallback(() => { requestId.current++; }, []);
+
   const fetchData = useCallback(async () => {
+    const currentRequest = ++optionsRequestId.current;
     const token = localStorage.getItem("token");
     if (!token) return;
-    const result = await getFormDataCitas(token);
-    if (result.tecnicos) {
-      setTecnicos(result.tecnicos as Tecnico[]);
-    }
-    if (result.consultorios) {
-      setConsultorios(result.consultorios as Consultorio[]);
+    setOptionsError(null);
+    try {
+      const result = await getFormDataCitas(token);
+      if (currentRequest !== optionsRequestId.current) return;
+      if (result.error) { setOptionsError(result.error); return; }
+      setTecnicos((result.tecnicos as Tecnico[]) || []);
+      setConsultorios((result.consultorios as Consultorio[]) || []);
+    } catch {
+      if (currentRequest === optionsRequestId.current) setOptionsError("No se pudieron cargar los psicólogos y consultorios.");
     }
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => fetchData(), 0);
-    return () => clearTimeout(timer);
-  }, [fetchData]);
+    const timer = setTimeout(() => { void fetchData(); }, 0);
+    return () => { clearTimeout(timer); invalidateOptions(); };
+  }, [fetchData, invalidateOptions]);
 
   const fetchOrdenes = useCallback(async () => {
+    const currentRequest = ++requestId.current;
     setLoading(true);
+    setLoadError(null);
+    setOrdenes([]);
     const token = localStorage.getItem("token");
     if (!token) {
+      setLoading(false);
       router.push("/sign-in");
       return;
     }
-
-    const tecnicoId =
-      selectedTecnicoId === "all" ? undefined : Number(selectedTecnicoId);
-
+    const tecnicoId = selectedTecnicoId === "all" ? undefined : Number(selectedTecnicoId);
     const dateStr = formatDateInputValue(currentDate);
-
-    const result = await getCitasByDateRange(token, dateStr, tecnicoId);
-    if (result.error) {
-      toast.error(result.error);
-    } else if (result.ordenes) {
-      setOrdenes(result.ordenes as unknown as CitaProgramacion[]);
+    try {
+      const result = await getCitasByDateRange(token, dateStr, tecnicoId);
+      if (currentRequest !== requestId.current) return;
+      if (result.error) setLoadError(result.error);
+      else setOrdenes((result.ordenes || []) as unknown as CitaProgramacion[]);
+    } catch {
+      if (currentRequest === requestId.current) setLoadError("No se pudo cargar la agenda. Revise su conexión e intente nuevamente.");
+    } finally {
+      if (currentRequest === requestId.current) setLoading(false);
     }
-    setLoading(false);
   }, [currentDate, selectedTecnicoId, router]);
 
   useEffect(() => {
-    const timer = setTimeout(() => fetchOrdenes(), 0);
-    return () => clearTimeout(timer);
-  }, [fetchOrdenes]);
+    const timer = setTimeout(() => { void fetchOrdenes(); }, 0);
+    return () => { clearTimeout(timer); invalidateAppointments(); };
+  }, [fetchOrdenes, invalidateAppointments, loadRevision]);
 
   const handlePrev = () => {
     const newDate = new Date(currentDate);
@@ -319,6 +335,7 @@ export default function ProgramacionCitasPage() {
   };
 
   const handleAssignSubmit = async () => {
+    if (savingAssignment) return;
     if (
       !selectedCita ||
       !assignConsultorioId ||
@@ -333,6 +350,7 @@ export default function ProgramacionCitasPage() {
     const token = localStorage.getItem("token");
     if (!token) return;
 
+    setSavingAssignment(true);
     // La server action devuelve { error }; lo convertimos en throw para que el toast muestre el fallo real.
     const promise = (async () => {
       const result = await moveCita(
@@ -358,9 +376,15 @@ export default function ProgramacionCitasPage() {
         error instanceof Error ? error.message : "Error al reasignar cita",
     });
 
-    await promise;
-    setIsAssignModalOpen(false);
-    fetchOrdenes();
+    try {
+      await promise;
+      setIsAssignModalOpen(false);
+      setLoadRevision((revision) => revision + 1);
+    } catch {
+      // toast.promise already displays the action error; keep the modal values.
+    } finally {
+      setSavingAssignment(false);
+    }
   };
 
   const unassignedOrders = ordersByConsultorio["unassigned"] || [];
@@ -382,6 +406,7 @@ export default function ProgramacionCitasPage() {
           <div className="flex flex-col sm:flex-row items-center gap-4">
             <div className="w-full sm:w-[200px]">
               <Combobox
+                aria-label="Filtrar agenda por psicólogo"
                 options={[
                   { value: "all", label: "Todos los psicólogos" },
                   ...tecnicos.map((tecnico) => ({
@@ -418,6 +443,7 @@ export default function ProgramacionCitasPage() {
               <div className="relative">
                 <Input
                   type="date"
+                  aria-label="Fecha de la agenda"
                   value={formatDateInputValue(currentDate)}
                   onChange={handleDateChange}
                   className="h-8 w-[140px] text-xs border-0 bg-transparent shadow-none focus-visible:ring-0 p-1 pl-8 text-center font-medium cursor-pointer"
@@ -440,6 +466,12 @@ export default function ProgramacionCitasPage() {
 
       <div className="flex-1 overflow-auto p-4 md:p-6">
         <div className="max-w-7xl mx-auto h-full flex flex-col gap-6">
+          {(loadError || optionsError) && (
+            <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              <p>{loadError || optionsError}</p>
+              <Button type="button" variant="outline" size="sm" onClick={() => { if (loadError) void fetchOrdenes(); if (optionsError) void fetchData(); }}>Reintentar</Button>
+            </div>
+          )}
           {/* Unassigned Orders Section */}
           <div
             className={cn(
@@ -532,7 +564,7 @@ export default function ProgramacionCitasPage() {
             {/* Simple list view for mobile for now, prioritized by time */}
             {loading ? (
               <div className="p-4 text-center text-slate-500">Cargando...</div>
-            ) : visibleOrdenes.length === 0 ? (
+            ) : loadError ? null : visibleOrdenes.length === 0 ? (
               <div className="p-8 text-center text-slate-500 bg-white rounded-lg border">
                 No hay citas programadas para este día.
               </div>
@@ -836,7 +868,7 @@ export default function ProgramacionCitasPage() {
         </div>
       </div>
 
-      <Dialog open={isAssignModalOpen} onOpenChange={setIsAssignModalOpen}>
+      <Dialog open={isAssignModalOpen} onOpenChange={(open) => { if (!savingAssignment) setIsAssignModalOpen(open); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Asignar consultorio y horario</DialogTitle>
@@ -848,7 +880,7 @@ export default function ProgramacionCitasPage() {
                 value={assignConsultorioId}
                 onValueChange={setAssignConsultorioId}
               >
-                <SelectTrigger>
+                <SelectTrigger id="consultorio">
                   <SelectValue placeholder="Seleccione un consultorio" />
                 </SelectTrigger>
                 <SelectContent>
@@ -896,11 +928,12 @@ export default function ProgramacionCitasPage() {
           <DialogFooter>
             <Button
               variant="outline"
+              disabled={savingAssignment}
               onClick={() => setIsAssignModalOpen(false)}
             >
               Cancelar
             </Button>
-            <Button onClick={handleAssignSubmit}>Guardar horario</Button>
+            <Button onClick={handleAssignSubmit} disabled={savingAssignment}>{savingAssignment ? "Guardando…" : "Guardar horario"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

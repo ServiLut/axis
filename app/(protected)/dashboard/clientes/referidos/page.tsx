@@ -7,6 +7,7 @@ import { Search, Users, Phone, Calendar, User, Hash, FileSpreadsheet, X } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { getReferidos } from "./actions";
+import { filterReferrals } from "./filters";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
@@ -59,32 +60,14 @@ export default function ReferidosPage() {
   }, [router]);
 
   const handleExportExcel = async () => {
-    const filteredForExport = referidos.filter((referido) => {
-      const refDate = new Date(referido.created_at);
-      refDate.setHours(0, 0, 0, 0);
-
-      let matchesDate = true;
-      if (startDate) {
-        const start = new Date(startDate);
-        start.setHours(0, 0, 0, 0);
-        // Ajuste zona horaria si es necesario, pero start y refDate son locales o UTC consistentes
-         // Al usar input type=date, devuelve YYYY-MM-DD
-         const startParts = startDate.split('-').map(Number);
-         const startLocal = new Date(startParts[0], startParts[1] - 1, startParts[2]);
-         
-         if (refDate < startLocal) matchesDate = false;
-      }
-      if (endDate) {
-         const endParts = endDate.split('-').map(Number);
-         const endLocal = new Date(endParts[0], endParts[1] - 1, endParts[2]);
-         
-         if (refDate > endLocal) matchesDate = false;
-      }
-      return matchesDate;
-    });
+    if (referralFilter.error) {
+      toast.error(referralFilter.error);
+      return;
+    }
+    const filteredForExport = filteredReferidos;
 
     if (filteredForExport.length === 0) {
-      toast.error("No hay datos para exportar en el rango seleccionado.");
+      toast.error("No hay referidos para exportar con los filtros seleccionados.");
       return;
     }
 
@@ -120,8 +103,8 @@ export default function ReferidosPage() {
       filteredForExport.forEach((referido) => {
         const dateObj = new Date(referido.created_at);
         worksheet.addRow({
-          fecha: dateObj.toLocaleDateString(),
-          hora: dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          fecha: dateObj.toLocaleDateString("es-CO", { timeZone: "America/Bogota" }),
+          hora: dateObj.toLocaleTimeString("es-CO", { hour: '2-digit', minute: '2-digit', timeZone: "America/Bogota" }),
           nombre: referido.nombre,
           apellido: referido.apellido,
           telefono: referido.telefono,
@@ -160,22 +143,8 @@ export default function ReferidosPage() {
     }
   };
 
-  const filteredReferidos = referidos.filter((referido) => {
-    const search = searchTerm.toLowerCase();
-    const fullName =
-      `${referido.nombre || ""} ${referido.apellido || ""}`.toLowerCase();
-    const telefono = referido.telefono?.toLowerCase() || "";
-    const codigo = referido.codigo?.toLowerCase() || "";
-    const referidoPor =
-      `${referido.Usuario?.nombre || ""} ${referido.Usuario?.apellido || ""}`.toLowerCase();
-
-    return (
-      fullName.includes(search) ||
-      telefono.includes(search) ||
-      codigo.includes(search) ||
-      referidoPor.includes(search)
-    );
-  });
+  const referralFilter = filterReferrals(referidos, searchTerm, startDate, endDate);
+  const filteredReferidos = referralFilter.rows;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -241,6 +210,8 @@ export default function ReferidosPage() {
           </div>
         </div>
       </div>
+
+      {referralFilter.error && <p role="alert" className="px-8 py-3 text-sm text-red-700">{referralFilter.error}</p>}
 
       {/* Table Content */}
       <div className="flex-1 overflow-auto bg-slate-50 px-8 py-6">
@@ -321,12 +292,12 @@ export default function ReferidosPage() {
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-2">
                             <Calendar className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                            {new Date(referido.created_at).toLocaleDateString()}
+                            {new Date(referido.created_at).toLocaleDateString("es-CO", { timeZone: "America/Bogota" })}
                           </div>
                           <div className="text-xs text-slate-400 ml-5">
                             {new Date(referido.created_at).toLocaleTimeString(
-                              [],
-                              { hour: "2-digit", minute: "2-digit" },
+                              "es-CO",
+                              { hour: "2-digit", minute: "2-digit", timeZone: "America/Bogota" },
                             )}
                           </div>
                         </div>

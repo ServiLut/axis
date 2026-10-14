@@ -115,40 +115,42 @@ export default function AprobarUsuariosPage() {
   const confirmApproval = async () => {
     if (!selectedUser) return;
     setIsApproving(true);
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
-    const res = await aprobarUsuario(token, selectedUser.id, {
-      rol: approveFormData.rol, 
-      empresaId: null
-    });
-
-    if (res.error) {
-      toast.error(res.error);
-    } else {
-      toast.success(res.message);
-      setUsuarios((prev) => prev.filter((u) => u.id !== selectedUser.id));
-      setIsApproveModalOpen(false);
-      setSelectedUser(null);
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) { router.push("/sign-in"); return; }
+      const res = await aprobarUsuario(token, selectedUser.id, { rol: approveFormData.rol, empresaId: null });
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success(res.message);
+        setUsuarios((prev) => prev.filter((user) => user.id !== selectedUser.id));
+        setIsApproveModalOpen(false);
+        setSelectedUser(null);
+      }
+    } catch {
+      toast.error("No se pudo confirmar la aprobación. Actualiza la lista antes de volver a intentarlo.");
+    } finally {
+      setIsApproving(false);
     }
-    setIsApproving(false);
   };
 
   const handleRechazar = async (id: number) => {
     if (!confirm("¿Está seguro de rechazar esta solicitud? El usuario no podrá ingresar hasta que se apruebe su acceso.")) return;
-    
     setProcessingId(id);
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
-    const res = await rechazarUsuario(token, id);
-    if (res.error) {
-      toast.error(res.error);
-    } else {
-      toast.success(res.message);
-      setUsuarios((prev) => prev.filter((u) => u.id !== id));
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) { router.push("/sign-in"); return; }
+      const res = await rechazarUsuario(token, id);
+      if (res.error) toast.error(res.error);
+      else {
+        toast.success(res.message);
+        setUsuarios((prev) => prev.filter((user) => user.id !== id));
+      }
+    } catch {
+      toast.error("No se pudo confirmar el rechazo. Actualiza la lista antes de volver a intentarlo.");
+    } finally {
+      setProcessingId(null);
     }
-    setProcessingId(null);
   };
 
   const filteredUsuarios = usuarios.filter(u => 

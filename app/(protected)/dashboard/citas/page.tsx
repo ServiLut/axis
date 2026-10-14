@@ -390,6 +390,7 @@ export default function CitasPage() {
   const billingLoading = !isRestored || billingResult?.key !== billingKey;
   const listFiltersKey = useRef(filtersKey);
   const listRequestId = useRef(0);
+  const detailRequestId = useRef(0);
 
   useEffect(() => {
     if (!isRestored) return;
@@ -667,6 +668,7 @@ export default function CitasPage() {
   };
 
   const handleExportExcel = async () => {
+    if (isExporting) return;
     if (roleLoading) {
       toast.info("Verificando permisos...");
       return;
@@ -702,6 +704,7 @@ export default function CitasPage() {
         endDate,
       };
 
+      try {
       const res = await getAllCitasForExport(token, filters);
 
       if (res.error) {
@@ -712,11 +715,17 @@ export default function CitasPage() {
           "Reporte_Citas"
         );
       }
-      setIsExporting(false);
+
+      } catch {
+        toast.error("No se pudo generar el archivo. Intente nuevamente.");
+      } finally {
+        setIsExporting(false);
+      }
     }
   };
 
   const handleConfirmExport = async () => {
+    if (isExporting) return;
     if (exportStartDate && exportEndDate && exportStartDate > exportEndDate) {
       toast.error("La fecha de fin debe ser igual o posterior a la fecha de inicio.");
       return;
@@ -728,6 +737,7 @@ export default function CitasPage() {
       return;
     }
 
+    try {
     const res = await getAllCitasForExport(token, {
       startDate: exportStartDate,
       endDate: exportEndDate,
@@ -744,7 +754,12 @@ export default function CitasPage() {
       );
       setIsExportModalOpen(false);
     }
-    setIsExporting(false);
+
+    } catch {
+      toast.error("No se pudo generar el archivo. Intente nuevamente.");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   useEffect(() => { 
@@ -763,33 +778,40 @@ export default function CitasPage() {
   };
 
   const confirmDelete = async () => {
-    if (!citaToDelete) return;
-    setIsDeleting(true);
+    if (!citaToDelete || isDeleting) return;
     const token = localStorage.getItem("token");
-    if (token) {
+    if (!token) { toast.error("No se encontró sesión activa."); return; }
+    setIsDeleting(true);
+    try {
       const res = await deleteCita(token, citaToDelete);
-      if (res.error) {
-        toast.error(res.error);
-      } else {
+      if (res.error) toast.error(res.error);
+      else {
         toast.success(res.message);
         refreshList();
         refreshBilling();
-        fetchAux(); // update stats
+        fetchAux();
+        setIsDeleteModalOpen(false);
       }
+    } catch {
+      toast.error("No se pudo eliminar la cita. Intente nuevamente.");
+    } finally {
+      setIsDeleting(false);
     }
-    setIsDeleting(false);
-    setIsDeleteModalOpen(false);
   };
 
   const handleViewCita = async (id: number) => {
+    const currentRequest = ++detailRequestId.current;
     const token = localStorage.getItem("token");
     if (!token) return;
-    const res = await getCita(token, id);
-    if (res.orden) {
-      setSelectedCita(res.orden as unknown as Cita);
-      setIsViewModalOpen(true);
-    } else {
-      toast.error(res.error);
+    try {
+      const res = await getCita(token, id);
+      if (currentRequest !== detailRequestId.current) return;
+      if (res.orden) {
+        setSelectedCita(res.orden as unknown as Cita);
+        setIsViewModalOpen(true);
+      } else toast.error(res.error);
+    } catch {
+      if (currentRequest === detailRequestId.current) toast.error("No se pudo abrir el detalle de la cita. Intente nuevamente.");
     }
   };
 
@@ -892,10 +914,16 @@ export default function CitasPage() {
       }
   };
 
-  const handleCopy = (cita: Cita) => {
-    const text = `Cita: ${cita.servicio.nombre}\nCliente: ${cita.cliente.nombre} ${cita.cliente.apellido}\nFecha: ${formatDateBogota(cita.fechaVisita)}`;
-    navigator.clipboard.writeText(text);
-    toast.success("Copiado al portapapeles");
+  const handleCopy = async (cita: Cita) => {
+    const paciente = `${cita.cliente?.nombre || ""} ${cita.cliente?.apellido || ""}`.trim();
+    const profesional = `${cita.tecnico?.nombre || ""} ${cita.tecnico?.apellido || ""}`.trim();
+    const text = `Cita: ${cita.servicio.nombre}\n${paciente ? `Paciente: ${paciente}` : `Psicólogo: ${profesional || "Sin asignar"}`}\nFecha: ${formatDateBogota(cita.fechaVisita)}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Copiado al portapapeles");
+    } catch {
+      toast.error("No se pudo copiar la cita. Intente nuevamente.");
+    }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1328,14 +1356,14 @@ export default function CitasPage() {
       </div>
 
       {/* Delete Modal */}
-      <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+      <Dialog open={isDeleteModalOpen} onOpenChange={(open) => { if (!isDeleting) setIsDeleteModalOpen(open); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Eliminar Cita</DialogTitle>
             <DialogDescription>¿Estás seguro de eliminar esta cita? Esta acción no se puede deshacer.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteModalOpen(false)}>Cancelar</Button>
+            <Button variant="outline" disabled={isDeleting} onClick={() => setIsDeleteModalOpen(false)}>Cancelar</Button>
             <Button variant="destructive" onClick={confirmDelete} disabled={isDeleting}>Eliminar</Button>
           </DialogFooter>
         </DialogContent>

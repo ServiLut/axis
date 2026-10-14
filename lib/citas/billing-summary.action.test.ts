@@ -58,6 +58,7 @@ const getCitasBillingSummary = moduleExports.getCitasBillingSummary as (
 const getCitas = moduleExports.getCitas as (
   token: string, page: number, limit: number, filters: CitasFilters,
 ) => Promise<unknown>;
+const getCitasStats = moduleExports.getCitasStats as (token: string) => Promise<unknown>;
 
 describe("getCitasBillingSummary database contract", () => {
   beforeEach(() => {
@@ -88,6 +89,18 @@ describe("getCitasBillingSummary database contract", () => {
       { OR: [{ estadoPago: "PENDIENTE" }, { estadoPago: null }] },
       { OR: [{ realizada: false }, { realizada: true }] },
     ]);
+  });
+
+  it("keeps every auxiliary appointment count in psychology even for a superadmin", async () => {
+    expect(await getCitasStats("token")).toHaveProperty("stats");
+    expect(mocks.count).toHaveBeenCalledTimes(7);
+    for (const [query] of mocks.count.mock.calls) expect(query.where.tenantId).toBe(4);
+  });
+
+  it("does not count appointments for an old-company user even with a superadmin role", async () => {
+    mocks.user.mockResolvedValue({ tenantId: 1, rol: "SU_ADMIN", activo: true, aprobado: true });
+    expect(await getCitasStats("token")).toEqual({ error: "No autorizado" });
+    expect(mocks.count).not.toHaveBeenCalled();
   });
 
   it("matches the production table historical unit value then recorded appointment value, scoped to tenant 4", async () => {

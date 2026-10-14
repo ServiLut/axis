@@ -4,6 +4,26 @@ import prisma from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
+async function readMetodoForm(formData: FormData, tenantId: number): Promise<
+  { error: string } | { nombre: string; empresaId: number | null; activo: boolean }
+> {
+  const nombre = String(formData.get("nombre") || "").trim();
+  if (!nombre) return { error: "El nombre es obligatorio" };
+  const rawEmpresa = formData.get("empresaId");
+  const empresaId = !rawEmpresa || rawEmpresa === "null" ? null : Number(rawEmpresa);
+  if (empresaId !== null) {
+    if (!Number.isSafeInteger(empresaId) || empresaId <= 0) {
+      return { error: "Selecciona una entidad válida" };
+    }
+    const empresa = await prisma.empresa.findFirst({
+      where: { id: empresaId, tenantId },
+      select: { id: true },
+    });
+    if (!empresa) return { error: "La entidad seleccionada no pertenece a Psicólogos" };
+  }
+  return { nombre, empresaId, activo: formData.get("activo") === "on" };
+}
+
 export async function getMetodosPago(token: string) {
   const payload = await verifyToken(token);
 
@@ -99,13 +119,9 @@ export async function createMetodoPago(token: string, formData: FormData) {
       return { error: "Usuario no encontrado" };
     }
 
-    const nombre = formData.get("nombre") as string;
-    const activo = formData.get("activo") === "on";
-    const empresaId = formData.get("empresaId") ? parseInt(formData.get("empresaId") as string) : null;
-
-    if (!nombre) {
-        return { error: "El nombre es obligatorio" };
-    }
+    const form = await readMetodoForm(formData, usuario.tenantId);
+    if ("error" in form) return { error: form.error };
+    const { nombre, activo, empresaId } = form;
 
     await prisma.metodoPago.create({
       data: {
@@ -140,13 +156,9 @@ export async function updateMetodoPago(token: string, id: number, formData: Form
       return { error: "Usuario no encontrado" };
     }
 
-    const nombre = formData.get("nombre") as string;
-    const activo = formData.get("activo") === "on";
-    const empresaId = formData.get("empresaId") ? parseInt(formData.get("empresaId") as string) : null;
-
-    if (!nombre) {
-        return { error: "El nombre es obligatorio" };
-    }
+    const form = await readMetodoForm(formData, usuario.tenantId);
+    if ("error" in form) return { error: form.error };
+    const { nombre, activo, empresaId } = form;
 
     await prisma.metodoPago.update({
         where: { id, tenantId: usuario.tenantId },

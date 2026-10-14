@@ -50,6 +50,7 @@ interface UsuarioNomina {
 export default function NominaPage() {
   const [usuarios, setUsuarios] = useState<UsuarioNomina[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const { role, loading: roleLoading } = useUserRole();
 
@@ -74,9 +75,12 @@ export default function NominaPage() {
   }, [role, roleLoading, router]);
 
   useEffect(() => {
+    if (role !== "ADMIN" && role !== "SU_ADMIN") return;
+    let ignore = false;
     const fetchUsuarios = async () => {
-      if (role !== "ADMIN" && role !== "SU_ADMIN") return;
-
+    setLoading(true);
+    setLoadError("");
+    try {
       const token = localStorage.getItem("token");
       if (!token) {
         router.push("/sign-in");
@@ -84,16 +88,22 @@ export default function NominaPage() {
       }
 
       const res = await getUsuariosNomina(token);
+      if (ignore) return;
       if (res.error) {
-        toast.error(res.error);
+        setLoadError(res.error);
         if (res.error === "No autorizado") router.push("/sign-in");
       } else if (res.data) {
         setUsuarios(res.data);
       }
-      setLoading(false);
-    };
+    } catch {
+      if (!ignore) setLoadError("No se pudo cargar la configuración de pagos. Intenta nuevamente.");
+    } finally {
+      if (!ignore) setLoading(false);
+    }
+  };
 
     fetchUsuarios();
+    return () => { ignore = true; };
   }, [role, router, refreshTrigger]);
 
   const handleEdit = (usuario: UsuarioNomina) => {
@@ -109,6 +119,7 @@ export default function NominaPage() {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
+    try {
     e.preventDefault();
     if (!editingUser) return;
     
@@ -134,6 +145,11 @@ export default function NominaPage() {
       setRefreshTrigger(prev => prev + 1);
     }
     setIsSubmitting(false);
+    } catch {
+      toast.error("No se pudo guardar la configuración de pago. Intenta nuevamente.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const filteredUsers = usuarios.filter(u => 
@@ -152,7 +168,7 @@ export default function NominaPage() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="flex-none bg-white border-b border-slate-200 px-8 py-6">
+      <div className="flex-none bg-white border-b border-slate-200 px-4 sm:px-8 py-6">
         <div className="max-w-5xl mx-auto">
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
             <Settings2 className="h-6 w-6 text-indigo-600" />
@@ -165,7 +181,7 @@ export default function NominaPage() {
       </div>
 
       {/* Toolbar */}
-      <div className="flex-none px-8 py-4 bg-slate-50 border-b border-slate-200">
+      <div className="flex-none px-4 sm:px-8 py-4 bg-slate-50 border-b border-slate-200">
         <div className="max-w-5xl mx-auto">
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -181,12 +197,14 @@ export default function NominaPage() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto bg-slate-50 px-8 py-6">
+      <div className="flex-1 overflow-auto bg-slate-50 px-4 sm:px-8 py-6">
         <div className="max-w-5xl mx-auto">
           {loading ? (
              <div className="flex items-center justify-center h-64">
                <div className="h-8 w-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
              </div>
+          ) : loadError ? (
+            <div role="alert" className="space-y-3 rounded-lg border bg-white p-6 text-center"><p className="text-sm text-slate-700">{loadError}</p><Button variant="outline" onClick={() => setRefreshTrigger(value => value + 1)}>Reintentar</Button></div>
           ) : filteredUsers.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-slate-500 bg-white rounded-lg border border-slate-200 border-dashed">
               <Settings2 className="h-12 w-12 mb-3 text-slate-300" />

@@ -67,6 +67,7 @@ export default function AnticiposPage() {
   const [anticipos, setAnticipos] = useState<Anticipo[]>([]);
   const [tecnicos, setTecnicos] = useState<{ id: number; nombre: string; apellido: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [editingAnticipo, setEditingAnticipo] = useState<Anticipo | null>(null);
@@ -79,18 +80,27 @@ export default function AnticiposPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const fetchAnticipos = useCallback(async () => {
+    setLoading(true);
+    setLoadError("");
+    try {
     const token = localStorage.getItem("token");
     if (!token) return;
     const res = await getAnticipos(token);
     if (res.success) {
       setAnticipos(res.data);
     } else {
-      toast.error(res.error || "Error al cargar anticipos");
+      setLoadError(res.error || "No se pudieron cargar los anticipos. Intenta nuevamente.");
     }
     setLoading(false);
+    } catch {
+      setLoadError("No se pudieron cargar los anticipos. Intenta nuevamente.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   const fetchTecnicos = useCallback(async () => {
+    try {
     const token = localStorage.getItem("token");
     if (!token) return;
     const res = await getTecnicos(token);
@@ -98,6 +108,9 @@ export default function AnticiposPage() {
       setTecnicos(res.data);
     } else {
       // Handle error silently or log
+    }
+    } catch {
+      toast.error("No se pudo cargar el equipo. Intenta nuevamente.");
     }
   }, []);
 
@@ -133,6 +146,7 @@ export default function AnticiposPage() {
   };
 
   const handleSave = async () => {
+    try {
     if (!selectedTecnico || !monto || !razon) {
       toast.error("Complete todos los campos");
       return;
@@ -163,6 +177,11 @@ export default function AnticiposPage() {
       toast.error(res.error || "Error al guardar");
     }
     setSubmitting(false);
+    } catch {
+      toast.error("No se pudo guardar el anticipo. Revisa tu conexión.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleOpenDeleteModal = (id: string) => {
@@ -171,6 +190,7 @@ export default function AnticiposPage() {
   };
 
   const handleDelete = async () => {
+    try {
     if (!deletingAnticipoId) return;
 
     setSubmitting(true);
@@ -186,6 +206,11 @@ export default function AnticiposPage() {
       toast.error(res.error || "Error al eliminar");
     }
     setSubmitting(false);
+    } catch {
+      toast.error("No se pudo eliminar el anticipo. Intenta nuevamente.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (loading || roleLoading) {
@@ -198,7 +223,7 @@ export default function AnticiposPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-none bg-white border-b border-slate-200 px-8 py-6">
+      <div className="flex-none bg-white border-b border-slate-200 px-4 sm:px-8 py-6">
         <div className="max-w-6xl mx-auto flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -216,9 +241,9 @@ export default function AnticiposPage() {
         </div>
       </div>
 
-      <div className="flex-1 p-8 bg-slate-50 overflow-auto">
+      <div className="flex-1 p-4 sm:p-8 bg-slate-50 overflow-auto">
         <div className="max-w-6xl mx-auto">
-          {anticipos.length === 0 ? (
+          {loadError ? (<div role="alert" className="space-y-3 rounded-lg border bg-white p-6 text-center"><p className="text-sm text-slate-700">{loadError}</p><Button variant="outline" onClick={fetchAnticipos}>Reintentar</Button></div>) : anticipos.length === 0 ? (
             <div className="text-center py-12 bg-white rounded-lg border border-dashed border-slate-300">
               <DollarSign className="h-12 w-12 text-slate-300 mx-auto mb-3" />
               <h3 className="text-lg font-medium text-slate-900">No hay anticipos registrados</h3>

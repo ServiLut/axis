@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useDebounce } from "use-debounce";
 import { toast } from "sonner";
@@ -94,6 +94,9 @@ export default function TerapiasTratamientosPage() {
   const canManage = role === "ADMIN" || role === "SU_ADMIN";
 
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadRevision, setLoadRevision] = useState(0);
+  const requestId = useRef(0);
   const [options, setOptions] = useState<OptionsState>(emptyOptions);
   const [terapias, setTerapias] = useState<TerapiaRow[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -152,46 +155,38 @@ export default function TerapiasTratamientosPage() {
     [categoriaSeleccionada, terapias],
   );
 
+  const invalidateRequests = useCallback(() => { requestId.current++; }, []);
+
   const loadData = useCallback(async () => {
+    const currentRequest = ++requestId.current;
     const token = localStorage.getItem("token");
-    if (!token) {
-      router.push("/sign-in");
-      return;
-    }
-
+    if (!token) { router.push("/sign-in"); return; }
     setLoading(true);
-    const [terapiasRes, optionsRes] = await Promise.all([
-      getTerapiasPsicologos(token, {
-        term: debouncedSearchTerm,
-        estado: estadoFilter,
-        tenantId: selectedTenantForOptions,
-      }),
-      getManagementOptions(token, selectedTenantForOptions),
-    ]);
-
-    if ("error" in terapiasRes && terapiasRes.error) {
-      toast.error(terapiasRes.error);
-    } else if ("terapias" in terapiasRes) {
-      setTerapias((terapiasRes.terapias as TerapiaRow[]) || []);
-    }
-
-    if ("error" in optionsRes && optionsRes.error) {
-      toast.error(optionsRes.error);
-    } else if ("empresas" in optionsRes) {
-      setOptions({
+    setLoadError(null);
+    try {
+      const [terapiasRes, optionsRes] = await Promise.all([
+        getTerapiasPsicologos(token, {
+          term: debouncedSearchTerm,
+          estado: estadoFilter,
+          tenantId: selectedTenantForOptions,
+        }),
+        getManagementOptions(token, selectedTenantForOptions),
+      ]);
+      if (currentRequest !== requestId.current) return;
+      const readError = ("error" in terapiasRes && terapiasRes.error) || ("error" in optionsRes && optionsRes.error);
+      if (readError) { setLoadError(readError); return; }
+      if ("terapias" in terapiasRes) setTerapias((terapiasRes.terapias as TerapiaRow[]) || []);
+      if ("empresas" in optionsRes) setOptions({
         empresas: (optionsRes.empresas as EmpresaOption[]) || [],
         tenants: (optionsRes.tenants as TenantOption[]) || [],
         currentTenantId: optionsRes.currentTenantId || null,
       });
+    } catch {
+      if (currentRequest === requestId.current) setLoadError("No se pudo cargar el catálogo. Revise su conexión e intente nuevamente.");
+    } finally {
+      if (currentRequest === requestId.current) setLoading(false);
     }
-
-    setLoading(false);
-  }, [
-    debouncedSearchTerm,
-    estadoFilter,
-    router,
-    selectedTenantForOptions,
-  ]);
+  }, [debouncedSearchTerm, estadoFilter, router, selectedTenantForOptions]);
 
   const refreshOptionsForTenant = useCallback(
     async (targetTenantId?: string) => {
@@ -201,22 +196,16 @@ export default function TerapiasTratamientosPage() {
         return;
       }
 
-      const result = await getManagementOptions(
-        token,
-        targetTenantId || selectedTenantForOptions,
-      );
-
-      if ("error" in result && result.error) {
-        toast.error(result.error);
-        return;
-      }
-
-      if ("empresas" in result) {
-        setOptions({
+      try {
+        const result = await getManagementOptions(token, targetTenantId || selectedTenantForOptions);
+        if ("error" in result && result.error) { toast.error(result.error); return; }
+        if ("empresas" in result) setOptions({
           empresas: (result.empresas as EmpresaOption[]) || [],
           tenants: (result.tenants as TenantOption[]) || [],
           currentTenantId: result.currentTenantId || null,
         });
+      } catch {
+        toast.error("No se pudieron actualizar las opciones del catálogo. Intente nuevamente.");
       }
     },
     [router, selectedTenantForOptions],
@@ -233,10 +222,10 @@ export default function TerapiasTratamientosPage() {
 
   useEffect(() => {
     if (canManage) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      loadData();
+      void loadData();
     }
-  }, [canManage, loadData]);
+    return () => { invalidateRequests(); };
+  }, [canManage, loadData, invalidateRequests, loadRevision]);
 
   const handleOpenModal = (
     terapia?: TerapiaRow,
@@ -276,6 +265,7 @@ export default function TerapiasTratamientosPage() {
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isSubmitting) return;
     setIsSubmitting(true);
 
     const token = localStorage.getItem("token");
@@ -295,41 +285,33 @@ export default function TerapiasTratamientosPage() {
     payload.set("empresaId", formData.empresaId);
     payload.set("activo", formData.activo);
 
-    const result = editingTerapia
-      ? await updateTerapiaPsicologos(token, editingTerapia.id, payload)
-      : await createTerapiaPsicologos(token, payload);
-
-    if ("error" in result) {
-      toast.error(result.error);
-    } else {
-      toast.success(result.message);
-      setIsModalOpen(false);
-      await loadData();
+    try {
+      const result = editingTerapia
+        ? await updateTerapiaPsicologos(token, editingTerapia.id, payload)
+        : await createTerapiaPsicologos(token, payload);
+      if ("error" in result) toast.error(result.error);
+      else { toast.success(result.message); setIsModalOpen(false); setLoadRevision((revision) => revision + 1); }
+    } catch {
+      toast.error("No se pudo guardar el servicio. Sus cambios se conservan para intentar nuevamente.");
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setIsSubmitting(false);
   };
 
   const toggleTerapia = async (terapia: TerapiaRow, active: boolean) => {
+    if (isDeleting) return;
     const token = localStorage.getItem("token");
     if (!token) return;
-
     setIsDeleting(true);
-    const result = await toggleTerapiaPsicologosActivo(
-      token,
-      terapia.id,
-      active,
-    );
-
-    if ("error" in result) {
-      toast.error(result.error);
-    } else {
-      toast.success(result.message);
-      setTerapiaToDeactivate(null);
-      await loadData();
+    try {
+      const result = await toggleTerapiaPsicologosActivo(token, terapia.id, active);
+      if ("error" in result) toast.error(result.error);
+      else { toast.success(result.message); setTerapiaToDeactivate(null); setLoadRevision((revision) => revision + 1); }
+    } catch {
+      toast.error("No se pudo cambiar el estado del servicio. Intente nuevamente.");
+    } finally {
+      setIsDeleting(false);
     }
-
-    setIsDeleting(false);
   };
 
   if (roleLoading || !canManage) {
@@ -427,14 +409,19 @@ export default function TerapiasTratamientosPage() {
               <div className="flex h-64 items-center justify-center">
                 <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
               </div>
+            ) : loadError ? (
+              <div role="alert" className="flex min-h-64 flex-col items-center justify-center gap-4 p-6 text-center text-sm text-slate-700">
+                <p>{loadError}</p>
+                <Button type="button" variant="outline" onClick={() => { void loadData(); }}>Reintentar</Button>
+              </div>
             ) : terapiasFiltradas.length === 0 ? (
               <div className="flex h-64 flex-col items-center justify-center text-slate-500">
                 <BookOpen className="mb-3 h-10 w-10 text-slate-300" />
                 <p className="font-medium">
-                  No hay terapias ni tratamientos registrados
+                  {debouncedSearchTerm || estadoFilter !== "all" || categoriaSeleccionada !== "all" ? "No hay servicios que coincidan con los filtros" : "No hay terapias ni tratamientos registrados"}
                 </p>
                 <p className="text-sm">
-                  Crea un registro para que aparezca en el catálogo de citas.
+                  {debouncedSearchTerm || estadoFilter !== "all" || categoriaSeleccionada !== "all" ? "Cambie la búsqueda o los filtros para ver otros servicios." : "Crea un registro para que aparezca en el catálogo de citas."}
                 </p>
               </div>
             ) : (
@@ -497,6 +484,7 @@ export default function TerapiasTratamientosPage() {
                               variant="ghost"
                               size="icon"
                               className="text-green-600 hover:text-green-700"
+                              disabled={isDeleting}
                               onClick={() => toggleTerapia(terapia, true)}
                               title="Reactivar terapia o tratamiento"
                             >

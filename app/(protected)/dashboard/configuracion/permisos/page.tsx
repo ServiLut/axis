@@ -37,6 +37,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { useUserRole } from "@/hooks/use-user-role";
 
 import {
   getPendingPermissions,
@@ -69,6 +70,8 @@ interface PermisoWithUser {
 
 export default function PermisosPage() {
   const router = useRouter();
+  const { role, loading: roleLoading } = useUserRole();
+  const isAdmin = role === "ADMIN" || role === "SU_ADMIN";
   const [activeTab, setActiveTab] = useState("pendientes");
   const [pendingPermissions, setPendingPermissions] = useState<
     PermisoWithUser[]
@@ -77,6 +80,8 @@ export default function PermisosPage() {
     PermisoWithUser[]
   >([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Approval Dialog State
   const [isApproveDialogOpen, setIsApproveDialogOpen] = useState(false);
@@ -86,35 +91,32 @@ export default function PermisosPage() {
   const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
+    if (!roleLoading && !isAdmin) router.replace("/dashboard");
+  }, [roleLoading, isAdmin, router]);
+
+  useEffect(() => {
+    if (roleLoading || !isAdmin) return;
     let ignore = false;
 
     async function load() {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        router.push("/sign-in");
-        return;
-      }
-
-      if (activeTab === "pendientes") {
-        const res = await getPendingPermissions(token);
-        if (!ignore) {
-          if (res.error) {
-            toast.error(res.error);
-          } else {
-            setPendingPermissions(res.permisos as unknown as PermisoWithUser[]);
-          }
-          setLoading(false);
+      setLoading(true);
+      setLoadError("");
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          router.push("/sign-in");
+          throw new Error("Inicia sesión para consultar las solicitudes.");
         }
-      } else {
-        const res = await getPermissionHistory(token);
-        if (!ignore) {
-          if (res.error) {
-            toast.error(res.error);
-          } else {
-            setHistoryPermissions(res.permisos as unknown as PermisoWithUser[]);
-          }
-          setLoading(false);
-        }
+        const res = activeTab === "pendientes" ? await getPendingPermissions(token) : await getPermissionHistory(token);
+        if (ignore) return;
+        if (res.error) throw new Error(res.error);
+        const permisos = res.permisos as unknown as PermisoWithUser[];
+        if (activeTab === "pendientes") setPendingPermissions(permisos);
+        else setHistoryPermissions(permisos);
+      } catch (error) {
+        if (!ignore) setLoadError(error instanceof Error ? error.message : "No se pudieron cargar las solicitudes. Intenta nuevamente.");
+      } finally {
+        if (!ignore) setLoading(false);
       }
     }
 
@@ -123,7 +125,7 @@ export default function PermisosPage() {
     return () => {
       ignore = true;
     };
-  }, [activeTab, router]);
+  }, [activeTab, router, roleLoading, isAdmin, refreshTrigger]);
 
   const handleTabChange = (value: string) => {
     setLoading(true);
@@ -131,30 +133,7 @@ export default function PermisosPage() {
   };
 
   // Keep fetchPermissions for manual triggers (approval/rejection)
-  const fetchPermissions = useCallback(async () => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      router.push("/sign-in");
-      return;
-    }
-
-    if (activeTab === "pendientes") {
-      const res = await getPendingPermissions(token);
-      if (res.error) {
-        toast.error(res.error);
-      } else {
-        setPendingPermissions(res.permisos as unknown as PermisoWithUser[]);
-      }
-    } else {
-      const res = await getPermissionHistory(token);
-      if (res.error) {
-        toast.error(res.error);
-      } else {
-        setHistoryPermissions(res.permisos as unknown as PermisoWithUser[]);
-      }
-    }
-    setLoading(false);
-  }, [activeTab, router]);
+  const fetchPermissions = useCallback(() => setRefreshTrigger(value => value + 1), []);
 
   const handleApproveClick = (permiso: PermisoWithUser) => {
     setSelectedPermiso(permiso);
@@ -162,6 +141,7 @@ export default function PermisosPage() {
   };
 
   const handleConfirmApprove = async () => {
+    try {
     if (!selectedPermiso) return;
     setProcessing(true);
     const token = localStorage.getItem("token");
@@ -183,9 +163,15 @@ export default function PermisosPage() {
       fetchPermissions(); 
     }
     setProcessing(false);
+    } catch {
+      toast.error("No se pudo aprobar la solicitud. Intenta nuevamente.");
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const handleReject = async (id: number) => {
+    try {
     if (!confirm("¿Estás seguro de rechazar esta solicitud?")) return;
 
     setProcessing(true);
@@ -203,6 +189,11 @@ export default function PermisosPage() {
       fetchPermissions(); 
     }
     setProcessing(false);
+    } catch {
+      toast.error("No se pudo rechazar la solicitud. Intenta nuevamente.");
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const getPermissionLabel = (tipo: string) => {
@@ -261,9 +252,11 @@ export default function PermisosPage() {
     }
   };
 
+  if (roleLoading || !isAdmin) return <div className="flex h-full items-center justify-center"><p className="text-sm text-slate-600">Verificando acceso…</p></div>;
+
   return (
     <div className="flex flex-col h-full overflow-hidden bg-slate-50">
-      <div className="flex-none bg-white border-b border-slate-200 px-8 py-6">
+      <div className="flex-none bg-white border-b border-slate-200 px-4 sm:px-8 py-6">
         <div className="max-w-5xl mx-auto">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-blue-50 rounded-lg">
@@ -279,7 +272,7 @@ export default function PermisosPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-8 py-6">
+      <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6">
         <div className="max-w-5xl mx-auto">
           <Tabs
             value={activeTab}
@@ -313,6 +306,8 @@ export default function PermisosPage() {
                 <div className="flex justify-center py-12">
                   <div className="h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
                 </div>
+              ) : loadError ? (
+                <div role="alert" className="space-y-3 rounded-lg border bg-white p-6 text-center"><p className="text-sm text-slate-700">{loadError}</p><Button variant="outline" onClick={fetchPermissions}>Reintentar</Button></div>
               ) : pendingPermissions.length === 0 ? (
                 <div className="text-center py-12 bg-white rounded-lg border border-slate-200 border-dashed">
                   <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-3" />
@@ -400,6 +395,8 @@ export default function PermisosPage() {
                 <div className="flex justify-center py-12">
                   <div className="h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
                 </div>
+              ) : loadError ? (
+                <div role="alert" className="space-y-3 rounded-lg border bg-white p-6 text-center"><p className="text-sm text-slate-700">{loadError}</p><Button variant="outline" onClick={fetchPermissions}>Reintentar</Button></div>
               ) : historyPermissions.length === 0 ? (
                 <div className="text-center py-12 bg-white rounded-lg border border-slate-200 border-dashed">
                   <History className="h-12 w-12 text-slate-300 mx-auto mb-3" />
@@ -408,7 +405,7 @@ export default function PermisosPage() {
                   </p>
                 </div>
               ) : (
-                <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                <div className="bg-white rounded-lg border border-slate-200 overflow-x-auto">
                   <table className="w-full text-sm text-left">
                     <thead className="bg-slate-50 text-slate-700 font-medium border-b border-slate-200">
                       <tr>

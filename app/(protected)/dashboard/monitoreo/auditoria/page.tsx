@@ -313,6 +313,8 @@ export default function AuditoriaPage() {
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({ usuarios: [], entidades: [] });
   const [references, setReferences] = useState<ReferencesMap>({});
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
@@ -339,7 +341,14 @@ export default function AuditoriaPage() {
     let isMounted = true;
     const fetchLogs = async () => {
       setLoading(true);
+      setLoadError(null);
+      setLogs([]);
+      setReferences({});
+      setTotal(0);
+      setTotalPages(1);
+      try {
       const token = localStorage.getItem("token");
+      if (!token) throw new Error("Tu sesión terminó. Vuelve a iniciar sesión.");
       if (token) {
         const filtros = {
           accion: currentAccion !== "all" ? currentAccion : undefined,
@@ -351,6 +360,7 @@ export default function AuditoriaPage() {
         };
 
         const result = await getAuditoria(token, page, ITEMS_PER_PAGE, filtros);
+        if (result.error) throw new Error(result.error);
         if (isMounted && result.logs) {
             setLogs(result.logs as unknown as AuditLog[]);
             setTotalPages(result.totalPages || 1);
@@ -360,11 +370,15 @@ export default function AuditoriaPage() {
             }
         }
       }
-      if (isMounted) setLoading(false);
+      } catch (error) {
+        if (isMounted) setLoadError(error instanceof Error ? error.message : "No se pudo cargar el historial. Intenta nuevamente.");
+      } finally {
+        if (isMounted) setLoading(false);
+      }
     };
     fetchLogs();
     return () => { isMounted = false; };
-  }, [page, currentAccion, currentEntidad, currentUsuario, currentEntidadId, startDate, endDate]);
+  }, [page, currentAccion, currentEntidad, currentUsuario, currentEntidadId, startDate, endDate, refreshKey]);
 
   // Filter Handlers
   const handleFilterChange = (key: string, value: string) => {
@@ -469,7 +483,7 @@ export default function AuditoriaPage() {
       <div className="p-4 md:p-8 space-y-6 max-w-[1600px] mx-auto">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">Auditoría de Sistema</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">Historial de cambios</h1>
             <p className="text-muted-foreground">
               Monitoreo y trazabilidad detallada de todas las acciones realizadas.
             </p>
@@ -478,7 +492,7 @@ export default function AuditoriaPage() {
               <Button 
                 variant="outline" 
                 onClick={handleExport} 
-                disabled={exporting}
+                disabled={exporting || loading || !!loadError}
                 className="w-full md:w-auto shadow-sm"
               >
                   <Download className="mr-2 h-4 w-4" />
@@ -486,6 +500,13 @@ export default function AuditoriaPage() {
               </Button>
           </div>
         </div>
+
+        {loadError && (
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            <p>{loadError}</p>
+            <Button type="button" variant="outline" onClick={() => setRefreshKey((value) => value + 1)}>Reintentar</Button>
+          </div>
+        )}
 
         {/* Filter Bar */}
         <Card className="bg-white shadow-sm border-slate-200">
@@ -622,7 +643,7 @@ export default function AuditoriaPage() {
                         <TableCell className="text-right pr-6">
                           <Dialog>
                             <DialogTrigger asChild>
-                              <Button variant="ghost" size="icon" className="hover:bg-indigo-50 hover:text-indigo-600 rounded-full h-8 w-8 transition-all">
+                              <Button variant="ghost" size="icon" aria-label={`Ver detalles del cambio ${log.id}`} className="hover:bg-indigo-50 hover:text-indigo-600 rounded-full h-8 w-8 transition-all">
                                 <Eye className="h-4 w-4" />
                               </Button>
                             </DialogTrigger>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Copy, Share2, Loader2, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,43 +13,61 @@ export default function MiCodigoPage() {
   const [codigo, setCodigo] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [origin, setOrigin] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [copying, setCopying] = useState(false);
+  const controllerRef = useRef<AbortController | null>(null);
 
-  useEffect(() => {
-    setOrigin(window.location.origin);
-    const fetchCodigo = async () => {
+  const fetchCodigo = useCallback(async () => {
+      controllerRef.current?.abort();
+      const controller = new AbortController();
+      controllerRef.current = controller;
+      setLoading(true);
+      setError(null);
+      setCodigo(null);
       try {
         const token = localStorage.getItem("token");
-        if (!token) return;
+        if (!token) throw new Error("Tu sesión terminó. Vuelve a iniciar sesión.");
 
         const res = await fetch("/api/profile/referral-code", {
+          signal: controller.signal,
           headers: { Authorization: `Bearer ${token}` }
         });
         
         if (res.ok) {
           const data = await res.json();
+          if (controller.signal.aborted) return;
+          if (typeof data.codigo !== "string" || !data.codigo) throw new Error("No se recibió tu código. Intenta nuevamente.");
           setCodigo(data.codigo);
         } else {
-          toast.error("Error al obtener el código");
+          throw new Error("No se pudo cargar tu enlace de referidos. Intenta nuevamente.");
         }
       } catch (error) {
-        console.error(error);
-        toast.error("Error de conexión");
+        if (!controller.signal.aborted) setError(error instanceof Error ? error.message : "No se pudo conectar con Axis.");
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
-    };
-
-    fetchCodigo();
   }, []);
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+    void fetchCodigo();
+    return () => controllerRef.current?.abort();
+  }, [fetchCodigo]);
 
   const getShareUrl = () => {
     return `${origin}/registro-referidos?code=${codigo}`;
   };
 
-  const copyToClipboard = () => {
-    if (codigo) {
-      navigator.clipboard.writeText(getShareUrl());
+  const copyToClipboard = async () => {
+    if (!codigo || !origin || copying) return;
+    setCopying(true);
+    try {
+      await navigator.clipboard.writeText(getShareUrl());
       toast.success("Enlace copiado al portapapeles");
+    } catch {
+      toast.error("No se pudo copiar. Selecciona y copia el enlace que aparece en esta página.");
+    } finally {
+      setCopying(false);
     }
   };
 
@@ -62,10 +80,12 @@ export default function MiCodigoPage() {
           url: getShareUrl()
         });
       } catch (err) {
-        console.error("Error sharing:", err);
+        if (!(err instanceof DOMException && err.name === "AbortError")) {
+          toast.error("No se pudo compartir. Puedes copiar el enlace.");
+        }
       }
     } else {
-        copyToClipboard();
+        await copyToClipboard();
     }
   };
 
@@ -90,6 +110,12 @@ export default function MiCodigoPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6 pt-6">
+          {error && (
+            <div role="alert" className="space-y-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              <p>{error}</p>
+              <Button type="button" variant="outline" onClick={() => void fetchCodigo()}>Reintentar</Button>
+            </div>
+          )}
           <div className="flex flex-col items-center justify-center space-y-4">
              {codigo && origin && (
                <div className="p-4 bg-white rounded-xl shadow-sm border border-slate-100">
@@ -118,15 +144,22 @@ export default function MiCodigoPage() {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <Button variant="outline" className="w-full" disabled={!codigo} onClick={copyToClipboard}>
+            <Button variant="outline" className="w-full" disabled={!codigo || !origin || copying || !!error} onClick={() => void copyToClipboard()}>
               <Copy className="mr-2 h-4 w-4" />
-              Copiar enlace
+              {copying ? "Copiando…" : "Copiar enlace"}
             </Button>
-            <Button className="w-full bg-blue-600 hover:bg-blue-700" disabled={!codigo} onClick={shareCode}>
+            <Button className="w-full bg-blue-600 hover:bg-blue-700" disabled={!codigo || !origin || !!error} onClick={shareCode}>
               <Share2 className="mr-2 h-4 w-4" />
               Compartir
             </Button>
           </div>
+
+          {codigo && origin && !error && (
+            <div className="space-y-2">
+              <Label htmlFor="referral-link">Enlace de registro</Label>
+              <Input id="referral-link" readOnly value={getShareUrl()} onFocus={(event) => event.currentTarget.select()} />
+            </div>
+          )}
 
           <div className="rounded-lg bg-blue-50 p-4 text-sm text-blue-800">
              <p className="text-center">

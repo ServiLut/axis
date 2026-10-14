@@ -144,6 +144,9 @@ export async function approvePermission(
   try {
     const fechaExpiracion = new Date();
     fechaExpiracion.setMinutes(fechaExpiracion.getMinutes() + durationMinutes);
+    if (!Number.isSafeInteger(durationMinutes) || durationMinutes <= 0 || !Number.isFinite(fechaExpiracion.getTime())) {
+      return { error: "La duración debe ser un número positivo de minutos" };
+    }
 
     await prisma.permiso.update({
       where: { id: permisoId, tenantId: PSYCHOLOGY_TENANT_ID },
