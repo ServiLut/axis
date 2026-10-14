@@ -1,5 +1,17 @@
 # Registro propio de servicios nuevos de María
 
+## Confirmación posterior al recibo y límites del formulario — 14/10/2026 23:21Z
+
+Sólo María instaló `bdaef650030e393f2f347c2122ceff556bce043f` (Dokploy DONE 4 s), confirmado por tarjeta exacta y por API propia a las 23:21:32Z. Gate final: **981/981 pruebas**, 76 archivos, cero omisiones; incluye cotización propia, fuentes literales de formulario, confirmación de resumen, una alta en memoria a su nombre, respuesta operativa citada entregada y confirmación final sin repetir consulta. No se crearon servicios productivos de prueba ni se acreditó una nueva venta real. Registro activo con SAVED=1 histórico BF23DF14; otras colas de registro=0.
+
+La consulta operativa inicial incluye el mismo `priceSource` que la ruta posterior. Una confirmación simple sólo recibe acuse si concuerdan recibo propio, hash, precio, plan prospectivo, fuente humana TESA vigente, entregas y contexto posteriores. No reabre la misma pregunta ni modifica el recibo, su aceptación original, la orden o su autor. Un cambio de día/hora sigue la consulta nueva; edición/caducidad no sustituye silenciosamente fuentes y conserva revisión. El acuse no declara el estado actual de la agenda a partir de un recibo histórico.
+
+Una presencia literal incidental de mascotas puede seguir la recepción ordinaria, con fuente nativa intacta y sin convertirla en falla técnica. Preguntas de seguridad separadas o compuestas siguen revisión; no hay nuevas instrucciones de producto/protección. **La nota aún sólo se conserva en la conversación cifrada, no en el resumen confirmable o DTO/observaciones de Tenaxis.** No atribuir al programa ese campo ni añadirlo por una ruta sin contrato y confirmación adecuados.
+
+El DTO y módulo Backend siguen sin cambios en esta entrega. El permiso vigente crea NUEVO sin agenda/técnico; no habilita actualizar una orden existente a PROGRAMADO. Los documentos privados `scheduling-design-private.md` y `scheduling-plan-private.json` son diseño, no implementación o nueva autorización. Requieren primera agenda propia, fuentes verificadas y exclusión concurrente común con personal antes de habilitar cualquier capacidad. Credenciales/vencimiento del 07/11/2026 y token limitado se conservan, sin ampliarlos o trasladarlos a otros bots.
+
+Evidencia y límites en `.tmp/maria-full-20261014/checkpoint-private.json` y el apartado actual de `BOTS_MARIA_MIGUEL.md`; espejo en visualizaciones `maria-full-20261014`. Roja suspendida, reactivación OFF, atención humana y ledgers intactos. No declarar autonomía total ni nuevos servicios reales por las pruebas aisladas.
+
 ## Continuación tras los escritos — 14/10/2026 21:03Z
 
 Sólo María instaló `93576d440beedddecc17628e4c36910e1919006e` (Dokploy DONE 6 s). `/status` a las 21:03:34Z confirmó la exclusión prospectiva de sincronización nativa exacta tras lectura saliente completa dentro de límites. 899 pruebas runtime y 19 probes independientes aprobaron. Se conservan DTO/módulo de Tenaxis, precios, actor, tokens y vencimiento. Registro ordinario activo, SAVED=1 histórico BF23DF14 y otras colas=0; no se acredita alta propia nueva.
