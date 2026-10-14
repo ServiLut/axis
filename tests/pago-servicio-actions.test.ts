@@ -20,6 +20,7 @@ async function fixture() {
     CREATE TABLE "PaqueteAdquirido"("id" bigint PRIMARY KEY,"tenantId" integer,"clienteId" integer,
       "fechaCompra" timestamptz,"precioPagado" numeric(12,2),"estado" text);
     CREATE TABLE "Auditoria"("id" bigserial PRIMARY KEY,"tenantId" integer,"accion" text);
+    CREATE TABLE "TerapiasPsicologos"("id" bigint PRIMARY KEY,"tenantId" integer,"empresaId" integer,"nombre" text,"cantidadSesiones" integer);
     INSERT INTO "Tenant" VALUES(4),(9);
     INSERT INTO "Usuario" VALUES(10,4,'ADMIN',true,true,'Recepción','Prueba');
     INSERT INTO "Cliente" VALUES(100,4,'Paciente','Prueba');
@@ -27,9 +28,13 @@ async function fixture() {
       (1,4,100,'2026-09-26T14:00:00Z',50000,'PENDIENTE',false,NULL,NULL),
       (2,4,100,'2026-09-25T14:00:00Z',20000,'CONCILIADO',true,NULL,'EFECTIVO');
     INSERT INTO "PaqueteAdquirido" VALUES(3,4,100,'2026-09-26T15:00:00Z',90000,'ACTIVO');
+    INSERT INTO "TerapiasPsicologos" VALUES(1,4,3,'Terapia de tres sesiones',3),(49,4,3,'Alquiler de consultorio',1),(50,9,3,'Alquiler externo',1),(51,4,2,'Alquiler de otra entidad',1);
     ALTER TABLE "CitasPsicologos" ADD "psicologoId" integer;
     ALTER TABLE "CitasPsicologos" ADD "empresaId" integer DEFAULT 3;
-    ALTER TABLE "PaqueteAdquirido" ADD "usuarioId" integer;`);
+    ALTER TABLE "PaqueteAdquirido" ADD "usuarioId" integer;
+    ALTER TABLE "PaqueteAdquirido" ADD "catalogoId" bigint DEFAULT 1;
+    ALTER TABLE "PaqueteAdquirido" ADD "sesionesTotales" integer DEFAULT 1;
+    UPDATE "PaqueteAdquirido" SET "sesionesTotales"=3 WHERE "catalogoId"=1;`);
   await db.exec(readFileSync("docs/sql/2026-09-24-caja-diaria.sql", "utf8"));
   await db.exec(readFileSync("docs/sql/2026-09-25-recepcion.sql", "utf8"));
   await db.exec(readFileSync("docs/sql/2026-09-26-pagos-servicios.sql", "utf8"));
@@ -325,6 +330,220 @@ test('transferencia sin referencia guarda, concilia y reintenta una sola vez; re
   assert.ok('error' in await f.actions.registrarPagoServicio('valid',{...p,solicitudId:randomUUID()}));
   assert.equal(await f.count('MovimientoCaja'),2);
  }finally{await f.db.close();}
+});
+
+test("alquileres cancelados salen de pendientes y alquileres sin citas quedan en revisión sin cobro ordinario", async () => {
+  const f = await fixture();
+  try {
+    await f.db.exec(`INSERT INTO "PaqueteAdquirido"(id,"tenantId","usuarioId","catalogoId","fechaCompra","precioPagado",estado)
+      VALUES(20,4,10,49,'2026-09-26T15:00:00Z',18900,'ACTIVO'),
+        (21,4,10,49,'2026-09-26T15:00:00Z',18900,'ACTIVO'),
+        (22,4,10,49,'2026-09-26T15:00:00Z',18900,'ACTIVO'),
+        (23,4,10,49,'2026-09-26T15:00:00Z',18900,'ACTIVO');
+      INSERT INTO "CitasPsicologos"(id,"tenantId","empresaId","paqueteId",realizada,valor,"estadoPago")
+      VALUES(20,4,3,20,NULL,18900,'PENDIENTE'),(22,9,3,22,false,18900,'PENDIENTE'),(23,4,2,23,false,18900,'PENDIENTE');`);
+    const result = await f.actions.getPendientesPsicologia("valid", "2026-09-30");
+    assert.ok("items" in result, JSON.stringify(result));
+    if (!("items" in result)) return;
+    assert.ok(result.items.some((item) => item.origen === "PAQUETE" && item.id === "3"));
+    assert.ok(!result.items.some((item) => item.origen === "PAQUETE" && ["20","22","23"].includes(item.id)));
+    const unassigned = result.items.find((item) => item.origen === "PAQUETE" && item.id === "21");
+    assert.equal(unassigned?.situacion, "REVISAR_ALQUILER");
+    assert.equal(unassigned?.alquilerSinReserva, true);
+    for (const id of ["20","21","22","23"]) {
+      const payment = await f.actions.registrarPagoServicio("valid", { origen: "PAQUETE", origenId: id, fecha: "2026-09-26",
+        solicitudId: randomUUID(), confirmado: true, historicoRevisado: true,
+        lineas: [{ metodoPago: "EFECTIVO", monto: "18900", referencia: "" }] });
+      assert.ok("error" in payment);
+      if ("error" in payment) assert.match(payment.error, id === "21" ? /reserva vinculada/ : /reserva vigente/);
+    }
+    assert.equal(await f.count("MovimientoCaja"), 0);
+    assert.equal(await f.count("PagoServicioPsicologia"), 0);
+    assert.equal(await f.count("Auditoria"), 0);
+  } finally { await f.db.close(); }
+});
+
+test("alquiler compartido con historia cancelada permanece visible en revisión y bloquea el cobro de cita 2708", async () => {
+  const f = await fixture();
+  try {
+    const baseline = await f.actions.getPendientesPsicologia("valid", "2026-09-30");
+    assert.ok("summary" in baseline);
+    await f.db.exec(`INSERT INTO "PaqueteAdquirido"(id,"tenantId","usuarioId","catalogoId","fechaCompra","precioPagado",estado)
+      VALUES(2013,4,10,49,'2026-09-26T15:00:00Z',56700,'ACTIVO');
+      INSERT INTO "CitasPsicologos"(id,"tenantId","empresaId","paqueteId",realizada,valor,"estadoPago")
+      VALUES(2498,4,3,2013,NULL,56700,'PENDIENTE'),(2708,4,3,2013,true,18900,'PENDIENTE');`);
+    const direct = await f.actions.getCobroDesdeCita("valid", "2708");
+    assert.ok("error" in direct);
+    if ("error" in direct) assert.match(direct.error, /compartido.*valor contratado/);
+    const open = await f.actions.getPendientesPsicologia("valid", "2026-09-30");
+    assert.ok("items" in open, JSON.stringify(open));
+    if (!("items" in open) || !("summary" in baseline)) return;
+    assert.equal(open.items.find((item) => item.origen === "PAQUETE" && item.id === "2013")?.situacion, "REVISAR_ALQUILER");
+    assert.equal(open.summary.revisarAlquiler, 1);
+    assert.equal(open.summary.vencidos, baseline.summary.vencidos);
+    assert.equal(open.summary.valorVencido, baseline.summary.valorVencido);
+    assert.equal(open.summary.legado, baseline.summary.legado);
+    for (const monto of ["56700", "18900"]) {
+      const payment = await f.actions.registrarPagoServicio("valid", { origen: "PAQUETE", origenId: "2013", fecha: "2026-09-26",
+        solicitudId: randomUUID(), confirmado: true, historicoRevisado: true, abonoConfirmado: true,
+        lineas: [{ metodoPago: "EFECTIVO", monto, referencia: "" }] });
+      assert.ok("error" in payment);
+      if ("error" in payment) assert.match(payment.error, /compartido/);
+    }
+    assert.equal(await f.count("MovimientoCaja"), 0);
+    assert.equal(await f.count("PagoServicioPsicologia"), 0);
+    assert.equal(await f.count("Auditoria"), 0);
+    assert.equal((await f.db.query<{ precio: string }>(`SELECT "precioPagado"::text AS precio FROM "PaqueteAdquirido" WHERE id=2013`)).rows[0].precio, "56700.00");
+    assert.deepEqual((await f.db.query<{ estadoPago: string }>(`SELECT "estadoPago" FROM "CitasPsicologos" WHERE "paqueteId"=2013 ORDER BY id`)).rows.map((row) => row.estadoPago), ["PENDIENTE", "PENDIENTE"]);
+  } finally { await f.db.close(); }
+});
+
+test("alquiler cuenta referencias de otras entidades y rechaza catálogo ajeno antes de cobrar", async () => {
+  const f = await fixture();
+  try {
+    await f.db.exec(`INSERT INTO "PaqueteAdquirido"(id,"tenantId","usuarioId","catalogoId","fechaCompra","precioPagado",estado)
+      VALUES(30,4,10,49,'2026-09-26T15:00:00Z',18900,'ACTIVO'),(31,4,10,50,'2026-09-26T15:00:00Z',18900,'ACTIVO'),
+        (32,4,10,51,'2026-09-26T15:00:00Z',18900,'ACTIVO');
+      INSERT INTO "CitasPsicologos"(id,"tenantId","empresaId","paqueteId",realizada,valor,"estadoPago")
+      VALUES(30,4,3,30,false,18900,'PENDIENTE'),(300,9,2,30,NULL,18900,'PENDIENTE'),
+        (31,4,3,31,false,18900,'PENDIENTE'),(32,4,3,32,false,18900,'PENDIENTE');`);
+    const open = await f.actions.getPendientesPsicologia("valid", "2026-09-30");
+    assert.ok("items" in open);
+    if ("items" in open) {
+      assert.equal(open.items.find((item) => item.origen === "PAQUETE" && item.id === "30")?.situacion, "REVISAR_ALQUILER");
+      assert.ok(!open.items.some((item) => item.origen === "PAQUETE" && ["31","32"].includes(item.id)));
+    }
+    for (const id of ["30","31","32"]) {
+      const direct = await f.actions.getCobroDesdeCita("valid", id);
+      assert.ok("error" in direct);
+      const payment = await f.actions.registrarPagoServicio("valid", { origen: "PAQUETE", origenId: id, fecha: "2026-09-26",
+        solicitudId: randomUUID(), confirmado: true, lineas: [{ metodoPago: "EFECTIVO", monto: "18900", referencia: "" }] });
+      assert.ok("error" in payment);
+      if ("error" in payment) assert.match(payment.error, id === "30" ? /compartido/ : /catálogo/);
+    }
+    assert.equal(await f.count("MovimientoCaja"), 0);
+    assert.equal(await f.count("PagoServicioPsicologia"), 0);
+  } finally { await f.db.close(); }
+});
+
+test("alquiler propio cobra una vez y un reintento exacto conserva el ingreso aunque cambie su vínculo después", async () => {
+  const f = await fixture();
+  try {
+    await f.db.exec(`INSERT INTO "PaqueteAdquirido"(id,"tenantId","usuarioId","catalogoId","fechaCompra","precioPagado",estado)
+      VALUES(40,4,10,49,'2026-09-26T15:00:00Z',18900,'ACTIVO');
+      INSERT INTO "CitasPsicologos"(id,"tenantId","empresaId","paqueteId",realizada,valor,"estadoPago")
+      VALUES(40,4,3,40,false,18900,'PENDIENTE');`);
+    const direct = await f.actions.getCobroDesdeCita("valid", "40");
+    assert.ok("item" in direct, JSON.stringify(direct));
+    if ("item" in direct) assert.equal(direct.item.valor, "18900.00");
+    const input = { origen: "PAQUETE" as const, origenId: "40", fecha: "2026-09-26", solicitudId: randomUUID(), confirmado: true,
+      lineas: [{ metodoPago: "TRANSFERENCIA" as const, monto: "18900", referencia: "RENTAL-40" }] };
+    const paid = await f.actions.registrarPagoServicio("valid", input);
+    assert.ok("ids" in paid, JSON.stringify(paid));
+    assert.equal((await f.db.query<{ estadoPago: string }>(`SELECT "estadoPago" FROM "CitasPsicologos" WHERE id=40`)).rows[0].estadoPago, "CONCILIADO");
+    await f.db.exec(`INSERT INTO "CitasPsicologos"(id,"tenantId","empresaId","paqueteId",realizada,valor,"estadoPago")
+      VALUES(41,4,3,40,NULL,18900,'PENDIENTE');`);
+    assert.equal(JSON.stringify(await f.actions.registrarPagoServicio("valid", input)), JSON.stringify(paid));
+    const open = await f.actions.getPendientesPsicologia("valid", "2026-09-30");
+    assert.ok("items" in open);
+    if ("items" in open) {
+      const sharedPaid = open.items.find((item) => item.origen === "PAQUETE" && item.id === "40");
+      assert.equal(sharedPaid?.situacion, "REVISAR_ALQUILER");
+      assert.equal(sharedPaid?.registrado, "18900.00");
+    }
+    const noDirect = await f.actions.getCobroDesdeCita("valid", "40");
+    assert.ok("error" in noDirect);
+    const newPayment = await f.actions.registrarPagoServicio("valid", { ...input, solicitudId: randomUUID() });
+    assert.ok("error" in newPayment);
+    if ("error" in newPayment) assert.match(newPayment.error, /compartido/);
+    assert.equal(await f.count("MovimientoCaja"), 1);
+    assert.equal(await f.count("PagoServicioPsicologia"), 1);
+  } finally { await f.db.close(); }
+});
+
+test("alquiler con una sola cita bloquea precio heredado, contrato múltiple o valor sin confirmar sin escribir dinero", async () => {
+  const f = await fixture();
+  try {
+    await f.db.exec(`INSERT INTO "PaqueteAdquirido"(id,"tenantId","usuarioId","catalogoId","fechaCompra","precioPagado",estado,"sesionesTotales")
+      VALUES(60,4,10,49,'2026-09-26T15:00:00Z',56700,'ACTIVO',1),
+        (61,4,10,49,'2026-09-26T15:00:00Z',18900,'ACTIVO',2),
+        (62,4,10,49,'2026-09-26T15:00:00Z',0,'ACTIVO',1),
+        (63,4,10,49,'2026-09-26T15:00:00Z',18900,'ACTIVO',1);
+      INSERT INTO "CitasPsicologos"(id,"tenantId","empresaId","paqueteId",realizada,valor,"estadoPago")
+      VALUES(60,4,3,60,false,18900,'PENDIENTE'),(61,4,3,61,false,18900,'PENDIENTE'),
+        (62,4,3,62,false,18900,'PENDIENTE'),(63,4,3,63,false,0,'PENDIENTE');`);
+    const open = await f.actions.getPendientesPsicologia("valid", "2026-09-30");
+    assert.ok("items" in open);
+    for (const id of ["60","61","62","63"]) {
+      if ("items" in open) {
+        const reviewItem: { situacion: string; alquilerContratoInconsistente?: boolean } | undefined = open.items.find((row) => row.origen === "PAQUETE" && row.id === id);
+        assert.equal(reviewItem?.situacion, "REVISAR_ALQUILER");
+        assert.equal(reviewItem?.alquilerContratoInconsistente, true);
+      }
+      assert.ok("error" in await f.actions.getCobroDesdeCita("valid", id));
+      const payment = await f.actions.registrarPagoServicio("valid", { origen: "PAQUETE", origenId: id, fecha: "2026-09-26",
+        solicitudId: randomUUID(), confirmado: true, historicoRevisado: true, abonoConfirmado: true,
+        lineas: [{ metodoPago: "EFECTIVO", monto: "18900", referencia: "" }] });
+      assert.ok("error" in payment);
+      if ("error" in payment) assert.match(payment.error, /contrato y el valor/);
+    }
+    if ("items" in open) assert.equal(open.summary.revisarAlquiler, 4);
+    assert.equal(await f.count("MovimientoCaja"), 0);
+    assert.equal(await f.count("PagoServicioPsicologia"), 0);
+    assert.equal(await f.count("Auditoria"), 0);
+  } finally { await f.db.close(); }
+});
+
+test("precio inconsistente de alquiler ya pagado permanece en revisión sin cambiar el ingreso ni repetirlo", async () => {
+  const f = await fixture();
+  try {
+    await f.db.exec(`INSERT INTO "PaqueteAdquirido"(id,"tenantId","usuarioId","catalogoId","fechaCompra","precioPagado",estado)
+      VALUES(64,4,10,49,'2026-09-26T15:00:00Z',18900,'ACTIVO');
+      INSERT INTO "CitasPsicologos"(id,"tenantId","empresaId","paqueteId",realizada,valor,"estadoPago")
+      VALUES(64,4,3,64,true,18900,'PENDIENTE');`);
+    const input = { origen: "PAQUETE" as const, origenId: "64", fecha: "2026-09-26", solicitudId: randomUUID(), confirmado: true,
+      lineas: [{ metodoPago: "EFECTIVO" as const, monto: "18900", referencia: "" }] };
+    const paid = await f.actions.registrarPagoServicio("valid", input);
+    assert.ok("ids" in paid);
+    await f.db.exec(`UPDATE "PaqueteAdquirido" SET "precioPagado"=5000 WHERE id=64`);
+    const open = await f.actions.getPendientesPsicologia("valid", "2026-09-30");
+    assert.ok("items" in open);
+    if ("items" in open) {
+      const item = open.items.find((item) => item.origen === "PAQUETE" && item.id === "64");
+      assert.equal(item?.situacion, "REVISAR_ALQUILER");
+      assert.equal(item?.alquilerContratoInconsistente, true);
+      assert.equal(item?.registrado, "18900.00");
+    }
+    assert.ok("error" in await f.actions.getCobroDesdeCita("valid", "64"));
+    const declined = await f.actions.registrarPagoServicio("valid", { ...input, solicitudId: randomUUID() });
+    assert.ok("error" in declined);
+    if ("error" in declined) assert.match(declined.error, /contrato y el valor/);
+    assert.equal(JSON.stringify(await f.actions.registrarPagoServicio("valid", input)), JSON.stringify(paid));
+    assert.equal(await f.count("MovimientoCaja"), 1);
+    assert.equal(await f.count("PagoServicioPsicologia"), 1);
+    assert.equal((await f.db.query<{ estadoPago: string }>(`SELECT "estadoPago" FROM "CitasPsicologos" WHERE id=64`)).rows[0].estadoPago, "CONCILIADO");
+  } finally { await f.db.close(); }
+});
+
+test("terapia de varias sesiones conserva recaudo sin citas o con citas solo canceladas", async () => {
+  const f = await fixture();
+  try {
+    await f.db.exec(`INSERT INTO "PaqueteAdquirido"(id,"tenantId","clienteId","catalogoId","fechaCompra","precioPagado",estado)
+      VALUES(50,4,100,1,'2026-09-26T15:00:00Z',90000,'ACTIVO');
+      INSERT INTO "CitasPsicologos"(id,"tenantId","empresaId","paqueteId",realizada,valor,"estadoPago")
+      VALUES(50,4,3,50,NULL,30000,'PENDIENTE');`);
+    const open = await f.actions.getPendientesPsicologia("valid", "2026-09-30");
+    assert.ok("items" in open);
+    if ("items" in open) for (const id of ["3","50"]) assert.equal(open.items.find((item) => item.origen === "PAQUETE" && item.id === id)?.situacion, "PENDIENTE");
+    for (const id of ["3","50"]) {
+      const payment = await f.actions.registrarPagoServicio("valid", { origen: "PAQUETE", origenId: id, fecha: "2026-09-26",
+        solicitudId: randomUUID(), confirmado: true, lineas: [{ metodoPago: "EFECTIVO", monto: "90000", referencia: "" }] });
+      assert.ok("ids" in payment, JSON.stringify(payment));
+    }
+    assert.equal(await f.count("MovimientoCaja"), 2);
+    assert.equal(await f.count("PagoServicioPsicologia"), 2);
+    assert.equal((await f.db.query<{ estadoPago: string }>(`SELECT "estadoPago" FROM "CitasPsicologos" WHERE id=50`)).rows[0].estadoPago, "PENDIENTE");
+  } finally { await f.db.close(); }
 });
 
 test("gasto de internet y cobro de cita comparten libro sin duplicar el ingreso", async () => {

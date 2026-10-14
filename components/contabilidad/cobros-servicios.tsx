@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CAJA_METHODS, paymentInputInCents, type CajaMethod } from "@/lib/caja";
@@ -12,7 +13,8 @@ import { bogotaToday } from "@/lib/bogota-date";
 import { AlertCircle, CheckCircle2, Loader2, Wallet, RefreshCw } from "lucide-react";
 
 type Item = { origen: "CITA" | "PAQUETE"; id: string; fecha: string; persona: string; valor: string;
-  registrado: string; estado: string; situacion: "PENDIENTE" | "SIN_LIBRO" | "REVISAR_LEGADO" };
+  registrado: string; estado: string; situacion: "PENDIENTE" | "SIN_LIBRO" | "REVISAR_LEGADO" | "REVISAR_ALQUILER";
+  alquilerSinReserva?: boolean; alquilerContratoInconsistente?: boolean };
 type Paid = { id: string; origen: string; origenId: string; monto: string; metodoPago: string; referencia: string; reversado: boolean };
 const labels: Record<CajaMethod,string> = { EFECTIVO: "Efectivo", TRANSFERENCIA: "Transferencia", TARJETA: "Tarjeta", OTRO: "Otro" };
 const format = (value: number) => new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(value);
@@ -28,7 +30,7 @@ export function CobrosServicios({ fecha, revision, onSaved, citaId, soloCita=fal
   onCancel?: () => void; onSavingChange?: (saving: boolean) => void;
 }) {
   const [items, setItems] = useState<Item[]>([]);
-  const [summary, setSummary] = useState({ total: 0, vencidos: 0, sinLibro: 0, legado: 0,
+  const [summary, setSummary] = useState({ total: 0, vencidos: 0, sinLibro: 0, legado: 0, revisarAlquiler: 0,
     valorVencido: "0.00", valorSinLibro: "0.00" });
   const [loadingMore, setLoadingMore] = useState(false);
   const [pagos, setPagos] = useState<Paid[]>([]);
@@ -61,7 +63,7 @@ export function CobrosServicios({ fecha, revision, onSaved, citaId, soloCita=fal
   const submitting = useRef(false);
   const paymentForm = useRef<HTMLFormElement>(null);
   useEffect(()=>{setHistoricoRevisado(false);},[selected?.id,selected?.origen]);
-  useEffect(()=>{if(selected && !soloCita)paymentForm.current?.focus();},[selected?.id,selected?.origen,soloCita]);
+  useEffect(()=>{if(selected?.id && !soloCita)paymentForm.current?.focus();},[selected?.id,selected?.origen,soloCita]);
 
   useEffect(() => {
     let cancelled = false;
@@ -129,6 +131,7 @@ export function CobrosServicios({ fecha, revision, onSaved, citaId, soloCita=fal
     try {
       const token = localStorage.getItem("token");
       if (!token) throw new Error("Inicia sesión para registrar pagos.");
+      if (selected.situacion === "REVISAR_ALQUILER") throw new Error("Revisa el vínculo de la reserva y su valor contratado antes de registrar un pago.");
       if (selected.situacion!=='PENDIENTE' && !historicoRevisado) throw new Error("Marca la revisión del pago anterior y confirma la fecha en que recibiste el dinero.");
       requestId.current ||= crypto.randomUUID();
       const input: PagoServicioInput = { origen: selected.origen, origenId: selected.id, fecha,
@@ -219,9 +222,10 @@ export function CobrosServicios({ fecha, revision, onSaved, citaId, soloCita=fal
     {loading ? <p role="status">Revisando saldos…</p> : error ? <p role="alert" className="text-red-700">{error}</p> : <>
       <div className="grid gap-3 sm:grid-cols-3">
         <p className="rounded-md border border-red-300 bg-red-50 p-3 text-red-900"><strong>{summary.vencidos}</strong> registros anteriores sin pago completo en libro · {format(Number(summary.valorVencido))} por revisar</p>
-        <p className="rounded-md border bg-slate-50 p-3"><strong>{summary.total}</strong> registros con saldo sin asiento · {summary.sinLibro} marcados como cobrados sin asiento ({format(Number(summary.valorSinLibro))})</p>
+        <p className="rounded-md border bg-slate-50 p-3"><strong>{summary.total}</strong> registros para revisar · {summary.sinLibro} marcados como cobrados sin asiento ({format(Number(summary.valorSinLibro))})</p>
         <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-900"><strong>{summary.legado}</strong> estados históricos para verificar</p>
       </div>
+      {summary.revisarAlquiler > 0 && <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"><strong>{summary.revisarAlquiler}</strong> alquileres requieren verificar reserva y valor contratado antes de cobrar.</p>}
       <p className="text-xs text-slate-500">Se muestran {items.length} de {summary.total} registros; carga más para revisar toda la lista. Un pago de paquete se registra una vez en el paquete; sus sesiones no se vuelven a sumar como ingreso.</p>
       <div className="max-h-80 overflow-auto rounded-md border">
         <table className="w-full min-w-[650px] text-left text-sm"><thead className="sticky top-0 bg-slate-100"><tr>
@@ -229,10 +233,10 @@ export function CobrosServicios({ fecha, revision, onSaved, citaId, soloCita=fal
         </tr></thead><tbody>{items.length === 0 ? <tr><td colSpan={5} className="p-4 text-slate-600">No hay pendientes en el rango consultado.</td></tr> : items.map((item) =>
           <tr key={`${item.origen}-${item.id}`} className={`border-t ${item.situacion === "SIN_LIBRO" || item.fecha < fecha && item.situacion === "PENDIENTE" ? "bg-red-50" : ""}`}>
             <td className="p-2">{item.fecha}</td><td className="p-2">{item.origen === "CITA" ? "Cita" : "Paquete"} #{item.id}</td>
-            <td className="p-2">{item.persona || "Sin nombre"}</td><td className="p-2 text-right tabular-nums">{format(Number(item.valor) - Number(item.registrado))}</td>
-            <td className="space-y-2 p-2">{item.situacion === "REVISAR_LEGADO" ? <p className="text-amber-800">Estado anterior: verificar soporte</p> :
+            <td className="p-2">{item.persona || "Sin nombre"}</td><td className="p-2 text-right tabular-nums">{item.situacion === "REVISAR_ALQUILER" ? "Por verificar" : format(Number(item.valor) - Number(item.registrado))}</td>
+            <td className="space-y-2 p-2">{item.situacion === "REVISAR_ALQUILER" ? <><Badge variant="outline" className="border-amber-300 text-amber-800">Revisar alquiler</Badge><p className="text-amber-800">{item.alquilerSinReserva ? "Paquete sin reserva vinculada: verificar contrato y valor." : item.alquilerContratoInconsistente ? "Contrato y valor del alquiler requieren revisión antes de cobrar." : "Paquete compartido: verificar reserva y valor contratado."}</p></> : item.situacion === "REVISAR_LEGADO" ? <p className="text-amber-800">Estado anterior: verificar soporte</p> :
               item.situacion === "SIN_LIBRO" ? <p className="font-semibold text-amber-800">Marcada como cobrada sin ingreso en libro: revisar</p> : null}
-              <Button size="sm" variant="outline" onClick={() => { setSelected(item); setHistoricoRevisado(false); setTargetNotice(""); setTargetError(""); setSaveError(""); setSavedNotice(""); setLines([newLine()]); setConfirmed(false); requestId.current = null; }}>{item.situacion==='PENDIENTE'?'Registrar pago':'Revisar pago anterior'}</Button></td>
+              <Button size="sm" variant="outline" disabled={item.situacion === "REVISAR_ALQUILER"} onClick={() => { setSelected(item); setHistoricoRevisado(false); setTargetNotice(""); setTargetError(""); setSaveError(""); setSavedNotice(""); setLines([newLine()]); setConfirmed(false); requestId.current = null; }}>{item.situacion==='REVISAR_ALQUILER'?'Cobro pendiente de revisión':item.situacion==='PENDIENTE'?'Registrar pago':'Revisar pago anterior'}</Button></td>
           </tr>)}</tbody></table>
       </div>
       {items.length < summary.total && <Button type="button" variant="outline" disabled={loadingMore} onClick={loadMore}>

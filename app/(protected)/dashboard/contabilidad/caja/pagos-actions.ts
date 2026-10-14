@@ -8,13 +8,37 @@ import { bogotaToday, getBogotaDayRange } from "@/lib/bogota-date";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import { syncPackagePaymentState } from "@/lib/package-payment";
+import type { Prisma } from "@/prisma/generated/prisma/client";
 
 type ExistingLine = { id: string; citaId: string | null; paqueteId: string | null; fecha: string;
   monto: string; metodoPago: string; referencia: string; linea: number };
 type OpenItem = { origen: "CITA" | "PAQUETE"; id: string; fecha: string; persona: string;
-  valor: string; registrado: string; estado: string; situacion: "PENDIENTE" | "SIN_LIBRO" | "REVISAR_LEGADO" };
-type OpenItemWithCounts = OpenItem & { totalRegistros: number; vencidos: number; sinLibro: number; legado: number;
+  valor: string; registrado: string; estado: string; situacion: "PENDIENTE" | "SIN_LIBRO" | "REVISAR_LEGADO" | "REVISAR_ALQUILER";
+  alquilerSinReserva?: boolean; alquilerContratoInconsistente?: boolean };
+type OpenItemWithCounts = OpenItem & { totalRegistros: number; vencidos: number; sinLibro: number; legado: number; revisarAlquiler: number;
   valorVencido: string; valorSinLibro: string };
+
+async function assertOrdinaryRentalPayment(client: Pick<Prisma.TransactionClient, "$queryRaw">, tenantId: number, packageId: string) {
+  const rows = await client.$queryRaw<{ alquiler: boolean; catalogoPropio: boolean; referencias: number; vigente: boolean; contratoCompatible: boolean }[]>`
+    SELECT COALESCE(t.nombre ILIKE '%alquiler%',false) AS alquiler,
+      COALESCE(t."tenantId"=p."tenantId" AND t."empresaId"=3,false) AS "catalogoPropio",
+      (SELECT COUNT(*)::int FROM "CitasPsicologos" c WHERE c."paqueteId"=p.id) AS referencias,
+      EXISTS(SELECT 1 FROM "CitasPsicologos" c WHERE c."paqueteId"=p.id
+        AND c."tenantId"=${tenantId} AND c."empresaId"=3 AND c.realizada IS NOT NULL) AS vigente,
+      p."sesionesTotales"=1 AND EXISTS(SELECT 1 FROM "CitasPsicologos" c WHERE c."paqueteId"=p.id
+        AND c."tenantId"=${tenantId} AND c."empresaId"=3 AND c.realizada IS NOT NULL
+        AND c.valor>0 AND c.valor=p."precioPagado") AS "contratoCompatible"
+    FROM "PaqueteAdquirido" p LEFT JOIN "TerapiasPsicologos" t ON t.id=p."catalogoId"
+    WHERE p.id=${packageId}::bigint AND p."tenantId"=${tenantId}`;
+  const pkg = rows[0];
+  if (!pkg) throw new Error("El paquete no está disponible en Psicólogos.");
+  if (!pkg.alquiler) return;
+  if (!pkg.catalogoPropio) throw new Error("El catálogo del alquiler no pertenece a Psicólogos. Revisa su vínculo antes de registrar un pago.");
+  if (pkg.referencias === 0) throw new Error("El paquete de alquiler no tiene una reserva vinculada. Revisa su contrato antes de registrar un pago.");
+  if (!pkg.vigente) throw new Error("El alquiler no tiene una reserva vigente en Psicólogos. Revisa su vínculo o cancelación; no registres un cobro ordinario.");
+  if (pkg.referencias > 1) throw new Error("El paquete de alquiler está compartido. Revisa el vínculo de la reserva y su valor contratado antes de registrar un pago.");
+  if (!pkg.contratoCompatible) throw new Error("El contrato y el valor del paquete de alquiler requieren revisión. Verifica el valor de la reserva antes de registrar un pago.");
+}
 
 function fail(error: unknown) {
   if (error instanceof Error && error.name === "Error") return { error: error.message };
@@ -53,6 +77,7 @@ export async function getCobroDesdeCita(token: string, citaId: string): Promise<
         AND (p.id IS NULL OR p.estado IS DISTINCT FROM 'CANCELADO') LIMIT 1`;
     const item = rows[0];
     if (!item) throw new Error("La cita o su paquete no están disponibles en Psicólogos. Revisa si se cancelaron.");
+    if (item.origen === "PAQUETE") await assertOrdinaryRentalPayment(prisma, user.tenantId, item.id);
     if (!item.fecha || !Number.isFinite(Number(item.valor)) || Number(item.valor)<=0) throw new Error("El servicio requiere revisar su fecha o valor antes de registrar el pago.");
     if (Number(item.registrado)>=Number(item.valor)) return { notice: "Este servicio ya tiene el valor completo registrado en el libro. No registres otro cobro." };
     return { item };
@@ -80,7 +105,7 @@ export async function getPendientesPsicologia(token: string, fecha: string, offs
         CASE WHEN c."estadoPago" IN ('CONCILIADO','CONSIGNADO','EFECTIVO_DECLARADO') AND COALESCE(pc.total,0)=0
           THEN CASE WHEN (c."fechaCita" AT TIME ZONE 'America/Bogota')::date < '2026-09-26'::date
             THEN 'REVISAR_LEGADO' ELSE 'SIN_LIBRO' END
-          ELSE 'PENDIENTE' END AS "situacion"
+          ELSE 'PENDIENTE' END AS "situacion", false AS "alquilerSinReserva", false AS "alquilerContratoInconsistente"
       FROM "CitasPsicologos" c LEFT JOIN "Cliente" cl ON cl."id"=c."pacienteId" AND cl."tenantId"=c."tenantId"
       LEFT JOIN "Usuario" u ON u."id"=c."psicologoId" AND u."tenantId"=c."tenantId" AND c."pacienteId" IS NULL
       LEFT JOIN cobros_cita pc ON pc."citaId"=c."id"
@@ -92,21 +117,37 @@ export async function getPendientesPsicologia(token: string, fecha: string, offs
         COALESCE(NULLIF(CONCAT_WS(' ',cl."nombre",cl."apellido"),''),CONCAT_WS(' ',u."nombre",u."apellido")), p."precioPagado"::numeric(12,2)::text,
         COALESCE(pp.total,0)::numeric(12,2)::text,
         p."estado"::text,
-        CASE WHEN (p."fechaCompra" AT TIME ZONE 'America/Bogota')::date < '2026-09-26'::date
-          AND COALESCE(pp.total,0)=0 THEN 'REVISAR_LEGADO' ELSE 'PENDIENTE' END
+        CASE WHEN t.nombre ILIKE '%alquiler%' AND alquiler_citas.revisar THEN 'REVISAR_ALQUILER'
+          WHEN (p."fechaCompra" AT TIME ZONE 'America/Bogota')::date < '2026-09-26'::date
+          AND COALESCE(pp.total,0)=0 THEN 'REVISAR_LEGADO' ELSE 'PENDIENTE' END,
+        COALESCE(t.nombre ILIKE '%alquiler%' AND alquiler_citas.referencias=0,false),
+        COALESCE(t.nombre ILIKE '%alquiler%' AND alquiler_citas.referencias=1 AND alquiler_citas.revisar,false)
       FROM "PaqueteAdquirido" p LEFT JOIN "Cliente" cl ON cl."id"=p."clienteId" AND cl."tenantId"=p."tenantId"
       LEFT JOIN "Usuario" u ON u."id"=p."usuarioId" AND u."tenantId"=p."tenantId" AND p."clienteId" IS NULL
       LEFT JOIN cobros_paquete pp ON pp."paqueteId"=p."id"
+      LEFT JOIN "TerapiasPsicologos" t ON t.id=p."catalogoId"
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*)::int AS referencias,
+          COUNT(*) FILTER (WHERE c."tenantId"=${user.tenantId} AND c."empresaId"=3 AND c.realizada IS NOT NULL)::int AS vigentes,
+          (p."sesionesTotales" IS DISTINCT FROM 1 OR COUNT(*)<>1 OR COUNT(*) FILTER
+            (WHERE c."tenantId"=${user.tenantId} AND c."empresaId"=3 AND c.realizada IS NOT NULL
+              AND c.valor>0 AND c.valor=p."precioPagado")<>1) AS revisar
+        FROM "CitasPsicologos" c WHERE c."paqueteId"=p.id
+      ) alquiler_citas ON t.nombre ILIKE '%alquiler%'
       WHERE p."tenantId"=${user.tenantId} AND p."estado" IS DISTINCT FROM 'CANCELADO'
-        AND p."precioPagado">0 AND p."fechaCompra" IS NOT NULL
+        AND (COALESCE(t.nombre ILIKE '%alquiler%',false)=false OR
+          (t."tenantId"=p."tenantId" AND t."empresaId"=3 AND (alquiler_citas.vigentes>0 OR alquiler_citas.referencias=0)))
+        AND (p."precioPagado">0 OR t.nombre ILIKE '%alquiler%' AND alquiler_citas.revisar) AND p."fechaCompra" IS NOT NULL
         AND (p."fechaCompra" AT TIME ZONE 'America/Bogota')::date <= ${fecha}::date
-        AND p."precioPagado">COALESCE(pp.total,0)
+        AND (p."precioPagado">COALESCE(pp.total,0) OR
+          (t.nombre ILIKE '%alquiler%' AND alquiler_citas.revisar))
       )
       SELECT pendientes.*,
         COUNT(*) OVER()::int AS "totalRegistros",
-        COUNT(*) FILTER (WHERE "fecha" < ${fecha} AND "situacion" <> 'REVISAR_LEGADO') OVER()::int AS "vencidos",
+        COUNT(*) FILTER (WHERE "fecha" < ${fecha} AND "situacion" IN ('PENDIENTE','SIN_LIBRO')) OVER()::int AS "vencidos",
         COUNT(*) FILTER (WHERE "situacion" = 'SIN_LIBRO') OVER()::int AS "sinLibro",
         COUNT(*) FILTER (WHERE "situacion" = 'REVISAR_LEGADO') OVER()::int AS "legado",
+        COUNT(*) FILTER (WHERE "situacion" = 'REVISAR_ALQUILER') OVER()::int AS "revisarAlquiler",
         COALESCE(SUM("valor"::numeric-"registrado"::numeric) FILTER
           (WHERE "fecha" < ${fecha} AND "situacion" = 'PENDIENTE') OVER(),0)::numeric(12,2)::text AS "valorVencido",
         COALESCE(SUM("valor"::numeric-"registrado"::numeric) FILTER
@@ -115,9 +156,11 @@ export async function getPendientesPsicologia(token: string, fecha: string, offs
         WHEN "situacion"='PENDIENTE' THEN 1 ELSE 2 END,
         "fecha" DESC,"id"::bigint DESC,"origen" DESC LIMIT 200 OFFSET ${offset}`;
     return { items: rows.map((row): OpenItem => ({ origen: row.origen, id: row.id, fecha: row.fecha,
-      persona: row.persona, valor: row.valor, registrado: row.registrado, estado: row.estado, situacion: row.situacion })),
+      persona: row.persona, valor: row.valor, registrado: row.registrado, estado: row.estado, situacion: row.situacion,
+      alquilerSinReserva: row.alquilerSinReserva, alquilerContratoInconsistente: row.alquilerContratoInconsistente })),
       summary: { total: rows[0]?.totalRegistros ?? 0, vencidos: rows[0]?.vencidos ?? 0,
         sinLibro: rows[0]?.sinLibro ?? 0, legado: rows[0]?.legado ?? 0,
+        revisarAlquiler: rows[0]?.revisarAlquiler ?? 0,
         valorVencido: rows[0]?.valorVencido ?? "0.00", valorSinLibro: rows[0]?.valorSinLibro ?? "0.00" } };
   } catch (error) { return fail(error); }
 }
@@ -147,6 +190,7 @@ export async function registrarPagoServicio(token: string, input: PagoServicioIn
         id: BigInt(data.origenId), tenantId: user.tenantId }, select: { precioPagado: true, fechaCompra: true, estado: true } }) : null;
       if (!cita && !paquete) throw new Error("La cita o el paquete no está disponible en PSICOLOGOS.");
       if (paquete?.estado === "CANCELADO") throw new Error("El paquete está cancelado. Revisa su devolución o ajuste; no registres un cobro ordinario.");
+      if (paquete) await assertOrdinaryRentalPayment(tx, user.tenantId, data.origenId);
       if (cita?.estadoPago && cita.estadoPago !== "PENDIENTE" && data.historicoRevisado!==true)
         throw new Error("Esta cita ya tiene un estado de cobro anterior. Revisa el comprobante y el banco antes de registrar otro pago.");
       if (paquete?.fechaCompra && paquete.fechaCompra < new Date("2026-09-26T05:00:00Z") && data.historicoRevisado!==true)

@@ -200,6 +200,12 @@ const getAppliedValue = (cita: Cita) =>
     legacyValue: cita.valorCotizado,
   });
 
+const hasRentalPriceDifference = (cita: Cita) => {
+  if (!cita.PaqueteAdquirido || !/alquiler/i.test(cita.paqueteNombre || "")) return false;
+  const applied = getAppliedValue(cita);
+  return cita.valorCotizado === null || applied === null || Number(applied) !== cita.valorCotizado;
+};
+
 const getPackageUnitReference = (paquete: PaqueteCita) =>
   resolveSerializedAppliedValue({
     valorAplicado: null,
@@ -1193,6 +1199,11 @@ export default function CitasPage() {
       {/* Table */}
       <div className="flex-none overflow-x-auto bg-slate-50 px-4 py-6 sm:px-8 lg:min-h-0 lg:flex-1 lg:overflow-auto">
         <div className="max-w-7xl mx-auto">
+           {!loading && !loadError && citas.some(cita => cita.realizada !== null && hasRentalPriceDifference(cita)) && (
+             <div role="alert" className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+               Hay alquileres con importes diferentes en la cita y en su paquete. El resumen usa el precio del paquete; abre el detalle para revisar el importe y sus comprobantes.
+             </div>
+           )}
            {loading ? (
              <div className="flex justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>
            ) : loadError ? (
@@ -1225,7 +1236,7 @@ export default function CitasPage() {
                        <td className="px-6 py-4 font-medium text-blue-600">{cita.paqueteNombre || 'Sin información'}</td>
                        <td className="px-6 py-4 font-semibold text-slate-700">
                           <div>{formatCurrency(getAppliedValue(cita))}</div>
-
+                          {hasRentalPriceDifference(cita) && <span className="mt-1 inline-flex rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">Revisar importe</span>}
                        </td>
                        <td className="px-6 py-4 text-center">
                           {cita.PaqueteAdquirido ? (
@@ -1440,10 +1451,11 @@ export default function CitasPage() {
                                <span className="font-medium text-blue-900">{selectedCita.PaqueteAdquirido.saldoRestante}</span>
                            </div>
                            <div>
-                               <span className="text-xs text-blue-500 block uppercase tracking-wider">Valor Pagado</span>
+                               <span className="text-xs text-blue-500 block uppercase tracking-wider">Valor del paquete</span>
                                <span className="font-medium text-blue-900">
                                    {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP' }).format(selectedCita.PaqueteAdquirido.precioPagado)}
                                </span>
+                               <span className="block text-xs text-blue-700">Precio contratado. Los pagos se verifican en Caja.</span>
                            </div>
                            <div>
                                 <span className="text-xs text-blue-500 block uppercase tracking-wider">Referencia unitaria</span>
@@ -1484,7 +1496,11 @@ export default function CitasPage() {
                      <span className="font-medium text-green-600">
                         {formatCurrency(getAppliedValue(selectedCita))}
                      </span>
-
+                     {hasRentalPriceDifference(selectedCita) && (
+                       <div role="alert" className="mt-2 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                         Valor guardado en la reserva: {formatCurrency(selectedCita.valorCotizado === null ? null : String(selectedCita.valorCotizado))}. La referencia del paquete es distinta. Revisa el contrato y los comprobantes antes de registrar un cobro.
+                       </div>
+                     )}
                  </div>
                </div>
 

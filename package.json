@@ -11,6 +11,7 @@
     "test:ui": "vitest run",
     "test:ux": "tsx --test tests/profile-atomic.test.ts tests/auditoria-date-range.test.ts tests/filter-date-range.test.ts tests/financial-settings-flow.test.ts \"app/(protected)/dashboard/clientes/actions.test.ts\" \"app/(protected)/dashboard/clientes/referidos/filters.test.ts\" \"app/(protected)/dashboard/usuarios/actions.test.ts\"",
     "test:psicologia": "tsx --test tests/psychology-inputs.test.ts tests/caja.test.ts tests/psychology-actions.test.ts tests/recepcion.test.ts tests/recepcion-sql.test.ts tests/booking-finance.test.ts tests/pago-servicio.test.ts tests/pago-servicio-sql.test.ts tests/pago-servicio-actions.test.ts",
+    "test:alquileres": "tsx --test tests/rental-package-reuse.test.ts tests/rental-manual.test.ts tests/rental-price-correction.test.ts tests/booking-finance.test.ts tests/rental-package-repair-plan.test.mjs tests/rental-package-repair-sql.test.mjs",
     "sb:init": "supabase init",
     "sb:start": "supabase start",
     "sb:stop": "supabase stop",

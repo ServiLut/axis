@@ -120,14 +120,16 @@ const findReusableActivePackage = async (
 
 const resolvePackageForScheduledCita = async (
   tx: Prisma.TransactionClient,
-  input: PackageOwnerInput & { valor: number | null }
+  input: PackageOwnerInput & { valor: number | null; forceNewPackage?: boolean }
 ) => {
   const ownerWhere = activePackageOwnerWhere(input);
   if (!ownerWhere) {
     throw new Error("Debe existir un paciente o psicólogo para asociar el paquete");
   }
 
-  const reusablePackage = await findReusableActivePackage(tx, input);
+  // A rental package records the price of one contracted reservation, not a
+  // transferable session balance. Reusing it would carry another duration's price.
+  const reusablePackage = input.forceNewPackage ? null : await findReusableActivePackage(tx, input);
   if (reusablePackage) {
     await consumePackageSession(tx, reusablePackage.id);
     return reusablePackage.id;
@@ -158,6 +160,24 @@ const resolvePackageForScheduledCita = async (
   });
 
   return nuevoPaquete.id;
+};
+
+const assertExclusiveRentalPackage = async (
+  tx: Prisma.TransactionClient,
+  tenantId: number,
+  paqueteId: bigint | null,
+  catalogoId?: bigint | null,
+) => {
+  if (!paqueteId || !catalogoId) return;
+  const therapy = await tx.terapiasPsicologos.findFirst({
+    where: { id: catalogoId, tenantId },
+    select: { nombre: true },
+  });
+  if (!/alquiler/i.test(therapy?.nombre || "")) return;
+  // The appointment is tenant-scoped before this check. Count every reference:
+  // cancelled or foreign references still prevent an exclusive rental contract.
+  const references = await tx.citasPsicologos.count({ where: { paqueteId } });
+  if (references > 1) throw new Error("El paquete de alquiler pertenece a varias reservas, incluidas las canceladas. Revisa y separa sus contratos antes de editar o restaurar esta reserva.");
 };
 
 type CitaSerialized = {
@@ -557,7 +577,9 @@ export async function createCita(token: string, formData: FormData) {
         if (pacienteId && !(await tx.cliente.findFirst({ where: { id: pacienteId, tenantId: usuario.tenantId, deletedAt: null }, select: { id: true } }))) throw new Error("Paciente no encontrado en este sistema.");
         if (empresaId && !(await tx.empresa.findFirst({ where: { id: empresaId, tenantId: usuario.tenantId }, select: { id: true } }))) throw new Error("Empresa no encontrada en este sistema.");
         for (const serviceId of [servicioId, tipoServicio].filter((n): n is number => n !== null)) {
-          if (!(await tx.servicio.findFirst({ where: { id: serviceId, tenantId: usuario.tenantId }, select: { id: true } }))) throw new Error("Servicio no encontrado en este sistema.");
+          const service = await tx.servicio.findFirst({ where: { id: serviceId, tenantId: usuario.tenantId }, select: { id: true, nombre: true } });
+          if (!service) throw new Error("Servicio no encontrado en este sistema.");
+          if (serviceId === servicioId && /alquiler/i.test(service.nombre) && !rental) throw new Error("Crea el alquiler con el servicio de alquiler del catálogo para registrar su propio paquete y valor.");
         }
         let finalPaqueteId: bigint | null = null;
 
@@ -571,12 +593,20 @@ export async function createCita(token: string, formData: FormData) {
             }
             if (paquete.fechaVencimiento && paquete.fechaVencimiento < schedule.fecha) throw new Error("El paquete vence antes de la cita.");
 
+            const packageTherapy = await tx.terapiasPsicologos.findFirst({
+                where: { id: paquete.catalogoId, tenantId: usuario.tenantId },
+                select: { nombre: true },
+            });
+            if (rental || /alquiler/i.test(packageTherapy?.nombre || "")) {
+                throw new Error("Cada alquiler nuevo requiere su propio paquete. Selecciona el servicio de alquiler del catálogo, sin usar un paquete anterior.");
+            }
+
             await consumePackageSession(tx, paqueteId);
             finalPaqueteId = paqueteId;
         }
 
-        // Si ya existe un paquete activo para el mismo paciente/terapia,
-        // se reutiliza. Crear otro acá es exactamente cómo nacen los duplicados.
+        // Therapy sessions may reuse their package; each rental owns its
+        // contracted duration and price, including after a prior cancellation.
         if (!finalPaqueteId && terapiaId && (pacienteId || psicologoId)) {
             finalPaqueteId = await resolvePackageForScheduledCita(tx, {
                 tenantId: usuario.tenantId,
@@ -584,6 +614,7 @@ export async function createCita(token: string, formData: FormData) {
                 psicologoId,
                 terapiaId,
                 valor,
+                forceNewPackage: rental !== null,
             });
         }
 
@@ -1178,7 +1209,7 @@ export async function restoreCitaCancelada(token: string, citaId: number) {
       await tx.$queryRaw`SELECT "id" FROM "Tenant" WHERE "id" = ${usuario.tenantId} FOR UPDATE`;
       const cita = await tx.citasPsicologos.findFirst({
         where: { id: BigInt(citaId), tenantId: usuario.tenantId },
-        include: { consultorios: { select: { nombre: true } } },
+        include: { consultorios: { select: { nombre: true } }, PaqueteAdquirido: true },
       });
 
       if (!cita) return { error: "Cita no encontrada" };
@@ -1186,6 +1217,10 @@ export async function restoreCitaCancelada(token: string, citaId: number) {
         return { error: "Solo se pueden restaurar citas canceladas" };
       }
 
+      if (cita.PaqueteAdquirido?.estado === "CANCELADO") {
+        throw new Error("El paquete de esta reserva está cancelado. Revisa su contrato antes de restaurar la reserva.");
+      }
+      await assertExclusiveRentalPackage(tx, usuario.tenantId, cita.paqueteId, cita.PaqueteAdquirido?.catalogoId);
       if (!cita.horaInicio || !cita.horaFin) throw new Error("Completa primero el horario de la cita.");
       await lockAndValidateBooking(tx, { tenantId: usuario.tenantId, psicologoId: cita.psicologoId, consultorioId: cita.consultorioId, inicio: cita.horaInicio, fin: cita.horaFin, excludeId: cita.id });
 
@@ -1473,6 +1508,7 @@ export async function updateCita(token: string, id: number, formData: FormData) 
         });
         
         if (!currentCita) throw new Error("Cita no encontrada en este sistema.");
+        await assertExclusiveRentalPackage(tx, usuario.tenantId, currentCita.paqueteId, currentCita.PaqueteAdquirido?.catalogoId);
         if (currentCita) {
             citaPrevia = serializeBigInt(currentCita);
             oldPaqueteId = currentCita.paqueteId;
@@ -1515,6 +1551,7 @@ export async function updateCita(token: string, id: number, formData: FormData) 
                         terapiaId,
                         valor,
                         excludePackageId: oldPaqueteId,
+                        forceNewPackage: rental,
                     });
                 }
             }
