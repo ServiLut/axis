@@ -78,8 +78,8 @@ export default function MiCodigoPage() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center h-full p-6 bg-slate-50">
-      <Card className="w-full max-w-md shadow-lg border-blue-100">
+    <div className="flex h-full min-h-0 flex-col items-center overflow-y-auto bg-slate-50 p-6">
+      <Card className="my-auto w-full max-w-md shrink-0 shadow-lg border-blue-100">
         <CardHeader className="text-center pb-2">
           <div className="mx-auto w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4">
              <Ticket className="h-6 w-6 text-blue-600" />

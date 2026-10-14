@@ -38,7 +38,7 @@ export default function UserAccessPage() {
     }catch{toast.error("No se pudo confirmar el cambio. Actualiza la lista antes de volver a intentarlo.")}
     finally{setSaving(false)}
   };
-  return <main className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
+  return <main className="mx-auto h-full min-h-0 w-full max-w-6xl space-y-6 overflow-y-auto p-4 md:p-8">
     <div className="flex items-start gap-3"><div className="rounded-xl bg-blue-50 p-3 text-blue-700"><ShieldCheck className="h-6 w-6"/></div><div><h1 className="text-2xl font-bold">Usuarios y accesos</h1><p className="mt-1 text-sm text-slate-600">Administra las cuentas de Psicólogos en Colombia. Los cambios quedan registrados en auditoría.</p></div></div>
     <div className="flex flex-wrap gap-3 text-sm"><span className="rounded-lg bg-emerald-50 px-4 py-2 text-emerald-800">{users.filter(u=>u.activo).length} activos</span><span className="rounded-lg bg-amber-50 px-4 py-2 text-amber-900">{users.filter(u=>!u.activo).length} suspendidos</span></div>
     <div className="flex flex-col gap-3 sm:flex-row"><div className="relative flex-1"><Search className="absolute left-3 top-3 h-4 w-4 text-slate-400"/><Input aria-label="Buscar usuario" placeholder="Buscar nombre o usuario" value={search} onChange={e=>setSearch(e.target.value)} className="pl-9"/></div><select aria-label="Estado del usuario" value={state} onChange={e=>setState(e.target.value)} className="rounded-md border bg-white px-3 py-2 text-sm"><option value="all">Todos los estados</option><option value="active">Activos</option><option value="suspended">Suspendidos</option></select><Button variant="outline" onClick={()=>void load()} disabled={loading}>Actualizar</Button></div>
