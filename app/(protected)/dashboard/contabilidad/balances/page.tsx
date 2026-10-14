@@ -190,7 +190,7 @@ export default function BalancesPage() {
                                     {balance.ingresos.desglosePorMetodo.map((item, idx) => (
                                         <div key={idx} className="flex justify-between text-xs">
                                             <span className="text-slate-600">{item.metodo}</span>
-                                            <span className="font-medium text-slate-900">${item.total.toLocaleString()}</span>
+                                            <span className="font-medium text-slate-900">${item.total.toLocaleString("es-CO", { maximumFractionDigits: 2 })}</span>
                                         </div>
                                     ))}
                                 </div>
