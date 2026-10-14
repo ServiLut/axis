@@ -29,11 +29,11 @@ export function Header({ onMenuClick, showMenuButtonOnDesktop = false }: HeaderP
         <Menu className="h-5 w-5" />
         <span className="sr-only">Abrir o cerrar menú</span>
       </Button>
-      <div className="flex items-center gap-2 font-semibold">
-        <span className="text-sm sm:text-base">{getDashboardPageLabel(pathname, role)}</span>
-        <HalloweenScene variant="panel" />
+      <div className="flex min-w-0 flex-1 items-center gap-2 font-semibold">
+        <span className="truncate text-sm sm:text-base" title={getDashboardPageLabel(pathname, role)}>{getDashboardPageLabel(pathname, role)}</span>
+        <div className="hidden shrink-0 sm:block"><HalloweenScene variant="panel" /></div>
       </div>
-      <div className="ml-auto flex items-center space-x-4">
+      <div className="ml-auto flex shrink-0 items-center space-x-2 sm:space-x-4">
         <HalloweenTheme />
         <div className="flex items-center gap-2 text-sm">
           <span className="hidden text-muted-foreground md:inline-block">

@@ -66,8 +66,8 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
               </Button>
               <div id={panelId} hidden={!open} className="my-1 ml-5 space-y-1 border-l border-sidebar-border pl-3">
                 {menu.items.map((item) => (
-                  <Button key={item.href} asChild variant="ghost" className={cn("h-9 w-full justify-start text-sm", activeHref === item.href && "bg-sidebar-accent font-medium text-sidebar-accent-foreground")}>
-                    <Link href={item.href} aria-current={activeHref === item.href ? "page" : undefined} onClick={onNavigate}>{item.label}</Link>
+                  <Button key={item.href} asChild variant="ghost" className={cn("h-auto min-h-9 w-full min-w-0 justify-start whitespace-normal py-2 text-left text-sm leading-snug", activeHref === item.href && "bg-sidebar-accent font-medium text-sidebar-accent-foreground")}>
+                    <Link href={item.href} aria-current={activeHref === item.href ? "page" : undefined} onClick={onNavigate}><span className="min-w-0 break-words">{item.label}</span></Link>
                   </Button>
                 ))}
               </div>
