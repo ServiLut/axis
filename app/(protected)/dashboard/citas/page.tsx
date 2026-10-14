@@ -919,7 +919,7 @@ export default function CitasPage() {
   };
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col overflow-y-auto lg:overflow-hidden">
       {/* Header */}
       <div className="flex-none bg-white border-b border-slate-200 px-4 sm:px-8 py-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 max-w-7xl mx-auto">
@@ -1163,7 +1163,7 @@ export default function CitasPage() {
       </div>
 
       {/* Table */}
-      <div className="flex-1 overflow-auto bg-slate-50 px-4 sm:px-8 py-6">
+      <div className="flex-none overflow-x-auto bg-slate-50 px-4 py-6 sm:px-8 lg:min-h-0 lg:flex-1 lg:overflow-auto">
         <div className="max-w-7xl mx-auto">
            {loading ? (
              <div className="flex justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>

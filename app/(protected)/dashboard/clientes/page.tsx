@@ -420,7 +420,7 @@ export default function ClientesPage() {
   };
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col overflow-y-auto lg:overflow-hidden">
       {/* Header */}
       <div className="flex-none bg-white border-b border-slate-200 px-8 py-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 max-w-7xl mx-auto">
@@ -657,7 +657,7 @@ export default function ClientesPage() {
       </div>
 
       {/* Table Content */}
-      <div className="flex-1 overflow-auto bg-slate-50 px-8 py-6">
+      <div className="flex-none overflow-x-auto bg-slate-50 px-4 py-6 sm:px-8 lg:min-h-0 lg:flex-1 lg:overflow-auto">
         <div className="max-w-7xl mx-auto flex flex-col gap-4">
           {loading ? (
             <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
