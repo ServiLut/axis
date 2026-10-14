@@ -3,6 +3,42 @@ import {semanticFollowup} from './maria-understanding.mjs';
 
 export const AFTER_SERVICE_GUARD='literal-followup-kind-and-first-source-before-new-intake-v1';
 export const MARIA_LITERAL_SERVICE_CONTEXT_GUARD='own-affirmed-documents-arrival-schedule-and-product-context-before-intake-v1';
+export const MARIA_INCIDENTAL_PETS_GUARD='own-current-incidental-pet-presence-without-safety-claims-v1';
+function onlyCommercialPetContext(raw){
+  // Inspect every sentence, including an unpunctuated explanation request.
+  // A price question elsewhere cannot authorize dropping an additional query
+  // about "las/ellos" or what the customer may do with the animals.
+  const clauses=raw.match(/[^.!?;\r\n]+(?:[.!?;\r\n]+|$)/gu)||[];
+  for(const clause of clauses){
+    const t=normalize(clause);
+    const reference=/\b(?:las|los|les|ellas|ellos|se)\s+(?:(?:las|los|les)\s+)?(?:pued\w*|deb\w*|dej\w*|qued\w*|sac\w*|llev\w*|manten\w*|retir\w*)\b/.test(t);
+    const asks=/[¿?]/.test(clause)||/\b(?:(?:quisiera|quiero|necesito|me gustaria) saber|me preocupa|puedo|podria|debo|debemos|es posible|tengo que|tenemos que|explic\w*|orient\w*|recomiend\w*|aconsej\w*)\b/.test(t)||/^(?:\s*(?:y|pero)\s+)?\s*(?:como|cuando|donde|por que|cuanto|que (?:hago|debemos|cuesta|precio|datos|valor|costo))\b/.test(t)||/\b(?:y|pero|ademas)\s+(?:que|como|cuando|donde|cual|cuanto|por que)\b/.test(t)||reference;
+    if(!asks)continue;
+    const question=t.replace(/^[¿\s]+/u,'');
+    // One identifiable commercial inquiry must lead the whole question. The
+    // remainder may describe its scope, never introduce another request.
+    const commercial=question.match(/^(?:(?:por favor|hola)[, ]+)?(?:(?:cuanto|que) (?:(?:me|nos) )?(?:cuesta|cuestan|vale|valen|costaria|valdria)|cual (?:es|seria) (?:el )?(?:precio|valor|costo)|que (?:precio|valor|costo) (?:tiene|tendria|manejan)|(?:me |nos )?(?:pueden|podrian|puedes|podrias) (?:cotizar(?:me|nos)?|(?:informar|decir)(?:me|nos)? (?:el )?(?:precio|valor|costo))|que (?:datos|informacion) (?:necesitan|requieren))\b/);
+    if(!commercial||reference)return false;
+    const rest=question.slice(commercial[0].length);
+    if(/\b(?:que|como|cuando|donde|cual|cuanto|por que|pued\w*|podri\w*|deb\w*|quier\w*|quisier\w*|necesit\w*|saber|explic\w*|orient\w*|recomiend\w*|aconsej\w*|dentro|adentro|afuera|dej\w*|ellas|ellos|descuento|rebaja)\b/.test(rest))return false;
+  }
+  return true;
+}
+export function mariaIncidentalPetMention(e){
+  if(e?.kind!=='text'||e.fromMe!==false||e.forwarded||e.quotedId||typeof e.id!=='string'||!e.id||!Number.isSafeInteger(e.at)||e.at<=0||typeof e.text!=='string')return null;
+  const raw=e.text,t=normalize(raw);
+  if(raw.length>8000||/["“”«»]|https?:|www\./i.test(raw)||/\b(?:no|nunca|sin|si|quizas|tal vez|en caso de|dijo|dice|dijeron|segun|vecin[oa]|un tercero)\b/.test(t))return null;
+  // Presence is an intake note, never a safety answer. Any real request about
+  // products, exposure, precautions or health keeps its existing review path.
+  if(/\b(?:segur\w*|riesgo\w*|peligro\w*|toxic\w*|inofensiv\w*|producto\w*|quimic\w*|veneno\w*|insecticida\w*|plaguicida\w*|rodenticida\w*|afect\w*|dano\w*|salud|intoxic\w*|vomit\w*|mareo\w*|maread\w*|respir\w*|ingiri\w*|ingest\w*|convulsion\w*|alergic\w*|asma|dolor|enferm\w*|murio|lamio|comio|embaraz\w*|ninos?|bebes?|salir|salgan?|sacar|retirar|qued\w*|permanecer|volver|regresar|reingreso|ventilar|precaucion\w*|cuidado\w*|proteger\w*|exposicion)\b/.test(t))return null;
+  const mentions=[...raw.matchAll(/\b(?:hay|tengo|tenemos)\s+(?:(?:una?|dos|tres|cuatro|cinco|varias?|algunas?|\d{1,2})\s+)?mascotas?\b/giu)];
+  if(mentions.length!==1)return null;
+  const mention=mentions[0],start=mention.index,end=start+mention[0].length;
+  const before=raw.slice(0,start).split(/[.!?;\r\n]/).at(-1),after=raw.slice(end).split(/[.!;\r\n]/)[0];
+  if(/[¿?]/.test(before)||/[¿?]/.test(after))return null;
+  if(!onlyCommercialPetContext(raw))return null;
+  return {guard:MARIA_INCIDENTAL_PETS_GUARD,sourceId:e.id,at:e.at,text:mention[0],classificationText:raw.slice(0,start)+' '+raw.slice(end)};
+}
 const plain=text=>normalize(String(text??'').replace(/\b(?:https?:\/\/|www\.)[^\s<>"']+/gi,' '));
 const newService=/\b(?:otra solicitud|nuevo servicio|servicio nuevo|otro servicio|nueva fumigacion|fumigacion nueva)\b/g;
 function affirmed(text,pattern){

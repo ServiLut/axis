@@ -2,12 +2,14 @@ import {createHash} from 'node:crypto';
 import {normalize,questionRecipients} from './config.mjs';
 import {BUSINESS_PRICE_HASH,selectBusinessPrice} from './business-prices.mjs';
 import {operationalLineAllowed,operationalCoverage} from './line-scope.mjs';
+import {getTesaConfig} from './tesa-config.mjs';
 
 export const MARIA_PROGRAM_GUARD='own-accepted-ordinary-service-literal-fields-and-atomic-receipt-v2';
 export const MARIA_PROGRAM_PIPELINE_GUARD='processed-customer-turn-before-registration-v1';
 export const MARIA_PROGRAM_FORM_BATCH_GUARD='own-native-prompt-batch-facts-ordered-acceptance-v1';
 export const MARIA_PROGRAM_LITERAL_FIELDS_GUARD='own-prompted-separate-name-address-standard-labels-and-native-source-v2';
 export const MARIA_PROGRAM_OPERATIONAL_CONTINUATION_GUARD='own-saved-order-new-quoted-operation-and-customer-continuity-v1';
+export const MARIA_PROGRAM_OPERATIONAL_CONFIRMATION_GUARD='own-saved-delivered-operation-pure-confirmation-without-repeat-v1';
 export const MARIA_PROGRAM_TIMED_ACCEPTANCE_GUARD='own-literal-timed-acceptance-before-conditional-v1';
 export const MARIA_PROGRAM_REQUESTED_TIMING_GUARD='own-literal-preference-source-and-pending-coordination-v1';
 export const MARIA_TENANT='9ffea9df-1e06-4590-acec-0e5cde715ba9';
@@ -328,6 +330,31 @@ export function prepareRegisteredTesaContinuation(s,c,request,result){
  s.audit('OWN_SAVED_ORDER_OPERATIONAL_CONTINUITY_PREPARED',request.source,{caseId:request.caseId,questionId:result.id,orderId:entry.receipt.orderId,scheduled:false,paymentsEnabled:false,historicalQuestionAdopted:false});
  return true;
 }
+// A delivered operational statement may receive a plain customer acceptance.
+// Acknowledge that turn without claiming that availability has been scheduled
+// or repeating the question. Only a prospectively prepared own continuation
+// can qualify; old questions never acquire a continuation marker here.
+export function registeredTesaConfirmation(s,c,state,e){
+ const plain=text=>/^(?:si|listo|dale|acepto|de acuerdo|confirmo|correcto|esta bien|perfecto|si esta bien|si confirmo|si acepto|todo correcto|si todo correcto|si correcto|listo esta bien|ok|okay)(?: (?:por favor|gracias|muchas gracias))*$/.test(normalize(text).replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim());
+ const tesa=getTesaConfig(c);
+ if(!programEnabled(c)||!tesa||e.kind!=='text'||e.fromMe||e.forwarded||!plain(e.text)||state.programIntake?.stage!=='registered'||state.awaitingHumanReview||state.closed||state.requestedAfterServiceReview||state.requestedControlReview||state.requestedDocumentReview)return null;
+ const conv=s.conversation(e.phone),entry=get(s,prefix+state.caseId),own=eligibleQuote(s,state,e.phone,e.line);
+ if(!conv||conv.hold||conv.state.caseId!==state.caseId||!entry||entry.status!=='SAVED'||entry.requestHash!==registrationHash(entry.payload)||!receiptValid(c,entry,entry.receipt)||!registrationOperationalScope(s,c,entry)||entry.payload.line!==e.line||state.programServiceId!==entry.receipt.orderId||!own||own.q.sourceId!==entry.payload.quote.sourceId||own.entry.priceCop!==entry.payload.quote.priceCop)return null;
+ const q=s.db.prepare("SELECT q.*,o.state delivery,o.mid question_mid FROM tesa_questions q JOIN tesa_outbox o ON o.id=q.outbox_id WHERE q.company=? AND q.case_id=? AND q.customer_phone=? AND q.source_id=? AND q.topic='disponibilidad-y-tecnico' AND q.source_line=?").get(c.company,state.caseId,e.phone,state.verifiedTesaAnswerSource||'',e.line);
+ if(!q||q.state!=='ANSWERED'||q.valid_until<=Date.now()||q.group_jid!==tesa.groupJid||q.sender_line!==tesa.senderLine||!['DELIVERED','READ'].includes(q.delivery))return null;
+ const id='tesa-continuation:'+q.id,plan=get(s,'tesa-continuation-plan:'+q.id),ref=get(s,'tesa-continuation-reply:'+id),out=s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND internal=0 AND state IN ('DELIVERED','READ') AND mid IS NOT NULL").get(id,e.phone,e.line,state.caseId),answer=q.answer&&s.open(q.answer);
+ if(!plan||plan.guard!==MARIA_PROGRAM_OPERATIONAL_CONTINUATION_GUARD||plan.questionId!==q.id||plan.caseId!==state.caseId||plan.phone!==e.phone||plan.line!==e.line||plan.orderId!==entry.receipt.orderId||plan.receiptHash!==entry.requestHash||plan.slotsHash!==registrationHash(state.slots)||!ref||registrationHash(ref.plan)!==registrationHash(plan)||ref.questionId!==q.id||ref.sourceId!==q.source_id||ref.answerText!==answer?.text||answer?.sourceId!==q.source_id||answer.questionMid!==q.question_mid||!out||out.revision!==ref.revision||s.open(out.body)!==ref.text||e.quotedId&&e.quotedId!==out.mid||e.at<Math.floor(out.updated/1000)*1000||e.at<answer.at||e.at>Date.now()+60000)return null;
+ const delivery=get(s,'first-delivery:'+id),source=s.db.prepare("SELECT body FROM tesa_events WHERE id=? AND state='CASE_ANSWER'").get(answer.sourceKey),observed=source&&s.open(source.body);
+ const day=at=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Bogota',year:'numeric',month:'2-digit',day:'2-digit'}).format(at);
+ if(!delivery||delivery.mid!==out.mid||delivery.line!==e.line||!['DELIVERED','READ'].includes(delivery.state)||e.at<Math.floor(delivery.verifiedAt/1000)*1000||observed?.text!==answer.text||observed.id!==q.source_id||observed.quote?.mid!==q.question_mid||observed.participantKey!==answer.participant?.phone||!tesa.allowedParticipantPhones.includes(answer.participant?.phone)||answer.at<Date.now()-600000||day(answer.at)!==day(Date.now()))return null;
+ const delta=conv.revision-out.revision;
+ if(delta<1||delta>4||s.db.prepare("SELECT 1 FROM events WHERE phone=? AND id<>? AND state IN ('PENDING','PROCESSING')").get(e.phone,e.id))return null;
+ const turns=s.db.prepare('SELECT id,line,at,body,state FROM events WHERE phone=? AND from_me=0 AND revision>? AND revision<=? ORDER BY revision').all(e.phone,out.revision,conv.revision);
+ if(turns.length!==delta||turns.at(-1)?.id!==e.id||turns.some(row=>{const turn=s.open(row.body);return row.line!==e.line||turn.fromMe||turn.forwarded||turn.kind!=='text'||turn.at!==row.at||turn.at<plan.customerAt||!(plain(turn.text)||neutralCourtesy(turn.text))||row.id!==e.id&&['PENDING','PROCESSING'].includes(row.state);}))return null;
+ const current=s.open(turns.at(-1).body);if(current.id!==e.id||current.phone!==e.phone||current.line!==e.line||current.at!==e.at||current.text!==e.text||current.quotedId!==e.quotedId)return null;
+ s.audit('OWN_SAVED_ORDER_CUSTOMER_CONFIRMATION_OBSERVED',e.id,{guard:MARIA_PROGRAM_OPERATIONAL_CONFIRMATION_GUARD,caseId:state.caseId,questionId:q.id,answerSource:q.source_id,orderId:entry.receipt.orderId,acceptanceRenewed:false,scheduled:false,businessWritten:false,newQuestionCreated:false,humanHoldReleased:false});
+ return {state,reply:'Recibí tu confirmación para el servicio.'};
+}
 async function nativeMessage(t,c,id,phone,line){
  const l=c.lines.find(x=>x.phone===line);if(!l||typeof t.request!=='function')throw Error('PROGRAM_NATIVE_RECHECK_REQUIRED');
  const response=await t.request(l,'/chat/findMessages/'+encodeURIComponent(l.instance),{where:{key:{id}},offset:10,page:1});
@@ -430,7 +457,7 @@ function saved(s,c,key,entry,r,routeQuestion){
   s.audit('OWN_SERVICE_REGISTRATION_SAVED',p.sourceId,{caseId:p.caseId,orderId:r.orderId,createdById:r.advisorMembershipId,requestHash:r.requestHash,scheduled:false,paymentRecorded:false,confirmationSuppressed:!active});
   if(active){const preference=conv.state.slots.preference;s.queue('program:'+p.caseId+':saved',p.phone,p.line,'Tu solicitud de servicio de '+p.slots.service+' por $'+p.quote.priceCop.toLocaleString('es-CO')+' quedó registrada a nombre de '+p.customerName+' en '+p.address+', '+p.municipality+'. El horario aún está pendiente de confirmación.'+(preference?'':' ¿Qué día y franja horaria prefieres?'),false,conv.revision,p.caseId);
    if(preference){
-    const question={phone:p.phone,line:p.line,caseId:p.caseId,topic:'disponibilidad-y-tecnico',conditions:{...conv.state.slots,quotedPriceCop:p.quote.priceCop,programServiceId:r.orderId},recipients:questionRecipients(c,'disponibilidad-y-tecnico'),source:p.sourceId,text:c.name+': solicitud ordinaria guardada, servicio '+p.slots.service+' en '+p.municipality+'. Precio aceptado $'+p.quote.priceCop+'. Pendiente de programación. ¿Qué disponibilidad y técnico corresponden a este caso?'};
+    const question={phone:p.phone,line:p.line,caseId:p.caseId,topic:'disponibilidad-y-tecnico',conditions:{...conv.state.slots,quotedPriceCop:p.quote.priceCop,priceSource:selectBusinessPrice(p.slots).entry?.source.quoteId,programServiceId:r.orderId},recipients:questionRecipients(c,'disponibilidad-y-tecnico'),source:p.sourceId,text:c.name+': solicitud ordinaria guardada, servicio '+p.slots.service+' en '+p.municipality+'. Precio aceptado $'+p.quote.priceCop+'. Pendiente de programación. ¿Qué disponibilidad y técnico corresponden a este caso?'};
     try{
      if(typeof routeQuestion!=='function'&&c.tesaOperations?.enabled)throw Error('PROGRAM_OPERATIONAL_ROUTER_REQUIRED');
      const routed=typeof routeQuestion==='function'?routeQuestion(s,c,question):s.questionToRecipients(question);

@@ -10,8 +10,8 @@ import {CONVERSATIONAL_AI_GUARD,MIGUEL_CONVERSATIONAL_AI_GUARD,conversationalAiG
 import {ownIntent} from './maria-understanding.mjs';
 import {ownMiguelIntent,miguelLiteralSlotAllowed} from './miguel-understanding.mjs';
 import {literalPaintingRequest} from './technical-scope.mjs';
-import {afterServiceKind,afterServiceRequest,afterServiceDecision,explicitNewService,mariaLiteralServiceContext,literalOwnAfterServiceRequest,MARIA_LITERAL_SERVICE_CONTEXT_GUARD} from './after-service.mjs';
-import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,literalIntakeTextWithoutRegistrationFields,literalProgramPreference,prepareRegisteredTesaContinuation} from './maria-program.mjs';
+import {afterServiceKind,afterServiceRequest,afterServiceDecision,explicitNewService,mariaLiteralServiceContext,literalOwnAfterServiceRequest,MARIA_LITERAL_SERVICE_CONTEXT_GUARD,mariaIncidentalPetMention} from './after-service.mjs';
+import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,literalIntakeTextWithoutRegistrationFields,literalProgramPreference,prepareRegisteredTesaContinuation,registeredTesaConfirmation} from './maria-program.mjs';
 import {createHash} from 'node:crypto';
 import {tesaOperationalTopic} from './tesa-config.mjs';
 import {prepareTesaQuestion,initializeTesaStore} from './tesa-operations.mjs';
@@ -270,8 +270,9 @@ function literalIntakeTurn(e,company='fumigacion'){
   const facts=/\b(?:tengo|mi (?:casa|apartamento)|son \d+|mide)\b/.test(text)||/^(?:hola[, ]+)?es una? (?:casa|apartamento)\b/.test(text);
   return e.kind==='text'&&!e.forwarded&&!(company==='fumigacion'&&mariaLiteralServiceContext(e))&&!unreadLinkOnly(e.text)&&!customerCourtesy(e.text)&&!ambiguousIntake(e.text)&&!afterServiceKind(e.text)&&(!isCustomerQuestion(e.text)||quotationInquiry(e.text)||facts)&&!postServiceDocuments(e.text)&&!serviceFollowup(e.text)&&!postServiceReturn(e.text)&&!plannedRevisit(e.text)&&!paymentInquiry(e.text)&&!previousQuotation(e.text)&&!requestedTechnicalContact(e.text)&&!/\b(?:antes|anterior|cancel\w*|reprogram\w*|reclamo|queja|garantia|pague|pago|abono|comprobante|me dijeron|me dijo|otra solicitud|otro servicio|nuevo servicio|otro equipo)\b/.test(text);
 }
-function contextNeedsPersonalPriority(text){
- const t=normalize(text);
+function contextNeedsPersonalPriority(text,event=null){
+ const incidental=event?.text===text&&mariaIncidentalPetMention(event);
+ const t=normalize(incidental?.classificationText??text);
  return faqNeedsPersonalReview(text)||paymentInquiry(text)||/\b(?:cancel|reprogram|reclamo|queja|devolucion|amenaz|abogad|denuncia|dolor|intoxic|embaraz|mascota|bebe|niño|nino|pague|pago|comprobante|transfer|consign|abono)\w*/.test(t);
 }
 function mariaLiteralContextDecision(state,e,context){
@@ -322,7 +323,7 @@ export function customerDecision(company,state,e,analysis={}) {
   if(e.kind==='text'&&!e.forwarded&&(company==='fumigacion'?ordinarySocial:company==='servicio-tecnico'&&existingSocial))return {state:{...state,slots:{...state.slots},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)},courtesy:true,socialGreeting:true,reply:'Gracias por preguntar. Estoy aquí para ayudarte.'};
   if(e.kind==='text'&&!e.forwarded&&(state.introduced||state.initialIntakeAllRequested||state.asked?.length)&&literalGreetingText(e.text))return {state:{...state,slots:{...state.slots},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)},courtesy:true,greeting:true,reply:/buenas noches/.test(normalize(e.text))?'Buenas noches.':/buenas tardes/.test(normalize(e.text))?'Buenas tardes.':/buen(?:os dias| dia)/.test(normalize(e.text))?'Buen día.':'Hola.'};
   const currentLiteralContext=company==='fumigacion'&&mariaLiteralServiceContext(e);
-  if(currentLiteralContext&&!contextNeedsPersonalPriority(e.text))return {...mariaLiteralContextDecision(state,e,currentLiteralContext),literalServiceContext:true};
+  if(currentLiteralContext&&!contextNeedsPersonalPriority(e.text,e))return {...mariaLiteralContextDecision(state,e,currentLiteralContext),literalServiceContext:true};
   const literalText=textWithoutLinks(company==='fumigacion'?literalIntakeTextWithoutRegistrationFields(e.text):e.text).trim(),t=normalize(literalText);
   const literal=literalFields(state,e,company),existing={...state.slots,...literal};
   if(company==='fumigacion'&&!literalIntakeTurn(e)){delete literal.dimensions;delete existing.dimensions;if(state.slots.dimensions)existing.dimensions=state.slots.dimensions;}
@@ -350,7 +351,7 @@ export function customerDecision(company,state,e,analysis={}) {
     if(size){next.slots.area=size;next.intakeSources={...next.intakeSources,area:{sourceId:e.id,at:e.at,context:'prior-size-question',unitExpanded:false}};}
   }
   if(company==='fumigacion')retainPromptedLocation(next,e);
-  if(company==='fumigacion'&&state.requestedProductInquiry&&!next.requestedAfterServiceReview&&literalIntakeTurn(e)&&!contextNeedsPersonalPriority(e.text)&&(Object.keys(literal).length||/^(?:solo|solamente|unicamente) (?:el )?producto[.! ]*$/.test(t))){
+  if(company==='fumigacion'&&state.requestedProductInquiry&&!next.requestedAfterServiceReview&&literalIntakeTurn(e)&&!contextNeedsPersonalPriority(e.text,e)&&(Object.keys(literal).length||/^(?:solo|solamente|unicamente) (?:el )?producto[.! ]*$/.test(t))){
     if(/^(?:solo|solamente|unicamente) (?:el )?producto[.! ]*$/.test(t))return {...mariaLiteralContextDecision(next,{...e,id:state.requestedProductInquiry.sourceId,at:state.requestedProductInquiry.at,text:state.requestedProductInquiry.question},{kind:'product-commercial-question',guard:MARIA_LITERAL_SERVICE_CONTEXT_GUARD}),reviewSource:state.requestedProductInquiry.sourceId};
     const asked=state.productPurposeClarification;
     next.productPurposeClarification=asked||{sourceId:e.id,productSourceId:state.requestedProductInquiry.sourceId,at:e.at};
@@ -359,7 +360,7 @@ export function customerDecision(company,state,e,analysis={}) {
   if(e.kind==='call')return {state:{...next,lastCallEvent:e.id},observed:true};
   if(e.kind!=='text')return {state:next,review:'El cliente envió '+e.kind+'. El contenido original necesita revisión.',reply:e.kind==='audio'?'Recibí tu audio. Te atenderemos en cuanto revisemos su contenido.':'Recibí el archivo. Revisaremos su contenido para continuar contigo.'};
   if(postServiceDocuments(e.text)&&!faqNeedsPersonalReview(e.text)&&!paymentInquiry(e.text))return {state:{...next,slots:{...state.slots}},reviewTopic:'service-documents',reviewConditions:{kind:'reported-post-service-documents',directCustomerReport:!e.forwarded},review:'La persona solicita documentos de un servicio que relata como realizado. El mensaje no acredita registro, ejecución ni existencia o autorización de documentos; hay que contrastar el servicio y revisar qué soportes pueden entregarse.',reviewQuestion:'¿Qué servicio y soportes autorizados comprobados corresponden a esta solicitud?',reply:'Con gusto. Una asesora continuará contigo para revisar los documentos que necesitas.'};
-  if((company!=='fumigacion'&&/\b(?:factura|certificado)\b/.test(t)||/\b(?:seguimiento|posservicio|ya tengo (?:una )?cita|estado de (?:la )?orden)\b/.test(t))&&(company!=='fumigacion'||!contextNeedsPersonalPriority(e.text)))return {state:next,review:'El cliente consulta un servicio previo, su estado o un soporte. Hace falta contrastar el registro del programa.',reply:'Gracias. Revisaremos el registro de tu servicio para poder ayudarte.'};
+  if((company!=='fumigacion'&&/\b(?:factura|certificado)\b/.test(t)||/\b(?:seguimiento|posservicio|ya tengo (?:una )?cita|estado de (?:la )?orden)\b/.test(t))&&(company!=='fumigacion'||!contextNeedsPersonalPriority(e.text,e)))return {state:next,review:'El cliente consulta un servicio previo, su estado o un soporte. Hace falta contrastar el registro del programa.',reply:'Gracias. Revisaremos el registro de tu servicio para poder ayudarte.'};
   if(company==='servicio-tecnico'){
     const intent=ownMiguelIntent(analysis,e);
     if(['warranty-claim','post-service'].includes(intent?.kind)||state.requestedTechnicalReview){
@@ -368,7 +369,16 @@ export function customerDecision(company,state,e,analysis={}) {
     }
   }
   const warrantyClaim=company==='fumigacion'&&['warranty','ambiguous-followup'].includes(afterServiceRequest(e,analysis)?.kind);
-  if(/\b(cancel|reprogram|reclamo|queja|devolucion|amenaz|abogad|denuncia|dolor|intoxic|embaraz|mascota|bebe|niño|nino)\w*/.test(t)||/\bgarantia\w*/.test(t)&&!warrantyClaim)
+  const incidentalPets=company==='fumigacion'&&mariaIncidentalPetMention(e);
+  if(incidentalPets&&next.caseId?.startsWith('fumigacion:')){
+    const note={guard:incidentalPets.guard,sourceId:incidentalPets.sourceId,at:incidentalPets.at,text:incidentalPets.text};
+    next.receptionNotes={...next.receptionNotes,incidentalPets:[...(next.receptionNotes?.incidentalPets||[]).filter(item=>item.sourceId!==e.id),note].slice(-8)};
+    if(!state.slots.detail&&normalize(next.slots.detail)===normalize(incidentalPets.text)){
+      delete next.slots.detail;next.intakeSources={...next.intakeSources};delete next.intakeSources.detail;
+    }
+  }
+  const personalPriorityText=normalize(incidentalPets?.classificationText??literalText);
+  if(/\b(cancel|reprogram|reclamo|queja|devolucion|amenaz|abogad|denuncia|dolor|intoxic|embaraz|mascota|bebe|niño|nino)\w*/.test(personalPriorityText)||/\bgarantia\w*/.test(t)&&!warrantyClaim)
     return {state:next,review:'El cliente solicita revisar una excepción o situación que necesita atención personal.',reply:'Gracias por contarnos. Revisaremos tu caso para darte una respuesta clara.'};
   if(/\b(pague|pago|comprobante|transfer|consign|abono)\w*/.test(t)&&(!paymentInquiry(e.text)||/\b(?:pague|comprobante|transferencia|consignacion|abono|(?:hice|realice) (?:el |un )?pago)\b/.test(t)))return {state:next,review:'El cliente informa un pago. Hace falta comprobar el ingreso y su asociación al servicio.',reply:'Gracias. Recibí la información del pago; falta verificarlo para poder confirmarte.'};
   if(paymentInquiry(e.text))return {state:next,reviewTopic:'payment-instructions',reviewConditions:{kind:'amount-and-instructions'},review:'La persona pregunta cuánto enviar o cómo pagar. No informa un ingreso recibido; el importe, medio de pago y asociación al caso requieren una fuente verificable.',reviewQuestion:'¿Qué importe y medio de pago verificados corresponden a esta solicitud?',reply:'Con gusto. Aún falta confirmar cuánto debes enviar y el medio de pago.'};
@@ -566,7 +576,7 @@ export class Engine {
       if(!newCase||newCaseSource.id!==e.id){
         const firstSource=caseState.caseId.startsWith(c.company+':')?caseState.caseId.slice(c.company.length+1):null;
         const turns=newCase?pendingBatch.slice(pendingBatch.findIndex(source=>source.id===newCaseSource.id)):s.customerTurnBatch(e.phone,e.id,caseState.lastHandledSourceId||(initialSource?null:firstSource));
-        if(c.company==='fumigacion')literalContextRequest=turns.filter(turn=>{const context=mariaLiteralServiceContext(turn);return context&&context.kind!=='context-reference'&&!contextNeedsPersonalPriority(turn.text);}).at(-1)||null;
+        if(c.company==='fumigacion')literalContextRequest=turns.filter(turn=>{const context=mariaLiteralServiceContext(turn);return context&&context.kind!=='context-reference'&&!contextNeedsPersonalPriority(turn.text,turn);}).at(-1)||null;
         documentRequest=turns.filter(turn=>turn.kind==='text'&&postServiceDocuments(turn.text)).at(-1)||null;
         if(c.company==='fumigacion')controlRequest=turns.filter(turn=>turn.kind==='text'&&requestedControl(turn.text)).at(-1)||null;
         if(c.company==='fumigacion')followupRequest=turns.find(turn=>ownCaseLiteralFollowup(s,c,caseState,e,turn.id))||null;
@@ -593,10 +603,11 @@ export class Engine {
       const controlSource=c.company==='fumigacion'&&e.kind==='text'&&!faqNeedsPersonalReview(e.text)&&!paymentInquiry(e.text)?(requestedControl(e.text)?e:controlRequest):null;
       const followupSource=c.company==='fumigacion'&&e.kind==='text'&&!faqNeedsPersonalReview(e.text.replace(/garant[ií]a/gi,''))&&!paymentInquiry(e.text)&&!/\b(?:pague|pago|comprobante|transfer|consign|abono)\w*/.test(normalize(e.text))?(afterServiceRequest(e,analysis)?e:followupRequest):null;
       const currentContext=c.company==='fumigacion'&&mariaLiteralServiceContext(e);
-      const literalContextSource=c.company==='fumigacion'&&e.kind==='text'&&!contextNeedsPersonalPriority(e.text)?(currentContext?.documentDetail&&literalContextRequest?literalContextRequest:currentContext?e:literalContextRequest):null;
-      const faq=c.company==='fumigacion'&&!documentSource&&!controlSource&&!followupSource&&!caseState.requestedAfterServiceReview&&!caseState.requestedControlReview&&e.kind==='text'&&!e.forwarded&&!unreadLinkOnly(e.text)&&!faqNeedsPersonalReview(e.text)&&!paymentInquiry(e.text)&&!previousQuotation(e.text)&&!postServiceReturn(e.text)&&!plannedRevisit(e.text)&&faqQuestion.kind==='text'?selectCommonAnswer(textWithoutLinks(faqQuestion.text),caseState.slots,s.approvedCustomerAnswers(),caseState.caseId):null;
+      const literalContextSource=c.company==='fumigacion'&&e.kind==='text'&&!contextNeedsPersonalPriority(e.text,e)?(currentContext?.documentDetail&&literalContextRequest?literalContextRequest:currentContext?e:literalContextRequest):null;
+      const faqClassificationText=mariaIncidentalPetMention(faqQuestion)?.classificationText??faqQuestion.text;
+      const faq=c.company==='fumigacion'&&!documentSource&&!controlSource&&!followupSource&&!caseState.requestedAfterServiceReview&&!caseState.requestedControlReview&&e.kind==='text'&&!e.forwarded&&!unreadLinkOnly(e.text)&&!faqNeedsPersonalReview(e.text)&&!paymentInquiry(e.text)&&!previousQuotation(e.text)&&!postServiceReturn(e.text)&&!plannedRevisit(e.text)&&faqQuestion.kind==='text'?selectCommonAnswer(textWithoutLinks(faqClassificationText),caseState.slots,s.approvedCustomerAnswers(),caseState.caseId):null;
       let decision;
-      const productClarification=c.company==='fumigacion'&&caseState.requestedProductInquiry&&literalIntakeTurn(e)&&!contextNeedsPersonalPriority(e.text)&&(Object.keys(extractSlots(e.text,c.company)).length||/^(?:solo|solamente|unicamente) (?:el )?producto[.! ]*$/.test(normalize(e.text)));
+      const productClarification=c.company==='fumigacion'&&caseState.requestedProductInquiry&&literalIntakeTurn(e)&&!contextNeedsPersonalPriority(e.text,e)&&(Object.keys(extractSlots(e.text,c.company)).length||/^(?:solo|solamente|unicamente) (?:el )?producto[.! ]*$/.test(normalize(e.text)));
       if(productClarification){
         decision=customerDecision(c.company,caseState,e,analysis);
       }else if(literalContextSource){
@@ -636,8 +647,10 @@ export class Engine {
           decision.state.quotedPrice={...currentQuote,accepted:true,acceptanceSource:currentQuote.acceptanceSource||e.id,acceptedAt:currentQuote.acceptedAt||e.at};
           const literalPreference=literalProgramPreference(e.text);
           const preference=literalPreference||decision.state.slots.preference;
+          const operationalConfirmation=registeredTesaConfirmation(s,c,decision.state,e);
           if(literalPreference)decision.state.intakeSources={...decision.state.intakeSources,preference:{sourceId:e.id,at:e.at,context:'literal-customer-preference-pending-coordination'}};
-          if(programEnabled(c)&&priceNow.source?.type==='direct_user_approved_schedule'&&decision.state.programIntake?.stage!=='registered'&&registrationQuoteReady(s,decision.state,e.phone,e.line)){
+          if(operationalConfirmation)decision=operationalConfirmation;
+          else if(programEnabled(c)&&priceNow.source?.type==='direct_user_approved_schedule'&&decision.state.programIntake?.stage!=='registered'&&registrationQuoteReady(s,decision.state,e.phone,e.line)){
             if(preference)decision.state.slots.preference=preference;
             decision={state:decision.state};
           }else if(preference){
@@ -718,7 +731,14 @@ export class Engine {
         const request=routeCaseQuestion(s,c,{phone:e.phone,line:e.line,caseId:caseState.caseId,topic:decision.question.topic,conditions:slots,recipients:questionRecipients(c,decision.question.topic),source:pendingQuestion?.id||e.id,
           text:c.name+': solicitud del contacto terminado en '+e.phone.slice(-4)+'. '+summary+(quoteOnly?'. Falta confirmar el precio y la respuesta aplicable. ¿Qué cotización y texto vigente corresponden a esta solicitud?':decision.question.topic==='disponibilidad-y-tecnico'?(decision.state.programServiceId?'. La solicitud está guardada en el programa a nombre de María; no hay horario o técnico confirmados. ¿Qué disponibilidad y técnico corresponden a este caso?':'. La cotización fue entregada y aceptada; no hay reserva guardada ni horario o técnico confirmados. ¿Qué disponibilidad y técnico corresponden a este caso?'):'. Aún no hay técnico, horario ni precio confirmados. ¿Qué técnico, horario disponible y cotización corresponden a este caso?')});
         if(request.created&&request.outboxId?.startsWith('tesa-question:')){decision.state.pendingTesaQuestionId=request.id;s.saveConversation(e.phone,decision.state);}
-        if(!request.created)decision.reply=null;
+        if(!request.created){
+          decision.reply=null;
+          if(c.company==='fumigacion'&&decision.state.programIntake?.stage==='registered'&&decision.question.topic==='disponibilidad-y-tecnico'&&request.id&&['ANSWERED','ANSWER_REVIEW'].includes(request.state)&&!request.valid){
+            decision.reply='Necesito verificar nuevamente la disponibilidad para continuar.';
+            decision.state.awaitingHumanReview=true;s.saveConversation(e.phone,decision.state);
+            s.audit('OWN_SAVED_ORDER_OPERATIONAL_ANSWER_REVIEW',e.id,{caseId:caseState.caseId,questionId:request.id,answerState:request.state,newQuestionCreated:false,businessWritten:false,humanHoldReleased:false});
+          }
+        }
         else if(c.company==='fumigacion'){
           decision.reply=decision.question.topic==='disponibilidad-y-tecnico'?'Gracias. Una asesora continuará contigo para confirmar el horario del servicio.':'Gracias. Una asesora continuará contigo para completar la cotización.';
           decision.state.awaitingHumanReview=true;s.saveConversation(e.phone,decision.state);

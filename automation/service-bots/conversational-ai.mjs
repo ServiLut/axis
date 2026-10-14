@@ -8,6 +8,18 @@ import {MIGUEL_UNDERSTANDING_GUARD,MIGUEL_UNDERSTANDING_VERSION,MIGUEL_UNDERSTAN
 const endpoint='https://api.openai.com/v1/responses';
 const fields=['service','location','site','detail','preference'];
 export const MARIA_CONVERSATION_GUARD='same-case-source-bounded-context-and-factual-reply-plan-v1';
+export const MARIA_AI_FAILURE_GUARD='own-fumigacion-fixed-failure-diagnostic-without-retry-v1';
+const failureReasons=new Set(['AI_PROVIDER_HTTP','AI_PROVIDER_TIMEOUT','AI_PROVIDER_ABORTED','AI_PROVIDER_TRANSPORT_FAILURE','AI_PROVIDER_RESPONSE_INVALID_JSON','AI_STRUCTURED_OUTPUT_INVALID_JSON','AI_RESPONSE_UNUSABLE','AI_RESPONSE_SCHEMA','AI_REPLY_NOT_APPROVED','AI_LOCAL_RESULT_HANDLING_FAILURE','AI_REQUEST_FAILURE']);
+const failureStages=new Set(['provider-request','provider-response','provider-json','structured-json','schema-validation','local-result']);
+function mariaFailureDiagnostic(error,stage,httpStatus){
+ let name=null,message=null;try{name=typeof error?.name==='string'?error.name:null;message=typeof error?.message==='string'?error.message:null;}catch{}
+ const providerStage=['provider-request','provider-response','provider-json'].includes(stage);
+ const exact=stage==='provider-response'&&message==='AI_RESPONSE_UNUSABLE'?message:stage==='schema-validation'?['AI_RESPONSE_SCHEMA','AI_REPLY_NOT_APPROVED'].find(value=>message===value):null;
+ const reasonCode=providerStage&&name==='TimeoutError'?'AI_PROVIDER_TIMEOUT':providerStage&&name==='AbortError'?'AI_PROVIDER_ABORTED':exact??(stage==='provider-json'?(name==='SyntaxError'?'AI_PROVIDER_RESPONSE_INVALID_JSON':'AI_PROVIDER_TRANSPORT_FAILURE'):stage==='structured-json'?'AI_STRUCTURED_OUTPUT_INVALID_JSON':stage==='provider-request'?'AI_PROVIDER_TRANSPORT_FAILURE':stage==='local-result'?'AI_LOCAL_RESULT_HANDLING_FAILURE':httpStatus!==null?'AI_PROVIDER_HTTP':'AI_REQUEST_FAILURE');
+ // Persist only closed codes and numeric status. Provider bodies, error messages,
+ // request identifiers, customer content and credentials never enter this field.
+ return {guard:MARIA_AI_FAILURE_GUARD,reasonCode,stage,httpStatus,automaticRetry:false};
+}
 const sourceDigest=id=>createHash('sha256').update(String(id)).digest('hex').slice(0,16);
 
 // This context is rebuilt from the authenticated, encrypted own event store.
@@ -76,28 +88,35 @@ async function request(config,store,fetcher,key,instructions,input,schema,maxOut
   if(reserved.previous.state==='DONE')return reserved.previous.result;
   throw Error('AI_ATTEMPT_ALREADY_RESERVED');
  }
+ let stage='provider-request',httpStatus=null;
  try{
   const ai=config.conversationalAi;
   const response=await fetcher(endpoint,{method:'POST',headers:{Authorization:'Bearer '+ai.key,'Content-Type':'application/json',...(ai.project?{'OpenAI-Project':ai.project}:{})},
    redirect:'error',signal:AbortSignal.timeout(20000),body:JSON.stringify({model:ai.model,store:false,max_output_tokens:maxOutputTokens,
     ...(ai.model==='gpt-6-luna'?{reasoning:{effort:'none'}}:{}),
     instructions,input:JSON.stringify(input),text:{format:{type:'json_schema',name:p.prefix+'_'+schema.name,strict:true,schema:schema.value}}})});
-  if(!response.ok)throw Error('AI_PROVIDER_HTTP_'+response.status);
+  stage='provider-response';
+  if(!response.ok){httpStatus=Number.isInteger(response.status)&&response.status>=100&&response.status<=599?response.status:null;throw Error('AI_PROVIDER_HTTP_'+response.status);}
+  stage='provider-json';
   const data=await response.json();
+  stage='provider-response';
   if(data.status==='incomplete'||data.error||data.output?.some(x=>x.content?.some(c=>c.type==='refusal')))throw Error('AI_RESPONSE_UNUSABLE');
   const raw=data.output?.flatMap(x=>x.content||[]).filter(x=>x.type==='output_text').map(x=>x.text).join('')||data.output_text;
+  stage='structured-json';
   const result=JSON.parse(raw);
+  stage='schema-validation';
   if(!result||typeof result!=='object'||Array.isArray(result)||Object.keys(result).length!==schema.value.required.length||schema.value.required.some(k=>!Object.hasOwn(result,k)))throw Error('AI_RESPONSE_SCHEMA');
   if(schema.name==='literal_slots'&&(!result.slots||typeof result.slots!=='object'||Array.isArray(result.slots)||Object.keys(result.slots).length!==fields.length||fields.some(f=>!Object.hasOwn(result.slots,f)||(result.slots[f]!==null&&typeof result.slots[f]!=='string'))))throw Error('AI_RESPONSE_SCHEMA');
   if(schema.name==='literal_slots'&&(!result.intent||Object.keys(result.intent).length!==2||!p.intents.includes(result.intent.kind)||(result.intent.evidence!==null&&typeof result.intent.evidence!=='string')))throw Error('AI_RESPONSE_SCHEMA');
   if(schema.name==='approved_reply'&&(!Number.isInteger(result.choice)||!schema.value.properties.choice.enum.includes(result.choice)))throw Error('AI_REPLY_NOT_APPROVED');
   if(schema.name==='contextual_reply'&&(typeof result.opening!=='string'||!schema.value.properties.opening.enum.includes(result.opening)||!Array.isArray(result.acknowledgements)||result.acknowledgements.length>2||result.acknowledgements.some(a=>!schema.value.properties.acknowledgements.items.enum.includes(a))||new Set(result.acknowledgements).size!==result.acknowledgements.length||!schema.value.properties.nextStep.enum.includes(result.nextStep)||!Array.isArray(result.factualAnchors)||result.factualAnchors.length!==schema.value.properties.factualAnchors.items.enum.length||new Set(result.factualAnchors).size!==result.factualAnchors.length||result.factualAnchors.some(a=>!schema.value.properties.factualAnchors.items.enum.includes(a))))throw Error('AI_REPLY_NOT_APPROVED');
+  stage='local-result';
   store.db.prepare('UPDATE meta SET value=? WHERE key=?').run(store.seal({...reserved.attempt,state:'DONE',result,
    usage:{inputTokens:data.usage?.input_tokens||0,outputTokens:data.usage?.output_tokens||0},at:Date.now()}),reserved.attemptKey);
   store.audit('AI_OWN_RESPONSE',key,{model:ai.model,month:reserved.attempt.month,inputTokens:data.usage?.input_tokens||0,outputTokens:data.usage?.output_tokens||0});
   return result;
  }catch(error){
-  store.db.prepare('UPDATE meta SET value=? WHERE key=?').run(store.seal({...reserved.attempt,state:'FAILED',at:Date.now()}),reserved.attemptKey);
+  store.db.prepare('UPDATE meta SET value=? WHERE key=?').run(store.seal({...reserved.attempt,state:'FAILED',at:Date.now(),...(config.company==='fumigacion'?{failure:mariaFailureDiagnostic(error,stage,httpStatus)}:{})}),reserved.attemptKey);
   throw error;
  }
 }
@@ -162,6 +181,12 @@ export function ownAiUsage(config,store){
  const attempts=store.db.prepare("SELECT value FROM meta WHERE key LIKE 'ai-attempt:%'").all().map(r=>store.open(r.value)).filter(a=>(a.company===ownAiScope(config.company)||config.company==='fumigacion'&&a.company===undefined)&&a.month===month);
  const at=state=>{const times=attempts.filter(a=>a.state===state&&Number.isFinite(a.at)).map(a=>a.at);return times.length?new Date(Math.max(...times)).toISOString():null;};
  result.outcomes={done:attempts.filter(a=>a.state==='DONE').length,failed:attempts.filter(a=>a.state==='FAILED').length,started:attempts.filter(a=>a.state==='STARTED').length,lastSuccessAt:at('DONE'),lastFailureAt:at('FAILED')};
+ if(config.company==='fumigacion'){
+  const failed=attempts.filter(a=>a.state==='FAILED'),known=failed.filter(a=>a.failure?.guard===MARIA_AI_FAILURE_GUARD&&failureReasons.has(a.failure.reasonCode)&&failureStages.has(a.failure.stage)&&a.failure.automaticRetry===false&&(a.failure.httpStatus===null||Number.isInteger(a.failure.httpStatus)&&a.failure.httpStatus>=100&&a.failure.httpStatus<=599));
+  const counts={};for(const a of known)counts[a.failure.reasonCode]=(counts[a.failure.reasonCode]??0)+1;
+  const latest=known.filter(a=>Number.isFinite(a.at)).sort((a,b)=>b.at-a.at)[0];
+  result.failureDiagnostics={guard:MARIA_AI_FAILURE_GUARD,classifiedFailures:known.length,legacyOrUnclassifiedFailures:failed.length-known.length,countsByReason:counts,lastClassifiedFailure:latest?{reasonCode:latest.failure.reasonCode,stage:latest.failure.stage,httpStatus:latest.failure.httpStatus,at:new Date(latest.at).toISOString()}:null,automaticRetry:false};
+ }
  return result;
 }
 export async function probeOwnAi(config,store,fetcher){
