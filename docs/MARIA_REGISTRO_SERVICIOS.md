@@ -1,5 +1,11 @@
 # Registro propio de servicios nuevos de María
 
+## Continuación tras los escritos — 14/10/2026 21:03Z
+
+Sólo María instaló `93576d440beedddecc17628e4c36910e1919006e` (Dokploy DONE 6 s). `/status` a las 21:03:34Z confirmó la exclusión prospectiva de sincronización nativa exacta tras lectura saliente completa dentro de límites. 899 pruebas runtime y 19 probes independientes aprobaron. Se conservan DTO/módulo de Tenaxis, precios, actor, tokens y vencimiento. Registro ordinario activo, SAVED=1 histórico BF23DF14 y otras colas=0; no se acredita alta propia nueva.
+
+El control posterior de diez casos seleccionados encontró atención humana concordante, sin falso eco observado. Una aceptación/cotización del personal no pasa al registro de María ni justifica otra orden. Se evita únicamente pausar un contacto nuevo por sincronización sin mensaje humano; no se liberan holds ni reejecutan chats. Evidencia en `.tmp/maria-after-dossier-20261014/`; escritos y actualización posterior en visualizaciones `maria-dossier-programador-20261014/output/`. Ver el apartado actual de `BOTS_MARIA_MIGUEL.md` para los cortes, límites y fuentes.
+
 ## Corrección del formulario y continuidad instalada — 14/10/2026 16:41Z
 
 María instaló `8487e57e62613887115ffb8781c48b73f5c77cdb` y el mismo código con documentación `2818fb82a0432105b2d1cba14879e1b5115493ee`; Tenaxis Backend instaló `6a7229a2459584050f0b6419af6e0aa1ae05ecee`. Nombre y dirección enviados por separado en el lote posterior al prompt propio entregado conservan fuentes nativas. Igualdad de segundo entre un dato ya leído y la confirmación no convierte ese dato en posterior; posición propia y cotejo nativo siguen siendo necesarios. Dos nombres contradictorios no se seleccionan automáticamente: se pide un dato inequívoco y luego se entrega el resumen para confirmarlo. Los datos posteriores al primer consentimiento tampoco pueden guardarse con ese consentimiento antiguo. Se conserva autoría, contrato cerrado, recibo e idempotencia ante SENDING/UNCERTAIN.
