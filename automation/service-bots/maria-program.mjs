@@ -3,6 +3,7 @@ import {normalize,questionRecipients} from './config.mjs';
 import {BUSINESS_PRICE_HASH,selectBusinessPrice} from './business-prices.mjs';
 import {operationalLineAllowed,operationalCoverage} from './line-scope.mjs';
 import {getTesaConfig} from './tesa-config.mjs';
+import {mariaIncidentalPetMention} from './after-service.mjs';
 
 export const MARIA_PROGRAM_GUARD='own-accepted-ordinary-service-literal-fields-and-atomic-receipt-v2';
 export const MARIA_PROGRAM_PIPELINE_GUARD='processed-customer-turn-before-registration-v1';
@@ -12,6 +13,7 @@ export const MARIA_PROGRAM_OPERATIONAL_CONTINUATION_GUARD='own-saved-order-new-q
 export const MARIA_PROGRAM_OPERATIONAL_CONFIRMATION_GUARD='own-saved-delivered-operation-pure-confirmation-without-repeat-v1';
 export const MARIA_PROGRAM_TIMED_ACCEPTANCE_GUARD='own-literal-timed-acceptance-before-conditional-v1';
 export const MARIA_PROGRAM_REQUESTED_TIMING_GUARD='own-literal-preference-source-and-pending-coordination-v1';
+export const MARIA_PROGRAM_PET_PRESENCE_GUARD='own-confirmed-native-incidental-pet-observation-v1';
 export const MARIA_TENANT='9ffea9df-1e06-4590-acec-0e5cde715ba9';
 export const MARIA_COMPANY='35a19d89-15d1-4c32-8353-3471b6d9f0ff';
 export const MARIA_PROGRAM_URL='https://tenaxis-backend-0zeuja.servilutioncrm.cloud/integrations/maria-service-registration';
@@ -68,7 +70,7 @@ export function registrationStatus(c,s){
  const reviewed=entries.filter(entry=>entry.status==='REVIEW').sort((a,b)=>(Number(b.reviewAt)||0)-(Number(a.reviewAt)||0));
  const reasons=new Map();for(const entry of reviewed){const reason=safeReason(entry.reason);reasons.set(reason,(reasons.get(reason)||0)+1);}
  const own=c.company==='fumigacion';
- return {guard:own?MARIA_PROGRAM_GUARD:null,pipelineGuard:own?MARIA_PROGRAM_PIPELINE_GUARD:null,formBatchGuard:own?MARIA_PROGRAM_FORM_BATCH_GUARD:null,literalFieldsGuard:own?MARIA_PROGRAM_LITERAL_FIELDS_GUARD:null,acceptanceTimingGuard:own?MARIA_PROGRAM_TIMED_ACCEPTANCE_GUARD:null,requestedTimingGuard:own?MARIA_PROGRAM_REQUESTED_TIMING_GUARD:null,operationalCoverage:operationalCoverage(c),configured:own&&c.mariaProgram?.enabled===true,enabled:programEnabled(c),company:own?'FUMIGACION':'S.TECNICO',tenantId:own&&c.mariaProgram?.enabled?MARIA_TENANT:null,companyId:own&&c.mariaProgram?.enabled?MARIA_COMPANY:null,advisorMembershipId:own?c.mariaProgram?.actorId||null:null,registrationKind:own?'new-service-pending-scheduling':null,prepared:states.PENDING,states,saved:states.SAVED,uncertain:states.UNCERTAIN+states.SENDING,review:states.REVIEW,lastReviewReason:reviewed.length?safeReason(reviewed[0].reason):null,reviewReasons:[...reasons].sort(([a],[b])=>a.localeCompare(b)).map(([reason,count])=>({reason,count})),scheduled:false,paymentsEnabled:false,fullyAutonomous:false};
+ return {guard:own?MARIA_PROGRAM_GUARD:null,pipelineGuard:own?MARIA_PROGRAM_PIPELINE_GUARD:null,formBatchGuard:own?MARIA_PROGRAM_FORM_BATCH_GUARD:null,literalFieldsGuard:own?MARIA_PROGRAM_LITERAL_FIELDS_GUARD:null,acceptanceTimingGuard:own?MARIA_PROGRAM_TIMED_ACCEPTANCE_GUARD:null,requestedTimingGuard:own?MARIA_PROGRAM_REQUESTED_TIMING_GUARD:null,petPresenceGuard:own?MARIA_PROGRAM_PET_PRESENCE_GUARD:null,operationalCoverage:operationalCoverage(c),configured:own&&c.mariaProgram?.enabled===true,enabled:programEnabled(c),company:own?'FUMIGACION':'S.TECNICO',tenantId:own&&c.mariaProgram?.enabled?MARIA_TENANT:null,companyId:own&&c.mariaProgram?.enabled?MARIA_COMPANY:null,advisorMembershipId:own?c.mariaProgram?.actorId||null:null,registrationKind:own?'new-service-pending-scheduling':null,prepared:states.PENDING,states,saved:states.SAVED,uncertain:states.UNCERTAIN+states.SENDING,review:states.REVIEW,lastReviewReason:reviewed.length?safeReason(reviewed[0].reason):null,reviewReasons:[...reasons].sort(([a],[b])=>a.localeCompare(b)).map(([reason,count])=>({reason,count})),scheduled:false,paymentsEnabled:false,fullyAutonomous:false};
 }
 // Only an affirmative from the customer is authority to create an ordinary,
 // unscheduled order. Courtesy, a preference or a quoted third-party "yes" alone
@@ -187,6 +189,68 @@ function changedAddressScope(text,slots){
  return false;
 }
 const source=e=>({id:e.id,text:e.text,at:iso(e.at)});
+function confirmedPetMention(event){
+ const mention=mariaIncidentalPetMention(event);
+ // The new registration contract is narrower than the historical intake
+ // classifier. An unpunctuated safety/return question is never a presence-only
+ // observation that can be written into an ordinary new order.
+ return mention&&!/\b(?:protej\w*|volver\w*|regres\w*)\b|,\s*(?:como|cuando|donde|que|por que)\b/.test(normalize(event.text))?mention:null;
+}
+function exactLiteralFieldSource(event,facts){
+ const raw=event.text.trim().replace(/[.!]+$/,'').trim();
+ // Only a complete, already parsed standalone fact may have an animal word
+ // in its surname or building name. Presence and mixed safety clauses are
+ // never names or address-only exemptions.
+ if(/\b(?:hay|tengo|tenemos|me equivoque|corrijo|correccion|rectifico)\b|[?¿]/.test(normalize(raw)))return false;
+ return facts.some(fact=>fact.source?.id===event.id&&fact.source.text===event.text&&Date.parse(fact.source.at)===event.at&&typeof fact.value==='string'&&raw===fact.value.trim().replace(/[.!]+$/,'').trim()&&(fact.kind==='name'?literalName(raw,true):literalAddress(raw,true))===fact.value);
+}
+function incompatiblePetContinuation(event,mention,facts){
+ if(event.kind!=='text'||typeof event.text!=='string')return false;
+ const raw=normalize(event.text);
+ if(!mention&&/\b(?:hay|tengo|tenemos)\s+(?:(?:una?|dos|tres|cuatro|cinco|varias?|algunas?|\d{1,2})\s+)?(?:mascotas?|perros?|gatos?|animales?)\b/.test(raw))return true;
+ // Inspect an action about the animals before any address/name exemption:
+ // the address parser may accept a trailing unpunctuated safety request.
+ if(/\b(?:las|los|les|ellas|ellos)\s+(?:(?:las|los|les)\s+)?(?:pued\w*|deb\w*|dej\w*|qued\w*|sac\w*|llev\w*|manten\w*|retir\w*)\b|\b(?:pued\w*|deb\w*|dej\w*|retir\w*)(?:las|los)\b/.test(raw))return true;
+ if(exactLiteralFieldSource(event,facts))return false;
+ const text=normalize(literalIntakeTextWithoutRegistrationFields(event.text)),fields=explicitFields(event.text);
+ const correction=/\b(?:me equivoque|corrijo|correccion|rectifico|en realidad|no (?:son|eran?))\b/.test(text)&&!fields.name&&!fields.address;
+ const petReference=/\b(?:mascotas?|perros?|gatos?|animales?)\b|\b(?:las|los|les|ellas|ellos)\s+(?:(?:las|los|les)\s+)?(?:pued\w*|deb\w*|dej\w*|qued\w*|sac\w*|llev\w*|manten\w*|retir\w*)\b|\b(?:pued\w*|deb\w*|dej\w*|retir\w*)(?:las|los)\b/.test(text);
+ // A later denied, corrected or safety-related observation is not permission
+ // to silently reuse the earlier affirmative. Preserve it for review instead
+ // of inferring a new number, animal, precaution or absence of animals.
+ return correction||petReference&&!mention;
+}
+function casePetPresence(s,c,state,e,literalFacts=[]){
+ const notes=state.receptionNotes?.incidentalPets??[];
+ if(!Array.isArray(notes))throw Error('PROGRAM_PET_SOURCE_UNVERIFIED');
+ const firstId=state.caseId?.startsWith(c.company+':')?state.caseId.slice(c.company.length+1):null;
+ const first=firstId&&s.db.prepare('SELECT rowid,at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(firstId,e.phone,e.line);
+ const current=s.db.prepare('SELECT rowid FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(e.id,e.phone,e.line);
+ if(!first||!current){if(notes.length)throw Error('PROGRAM_PET_SOURCE_UNVERIFIED');return null;}
+ let latest=null;
+ for(const reference of notes){
+  const row=reference?.sourceId&&s.db.prepare('SELECT rowid,body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(reference.sourceId,e.phone,e.line);
+  if(!row||row.rowid<first.rowid||row.rowid>current.rowid)throw Error('PROGRAM_PET_SOURCE_UNVERIFIED');
+  const native=s.open(row.body),mention=confirmedPetMention(native);
+  if(!mention||native.id!==reference.sourceId||native.phone!==e.phone||native.line!==e.line||native.at!==reference.at||native.at<Math.max(first.at,c.mariaProgram.startsAt)||native.at>e.at||mention.guard!==reference.guard||mention.text!==reference.text||mention.text.length>100)throw Error('PROGRAM_PET_SOURCE_UNVERIFIED');
+  if(!latest||row.rowid>latest.position)latest={value:mention.text,source:source(native),position:row.rowid};
+ }
+ // Earlier sources in a rapid facts batch may be superseded before the
+ // conversational turn can retain its note. Read their original encrypted
+ // events within this exact case window, never import another case or line.
+ const rows=s.db.prepare('SELECT rowid,id,at,body FROM events WHERE phone=? AND line=? AND from_me=0 AND rowid>=? AND rowid<=? AND at>=? AND at<=? ORDER BY rowid').all(e.phone,e.line,first.rowid,current.rowid,Math.max(first.at,c.mariaProgram.startsAt),e.at);
+ const knownFields=[{kind:'name',value:state.programIntake?.customerName,source:state.programIntake?.nameSource},{kind:'address',value:state.programIntake?.address,source:state.programIntake?.addressSource},...literalFacts];
+ let chronological=null;
+ for(const row of rows){
+  const native=s.open(row.body),mention=confirmedPetMention(native);
+  if(native.id!==row.id||native.at!==row.at||native.phone!==e.phone||native.line!==e.line)continue;
+  if(chronological&&incompatiblePetContinuation(native,mention,knownFields))throw Error('PROGRAM_PET_SOURCE_CONTRADICTED');
+  if(!mention||mention.text.length>100)continue;
+  chronological={value:mention.text,source:source(native),position:row.rowid};
+  if(!latest||row.rowid>latest.position)latest={value:mention.text,source:source(native),position:row.rowid};
+ }
+ return latest;
+}
 function casePreferenceSource(s,c,state,e){
  const value=state.slots.preference,reference=state.intakeSources?.preference;
  if(typeof value!=='string'||!value.trim()||value.length>300||/[\r\n]/.test(value)||!reference?.sourceId)return null;
@@ -217,7 +281,7 @@ function promptedBatchFields(s,c,previous,e,pi,prompt){
   const position=s.db.prepare('SELECT rowid FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(turn.id,e.phone,e.line)?.rowid;
   if(!position||position<=promptSource.rowid)continue;
   if(turn.phone!==e.phone||turn.line!==e.line||turn.fromMe||turn.forwarded||turn.kind!=='text'||turn.at<c.mariaProgram.startsAt)return [];
-  if(confirms(turn.text)||neutralCourtesy(turn.text)||/^(?:hola|hola buenas noches|buenos dias|buen dia|buenas tardes|buenas noches)[.!¡, ]*$/.test(normalize(turn.text))||/^[¡ ]*(?:hola[,!. ]+)?(?:(?:buenos dias|buen dia|buenas tardes|buenas noches)[,!. ]+)?[¿¡ ]*como esta(?:s|n)?[?!.,! ]*$/.test(normalize(turn.text))||registrationSourcePreface(turn.text)||literalProgramPreference(turn.text)||pi.stage==='correction'&&correctionFieldReference(turn.text))continue;
+  if(confirms(turn.text)||mariaIncidentalPetMention(turn)||neutralCourtesy(turn.text)||/^(?:hola|hola buenas noches|buenos dias|buen dia|buenas tardes|buenas noches)[.!¡, ]*$/.test(normalize(turn.text))||/^[¡ ]*(?:hola[,!. ]+)?(?:(?:buenos dias|buen dia|buenas tardes|buenas noches)[,!. ]+)?[¿¡ ]*como esta(?:s|n)?[?!.,! ]*$/.test(normalize(turn.text))||registrationSourcePreface(turn.text)||literalProgramPreference(turn.text)||pi.stage==='correction'&&correctionFieldReference(turn.text))continue;
   if(blockedText(turn.text))return [];
   const explicit=explicitFields(turn.text),separated=promptedLiteralFields(turn.text,requested,pi.stage==='correction');
   const name=explicit.name||separated.name||(requested.includes('name')&&literalName(turn.text,true)),address=explicit.address||separated.address||(requested.includes('address')&&literalAddress(turn.text,true));
@@ -253,6 +317,15 @@ export function registrationTurn(s,c,previous,e,decision){
  const pi={...prior},prompt=pi.promptId&&s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND state IN ('DELIVERED','READ')").get(pi.promptId,e.phone,e.line),batchFields=promptedBatchFields(s,c,previous,e,pi,prompt);
  if(decision.courtesy&&!confirms(e.text)&&!batchFields.some(fact=>fact.name||fact.address))return null;
  state.programIntake=pi;
+ const candidateRequested=pi.requestedFields||(['name','address'].includes(pi.stage)?[pi.stage]:['name','address']),candidateExplicit=explicitFields(e.text),candidateSeparated=prompt&&!confirms(e.text)?promptedLiteralFields(e.text,candidateRequested,pi.stage==='correction'):{};
+ const candidateName=candidateExplicit.name||candidateSeparated.name||(!confirms(e.text)&&!mariaIncidentalPetMention(e)&&literalName(e.text,(pi.stage==='name'||pi.stage==='correction'&&!correctionFieldReference(e.text))&&Boolean(prompt)));
+ const candidateAddress=candidateExplicit.address||candidateSeparated.address||literalAddress(e.text,(['address','confirm','correction'].includes(pi.stage)||pi.requestedFields?.includes('address'))&&Boolean(prompt));
+ const petFieldFacts=[...batchFields.flatMap(fact=>['name','address'].filter(kind=>fact[kind]&&!fact.conflictFields?.includes(kind)).map(kind=>({kind,value:fact[kind],source:fact.source}))),...(!candidateExplicit.conflict?[{kind:'name',value:candidateName,source:source(e)},{kind:'address',value:candidateAddress,source:source(e)}]:[])];
+ let petPresence;
+ try{petPresence=casePetPresence(s,c,state,e,petFieldFacts);}catch{
+  pi.stage='review';pi.preview=null;
+  return {state,reviewTopic:'program-registration-review',reviewConditions:{kind:'pet-source-unverified',caseId:state.caseId},review:'La observación de mascotas no coincide con una fuente literal vigente y verificable de este caso y esta línea. Hay un dato pendiente de aclaración; no se creó un servicio.',reviewQuestion:'¿Qué observación literal y fuente verificadas corresponden a esta solicitud?',reply:'Hay un dato de tu solicitud que necesita verificarse antes de registrarla.'};
+ }
  if(/\b(?:no (?:gracias|quiero|deseo|necesito|me interesa|acepto)|prefiero no|cancela|cancelar)\b/.test(normalize(e.text))){
   pi.stage='declined';pi.preview=null;state.closed=true;state.quotedPrice={...state.quotedPrice,accepted:false};
   return {state,reply:'Entendido. No registraré el servicio. Gracias por avisarme.'};
@@ -274,7 +347,7 @@ export function registrationTurn(s,c,previous,e,decision){
  }
  const explicit=explicitFields(e.text),requested=pi.requestedFields||(['name','address'].includes(pi.stage)?[pi.stage]:['name','address']);
  const separated=prompt&&!confirms(e.text)?promptedLiteralFields(e.text,requested,pi.stage==='correction'):{};
- const name=!unresolved.has('name')&&(explicit.name||separated.name||(!confirms(e.text)&&literalName(e.text,(pi.stage==='name'||pi.stage==='correction'&&!correctionFieldReference(e.text))&&Boolean(prompt)))),address=!unresolved.has('address')&&(explicit.address||separated.address||literalAddress(e.text,(['address','confirm','correction'].includes(pi.stage)||pi.requestedFields?.includes('address'))&&Boolean(prompt)));
+ const name=!unresolved.has('name')&&(explicit.name||separated.name||(!confirms(e.text)&&!mariaIncidentalPetMention(e)&&literalName(e.text,(pi.stage==='name'||pi.stage==='correction'&&!correctionFieldReference(e.text))&&Boolean(prompt)))),address=!unresolved.has('address')&&(explicit.address||separated.address||literalAddress(e.text,(['address','confirm','correction'].includes(pi.stage)||pi.requestedFields?.includes('address'))&&Boolean(prompt)));
  const scopedAddress=address||pi.address;
  if(scopedAddress&&changedAddressScope(scopedAddress,state.slots)){
   pi.stage='review';pi.preview=null;return {state,reviewTopic:'special-quotation',reviewConditions:{kind:'registration-address-scope-changed',caseId:state.caseId},review:'La dirección o su texto añaden un municipio o alcance diferente a la cotización aceptada. No se creó un servicio ni se conservó ese precio para otro alcance.',reviewQuestion:'¿Qué municipio y alcance comprobados corresponden a esta solicitud?',reply:'Los datos que compartiste cambian el alcance de la cotización. Tu solicitud necesita revisión antes de confirmarla.'};
@@ -293,21 +366,21 @@ export function registrationTurn(s,c,previous,e,decision){
  // delivered price, the acceptance is sufficient for an unscheduled order.
  // New/corrected facts supplied after acceptance still need a delivered summary.
  const originalAcceptance=own.q.acceptanceSource&&s.db.prepare('SELECT rowid,at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(own.q.acceptanceSource,e.phone,e.line);
- const preprovided=confirms(e.text)&&!conflicting&&!explicit.conflict&&!['confirm','correction'].includes(prior.stage)&&originalAcceptance&&sourcePosition(s,e,pi.nameSource)<=originalAcceptance.rowid&&sourcePosition(s,e,pi.addressSource)<=originalAcceptance.rowid&&Date.parse(pi.nameSource.at)<=originalAcceptance.at&&Date.parse(pi.addressSource.at)<=originalAcceptance.at;
+ const preprovided=confirms(e.text)&&!conflicting&&!explicit.conflict&&!['confirm','correction'].includes(prior.stage)&&originalAcceptance&&sourcePosition(s,e,pi.nameSource)<=originalAcceptance.rowid&&sourcePosition(s,e,pi.addressSource)<=originalAcceptance.rowid&&Date.parse(pi.nameSource.at)<=originalAcceptance.at&&Date.parse(pi.addressSource.at)<=originalAcceptance.at&&(!petPresence||petPresence.position<=originalAcceptance.rowid&&Date.parse(petPresence.source.at)<=originalAcceptance.at);
  const preference=casePreferenceSource(s,c,state,e);
- const preview={customerName:pi.customerName,address:pi.address,municipality:state.slots.location,service:state.slots.service,priceCop:own.entry.priceCop,...(preference?{preference:preference.value}:{})};
+ const preview={customerName:pi.customerName,address:pi.address,municipality:state.slots.location,service:state.slots.service,priceCop:own.entry.priceCop,...(preference?{preference:preference.value}:{}),...(petPresence?{petPresence:petPresence.value,petPresenceSource:petPresence.source}:{})};
  if(!preprovided&&(prior.stage!=='confirm'||changed||JSON.stringify(pi.preview)!==JSON.stringify(preview))){
   pi.stage='confirm';pi.promptId=e.id+':reply';pi.preview=preview;
-  return {state,reply:'Registraré el servicio de '+state.slots.service+' por $'+own.entry.priceCop.toLocaleString('es-CO')+' en '+pi.address+', '+state.slots.location+', a nombre de '+pi.customerName+'.'+(preference?' Preferencia solicitada: '+preference.value+'. El horario sigue pendiente de coordinación.':'')+' ¿Confirmas que estos datos son correctos?'};
+  return {state,reply:'Registraré el servicio de '+state.slots.service+' por $'+own.entry.priceCop.toLocaleString('es-CO')+' en '+pi.address+', '+state.slots.location+', a nombre de '+pi.customerName+'.'+(preference?' Preferencia solicitada: '+preference.value+'. El horario sigue pendiente de coordinación.':'')+(petPresence?' Presencia de mascotas informada: '+petPresence.value+'.':'')+' ¿Confirmas que estos datos son correctos?'};
  }
  if(!preprovided&&(!prompt||!confirms(e.text)))return {state,observed:true,observedState:'PROGRAM_SUMMARY_CONFIRMATION_PENDING'};
  if(!preprovided&&JSON.stringify(pi.preview)!==JSON.stringify(preview))return {state,observed:true,observedState:'PROGRAM_SUMMARY_REVIEW'};
  const conv=s.conversation(e.phone),allowed=['service','site','location','area','rooms','mattresses','patio','floors','roomScale','siteScale','treatmentScope','affectedFurniture'];
  const slots=Object.fromEntries(allowed.filter(k=>state.slots[k]!=null).map(k=>[k,String(state.slots[k])]));
  if(preference)slots.preference=preference.value;
- const payload={caseId:state.caseId,phone:e.phone,line:e.line,sourceId:e.id,customerName:pi.customerName,address:pi.address,municipality:state.slots.location,locationDetails:String(state.slots.locationDetails||''),slots,
+ const payload={caseId:state.caseId,phone:e.phone,line:e.line,sourceId:e.id,customerName:pi.customerName,address:pi.address,municipality:state.slots.location,locationDetails:String(state.slots.locationDetails||''),slots,...(petPresence?{petPresence:petPresence.value}:{}),
   quote:{entryId:own.entry.id,priceCop:own.entry.priceCop,scheduleHash:BUSINESS_PRICE_HASH,mid:own.row.mid,sourceId:own.q.sourceId,deliveredAt:iso(own.row.firstDeliveryAt),acceptedAt:iso(e.at),acceptanceId:e.id},
-  sources:{customerName:pi.nameSource,address:pi.addressSource,...(preference?{preference:preference.source}:{}),acceptance:{...source(e),phone:e.phone,line:e.line,fromMe:false,forwarded:false}}};
+  sources:{customerName:pi.nameSource,address:pi.addressSource,...(preference?{preference:preference.source}:{}),...(petPresence?{petPresence:petPresence.source}:{}),acceptance:{...source(e),phone:e.phone,line:e.line,fromMe:false,forwarded:false}}};
  const key=prefix+state.caseId,existing=get(s,key),hash=registrationHash(payload);
  if(existing){if(existing.requestHash!==hash)throw Error('PROGRAM_CASE_ALREADY_RESERVED');return {state,observed:true,observedState:'PROGRAM_REGISTRATION_PENDING'};}
  const summaryOutboxId=preprovided?null:pi.promptId;
@@ -382,7 +455,10 @@ function storedCourtesy(s,p,id){
 }
 async function verifyNative(s,c,t,entry){
  if(!registrationOperationalScope(s,c,entry))throw Error('OPERATIONAL_LINE_SCOPE_REVIEW');
- const p=entry.payload,own=eligibleQuote(s,s.conversation(p.phone).state,p.phone,p.line);if(!own||own.q.sourceId!==p.quote.sourceId)throw Error('PROGRAM_PRICE_CHANGED');
+ const p=entry.payload,state=s.conversation(p.phone).state,own=eligibleQuote(s,state,p.phone,p.line);if(!own||own.q.sourceId!==p.quote.sourceId)throw Error('PROGRAM_PRICE_CHANGED');
+ const acceptanceRow=s.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(p.quote.acceptanceId,p.phone,p.line);
+ const petPresence=acceptanceRow&&casePetPresence(s,c,state,s.open(acceptanceRow.body));
+ if(!acceptanceRow||petPresence?.value!==p.petPresence||JSON.stringify(petPresence?.source)!==JSON.stringify(p.sources.petPresence))throw Error('PROGRAM_PET_SOURCE_UNVERIFIED');
  await t.verifyLine(p.line);
  const attention=await t.currentAttention(p.phone);if(!attention.complete)throw Error('PROGRAM_ATTENTION_UNVERIFIED');
  const unknown=attention.sources.find(a=>!s.db.prepare('SELECT 1 FROM outbox WHERE mid=? AND phone=? AND line=?').get(a.id,p.phone,a.line));
@@ -397,7 +473,7 @@ async function verifyNative(s,c,t,entry){
  for(const src of Object.values(p.sources)){
   const eventRow=s.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(src.id,p.phone,p.line);if(!eventRow)throw Error('PROGRAM_SOURCE_SCOPE');
   const event=s.open(eventRow.body),native=await nativeMessage(t,c,src.id,p.phone,p.line),m=native.message?.ephemeralMessage?.message??native.message??{},ctx=m.extendedTextMessage?.contextInfo??native.contextInfo??{};
-  if(event.text!==src.text||event.at!==Date.parse(src.at)||event.forwarded||native.key.fromMe!==false||nativeText(native)!==src.text||Number(native.messageTimestamp)*1000!==event.at||ctx.isForwarded||ctx.forwardingScore>0)throw Error('PROGRAM_NATIVE_FACT_MISMATCH');
+  if(event.text!==src.text||event.at!==Date.parse(src.at)||event.forwarded||native.key.fromMe!==false||nativeText(native)!==src.text||Number(native.messageTimestamp)*1000!==event.at||ctx.isForwarded||ctx.forwardingScore>0||src===p.sources.petPresence&&(event.quotedId||ctx.stanzaId||confirmedPetMention(event)?.text!==p.petPresence))throw Error('PROGRAM_NATIVE_FACT_MISMATCH');
  }
  if(typeof t.currentCustomerActivity!=='function')throw Error('PROGRAM_CUSTOMER_CONTEXT_UNVERIFIED');
  const at=Date.parse(p.sources.acceptance.at),latest=await t.currentCustomerActivity(p.phone,at);
