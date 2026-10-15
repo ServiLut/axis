@@ -189,6 +189,15 @@ test('no-delivery, later acknowledgement, forwarded yes, other case and human at
  }
 });
 
+test('a denied pest clarification cannot revive after another attachment and a later yes',async()=>{
+ const f=fixture();try{
+  const burst=await mediaBurst(f);f.deliver(burst.first.e);
+  const denied=await f.turn('No');assert.equal(denied.state.pendingPestClarification,undefined);
+  await f.turn('',null,{kind:'image'});
+  const result=await f.turn('Sí');assert.notEqual(result.state.slots.service,'comején');assert.equal(result.state.quotedPrice,undefined);f.noBusiness();
+ }finally{f.s.close();}
+});
+
 test('a private media question cannot hide the own pending TESA quotation from a direct status request',async()=>{
  const f=fixture({tesa:true});try{
   const quoted=await f.turn('Cucarachas en un edificio de 7 apartamentos en Medellín');
