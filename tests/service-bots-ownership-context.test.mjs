@@ -472,13 +472,13 @@ test('neighborhood quotation facts request the municipality before a single quot
     assert.match(question.text,/66 m²/);assert.match(question.text,/cucarachas y hormigas/);
     assert.match(question.text,/Robledo/);assert.doesNotMatch(question.text,/139|300|horario disponible/);
     const reply=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(municipality.id+':reply').body);
-    assert.match(reply,/cotización aún necesita confirmación/);assert.doesNotMatch(reply,/día|horaria|confirmada|139|300/i);
+    assert.match(reply,/Aún no tengo un precio confirmado para esta cotización/);assert.doesNotMatch(reply,/día|horaria|confirmada|139|300/i);
     assert.equal(f.s.conversation(answer.phone).state.slots.price,undefined);
     assert.equal(f.s.conversation(answer.phone).state.slots.location,'medellin');
     assert.equal(f.s.conversation(answer.phone).state.intakeSources.location.sourceId,municipality.id);
     await f.process({id:'SAMEQUOTEFACTS',at:Date.now()+3,text:'Un apartamento de 66 m²'});
     assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,1);
-    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get('SAMEQUOTEFACTS:reply').n,0);
+    const acknowledged=f.s.db.prepare('SELECT * FROM outbox WHERE id=?').get('SAMEQUOTEFACTS:reply');assert.ok(acknowledged);assert.equal(acknowledged.internal,0);assert.match(f.s.open(acknowledged.body),/Recibí .*tamaño del inmueble/);assert.match(f.s.open(acknowledged.body),/Aún no tengo un precio confirmado/);assert.doesNotMatch(f.s.open(acknowledged.body),/\$|agendad|reservad|garantiz/i);
   }finally{f.s.close();}
 });
 

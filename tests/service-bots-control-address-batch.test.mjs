@@ -27,14 +27,17 @@ test('control continuation saves literal facts with one question, without restar
   const f=fixture();try{
     const first=await f.process('Por favor visita de control');await f.process('Control de 15 días');
     const pest=f.enqueue('Cucarachas'),extra=f.enqueue('Y hormiga');await f.handle(pest);await f.handle(extra);
-    await f.process(address+' Hora 10.30 am');
+    const data=await f.process(address+' Hora 10.30 am');
     const qs=f.store.db.prepare('SELECT topic,recipient FROM questions').all();
     assert.deepEqual(qs.map(q=>q.topic),['service-followup']);assert.equal(qs[0].recipient,DIEGO);
     assert.deepEqual(f.store.db.prepare('SELECT phone FROM outbox WHERE internal=1 ORDER BY phone').all().map(r=>r.phone).sort(),[DIEGO,HILARY].sort());
     const state=f.store.conversation(first.phone).state;
     assert.equal(state.slots.service,'cucarachas y hormigas');assert.equal(state.slots.site,'apartamento');
     assert.equal(state.requestedControlReview.sourceId,first.id);
-    assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM outbox WHERE internal=0').get().n,1);
+    const reply=f.store.db.prepare('SELECT * FROM outbox WHERE id=?').get(data.id+':reply'),text=f.store.open(reply.body);
+    assert.equal(reply.internal,0);assert.match(text,/Recibí .*dirección/);assert.match(text,/Tu solicitud de control sigue pendiente de revisión/);assert.match(text,/Aún no tengo confirmadas las condiciones ni el horario/);assert.doesNotMatch(text,/\$|gratis|sin costo|ya (?:quedó|está).*confirmad|nueva cotización/i);
+    assert.equal(state.pendingReviewReply.sourceId,data.id);assert.equal(f.store.open(f.store.db.prepare('SELECT body FROM questions').get().body).source,first.id);assert.equal(f.store.open(f.store.db.prepare('SELECT body FROM events WHERE id=?').get(data.id).body).text,address+' Hora 10.30 am');
+    assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM outbox WHERE internal=0').get().n,2);
     assert.equal(f.store.db.prepare("SELECT COUNT(*) n FROM audit WHERE action='REVIEWED_PRICE_SELECTED'").get().n,0);
   }finally{f.store.close();}
 });

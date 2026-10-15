@@ -390,6 +390,12 @@ export function registrationTurn(s,c,previous,e,decision){
  return {state,observed:true,observedState:'PROGRAM_REGISTRATION_PENDING'};
 }
 function receiptValid(c,entry,r){return ownScope(c,r)&&r.createdById===c.mariaProgram.actorId&&r.phone===entry.payload.phone&&r.persisted===true&&uuid.test(r.orderId||'')&&r.caseId===entry.payload.caseId&&r.acceptanceId===entry.payload.quote.acceptanceId&&r.requestHash===entry.requestHash&&r.state==='NUEVO'&&r.scheduled===false&&r.paymentRecorded===false;}
+export function ownRegisteredReceiptForPresentation(s,c,{phone,line,caseId}){
+ if(!programEnabled(c))return null;
+ const conv=s.conversation(phone),entry=get(s,prefix+caseId),p=entry?.payload;
+ if(!conv||conv.hold||conv.state.caseId!==caseId||conv.state.programIntake?.stage!=='registered'||entry?.status!=='SAVED'||!p||p.phone!==phone||p.line!==line||p.caseId!==caseId||entry.requestHash!==registrationHash(p)||!receiptValid(c,entry,entry.receipt)||conv.state.programServiceId!==entry.receipt.orderId||!registrationOperationalScope(s,c,entry))return null;
+ return entry;
+}
 // Only the creation of a new operational question may prepare continuity.
 // Existing questions never acquire this marker after an upgrade or rerouting.
 export function prepareRegisteredTesaContinuation(s,c,request,result){

@@ -49,7 +49,7 @@ test('facts supplied together with a price question remain literal and are not r
   const f=fixture();try{
     await f.process('WITHQUESTION','Tengo cucarachas en mi casa de 3 habitaciones en Bello. ¿Cuánto cuesta?');
     assert.equal(f.s.conversation(phone).state.slots.rooms,'3 habitaciones');assert.equal(f.s.conversation(phone).state.slots.location,'bello');
-    assert.match(f.response('WITHQUESTION').text,/cotización aún necesita confirmación/);assert.doesNotMatch(f.response('WITHQUESTION').text,/cuántas|qué plaga|qué tipo|municipio/i);
+    assert.match(f.response('WITHQUESTION').text,/Recibí .*tamaño del inmueble/);assert.match(f.response('WITHQUESTION').text,/Aún no tengo un precio confirmado para esta cotización\./);assert.doesNotMatch(f.response('WITHQUESTION').text,/cuántas|qué plaga|qué tipo|en qué municipio|\$|gratis|sin costo/i);assert.equal(f.s.conversation(phone).state.pendingReviewReply.sourceId,'WITHQUESTION');assert.equal(f.s.open(f.s.db.prepare('SELECT body FROM questions').get().body).source,'WITHQUESTION');
     await f.process('ADDEDFLOOR','Es en el primer piso');
     assert.equal(f.response('ADDEDFLOOR'),undefined);assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,1);
   }finally{f.s.close();}

@@ -34,7 +34,7 @@ test('a plural warranty complaint survives a greeting, its quoted followup and l
   for(const [text,extra] of [['Me confirmas porfa',{quotedId:first.id}],['Casa',{}],['120',{}]]){
    const e=await f.turn(text,extra),state=f.s.conversation(e.phone).state;
    assert.equal(state.caseId,'fumigacion:'+first.id);assert.equal(state.requestedAfterServiceReview?.sourceId,first.id);
-   assert.doesNotMatch(f.reply(e)||'',/tipo de inmueble|cuántas habitaciones|metros cuadrados|cotizaci[oó]n|129\.000/i);
+   assert.doesNotMatch(f.reply(e)||'',/qué tipo de inmueble|cuántas habitaciones|metros cuadrados|cotizaci[oó]n|129\.000/i);
   }
   assert.equal(registrationStatus(f.c,f.s).prepared,0);
   assert.equal(f.s.db.prepare("SELECT COUNT(*) n FROM questions WHERE topic='cotizacion-verificada'").get().n,0);

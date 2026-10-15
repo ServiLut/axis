@@ -85,7 +85,8 @@ test('semantic source and single operational question are preserved across conti
   const engine=new Engine(f.s,f.c),first=event('Me gustaría que volvieran a revisar cómo quedó el tratamiento anterior.');f.s.enqueue(first);await engine.process(first,analysis(first,'verification'));
   const next=event('Cucarachas en apartamento de 42 mts2 en Itagüí.','LOCAL_INTENT_02');f.s.enqueue(next);await engine.process(next);
   const state=f.s.conversation(first.phone).state;assert.equal(state.requestedAfterServiceReview.sourceId,first.id);assert.equal(state.requestedAfterServiceReview.evidence,first.text);
-  assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,1);assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE internal=0').get().n,1);
+  assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,1);assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE internal=0').get().n,2);
+  const reply=f.s.db.prepare('SELECT * FROM outbox WHERE id=?').get(next.id+':reply'),text=f.s.open(reply.body);assert.equal(reply.internal,0);assert.match(text,/Recibí .*tamaño del inmueble/);assert.match(text,/Tu solicitud de verificación sigue pendiente de revisión/);assert.match(text,/Aún no tengo confirmadas las condiciones ni el horario/);assert.doesNotMatch(text,/\$|gratis|sin costo|ya (?:quedó|está).*confirmad|nueva cotización/i);assert.equal(state.pendingReviewReply.sourceId,next.id);assert.equal(f.s.open(f.s.db.prepare('SELECT body FROM questions').get().body).source,first.id);assert.equal(f.s.open(f.s.db.prepare('SELECT body FROM events WHERE id=?').get(next.id).body).text,next.text);
   assert.deepEqual(f.s.db.prepare('SELECT phone FROM outbox WHERE internal=1 ORDER BY phone').all().map(r=>r.phone),[DIEGO,HILARY].sort());
  }finally{f.s.close();}
 });

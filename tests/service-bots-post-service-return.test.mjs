@@ -47,7 +47,8 @@ test('the same case persists one administrative review and no operational price 
     const qs=store.db.prepare('SELECT topic,recipient FROM questions').all();
     assert.deepEqual(qs.map(({topic,recipient})=>({topic,recipient})),[{topic:'service-followup',recipient:SANDRA}]);
     assert.equal(store.db.prepare('SELECT state FROM events WHERE id=?').get(first.id).state,'REVIEW');
-    assert.equal(store.db.prepare('SELECT COUNT(*) n FROM outbox WHERE id=?').get(repeat.id+':reply').n,0);
+    const reply=store.db.prepare('SELECT * FROM outbox WHERE id=?').get(repeat.id+':reply'),text=store.open(reply.body);
+    assert.equal(reply.internal,0);assert.match(text,/Lamento que el problema con las cucarachas continúe\./);assert.match(text,/Aún falta verificar el antecedente del servicio/);assert.match(text,/No tengo una nueva visita confirmada\./);assert.doesNotMatch(text,/\$|precio|cotización|gratis|sin costo|garantía cubierta|ya (?:quedó|está).*confirmad/i);assert.equal(store.conversation(first.phone).state.pendingReviewReply.sourceId,repeat.id);assert.equal(store.open(store.db.prepare('SELECT body FROM questions').get().body).source,first.id);assert.equal(store.open(store.db.prepare('SELECT body FROM events WHERE id=?').get(first.id).body).text,complaint);
     await process('Estamos revisando tu solicitud.',{fromMe:true});
     const held=await process(complaint);
     assert.equal(store.db.prepare('SELECT state FROM events WHERE id=?').get(held.id).state,'OBSERVED_HUMAN');
