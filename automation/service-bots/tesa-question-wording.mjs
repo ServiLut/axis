@@ -54,7 +54,7 @@ function requestFor(topic,conditions,presentationStage){
   if(stage==='saved-awaiting-schedule')return {
     purpose:'coordinar una solicitud ya registrada; faltan técnico y horario',
     question:'¿Qué técnico, fecha y franja de inicio y fin pueden confirmar para esta solicitud?',
-    format:'técnico [nombre en Tenaxis]; fecha [día]; inicio [hora]; fin [hora].'
+    format:'técnico: [nombre completo en Tenaxis]; fecha: [AAAA-MM-DD]; inicio: [HH:mm]; fin: [HH:mm]. Usen hora de Colombia y reloj de 24 horas; si falta un dato, indiquen cuál.'
   };
   if(stage==='accepted-unregistered')return {
     purpose:'coordinar un servicio aceptado por el cliente, todavía sin registrar',

@@ -32,7 +32,10 @@ import {persistMariaKnowledge,mariaKnowledgeStatus,mariaKnowledgeDocument} from 
 import {restoreProgramSetup,installProgramSetup,registrationStatus,MARIA_PROGRAM_OPERATIONAL_CONTINUATION_GUARD,MARIA_PROGRAM_OPERATIONAL_CONFIRMATION_GUARD} from './maria-program.mjs';
 import {initializeInactivityFollowup,inactivityStatus,responseTimingStatus,recordDeliveryTiming} from './inactivity-followup.mjs';
 import {initializeTesaStore,tesaStatus,reviewTesaSources} from './tesa-operations.mjs';
-import {ingestTesaWebhook,refreshTesaMembership} from './tesa-transport.mjs';
+import {ingestTesaWebhook,refreshTesaMembership,schedulingProofForBackend} from './tesa-transport.mjs';
+import {MARIA_UNREGISTERED_TESA_GUARD} from './maria-tesa-unregistered.mjs';
+import {restoreOwnSchedulingAccess,installOwnSchedulingAccess,ownSchedulingProofAuthorized} from './maria-scheduling-access.mjs';
+import {ownSchedulingStatus} from './maria-own-order-scheduling.mjs';
 import {queueTesaGuidanceList,guidanceListStatus} from './tesa-guidance-list.mjs';
 import {MARIA_TESA_QUESTION_WORDING_GUARD} from './tesa-question-wording.mjs';
 import {operationalLines,operationalLineAllowed,operationalCoverage} from './line-scope.mjs';
@@ -96,6 +99,12 @@ export function createBotServer(config,store,transport,engine) {
   store.db.prepare("UPDATE tesa_outbox SET state='UNCERTAIN',updated=? WHERE state='SENDING'").run(Date.now());
   restoreOwnAiSetup(config,store);
   restoreProgramSetup(config,store);
+  restoreOwnSchedulingAccess(config,store);
+  if(config.company==='fumigacion'&&config.enabled&&config.tesaOperations?.enabled){
+    const name='maria-unregistered-tesa-start',prior=store.db.prepare('SELECT value FROM meta WHERE key=?').get(name),value=prior?store.open(prior.value):{startsAt:Date.now()};
+    if(!prior)store.db.prepare('INSERT INTO meta(key,value) VALUES(?,?)').run(name,store.seal(value));
+    config.mariaTesaUnregistered={enabled:true,startsAt:value.startsAt};
+  }
   restoreProgramSupervision(config,store);
   restoreRetentionProofAccess(config,store);
   if(config.company==='fumigacion')restoreRetentionNoteAccess(config,store);
@@ -132,7 +141,8 @@ export function createBotServer(config,store,transport,engine) {
     const reply=(status,body)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store, private'});res.end(JSON.stringify(body));};
     const ingestion=['/event','/delivery','/webhook'].includes(req.url);
     const retentionProof=req.url==='/retention-delivery-proof';
-    if(!(retentionProof?retentionProofAuthorized(config,req.headers.authorization):authorized(req.headers.authorization,ingestion?config.webhookHash:config.authHash)))return reply(401,{error:'UNAUTHORIZED'});
+    const schedulingProof=req.url==='/program-scheduling-proof';
+    if(!(schedulingProof?ownSchedulingProofAuthorized(config,req.headers.authorization):retentionProof?retentionProofAuthorized(config,req.headers.authorization):authorized(req.headers.authorization,ingestion?config.webhookHash:config.authHash)))return reply(401,{error:'UNAUTHORIZED'});
     if(req.method!=='POST')return reply(405,{error:'POST_REQUIRED'});
     try {
       const bodyLimit=req.url==='/notify-chief-document'?720000:req.url==='/webhook'&&config.company==='fumigacion'?FUMIGACION_WEBHOOK_BODY_LIMIT:20000;
@@ -143,6 +153,12 @@ export function createBotServer(config,store,transport,engine) {
       for await(const chunk of req){const bytes=Buffer.isBuffer(chunk)?chunk:Buffer.from(chunk);chunks.push(bytes);byteLength+=bytes.length;if(byteLength>bodyLimit){journalGap('PAYLOAD_TOO_LARGE');return reply(413,{error:'PAYLOAD_TOO_LARGE'});}}
       const raw=Buffer.concat(chunks,byteLength).toString('utf8');
       let body;try{body=JSON.parse(raw);}catch{journalGap('INVALID_JSON');return reply(400,{error:'INVALID_JSON'});}
+      if(schedulingProof){try{return reply(200,await schedulingProofForBackend(store,config,transport,body));}catch{return reply(409,{error:'OWN_SCHEDULING_PROOF_NOT_CURRENT'});}}
+      if(req.url==='/own-order-scheduling-setup'){
+        if(config.company!=='fumigacion')return reply(403,{error:'OWN_FUMIGACION_REQUIRED'});
+        if(draining||settingUpAi)return reply(409,{error:'OWN_SCHEDULING_SETUP_BUSY'});
+        try{return reply(200,installOwnSchedulingAccess(config,store,body));}catch{return reply(409,{error:'OWN_SCHEDULING_SETUP_NOT_APPLIED'});}
+      }
       if(retentionProof){
         if(!retentionDelivery)return reply(403,{error:'OWN_FUMIGACION_RETENTION_REQUIRED'});
         return reply(200,await retentionDelivery.deliveryProof(body));
@@ -232,6 +248,7 @@ export function createBotServer(config,store,transport,engine) {
         return reply(200,reviewChiefActions(store,config,body));
       }
       if(req.url==='/status')return reply(200,{company:config.name,bot:config.bot,enabled:config.enabled,mode:'reception-with-human-review',operationalCoverage:operationalCoverage(config),fullyAutonomous:false,intakeJournal:intakeJournalStatus(store,config),programSupervision:programSupervisionStatus(config),preventiveRetention:config.company==='fumigacion'?{guard:PREVENTIVE_RETENTION_GUARD,prepared:true,sendsEnabled:false,notesEnabled:false,required:'own-complete-both-line-history-and-separate-expiring-access',proofAccess:retentionProofAccessStatus(config),eligibilityAdapter:retentionEligibility.status(),dispatch:retentionDispatch.status(),deliveryProof:retentionDelivery.status()}:null,tesaOperations:tesaStatus(store,config),programRegistration:registrationStatus(config,store),privateNativeIdentity:privateIdentityStatus(store,config),inactivityFollowup:inactivityStatus(config,store),responseTiming:responseTimingStatus(config,store),drainIntervalMs:scheduler.intervalMs,semanticUnderstandingGuard:config.company==='fumigacion'?MARIA_UNDERSTANDING_GUARD:MIGUEL_UNDERSTANDING_GUARD,ownQuoteClarificationGuard:config.company==='fumigacion'?OWN_QUOTE_CLARIFICATION_GUARD:null,aiUsage:ownAiUsage(config,store),approvedAiKnowledge:mariaKnowledgeStatus(config,store),
+        unregisteredTesaGuard:config.company==='fumigacion'?MARIA_UNREGISTERED_TESA_GUARD:null,unregisteredTesaContinuation:config.company==='fumigacion'?{enabled:Boolean(config.mariaTesaUnregistered?.enabled),startsAt:config.mariaTesaUnregistered?.startsAt??null}:null,ownOrderScheduling:config.company==='fumigacion'?ownSchedulingStatus(store,config):null,
         chiefActionsGuard:config.company==='fumigacion'?CHIEF_ACTIONS_GUARD:null,chiefCommandAiGuard:config.company==='fumigacion'?CHIEF_COMMAND_AI_GUARD:null,chiefActions:config.company==='fumigacion'?chiefActionsStatus(store,config):null,tesaQuestionWordingGuard:config.company==='fumigacion'?MARIA_TESA_QUESTION_WORDING_GUARD:null,tesaGuidanceLists:config.company==='fumigacion'?guidanceListStatus(store,config):null,
         pendingCustomerConversationGuard:config.company==='fumigacion'?MARIA_PENDING_CONVERSATION_GUARD:null,pendingCustomerReviewGuard:config.company==='fumigacion'?MARIA_PENDING_REVIEW_GUARD:null,batchIntakeGuard:config.company==='fumigacion'?MARIA_BATCH_INTAKE_GUARD:null,pestIdentityGuard:config.company==='fumigacion'?MARIA_PEST_IDENTITY_GUARD:null,
         events:store.db.prepare('SELECT state,COUNT(*) n FROM events GROUP BY state').all(),outbox:store.db.prepare('SELECT state,COUNT(*) n FROM outbox GROUP BY state').all(),

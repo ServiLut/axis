@@ -294,10 +294,16 @@ function promptedBatchFields(s,c,previous,e,pi,prompt){
  return facts;
 }
 function sourcePosition(s,e,reference){return reference?.id?s.db.prepare('SELECT rowid FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(reference.id,e.phone,e.line)?.rowid||0:0;}
+export function ownQuoteOutboxId(s,state,phone,line){
+ const q=state.quotedPrice;if(!q)return null;if(!q.replyId)return q.sourceId+':reply';
+ if(!/^tesa-unregistered:[a-zA-Z0-9:_-]+$/.test(q.replyId))return null;
+ const ref=get(s,'maria-tesa-unregistered-reply:'+q.replyId);
+ return ref?.guard==='own-prospective-native-tesa-closed-unregistered-answer-v1'&&ref.ordinaryPrice===true&&ref.plan?.caseId===state.caseId&&ref.plan.phone===phone&&ref.plan.line===line&&ref.plan.sourceId===q.sourceId&&ref.entryId===q.entryId?q.replyId:null;
+}
 function eligibleQuote(s,state,phone,line){
  const q=state.quotedPrice,entry=selectBusinessPrice(state.slots).entry;
  if(!q?.accepted||!entry||entry.id!==q.entryId||entry.priceCop!==q.priceCop||entry.source.scheduleHash!==BUSINESS_PRICE_HASH)return null;
- const row=s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND state IN ('DELIVERED','READ') AND mid IS NOT NULL").get(q.sourceId+':reply',phone,line);
+ const row=s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND state IN ('DELIVERED','READ') AND mid IS NOT NULL").get(ownQuoteOutboxId(s,state,phone,line),phone,line,state.caseId);
  const firstDelivery=row&&get(s,'first-delivery:'+row.id);
  if(!row||row.created<Date.now()-86400000||!firstDelivery||firstDelivery.mid!==row.mid||!s.priceReplyReference(row)||!s.priceReplyStillValid(row)||firstDelivery.verifiedAt<Date.now()-86400000)return null;
  row.firstDeliveryAt=Math.floor(firstDelivery.verifiedAt/1000)*1000;
@@ -310,7 +316,13 @@ export function registrationTurn(s,c,previous,e,decision){
  if(!programEnabled(c)||e.fromMe||e.forwarded||e.kind!=='text'||e.at<c.mariaProgram.startsAt)return null;
  if(!operationalLineAllowed(c,e.line)||c.operationalLineScope&&e.at<Date.parse(c.operationalLineScope.authorizedAt))return null;
  if(c.operationalLineScope&&(typeof s.hasSourcesOutsideLine!=='function'||s.hasSourcesOutsideLine(e.phone,e.line)))return null;
- const state=decision.state,own=eligibleQuote(s,state,e.phone,e.line);
+ const state=decision.state;
+ const priorQuote=state.programIntake&&s.db.prepare('SELECT case_id FROM outbox WHERE id=? AND phone=? AND line=?').get(ownQuoteOutboxId(s,state,e.phone,e.line),e.phone,e.line);
+ if(priorQuote&&priorQuote.case_id!==state.caseId){
+  state.programIntake={...state.programIntake,stage:'review',preview:null};
+  return {state,reviewTopic:'program-registration-review',reviewConditions:{kind:'quote-case-changed',caseId:state.caseId},review:'Los datos y la cotización no pertenecen a la misma solicitud vigente. No se creó un servicio.',reviewQuestion:'¿Qué solicitud y cotización verificadas corresponden a estos datos?',reply:'Necesito verificar que la cotización y los datos correspondan a la misma solicitud antes de registrarla.'};
+ }
+ const own=eligibleQuote(s,state,e.phone,e.line);
  if(!own||state.requestedAfterServiceReview||state.requestedControlReview||state.requestedDocumentReview)return null;
  const prior=state.programIntake||{stage:'name',originalQuoteAcceptanceId:own.q.acceptanceSource};
  if(['pending','review','declined'].includes(prior.stage))return {state,observed:true,observedState:'PROGRAM_REGISTRATION_PENDING'};

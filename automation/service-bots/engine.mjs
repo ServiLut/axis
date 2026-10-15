@@ -11,7 +11,9 @@ import {ownIntent} from './maria-understanding.mjs';
 import {ownMiguelIntent,miguelLiteralSlotAllowed} from './miguel-understanding.mjs';
 import {literalPaintingRequest} from './technical-scope.mjs';
 import {afterServiceKind,afterServiceRequest,afterServiceDecision,explicitNewService,mariaLiteralServiceContext,literalOwnAfterServiceRequest,MARIA_LITERAL_SERVICE_CONTEXT_GUARD,mariaIncidentalPetMention} from './after-service.mjs';
-import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,literalIntakeTextWithoutRegistrationFields,literalProgramPreference,prepareRegisteredTesaContinuation,registeredTesaConfirmation,ownRegisteredReceiptForPresentation,ownSavedPendingOperation,queueOwnSavedServiceReview} from './maria-program.mjs';
+import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,literalIntakeTextWithoutRegistrationFields,literalProgramPreference,prepareRegisteredTesaContinuation,registeredTesaConfirmation,ownRegisteredReceiptForPresentation,ownSavedPendingOperation,queueOwnSavedServiceReview,ownQuoteOutboxId} from './maria-program.mjs';
+import {prepareMariaUnregisteredTesaPlan,mariaCaseQuoteCustomerTurn} from './maria-tesa-unregistered.mjs';
+import {prepareOwnSchedulingPlan,ownSchedulingCustomerTurn} from './maria-own-order-scheduling.mjs';
 import {createHash} from 'node:crypto';
 import {tesaOperationalTopic} from './tesa-config.mjs';
 import {prepareTesaQuestion,initializeTesaStore} from './tesa-operations.mjs';
@@ -198,7 +200,7 @@ export function routeCaseQuestion(store,config,request){
   const contextFacts=Object.fromEntries(Object.entries(display).filter(([key,value])=>labels[key]&&typeof value==='string').map(([key,value])=>[key,groupField(value)]));
   const text=config.company==='fumigacion'?formatMariaTesaQuestion({bot:config.bot,name:config.name,reference,last4:request.phone.slice(-4),lineLast4:request.line.slice(-4),facts,contextFacts,topic:request.topic,conditions:request.conditions,presentationStage}):config.bot+' · '+config.name+'. Ref '+reference+'; cliente …'+request.phone.slice(-4)+'; línea …'+request.line.slice(-4)+'. '+(facts?facts+'. ':'')+question;
   const result=prepareTesaQuestion(store,config,{...request,text});
-  if(config.company==='fumigacion'&&result.created===true)prepareRegisteredTesaContinuation(store,config,request,result);
+  if(config.company==='fumigacion'&&result.created===true){prepareRegisteredTesaContinuation(store,config,request,result);prepareMariaUnregisteredTesaPlan(store,config,request,result);prepareOwnSchedulingPlan(store,config,request,result);}
   return result;
 }
 
@@ -366,6 +368,7 @@ function ordinaryAvailabilityRequest(text){
 }
 function customerCourtesy(text){
   const value=normalize(text).replace(/\s+/g,' ');
+  if(/^muy amable[.! ]*$/.test(value))return true;
   if(/[?¿\d]/.test(value)||!/^(?:(?:hola|buenos dias|buen dia|buenas tardes|buenas noches)[,.! ]+)?(?:(?:muchas|muchisimas|mil)\s+)?gracias\b/.test(value))return false;
   // Only affirmative gratitude vocabulary qualifies. A request, complaint, uncertainty,
   // payment or safety concern must continue through the ordinary review/intake path.
@@ -707,6 +710,9 @@ export class Engine {
         if(literalIntakeTurn(e,c.company)&&Object.keys(extractSlots(e.text,c.company)).length)pendingQuestion=turns.filter(turn=>turn.id!==e.id&&turn.kind==='text'&&!turn.forwarded&&isCustomerQuestion(turn.text)).at(-1)||null;
       }
       rememberAdditionalLiteralFields(s,c,caseState,e);
+      const caseQuoteTurn=mariaCaseQuoteCustomerTurn(s,c,caseState,e);
+      const schedulingTurn=ownSchedulingCustomerTurn(s,c,caseState,e);
+      if(schedulingTurn){schedulingTurn.state.lastHandledSourceId=e.id;schedulingTurn.state.lastText=e.text;s.saveConversation(e.phone,schedulingTurn.state);s.queue(e.id+':reply',e.phone,e.line,schedulingTurn.reply,false,conv.revision,caseState.caseId);finish('OWN_SCHEDULING_CUSTOMER_TURN');return;}
       if(c.company==='fumigacion'&&!e.forwarded&&['image','audio','document','video'].includes(e.kind)){
         const caseSource=ownCaseAnchor(s,c,caseState,e);
         const media=mariaMediaBurstContinuation({company:c.company,event:e,state:caseState,caseSource,sources:ownCaseLiteralSources(s,c,caseState,e),priorMarker:caseState.pendingMediaBurst,humanHold:Boolean(conv.hold)});
@@ -725,7 +731,7 @@ export class Engine {
           finish(media.suppressed?'OBSERVED_MEDIA_BURST':'MEDIA_CONTEXT_CONTINUED');return;
         }
       }
-      if(caseState.awaitingHumanReview){
+      if(caseState.awaitingHumanReview&&!caseQuoteTurn){
         const pendingTurn=ownSavedPendingCustomerTurn(s,c,caseState,e);
         if(pendingTurn){
           pendingTurn.state.lastHandledSourceId=e.id;pendingTurn.state.lastText=e.text;s.saveConversation(e.phone,pendingTurn.state);
@@ -756,7 +762,9 @@ export class Engine {
       const faq=c.company==='fumigacion'&&!documentSource&&!controlSource&&!followupSource&&!caseState.requestedAfterServiceReview&&!caseState.requestedControlReview&&e.kind==='text'&&!e.forwarded&&!unreadLinkOnly(e.text)&&!faqNeedsPersonalReview(e.text)&&!paymentInquiry(e.text)&&!previousQuotation(e.text)&&!postServiceReturn(e.text)&&!plannedRevisit(e.text)&&faqQuestion.kind==='text'?selectCommonAnswer(textWithoutLinks(faqClassificationText),caseState.slots,s.approvedCustomerAnswers(),caseState.caseId):null;
       let decision;
       const productClarification=c.company==='fumigacion'&&caseState.requestedProductInquiry&&literalIntakeTurn(e)&&!contextNeedsPersonalPriority(e.text,e)&&(Object.keys(extractSlots(e.text,c.company)).length||/^(?:solo|solamente|unicamente) (?:el )?producto[.! ]*$/.test(normalize(e.text)));
-      if(caseState.pendingSizeClarification?.sourceId===e.id){
+      if(caseQuoteTurn){
+        decision=caseQuoteTurn;
+      }else if(caseState.pendingSizeClarification?.sourceId===e.id){
         decision={state:caseState,sizeUnitClarification:true,reply:caseState.pendingSizeClarification.text};
       }else if(productClarification){
         decision=customerDecision(c.company,caseState,e,analysis);
@@ -790,7 +798,7 @@ export class Engine {
       const incidentalPetNote=c.company==='fumigacion'&&mariaIncidentalPetMention(e);
       const pureIncidentalPetNote=incidentalPetNote&&!normalize(incidentalPetNote.classificationText).replace(/[.!¡,;\s]+/g,'');
       if(pureIncidentalPetNote&&currentQuote&&priceNow?.id===currentQuote.entryId&&priceNow.priceCop===currentQuote.priceCop&&priceNow.source?.type==='direct_user_approved_schedule'&&!caseState.requestedAfterServiceReview&&!caseState.requestedControlReview&&!caseState.requestedDocumentReview&&!decision.review&&(!decision.question||decision.question.topic==='cotizacion-verificada')){
-        const delivered=s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND state IN ('DELIVERED','READ')").get(currentQuote.sourceId+':reply',e.phone,e.line);
+        const delivered=s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND state IN ('DELIVERED','READ')").get(ownQuoteOutboxId(s,decision.state,e.phone,e.line),e.phone,e.line,caseState.caseId);
         if(delivered&&s.priceReplyStillValid(delivered))decision={state:decision.state,incidentalPetNote:true,reply:'Anoté: '+incidentalPetNote.text+'.'};
       }
       const naturalAcceptance=acceptsOrdinaryQuotation(e.text);
@@ -798,7 +806,7 @@ export class Engine {
         ((!decision.review&&!decision.courtesy)||(naturalAcceptance&&(decision.courtesy||decision.reviewTopic==='customer-question')))&&!specialQuotation(textWithoutLinks(literalIntakeTextWithoutRegistrationFields(e.text)),decision.state.slots)&&
         (currentQuote.accepted||naturalAcceptance);
       if(continuingQuote){
-        const delivered=s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND state IN ('DELIVERED','READ')").get(currentQuote.sourceId+':reply',e.phone,e.line);
+        const delivered=s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND state IN ('DELIVERED','READ')").get(ownQuoteOutboxId(s,decision.state,e.phone,e.line),e.phone,e.line,caseState.caseId);
         if(delivered&&s.priceReplyStillValid(delivered)){
           decision.state.quotedPrice={...currentQuote,accepted:true,acceptanceSource:currentQuote.acceptanceSource||e.id,acceptedAt:currentQuote.acceptedAt||e.at};
           const literalPreference=literalProgramPreference(e.text);

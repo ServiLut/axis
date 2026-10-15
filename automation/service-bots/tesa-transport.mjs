@@ -5,6 +5,9 @@ import {observeTesaGroupEvent,acceptTesaQuotedAnswer,bindTesaQuestionDelivery,te
 import {operationalCoverage} from './line-scope.mjs';
 import {registrationHash,MARIA_PROGRAM_OPERATIONAL_CONTINUATION_GUARD} from './maria-program.mjs';
 import {publicTextSafe,normalize} from './config.mjs';
+import {continueMariaUnregisteredTesaCustomer,mariaUnregisteredTesaReplyStillValid} from './maria-tesa-unregistered.mjs';
+import {continueOwnSchedulingOffer,ownSchedulingPlan,ownSchedulingProof,ownSchedulingReplyStillValid} from './maria-own-order-scheduling.mjs';
+import {routeCaseQuestion} from './engine.mjs';
 
 const nativeText=r=>{const m=r.message?.ephemeralMessage?.message??r.message??{};return m.conversation??m.extendedTextMessage?.text??null;};
 const phoneJid=j=>/^57\d{10}@s\.whatsapp\.net$/.test(j??'')?j.split('@')[0]:null;
@@ -28,7 +31,7 @@ function continuationCourtesies(s,plan,conv){
 
 function currentContinuation(s,c,plan,questionId){
  if(c.company!=='fumigacion'||!c.enabled||plan?.guard!==MARIA_PROGRAM_OPERATIONAL_CONTINUATION_GUARD||plan.questionId!==questionId)return null;
- const q=s.db.prepare('SELECT q.*,o.state delivery,o.mid,o.created outbox_created FROM tesa_questions q JOIN tesa_outbox o ON o.id=q.outbox_id WHERE q.id=? AND q.company=?').get(questionId,c.company),conv=s.conversation(plan.phone),entry=getMeta(s,'maria-registration:'+plan.caseId);
+ const q=s.db.prepare('SELECT q.*,o.state delivery,o.mid,o.native_proof,o.created outbox_created FROM tesa_questions q JOIN tesa_outbox o ON o.id=q.outbox_id WHERE q.id=? AND q.company=?').get(questionId,c.company),conv=s.conversation(plan.phone),entry=getMeta(s,'maria-registration:'+plan.caseId);
  if(!q||q.state!=='ANSWERED'||q.valid_until<=Date.now()||!['DELIVERED','READ'].includes(q.delivery)||q.topic!=='disponibilidad-y-tecnico'||q.customer_phone!==plan.phone||q.case_id!==plan.caseId||q.source_line!==plan.line||!conv||conv.hold||conv.state.caseId!==plan.caseId||conv.state.closed||conv.state.programIntake?.stage!=='registered'||conv.state.programServiceId!==plan.orderId||registrationHash(conv.state.slots)!==plan.slotsHash||conv.state.requestedAfterServiceReview||conv.state.requestedControlReview||conv.state.requestedDocumentReview||!entry||entry.status!=='SAVED'||entry.requestHash!==plan.receiptHash||entry.receipt?.orderId!==plan.orderId||entry.receipt?.scheduled!==false||entry.receipt?.state!=='NUEVO'||!tesaOutboxScopeSafe(s,c,{question_id:q.id,source_line:q.source_line,sender_line:q.sender_line,customer_phone:q.customer_phone,case_id:q.case_id,created:q.outbox_created}))return null;
  const courtesies=continuationCourtesies(s,plan,conv);if(!courtesies)return null;
  if(s.db.prepare("SELECT 1 FROM events WHERE phone=? AND state IN ('PENDING','PROCESSING')").get(plan.phone))return null;
@@ -74,6 +77,16 @@ async function verifiedContinuation(s,c,t,plan,questionId){
  current=currentContinuation(s,c,plan,questionId);return current&&current.conv.revision===revision&&current.q.mid===q.mid&&current.answer.sourceId===answer.sourceId&&current.answer.text===answer.text?current:null;
 }
 
+const unregisteredVerifiers={verifyQuestionDelivery:verifyTesaNativeDelivery,verifyHumanAnswer:exactNativeHumanAnswer};
+export async function unregisteredTesaReplyValid(s,c,t,outbox){return mariaUnregisteredTesaReplyStillValid(s,c,t,outbox,unregisteredVerifiers);}
+export async function verifySchedulingTesaAnswer(s,c,t,entry){
+ const registered=getMeta(s,'tesa-continuation-plan:'+entry.plan.questionId),conv=s.conversation(entry.plan.phone);
+ if(!registered||registered.orderId!==entry.plan.orderId||registered.receiptHash!==entry.plan.registrationRequestHash||registered.caseId!==entry.plan.caseId||registered.phone!==entry.plan.phone||registered.line!==entry.plan.line||!conv||conv.hold)return null;
+ return verifiedContinuation(s,c,t,{...registered,revision:conv.revision,customerAt:conv.at},registered.questionId);
+}
+export async function schedulingProofForBackend(s,c,t,body){return ownSchedulingProof(s,c,t,body,{verifyRegistered:entry=>verifySchedulingTesaAnswer(s,c,t,entry)});}
+export async function schedulingReplyValid(s,c,t,outbox){return ownSchedulingReplyStillValid(s,c,t,outbox,{verifyRegistered:entry=>verifySchedulingTesaAnswer(s,c,t,entry)});}
+
 // Transport calls this before composition and once more immediately before
 // reserving a send. Another reply/edit, takeover or new customer fact stops it.
 export async function tesaCustomerReplyStillValid(s,c,t,outbox){
@@ -100,6 +113,21 @@ export async function tesaCustomerReplyStillValid(s,c,t,outbox){
 
 async function continueRegisteredCustomer(s,c,t,accepted){
  const plan=getMeta(s,'tesa-continuation-plan:'+accepted.questionId);if(!plan)return {prepared:false,queued:false};
+ if(ownSchedulingPlan(s,c,accepted.questionId)){
+  let outcome;try{outcome=await continueOwnSchedulingOffer(s,c,t,accepted,{verifyRegistered:()=>verifiedContinuation(s,c,t,plan,accepted.questionId)});}catch{outcome={prepared:true,queued:false,nativeReadPending:true};}
+  const retryKey='tesa-continuation-read:'+accepted.questionId;
+  if(outcome.nativeReadPending){putMeta(s,retryKey,{...accepted,state:'PENDING_NATIVE_READ',nextAt:Date.now()+60000});return outcome;}
+  s.db.prepare('DELETE FROM meta WHERE key=?').run(retryKey);
+  if(outcome.missingExplicitSlot){
+   const q=s.db.prepare('SELECT * FROM tesa_questions WHERE id=?').get(accepted.questionId),conv=s.conversation(plan.phone),body=q&&s.open(q.body),once='maria-scheduling-clarification:'+accepted.questionId;
+   if(q?.state==='ANSWERED'&&conv&&!conv.hold&&conv.state.caseId===plan.caseId&&conv.state.pendingTesaQuestionId===q.id&&!body.conditions?.schedulingClarificationOf&&!getMeta(s,once)){
+    const result=routeCaseQuestion(s,c,{phone:plan.phone,line:plan.line,caseId:plan.caseId,topic:'disponibilidad-y-tecnico',source:body.source,conditions:{...body.conditions,schedulingClarificationOf:q.id},text:'Faltan datos explícitos para programar la solicitud. ¿Qué técnico, fecha y hora de inicio y fin están disponibles?'});
+    putMeta(s,once,{questionId:result.id,created:result.created===true,sourceId:accepted.id});
+    if(result.created){s.saveConversation(plan.phone,{...conv.state,awaitingHumanReview:true,pendingTesaQuestionId:result.id});s.audit('OWN_SCHEDULING_SLOT_CLARIFICATION_PREPARED',accepted.id,{questionId:result.id,originalQuestionId:q.id,businessWritten:false});}
+   }
+  }
+  return outcome;
+ }
  let current;const revisionBefore=s.conversation(plan.phone)?.revision;
  try{current=await verifiedContinuation(s,c,t,plan,accepted.questionId);}catch{
   // No send has been reserved. Keep a retry for this new, explicitly prepared
@@ -185,6 +213,11 @@ export async function ingestTesaWebhook(store,config,transport,body){
     const answer=acceptTesaQuotedAnswer(store,config,event);
     if(answer?.accepted){
       caseAnswers++;
+      const unregistered=await continueMariaUnregisteredTesaCustomer(store,config,transport,answer,unregisteredVerifiers);
+      if(unregistered.prepared){
+        if(unregistered.nativeReadPending)putMeta(store,'maria-unregistered-read:'+answer.questionId,{...answer,nextAt:Date.now()+60000});
+        continue;
+      }
       const continuation=await continueRegisteredCustomer(store,config,transport,answer);
       if(continuation.prepared)continue;
       const conversation=store.conversation(answer.customerPhone);
@@ -257,5 +290,10 @@ export async function drainTesaGroup(store,config,transport){
   }
   const pendingContinuity=store.db.prepare("SELECT key,value FROM meta WHERE key LIKE 'tesa-continuation-read:%' ORDER BY key LIMIT 3").all();
   for(const row of pendingContinuity){const pending=store.open(row.value);if(pending.state==='PENDING_NATIVE_READ'&&pending.nextAt<=Date.now())await continueRegisteredCustomer(store,config,transport,pending);}
+  for(const row of store.db.prepare("SELECT key,value FROM meta WHERE key LIKE 'maria-unregistered-read:%' ORDER BY key LIMIT 3").all()){
+    const pending=store.open(row.value);if(pending.nextAt>Date.now())continue;
+    const result=await continueMariaUnregisteredTesaCustomer(store,config,transport,pending,unregisteredVerifiers);
+    if(result.nativeReadPending)putMeta(store,row.key,{...pending,nextAt:Date.now()+60000});else store.db.prepare('DELETE FROM meta WHERE key=?').run(row.key);
+  }
   return {enabled:true,accepted,uncertain,scopeReviewed};
 }

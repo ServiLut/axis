@@ -9,7 +9,8 @@ import {drainProgramRegistrations,acceptsOrdinaryQuotation,savedServiceReviewSti
 import {routeCaseQuestion} from './engine.mjs';
 import {initializeInactivityFollowup,queueInactivityFollowups,inactivityDeliveryValid,recordResponseTiming} from './inactivity-followup.mjs';
 import {tesaCaseAnswers} from './tesa-operations.mjs';
-import {drainTesaGroup,tesaCustomerReplyStillValid} from './tesa-transport.mjs';
+import {drainTesaGroup,tesaCustomerReplyStillValid,unregisteredTesaReplyValid,schedulingReplyValid,schedulingProofForBackend} from './tesa-transport.mjs';
+import {drainOwnScheduling} from './maria-own-order-scheduling.mjs';
 import {drainTesaGuidanceLists} from './tesa-guidance-list.mjs';
 import {assertOperationalLineScope,operationalLines,operationalLineAllowed,operationalHistoryGuard,operationalCoverage} from './line-scope.mjs';
 import {drainChiefActions} from './chief-actions.mjs';
@@ -306,6 +307,7 @@ export async function drain(store,config,transport,engine) {
 
 export async function flushOutbox(store,config,transport){
   await drainProgramRegistrations(store,config,transport,routeCaseQuestion);
+  await drainOwnScheduling(store,config,transport,{verifyProof:entry=>schedulingProofForBackend(store,config,transport,{company:'fumigacion',schedulingKey:entry.schedulingKey})});
   let accepted=0,suppressed=0,uncertain=0;
   const checkOwnSavedReview=(outbox,text)=>{
     if(!outbox.id.startsWith('chief-report:maria-saved-'))return true;
@@ -316,9 +318,9 @@ export async function flushOutbox(store,config,transport){
     return false;
   };
   const checkTesaContinuation=async outbox=>{
-    if(!outbox.id.startsWith('tesa-continuation:'))return true;
+    if(!outbox.id.startsWith('tesa-continuation:')&&!outbox.id.startsWith('tesa-unregistered:')&&!outbox.id.startsWith('maria-schedule-')&&!outbox.id.startsWith('chief-report:maria-scheduling:'))return true;
     try{
-      const valid=await tesaCustomerReplyStillValid(store,config,transport,outbox);
+      const valid=outbox.id.startsWith('tesa-unregistered:')?await unregisteredTesaReplyValid(store,config,transport,outbox):(outbox.id.startsWith('maria-schedule-')||outbox.id.startsWith('chief-report:maria-scheduling:'))?await schedulingReplyValid(store,config,transport,outbox):await tesaCustomerReplyStillValid(store,config,transport,outbox);
       if(valid===true)return true;
       // A pending verified courtesy waits for ordinary Engine processing. It
       // neither changes the case nor proves a reason for permanent review.
@@ -373,7 +375,7 @@ export async function flushOutbox(store,config,transport){
     // The latency target controls worker scheduling; it must not silently turn
     // off Maria's contextual reply planner. Provider failures retain her useful
     // deterministic next step, and every await still rechecks human attention.
-    if(!o.internal&&!literalGreetingReplyStillValid(config,store,o,text)&&(config.company==='fumigacion'||config.responseTargetMs!==3000)&&config.conversationalAi?.ready&&typeof transport.composeReply==='function'&&store.approvedReplyStillValid(o)&&store.priceReplyStillValid(o)){
+    if(!o.internal&&!o.id.startsWith('tesa-unregistered:')&&!o.id.startsWith('maria-schedule-')&&!literalGreetingReplyStillValid(config,store,o,text)&&(config.company==='fumigacion'||config.responseTargetMs!==3000)&&config.conversationalAi?.ready&&typeof transport.composeReply==='function'&&store.approvedReplyStillValid(o)&&store.priceReplyStillValid(o)){
       try{
         const composed=await transport.composeReply(o,text,store);
         if(!ownReplyTextAllowed(config,store,o,text,composed))throw Error('AI_REPLY_NOT_APPROVED');
