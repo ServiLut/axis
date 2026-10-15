@@ -37,7 +37,7 @@ test('accepted delivered quote advances to preference without promising an appoi
   await f.process('ADVISER004','Ratas en casa de 3 habitaciones en Medellín');f.s.delivery(f.reply('ADVISER004').mid,f.c.lines[0].phone,'DELIVERED');
   await f.process('ADVISER005','Sí, por favor');assert.match(f.reply('ADVISER005').text,/día y franja/);
   await f.process('ADVISER006','Mañana en la tarde');const text=f.reply('ADVISER006').text;
-  assert.match(text,/horario.*aún no está confirmado/);assert.doesNotMatch(text,/Con gusto|reservad|servicio confirmad|agendado|Diego|Hilary|Sandra|asesora continuará/i);
+  assert.match(text,/Aún no tengo confirmado el horario del servicio/);assert.doesNotMatch(text,/Con gusto|reservad|servicio confirmad|agendado|Diego|Hilary|Sandra|asesora continuará/i);
   assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,1);assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE internal=1').get().n,2);
   await f.process('ADVISER007','Mañana en la tarde');assert.equal(f.reply('ADVISER007'),undefined);
  }finally{f.s.close();}

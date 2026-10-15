@@ -5,7 +5,7 @@ import { SANDRA, DIEGO, HILARY, CURRENT_OPERATOR_ROUTING, publicTextSafe, normal
 import {parseChiefDocument} from './chief-document.mjs';
 import {selectPrice,verifyPriceSource} from './prices.mjs';
 import {understandOwnCustomer,composeOwnReply,ownReplyTextAllowed,probeOwnAi} from './conversational-ai.mjs';
-import {drainProgramRegistrations,acceptsOrdinaryQuotation} from './maria-program.mjs';
+import {drainProgramRegistrations,acceptsOrdinaryQuotation,savedServiceReviewStillValid} from './maria-program.mjs';
 import {routeCaseQuestion} from './engine.mjs';
 import {initializeInactivityFollowup,queueInactivityFollowups,inactivityDeliveryValid,recordResponseTiming} from './inactivity-followup.mjs';
 import {tesaCaseAnswers} from './tesa-operations.mjs';
@@ -307,6 +307,14 @@ export async function drain(store,config,transport,engine) {
 export async function flushOutbox(store,config,transport){
   await drainProgramRegistrations(store,config,transport,routeCaseQuestion);
   let accepted=0,suppressed=0,uncertain=0;
+  const checkOwnSavedReview=(outbox,text)=>{
+    if(!outbox.id.startsWith('chief-report:maria-saved-'))return true;
+    try{if(savedServiceReviewStillValid(store,config,outbox,text)===true)return true;}catch{}
+    if(store.db.prepare("UPDATE outbox SET state='OWN_SAVED_REVIEW_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),outbox.id).changes){
+      store.audit('OWN_SAVED_SERVICE_REVIEW_BEFORE_SEND_BLOCKED',outbox.id,{attemptedSend:false,contextOrBodyChanged:true,humanAttentionPreserved:true,resent:false});suppressed++;
+    }
+    return false;
+  };
   const checkTesaContinuation=async outbox=>{
     if(!outbox.id.startsWith('tesa-continuation:'))return true;
     try{
@@ -349,6 +357,7 @@ export async function flushOutbox(store,config,transport){
     if(o.created<Date.now()-600000){store.db.prepare("UPDATE outbox SET state='EXPIRED_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id);suppressed++;continue;}
     // Reject before any delivery attempt; this is a review, never an uncertain send.
     let text=store.open(o.body);
+    if(!checkOwnSavedReview(o,text))continue;
     if(!o.internal&&!publicTextSafe(text)){
       store.db.prepare("UPDATE outbox SET state='COMMUNICATION_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id);
       store.hold(o.phone,'communication-review');store.audit('EXTERNAL_TEXT_REJECTED',o.id);suppressed++;continue;
@@ -434,6 +443,7 @@ export async function flushOutbox(store,config,transport){
     // The quoted human answer may change during a channel/model/price await.
     // Recheck its exact native proof and customer attention before reserving.
     if(!await checkTesaContinuation(o))continue;
+    if(!checkOwnSavedReview(o,text))continue;
     if(!store.db.prepare("UPDATE outbox SET state='SENDING',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id).changes)continue;
     try {
       const mid=await transport.send(o,text);

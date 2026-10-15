@@ -11,7 +11,7 @@ import {ownIntent} from './maria-understanding.mjs';
 import {ownMiguelIntent,miguelLiteralSlotAllowed} from './miguel-understanding.mjs';
 import {literalPaintingRequest} from './technical-scope.mjs';
 import {afterServiceKind,afterServiceRequest,afterServiceDecision,explicitNewService,mariaLiteralServiceContext,literalOwnAfterServiceRequest,MARIA_LITERAL_SERVICE_CONTEXT_GUARD,mariaIncidentalPetMention} from './after-service.mjs';
-import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,literalIntakeTextWithoutRegistrationFields,literalProgramPreference,prepareRegisteredTesaContinuation,registeredTesaConfirmation} from './maria-program.mjs';
+import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,literalIntakeTextWithoutRegistrationFields,literalProgramPreference,prepareRegisteredTesaContinuation,registeredTesaConfirmation,ownSavedPendingOperation,queueOwnSavedServiceReview} from './maria-program.mjs';
 import {createHash} from 'node:crypto';
 import {tesaOperationalTopic} from './tesa-config.mjs';
 import {prepareTesaQuestion,initializeTesaStore} from './tesa-operations.mjs';
@@ -25,6 +25,39 @@ import {parseChiefCommand,enqueueChiefCommand} from './chief-actions.mjs';
 export const MARIA_AUTONOMOUS_INTAKE_GUARD='literal-ordinary-intake-without-staff-delegation-v1';
 export const MARIA_AFTER_SERVICE_CONTINUITY_GUARD='own-same-case-stored-or-quoted-postservice-context-and-priority-preservation-v2';
 export const MARIA_STAGED_GREETING_GUARD='own-pure-greeting-essential-fields-before-property-details-v1';
+export const MARIA_SAVED_PENDING_CUSTOMER_GUARD='own-saved-pending-operation-direct-status-and-cancellation-request-v1';
+
+// These exact whole-message requests are meaningful only after an independently
+// verified own receipt and a still-pending operational consultation. They do not
+// grant a general cancellation classifier, schedule, business write or replay.
+function ownPendingCustomerKind(e){
+ if(e.kind!=='text'||e.fromMe!==false||e.forwarded||e.quotedId||typeof e.text!=='string'||e.text.length>200||/["“”«»]|https?:|www\./i.test(e.text))return null;
+ const t=normalize(e.text).replace(/^[¿¡\s]+|[?!.¡\s]+$/g,'').replace(/\s+/g,' ').trim();
+ if(/^(?:y entonces|entonces|ya hay horario|ya tienen horario|ya hay una hora|cuando seria(?: el servicio)?|como va(?: mi solicitud| el servicio)?|que paso con(?: mi solicitud| el horario)|que horario(?: hay| tienen))$/.test(t))return 'status';
+ if(/[¿?]/.test(e.text))return null;
+ const service='(?:(?:el|mi|este|la|esta) )?(?:servicio|solicitud|fumigacion|visita)';
+ return new RegExp('^(?:por favor )?(?:cancelalo|cancelelo|cancelenlo|(?:(?:quiero|necesito|solicito|deseo) cancelar|cancela|cancele|cancelen|cancelar) '+service+'|(?:ya )?no (?:quiero|necesito|deseo) '+service+')(?: por favor)?$').test(t)?'cancellation-request':null;
+}
+function ownSavedPendingCustomerTurn(s,c,state,e){
+ const kind=ownPendingCustomerKind(e);if(!kind)return null;
+ const own=ownSavedPendingOperation(s,c,state,e);if(!own)return null;
+ const {entry}=own,key='maria-saved-cancellation-request:'+state.caseId+':'+entry.requestHash;
+ const prior=s.db.prepare('SELECT value FROM meta WHERE key=?').get(key),existing=prior&&s.open(prior.value);
+ const requested=existing?.guard===MARIA_SAVED_PENDING_CUSTOMER_GUARD&&existing.state==='REQUEST'&&existing.orderId===entry.receipt.orderId&&existing.receiptHash===entry.requestHash;
+ if(kind==='cancellation-request'){
+  // Keep each native source intact without issuing another equivalent alert
+  // for the same still-pending case and immutable receipt.
+  const marker=requested?existing:{guard:MARIA_SAVED_PENDING_CUSTOMER_GUARD,state:'REQUEST',caseId:state.caseId,phone:e.phone,line:e.line,orderId:entry.receipt.orderId,receiptHash:entry.requestHash,createdAt:Date.now(),sources:[]};
+  if(!marker.sources.some(source=>source.id===e.id))marker.sources.push({id:e.id,text:e.text,at:e.at,phone:e.phone,line:e.line});
+  const alert=queueOwnSavedServiceReview(s,c,entry,{motive:'cancellation-request',sourceId:marker.sources[0].id,text:'María Ángel · solicitud de cancelación. El cliente terminado en '+e.phone.slice(-4)+' pidió cancelar su servicio registrado, orden '+entry.receipt.orderId.slice(0,8).toUpperCase()+'. Precio registrado $'+entry.payload.quote.priceCop.toLocaleString('es-CO')+'. Solicitud literal: '+marker.sources[0].text+'. No he cancelado la orden ni modificado pagos. ¿Cómo debemos atender esta solicitud?'});
+  if(alert?.id)marker.alertId=alert.id;
+  s.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key,s.seal(marker));
+  state.requestedProgramCancellationReview={guard:MARIA_SAVED_PENDING_CUSTOMER_GUARD,key,firstSourceId:marker.sources[0].id,orderId:entry.receipt.orderId,state:'REQUEST'};
+  s.audit('OWN_SAVED_ORDER_CANCELLATION_REQUESTED',e.id,{guard:MARIA_SAVED_PENDING_CUSTOMER_GUARD,caseId:state.caseId,orderId:entry.receipt.orderId,firstSourceId:marker.sources[0].id,additionalSource:marker.sources.length>1,businessWritten:false,cancelled:false,humanHoldReleased:false});
+ }else s.audit('OWN_SAVED_ORDER_PENDING_STATUS_ACKNOWLEDGED',e.id,{guard:MARIA_SAVED_PENDING_CUSTOMER_GUARD,caseId:state.caseId,orderId:entry.receipt.orderId,scheduled:false,newOperationalQuestion:false,businessWritten:false});
+ const reply=kind==='cancellation-request'||requested?'Recibí tu solicitud de cancelación. Aún no tengo confirmada la cancelación; tu solicitud está pendiente de revisión.':'Aún no tengo confirmado el horario del servicio.';
+ return {state,reply};
+}
 
 function rememberIntakeTiming(state,event,company){
  if(company!=='fumigacion'||state.programIntake||state.requestedAfterServiceReview||state.requestedProductInquiry||state.requestedControlReview||state.awaitingHumanReview)return null;
@@ -596,6 +629,13 @@ export class Engine {
         if(literalIntakeTurn(e,c.company)&&Object.keys(extractSlots(e.text,c.company)).length)pendingQuestion=turns.filter(turn=>turn.id!==e.id&&turn.kind==='text'&&!turn.forwarded&&isCustomerQuestion(turn.text)).at(-1)||null;
       }
       if(caseState.awaitingHumanReview){
+        const pendingTurn=ownSavedPendingCustomerTurn(s,c,caseState,e);
+        if(pendingTurn){
+          pendingTurn.state.lastHandledSourceId=e.id;pendingTurn.state.lastText=e.text;s.saveConversation(e.phone,pendingTurn.state);
+          if(!publicTextSafe(pendingTurn.reply))throw new Error('EXTERNAL_TEXT_REJECTED');
+          s.queue(e.id+':reply',e.phone,e.line,pendingTurn.reply,false,conv.revision,caseState.caseId);
+          finish(ownPendingCustomerKind(e)==='cancellation-request'?'OWN_SAVED_CANCELLATION_REQUEST':'OWN_SAVED_PENDING_STATUS');return;
+        }
         if(literalIntakeTurn(e,c.company)){rememberFields(caseState,e,c.company);retainPromptedLocation(caseState,e);}
         caseState.lastHandledSourceId=e.id;s.saveConversation(e.phone,caseState);finish('OBSERVED_REVIEW');return;
       }
@@ -664,10 +704,10 @@ export class Engine {
             decision={state:decision.state};
           }else if(preference){
             decision.state.slots.preference=preference;
-            decision={state:decision.state,question:{topic:'disponibilidad-y-tecnico',conditions:{...decision.state.slots,quotedPriceCop:currentQuote.priceCop,priceSource:priceNow.source.quoteId,...(decision.state.programServiceId?{programServiceId:decision.state.programServiceId}:{})}},reply:'Gracias. Una asesora continuará contigo para confirmar el horario del servicio.'};
+            decision={state:decision.state,question:{topic:'disponibilidad-y-tecnico',conditions:{...decision.state.slots,quotedPriceCop:currentQuote.priceCop,priceSource:priceNow.source.quoteId,...(decision.state.programServiceId?{programServiceId:decision.state.programServiceId}:{})}},reply:'Aún no tengo confirmado el horario del servicio.'};
           }else if(!decision.state.asked.includes('preference')){
             decision.state.asked.push('preference');decision={state:decision.state,reply:'¿Qué día y franja horaria prefieres para el servicio?'};
-          }else decision={state:decision.state,reviewTopic:'missing-intake:preference',reviewConditions:{missing:'preference'},review:'La persona aceptó la cotización verificada, pero falta una preferencia de horario clara.',reviewQuestion:'¿Qué día y franja horaria prefiere esta persona?',reply:'Gracias. Una asesora continuará contigo para confirmar el horario del servicio.'};
+          }else decision={state:decision.state,reviewTopic:'missing-intake:preference',reviewConditions:{missing:'preference'},review:'La persona aceptó la cotización verificada, pero falta una preferencia de horario clara.',reviewQuestion:'¿Qué día y franja horaria prefiere esta persona?',reply:'Aún no tengo confirmado el horario del servicio.'};
         }else decision={state:decision.state,observed:true,observedState:'QUOTATION_DELIVERY_REVIEW'};
       }
       if(c.company==='fumigacion'&&(decision.question?.topic==='cotizacion-verificada'||decision.reviewTopic==='customer-question'&&quotationInquiry(e.text))){
@@ -749,7 +789,7 @@ export class Engine {
           }
         }
         else if(c.company==='fumigacion'){
-          decision.reply=decision.question.topic==='disponibilidad-y-tecnico'?'Gracias. Una asesora continuará contigo para confirmar el horario del servicio.':'Gracias. Una asesora continuará contigo para completar la cotización.';
+          decision.reply=decision.question.topic==='disponibilidad-y-tecnico'?'Aún no tengo confirmado el horario del servicio.':'Tu cotización aún necesita confirmación.';
           decision.state.awaitingHumanReview=true;s.saveConversation(e.phone,decision.state);
         }
       }
