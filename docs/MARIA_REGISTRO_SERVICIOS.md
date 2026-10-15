@@ -1,5 +1,13 @@
 # Registro propio de servicios nuevos de María
 
+## Continuidad de conversación y formularios preservados — 15/10/2026 21:26Z
+
+Sólo María instaló `cacb1c87c75d4d12c46d74c92407f8f085945c94` (DONE 2 s), corrección funcional `438b18e87e7ef99a69e52cc20f27951fc40b4d72`. API propia verificó recepción, Luna, registro, scope, precio y vencimiento originales; SAVED=1 histórico, otras colas=0. Backend `7cc76009a97cf2ab5a674a86d369c6b2d51b324f` sin cambios. El detalle de queja, fuentes y guardias nuevas está al inicio de `BOTS_MARIA_MIGUEL.md`.
+
+El reconocimiento de datos/estado pendientes no sustituye `registrationTurn`, recibo, fuentes, revisión de dirección, confirmación posterior ni reglas de atención humana. Si existe `programIntake`, la nueva continuidad genérica no elude la ruta del formulario ni el recibo propio. La presentación de «ya registrado» a TESA requiere el recibo validado, hash, actor, caso/teléfono/línea actuales y scope operativo; un `programServiceId` aislado no basta. La prueba de registro simulado conserva precio, campos, autoría y una sola escritura simulada. Las aclaraciones por dos fragmentos conservan ambos nativos y primera entrega exacta; no generan aceptación de cotización o servicio por sí mismas.
+
+Gate final 1242/1242 runtime en 85 archivos, sin omisiones; evidencia `.tmp/maria-user-complaint-20261015/installed/` y `runtime-complete-final.txt`. No se fabricó una segunda alta real para demostrar avance. BF23DF14 sigue siendo el único recibo propio: campos actuales y autor original concordantes, NUEVO sin técnico ni fecha. Primera programación automática y continuación de respuestas libres TESA no registradas permanecen pendientes; no describirlas como instaladas. Humanos, roja suspendida, reactivación OFF, accesos con vencimiento 07/11/2026 y registros inciertos se conservan.
+
 ## Coordinación durable y turnos posteriores verificados — 15/10/2026 18:18Z
 
 Sólo María instaló **`11dc7f369fc47180728c09396e89183630b2a4d5`**, DONE 3 s; API propias a las 18:18:30Z confirmaron guardias, recepción/Luna/registro, identidad y precio/vencimiento. BF23DF14 conserva SAVED=1, recibo/autor/$129.000, estado NUEVO y ausencia de técnico/agenda; no hay nueva alta propia acreditada. Backend `7cc76009a97cf2ab5a674a86d369c6b2d51b324f`, roja suspendida, reactivación OFF y otros bots preservados.
