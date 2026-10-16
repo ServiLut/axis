@@ -1,8 +1,8 @@
 # Registro propio de servicios nuevos de María
 
-## Recepción legible y activación de primera agenda en curso — 16/10/2026
+## Recepción legible y primera agenda limitada habilitadas — 16/10/2026 17:18Z
 
-La corrección de recepción conserva saludo y preguntas pertinentes, elimina ecos de servicio/inmueble y presenta varios faltantes en una lista numerada. Se preservan fuentes literales, importes, respuestas aprobadas, reservas antiguas y toma humana. El ejemplo aportado por la usuaria se reprodujo exactamente antes y quedó corregido en el ensayo después; **1324/1324 pruebas** pasan. La estructura de primera programación ya tiene recibo productivo post-COMMIT, sin filas de negocio modificadas; acceso/variables/recarga/verificación aún pendientes. No equivale a una primera agenda real ni a otro servicio creado. Estado actual y fuentes al inicio de `BOTS_MARIA_MIGUEL.md`.
+La corrección de recepción conserva saludo y preguntas pertinentes, elimina ecos de servicio/inmueble y presenta varios faltantes en una lista numerada. Se preservan fuentes literales, importes, respuestas aprobadas, reservas antiguas y toma humana. El ejemplo aportado por la usuaria se reprodujo exactamente antes y quedó corregido en el ensayo después; **1324/1324 pruebas** pasan. La estructura tiene recibo productivo post-COMMIT sin filas de negocio modificadas; cinco variables, recarga Backend y acceso propio ya instalados. Runtime y Backend devuelven programación **enabled=true**, ámbito/actor/vencimiento exactos y el registro original intacto. Los 52 módulos desplegados coinciden con `cd14a25`; no se afirma DONE del historial Dokploy desactualizado. No equivale a una primera agenda real ni a otro servicio creado. Estado actual y fuentes al inicio de `BOTS_MARIA_MIGUEL.md`.
 
 ## Regresiones reales de cotización y continuidad corregidas, sin nueva alta — 16/10/2026
 
