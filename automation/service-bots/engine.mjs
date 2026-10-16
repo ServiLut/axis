@@ -253,16 +253,18 @@ function ordinaryLiteralMunicipality(text){
   return /sopetran|antioquia/.test(distinct[0])?String(text).match(/\b(?:(?:santa\s+fe|santaf[eé])\s+de\s+antioquia|sopetr[aá]n)\b/i)?.[0]:distinct[0];
 }
 function literalAffectedFurniture(text){
-  const clauses=normalize(text).split(/[.!?;,\r\n]|\bpero\b/);
-  for(const clause of clauses)for(const match of clause.matchAll(/\b(?:bases?(?: de)? (?:la )?camas?|basecamas?|sofas?|muebles?)\b/g)){
+  // Keep interrogative punctuation with its own clause: a question about an
+  // exclusion is not the customer's statement that no extra furniture exists.
+  const clauses=normalize(text).split(/(?<=[.!?;,\r\n])|\bpero\b/);
+  for(const rawClause of clauses){const clause=rawClause.trim().replace(/[.!?;,\r\n]+$/g,'');for(const match of clause.matchAll(/\b(?:bases?(?: de)? (?:la )?camas?|basecamas?|sofas?|muebles?)\b/g)){
     const before=clause.slice(0,match.index),after=clause.slice(match.index+match[0].length);
     // A stated exclusion is not extra affected furniture. Uncertainty ("no sé
     // si...") and scope/price questions remain unresolved furniture scope.
-    const excludedBefore=/\b(?:sin|ningun[oa]?s?)\s+(?:chinches?\s+(?:en\s+)?)?(?:(?:la|las|el|los|un|una|unos|unas)\s+)?$/.test(before)||/\bno\s+(?:(?:hay|tengo|tenemos|tiene|tienen|presenta|presentan|veo|vemos|es|necesito tratar|quiero tratar|deseo tratar)\s+)?(?:chinches?\s+)?(?:(?:en|de)\s+)?(?:(?:la|las|el|los|un|una|unos|unas)\s+)?$/.test(before);
+    const excludedBefore=/\b(?:sin|ningun[oa]?s?)\s+(?:chinches?\s+(?:en\s+)?)?(?:(?:la|las|el|los|un|una|unos|unas)\s+)?(?:otr[oa]s?\s+)?$/.test(before)||/\bno\s+(?:(?:hay|tengo|tenemos|tiene|tienen|presenta|presentan|veo|vemos|es|necesito tratar|quiero tratar|deseo tratar)\s+)?(?:chinches?\s+)?(?:(?:en|de)\s+)?(?:(?:la|las|el|los|un|una|unos|unas)\s+)?(?:otr[oa]s?\s+)?$/.test(before);
     const excludedAfter=/^\s+no\s+(?:tiene[n]?\s+chinches?|presenta[n]?\s+chinches?|est[a-z]*\s+afectad[oa]s?)(?:\b|$)/.test(after)||/^\s+no\s*$/.test(after);
-    const uncertain=/\b(?:si|quizas|tal vez|no se)\b/.test(clause);
+    const uncertain=/[?¿"“”«»]/.test(rawClause)||/\b(?:si|cuando|en caso|quizas|tal vez|no se|segun|dijo|dice|dijeron|supongamos|podria|puede ser|no es cierto que|no dije que)\b/.test(clause)||excludedBefore&&/^\s+(?:sin|no|libres? de|que\s+(?:(?:aun|todavia)\s+)?no)\b/.test(after);
     if(uncertain||!excludedBefore&&!excludedAfter)return 'muebles mencionados; alcance por verificar';
-  }
+  }}
 }
 const ordinaryPestPatterns={cucarachas:/\bcucarachas?\b/,hormigas:/\bhormigas?\b/,ratones:/\b(?:raton|ratones)\b/,ratas:/\bratas?\b/,chinches:/\bchinches?\b/,comején:/\bcomejen(?:es)?\b/,avispas:/\bavispas?\b/,roedores:/\broedores?\b/,mosquitos:/\bmosquitos?\b/,pulgas:/\bpulgas?\b/,zancudos:/\b(?:zancudos?|sancudos?)\b/,'arañas':/\baranas?\b/,moscas:/\bmoscas?\b/,chiripas:/\bchiripas?\b/,prevencion:/\bprevencion\b/,fumigacion:/\bfumigacion\b/};
 const ordinaryPropertyPatterns={'casa finca':/\bcasas?\s+fincas?\b/,finca:/\bfincas?\b/,apartamento:/\b(?:apartamentos?|aptos?)\b/,casa:/\bcasas?\b/,restaurante:/\brestaurantes?\b/,local:/\blocal(?:es)?\b/,oficina:/\boficinas?\b/,bodega:/\bbodegas?\b/,'cafetería':/\bcafeterias?\b/,'café':/^(?:(?:es|seria)\s+)?en\s+(?:(?:el|un|nuestro|mi)\s+)?cafe\b/};
