@@ -25,6 +25,12 @@ export function customerDeferralResumeEvidence(event,literal={}){
 }
 
 export function customerDeferralContinues(event){return direct(event)&&/\b(?:(?:todavia|aun) no se si (?:quiero|voy a|debo)|lo voy a pensar|voy a pensarlo|prefiero pensarlo|lo pensare)\b/.test(normalize(event.text));}
+/** A short acknowledgement after postponement is not a request to resume. */
+export function customerDeferralAcknowledgement(event){
+ if(!direct(event))return false;
+ const text=normalize(event.text).replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim();
+ return /^(?:si|ok|okay|listo|dale|de acuerdo|esta bien|perfecto|confirmo|todo correcto|correcto|entendido)(?: (?:gracias|muchas gracias))*$/.test(text);
+}
 export function customerDeclinesAfterDeferral(event){
  if(!direct(event))return false;
  const t=normalize(event.text).replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim();

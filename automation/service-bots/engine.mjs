@@ -28,7 +28,7 @@ import {literalIntakeDimensions,MARIA_DIMENSIONS_GUARD} from './intake-dimension
 import {parseChiefCommand,enqueueChiefCommand} from './chief-actions.mjs';
 import {mariaPendingReviewReply} from './maria-pending-review.mjs';
 import {literalMariaPartialLocation,literalMariaRoomCount,mariaMediaBurstContinuation,MARIA_BATCH_INTAKE_GUARD} from './maria-batch-intake.mjs';
-import {customerDeferralRequested,customerDeferralResumeEvidence,customerDeferralContinues,customerDeclinesAfterDeferral,CUSTOMER_DEFERRAL_GUARD} from './customer-deferral.mjs';
+import {customerDeferralRequested,customerDeferralResumeEvidence,customerDeferralContinues,customerDeferralAcknowledgement,customerDeclinesAfterDeferral,CUSTOMER_DEFERRAL_GUARD} from './customer-deferral.mjs';
 
 export const MARIA_AUTONOMOUS_INTAKE_GUARD='literal-ordinary-intake-without-staff-delegation-v1';
 export const MARIA_AFTER_SERVICE_CONTINUITY_GUARD='own-same-case-stored-or-quoted-postservice-context-and-priority-preservation-v2';
@@ -638,6 +638,7 @@ export function customerDecision(company,state,e,analysis={}) {
   if(company==='fumigacion'&&state.customerDeferral?.guard===CUSTOMER_DEFERRAL_GUARD&&state.customerDeferral.active===true&&state.customerDeferral.caseId===state.caseId&&state.customerDeferral.line===e.line&&e.at>state.customerDeferral.at&&!contextNeedsPersonalPriority(e.text,e)){
     if(customerDeclinesAfterDeferral(e))return {state:{...next,closed:true},courtesy:true,reply:'Entendido, gracias por avisarme.'};
     if(customerDeferralContinues(e))return {state:next,courtesy:true,customerDeferred:true,reply:'Claro, puedes pensarlo con calma. Si te surge alguna duda, aquí estoy.'};
+    if(customerDeferralAcknowledgement(e))return {state:{...next,slots:{...state.slots}},courtesy:true,customerDeferred:true,reply:'De acuerdo. Puedes pensarlo con calma; aquí estoy si surge alguna duda.'};
   }
   if(company==='fumigacion'&&state.customerDeferral?.guard===CUSTOMER_DEFERRAL_GUARD&&state.customerDeferral.active===true&&state.customerDeferral.caseId===state.caseId&&state.customerDeferral.line===e.line&&e.at>state.customerDeferral.at&&literalIntakeTurn(e,company)&&!contextNeedsPersonalPriority(e.text,e)){
     const resumedBy=customerDeferralResumeEvidence(e,literal);if(resumedBy)next.customerDeferral={...state.customerDeferral,active:false,resumedBy};
@@ -1033,6 +1034,13 @@ export class Engine {
         if(delivered&&s.priceReplyStillValid(delivered))decision={state:decision.state,incidentalPetNote:true,reply:'Anoté: '+incidentalPetNote.text+'.'};
       }
       const amountAcceptance=e.kind==='text'&&e.fromMe===false&&!e.forwarded&&!e.quotedId&&priceNow&&acceptsOwnQuotedAmount(e.text,priceNow.priceCop);
+      const deferral=caseState.customerDeferral;
+      if(amountAcceptance&&deferral?.guard===CUSTOMER_DEFERRAL_GUARD&&deferral.active===true&&deferral.caseId===caseState.caseId&&deferral.line===e.line&&e.at>deferral.at&&!caseState.awaitingHumanReview&&!decision.literalServiceContext&&!decision.quoteClarification&&(!decision.review||decision.reviewTopic==='customer-question')&&!contextNeedsPersonalPriority(e.text,e)){
+        // The current own delivered quote, not a bare affirmative or a marker,
+        // supplies the expected amount. This resumes the ordinary guarded
+        // intake path; it does not confirm a summary or authorize a reminder.
+        decision={state:{...decision.state,customerDeferral:{...deferral,active:false,resumedBy:{kind:'verified-own-quotation-acceptance',sourceId:e.id,at:e.at,line:e.line,textHash:createHash('sha256').update(e.text).digest('hex'),quotationSourceId:currentQuote.sourceId,entryId:priceNow.id,priceCop:priceNow.priceCop}}}};
+      }
       const naturalAcceptance=acceptsOrdinaryQuotation(e.text)||Boolean(amountAcceptance);
       // An affirmative amount without the quotation's delivery proof cannot
       // grant consent or silently issue a replacement quotation either.
