@@ -1,5 +1,11 @@
 # Registro propio de servicios nuevos de María
 
+## Regresiones reales de cotización y continuidad corregidas, sin nueva alta — 16/10/2026
+
+La lectura azul de las 14:44Z comprobó dos errores de respuestas propias posteriores a `e4f6bf3`: reinicio de preguntas de plaga ante una consulta de vigencia y omisión de «base cama» al delimitar la cotización por colchón. Corrección **preparada, no desplegada**: conserva propósito y fuente de la consulta previa; reconoce variantes y negación/condición de mobiliario; explica la duda colchón/habitación con su alcance pendiente. No certifica vigencia, inclusión, aceptación o reserva ni cambia precios. No ejecuta o recupera los casos históricos ya atendidos por personal.
+
+**1315/1315 pruebas runtime** pasan, ninguna omitida. Las once regresiones de Engine/Store aislados fallaban nueve contra el código anterior y pasan once con la corrección. Guardado ordinario y nuevos permisos siguen separados; no se modificó DTO/Backend por esta corrección. El servicio histórico BF23DF14 conserva su única alta, recibo y autoría; no se acreditó una nueva venta o primera programación real. Dokploy requiere ingreso personal para instalar el cambio y activar el acceso de programación **ya autorizado**, sin pedir nuevamente ese permiso. Detalle, evidencia y restricciones actuales al inicio de `BOTS_MARIA_MIGUEL.md` y `.tmp/maria-tesa-scheduling-20261015/`.
+
 ## Primera programación preparada y autorizada; activación pendiente — 16/10/2026 14:43Z
 
 Runtime `e4f6bf319ed6ac80662c41fc2e7a79a1a0d0bc28` y Backend `a8d208dd8c21d65d71dd8b7ff5bb7c8d1fa9399a` se desplegaron el 15/10. El control propio del 16/10 **14:43:05Z** comprobó recepción y continuación TESA activas, primera programación **OFF**, SAVED=1 histórico y pendientes/inciertos/revisión=0. No acredita una segunda alta o primera agenda nueva. Detalle y fuentes vigentes al inicio de `BOTS_MARIA_MIGUEL.md`.
