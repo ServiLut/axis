@@ -8,6 +8,8 @@ import {publicTextSafe,normalize} from './config.mjs';
 import {continueMariaUnregisteredTesaCustomer,mariaUnregisteredTesaReplyStillValid} from './maria-tesa-unregistered.mjs';
 import {continueOwnSchedulingOffer,ownSchedulingPlan,ownSchedulingProof,ownSchedulingReplyStillValid} from './maria-own-order-scheduling.mjs';
 import {routeCaseQuestion} from './engine.mjs';
+import {verifyStoredNativeIdentitySource} from './native-identity-resolution.mjs';
+import {partitionNativeAttention} from './explicit-return-attention.mjs';
 
 const nativeText=r=>{const m=r.message?.ephemeralMessage?.message??r.message??{};return m.conversation??m.extendedTextMessage?.text??null;};
 const phoneJid=j=>/^57\d{10}@s\.whatsapp\.net$/.test(j??'')?j.split('@')[0]:null;
@@ -60,13 +62,18 @@ async function verifiedContinuation(s,c,t,plan,questionId){
  if(!getTesaConfig(c)||typeof t.currentCustomerActivity!=='function'||typeof t.currentAttention!=='function')return null;
  const own=s.db.prepare('SELECT * FROM tesa_outbox WHERE question_id=?').get(questionId);
  if(!await verifyTesaNativeDelivery(s,c,t,own)||!await exactNativeHumanAnswer(c,t,q,answer))return null;
- const attention=await t.currentAttention(plan.phone);if(!attention.complete)return null;
- const unknown=attention.sources.find(item=>!s.db.prepare('SELECT 1 FROM outbox WHERE mid=? AND phone=? AND line=?').get(item.id,plan.phone,item.line));
+ const attention=await t.currentAttention(plan.phone,{store:s});if(!attention.complete)return null;
+ const classified=partitionNativeAttention(s,c,{phone:plan.phone,line:plan.line,revision:current.conv.revision,created:plan.preparedAt,sourceAt:plan.customerAt},attention),unknown=classified.unknown[0];
+ if(classified.releasedSources.length)s.audit('TESA_PRE_RETURN_ATTENTION_PRESERVED',questionId,{sources:classified.releasedSources,releaseSource:classified.release.source,holdReleased:false,authorUnverified:true,businessWritten:false});
  if(unknown){s.hold(plan.phone,unknown.id);return null;}
- const activity=await t.currentCustomerActivity(plan.phone,plan.customerAt);
+ const activity=await t.currentCustomerActivity(plan.phone,plan.customerAt,{store:s});
  if(!activity.complete||!activity.sources.length||activity.sources.some(item=>{const row=s.db.prepare('SELECT line,at,revision FROM events WHERE id=? AND phone=? AND from_me=0').get(item.id,plan.phone);return !row||row.line!==plan.line||row.at!==item.at||row.revision>revision;}))return null;
  for(const event of courtesies){
-  const ownLine=c.lines.find(value=>value.phone===plan.line),data=await t.request(ownLine,'/chat/findMessages/'+encodeURIComponent(ownLine.instance),{where:{key:{id:event.id}},offset:10,page:1}),matches=(data.messages?.records??[]).filter(row=>row.key?.id===event.id&&(row.key.remoteJid===plan.phone+'@s.whatsapp.net'||row.key.remoteJidAlt===plan.phone+'@s.whatsapp.net'));
+  const ownLine=c.lines.find(value=>value.phone===plan.line),data=await t.request(ownLine,'/chat/findMessages/'+encodeURIComponent(ownLine.instance),{where:{key:{id:event.id}},offset:10,page:1}),matches=[];
+  for(const row of (data.messages?.records??[]).filter(row=>row.key?.id===event.id)){
+   const pn=plan.phone+'@s.whatsapp.net',primary=row.key.remoteJid,alt=row.key.remoteJidAlt,direct=(primary===pn||/^\d+@lid$/.test(primary??'')&&alt===pn)&&!(alt?.endsWith('@s.whatsapp.net')&&alt!==pn);
+   if(direct||await verifyStoredNativeIdentitySource(s,c,t,event,row))matches.push(row);
+  }
   if(matches.length!==1)return null;const row=matches[0],message=row.message?.ephemeralMessage?.message??row.message??{},contexts=[message.extendedTextMessage?.contextInfo,message.messageContextInfo,row.contextInfo].filter(Boolean);
   if(row.key.fromMe!==false||nativeText(row)!==event.text||Number(row.messageTimestamp)*1000!==event.at||contexts.some(context=>context.isForwarded||Number(context.forwardingScore)>0))return null;
  }

@@ -4,6 +4,8 @@ import {BUSINESS_PRICE_HASH,selectBusinessPrice} from './business-prices.mjs';
 import {operationalLineAllowed,operationalCoverage} from './line-scope.mjs';
 import {getTesaConfig} from './tesa-config.mjs';
 import {mariaIncidentalPetMention} from './after-service.mjs';
+import {verifyStoredNativeIdentitySource} from './native-identity-resolution.mjs';
+import {partitionNativeAttention} from './explicit-return-attention.mjs';
 
 export const MARIA_PROGRAM_GUARD='own-accepted-ordinary-service-literal-fields-and-atomic-receipt-v2';
 export const MARIA_PROGRAM_PIPELINE_GUARD='processed-customer-turn-before-registration-v1';
@@ -464,10 +466,16 @@ export function registeredTesaConfirmation(s,c,state,e){
  s.audit('OWN_SAVED_ORDER_CUSTOMER_CONFIRMATION_OBSERVED',e.id,{guard:MARIA_PROGRAM_OPERATIONAL_CONFIRMATION_GUARD,caseId:state.caseId,questionId:q.id,answerSource:q.source_id,orderId:entry.receipt.orderId,acceptanceRenewed:false,scheduled:false,businessWritten:false,newQuestionCreated:false,humanHoldReleased:false});
  return {state,reply:'Recibí tu confirmación para el servicio.'};
 }
-async function nativeMessage(t,c,id,phone,line){
+async function nativeMessage(s,t,c,id,phone,line){
  const l=c.lines.find(x=>x.phone===line);if(!l||typeof t.request!=='function')throw Error('PROGRAM_NATIVE_RECHECK_REQUIRED');
  const response=await t.request(l,'/chat/findMessages/'+encodeURIComponent(l.instance),{where:{key:{id}},offset:10,page:1});
- const matches=(response.messages?.records||[]).filter(r=>r.key?.id===id&&(r.key.remoteJid===phone+'@s.whatsapp.net'||r.key.remoteJidAlt===phone+'@s.whatsapp.net'));
+ const matches=[];
+ for(const native of (response.messages?.records||[]).filter(r=>r.key?.id===id)){
+  const pn=phone+'@s.whatsapp.net',primary=native.key.remoteJid,alt=native.key.remoteJidAlt;
+  if((primary===pn||/^\d+@lid$/.test(primary??'')&&alt===pn)&&!(alt?.endsWith('@s.whatsapp.net')&&alt!==pn)){matches.push(native);continue;}
+  const stored=s.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(id,phone,line),expected=stored&&s.open(stored.body);
+  if(expected&&await verifyStoredNativeIdentitySource(s,c,t,expected,native))matches.push(native);
+ }
  if(matches.length!==1)throw Error('PROGRAM_NATIVE_SOURCE_NOT_UNIQUE');return matches[0];
 }
 function nativeText(r){const m=r.message?.ephemeralMessage?.message??r.message??{};return m.conversation??m.extendedTextMessage?.text;}
@@ -496,23 +504,24 @@ async function verifyNative(s,c,t,entry){
  const petPresence=acceptanceRow&&casePetPresence(s,c,state,s.open(acceptanceRow.body));
  if(!acceptanceRow||petPresence?.value!==p.petPresence||JSON.stringify(petPresence?.source)!==JSON.stringify(p.sources.petPresence))throw Error('PROGRAM_PET_SOURCE_UNVERIFIED');
  await t.verifyLine(p.line);
- const attention=await t.currentAttention(p.phone);if(!attention.complete)throw Error('PROGRAM_ATTENTION_UNVERIFIED');
- const unknown=attention.sources.find(a=>!s.db.prepare('SELECT 1 FROM outbox WHERE mid=? AND phone=? AND line=?').get(a.id,p.phone,a.line));
+ const attention=await t.currentAttention(p.phone,{store:s});if(!attention.complete)throw Error('PROGRAM_ATTENTION_UNVERIFIED');
+ const classified=partitionNativeAttention(s,c,{phone:p.phone,line:p.line,revision:s.conversation(p.phone).revision,created:entry.createdAt,sourceAt:Date.parse(p.sources.acceptance.at)},attention),unknown=classified.unknown[0];
+ if(classified.releasedSources.length)s.audit('OWN_REGISTRATION_PRE_RETURN_ATTENTION_PRESERVED',p.quote.acceptanceId,{sources:classified.releasedSources,releaseSource:classified.release.source,holdReleased:false,authorUnverified:true,businessWritten:false});
  if(unknown){s.hold(p.phone,unknown.id);throw Error('PROGRAM_HUMAN_TAKEOVER');}
- const quote=await nativeMessage(t,c,p.quote.mid,p.phone,p.line),deliveries=[[quote,own.row]];
+ const quote=await nativeMessage(s,t,c,p.quote.mid,p.phone,p.line),deliveries=[[quote,own.row]];
  if(entry.summaryOutboxId){
   const summary=s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND state IN ('DELIVERED','READ') AND mid IS NOT NULL").get(entry.summaryOutboxId,p.phone,p.line);
   if(!summary)throw Error('PROGRAM_SUMMARY_DELIVERY_UNVERIFIED');
-  deliveries.push([await nativeMessage(t,c,summary.mid,p.phone,p.line),summary]);
+  deliveries.push([await nativeMessage(s,t,c,summary.mid,p.phone,p.line),summary]);
  }else if(entry.confirmationKind!=='price-accepted-with-prior-literal-facts'||!confirms(p.sources.acceptance.text)||Date.parse(p.sources.customerName.at)>Date.parse(p.sources.acceptance.at)||Date.parse(p.sources.address.at)>Date.parse(p.sources.acceptance.at))throw Error('PROGRAM_CUSTOMER_CONFIRMATION_UNVERIFIED');
  for(const [r,row] of deliveries)if(r.key.fromMe!==true||nativeText(r)!==s.open(row.body)||![r.status,...(r.MessageUpdate||[]).map(u=>u.status)].some(v=>['DELIVERY_ACK','READ','PLAYED'].includes(v)))throw Error('PROGRAM_NATIVE_DELIVERY_MISMATCH');
  for(const src of Object.values(p.sources)){
   const eventRow=s.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(src.id,p.phone,p.line);if(!eventRow)throw Error('PROGRAM_SOURCE_SCOPE');
-  const event=s.open(eventRow.body),native=await nativeMessage(t,c,src.id,p.phone,p.line),m=native.message?.ephemeralMessage?.message??native.message??{},ctx=m.extendedTextMessage?.contextInfo??native.contextInfo??{};
+  const event=s.open(eventRow.body),native=await nativeMessage(s,t,c,src.id,p.phone,p.line),m=native.message?.ephemeralMessage?.message??native.message??{},ctx=m.extendedTextMessage?.contextInfo??native.contextInfo??{};
   if(event.text!==src.text||event.at!==Date.parse(src.at)||event.forwarded||native.key.fromMe!==false||nativeText(native)!==src.text||Number(native.messageTimestamp)*1000!==event.at||ctx.isForwarded||ctx.forwardingScore>0||src===p.sources.petPresence&&(event.quotedId||ctx.stanzaId||confirmedPetMention(event)?.text!==p.petPresence))throw Error('PROGRAM_NATIVE_FACT_MISMATCH');
  }
  if(typeof t.currentCustomerActivity!=='function')throw Error('PROGRAM_CUSTOMER_CONTEXT_UNVERIFIED');
- const at=Date.parse(p.sources.acceptance.at),latest=await t.currentCustomerActivity(p.phone,at);
+ const at=Date.parse(p.sources.acceptance.at),latest=await t.currentCustomerActivity(p.phone,at,{store:s});
  if(!latest.complete||!latest.sources.some(r=>r.id===p.quote.acceptanceId&&r.line===p.line&&r.at===at))throw Error('PROGRAM_NEW_CUSTOMER_TURN');
  const acceptancePosition=s.db.prepare('SELECT rowid FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(p.quote.acceptanceId,p.phone,p.line)?.rowid;
  const verifiedFacts=new Set(Object.values(p.sources).filter(src=>src.id!==p.quote.acceptanceId&&Date.parse(src.at)===at).map(src=>src.id));
@@ -528,7 +537,7 @@ async function verifyNative(s,c,t,entry){
  if(subsequent.length>3)throw Error('PROGRAM_NEW_CUSTOMER_TURN');
  for(const item of subsequent){
   const event=storedCourtesy(s,p,item.id);if(!event||item.line!==p.line||item.at!==event.at)throw Error('PROGRAM_NEW_CUSTOMER_TURN');
-  const native=await nativeMessage(t,c,item.id,p.phone,p.line),m=native.message?.ephemeralMessage?.message??native.message??{},ctx=m.extendedTextMessage?.contextInfo??native.contextInfo??{};
+  const native=await nativeMessage(s,t,c,item.id,p.phone,p.line),m=native.message?.ephemeralMessage?.message??native.message??{},ctx=m.extendedTextMessage?.contextInfo??native.contextInfo??{};
   if(native.key.fromMe!==false||nativeText(native)!==event.text||Number(native.messageTimestamp)*1000!==event.at||ctx.isForwarded||ctx.forwardingScore>0)throw Error('PROGRAM_NEW_CUSTOMER_TURN');
  }
 }

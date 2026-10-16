@@ -17,41 +17,11 @@ import {drainChiefActions} from './chief-actions.mjs';
 import {decodeWebhook} from './webhook.mjs';
 import {validateEvent} from './config.mjs';
 import {literalGreetingEligible,literalGreetingReplyStillValid} from './literal-reception.mjs';
+import {priorAttentionRelease,nativeSourceBeforeRelease} from './explicit-return-attention.mjs';
+import {listStoredNativeIdentitySources,verifyStoredNativeIdentitySource} from './native-identity-resolution.mjs';
 
 export const MARIA_HISTORY_PROTOCOL_GUARD='own-preactivation-synchronization-only-complete-history-v1';
 
-function priorAttentionRelease(store,config,outbox,attention){
-  // Store.hold(false) is the existing explicit chief-return path. Merely
-  // reading its encrypted marker must never release a held conversation or
-  // make an already-prepared response eligible again.
-  if(config.company!=='fumigacion'||store.company!==config.company||outbox.internal)return null;
-  const now=Date.now(),through=attention.through,conversation=store.conversation(outbox.phone);
-  if(!Number.isSafeInteger(through)||through>now||through<config.activatedAt||
-    !conversation||conversation.hold||conversation.line!==outbox.line||conversation.revision!==outbox.revision||
-    store.db.prepare("SELECT 1 FROM events WHERE phone=? AND from_me=1 AND state='PENDING'").get(outbox.phone))return null;
-  try{
-    const row=store.db.prepare('SELECT value FROM meta WHERE key=?').get('chief-release:'+outbox.phone);
-    if(!row)return null;
-    const release=store.open(row.value);
-    if(!release||typeof release!=='object'||Array.isArray(release)||
-      Object.keys(release).some(key=>!['source','at'].includes(key))||
-      typeof release.source!=='string'||!release.source.trim()||release.source.length>200||
-      !Number.isSafeInteger(release.at)||release.at<config.activatedAt||release.at>through||release.at>now||
-      !Number.isSafeInteger(conversation.at)||conversation.at<release.at||conversation.at>now||
-      !Number.isSafeInteger(outbox.created)||outbox.created<release.at)return null;
-    return release;
-  }catch{return null;}
-}
-
-function nativeSourceBeforeRelease(source,outbox,release,config,through){
-  // Native timestamps have second precision. A source in the release second
-  // remains ambiguous, even when its rounded timestamp looks earlier.
-  return Boolean(release&&source.line===outbox.line&&operationalLineAllowed(config,source.line)&&
-    (source.phone===undefined||source.phone===outbox.phone)&&
-    source.edited!==true&&source.kind!=='edited-body-unavailable'&&
-    typeof source.id==='string'&&source.id&&Number.isSafeInteger(source.at)&&
-    source.at>=config.activatedAt&&source.at<=through&&source.at+999<release.at);
-}
 const historyStart=Date.parse('2000-01-01T00:00:00.000Z');
 const historyObject=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 function isolatedHistorySynchronization(record){
@@ -77,6 +47,44 @@ function rememberHistorySource(sources,line,record){
   const key=line.phone+':'+record.key.id,hash=historySourceHash(record),previous=sources.get(key);
   if(previous&&previous!==hash)throw Error('HISTORY_RESULT_UNVERIFIED');
   sources.set(key,hash);return hash;
+}
+async function knownNativeLidWindow(transport,store,phone,since,through,{outgoing=false}={}){
+  if(!store)return {sources:[],checks:[]};
+  const c=transport.config,sources=[],checks=[];
+  if(store.company!==c.company)throw Error('STORED_NATIVE_IDENTITY_SCOPE_REQUIRED');
+  for(const line of operationalLines(c)){
+    const anchors=listStoredNativeIdentitySources(store,c,{phone,line:line.phone,since:c.activatedAt,through});
+    const lids=[...new Set(anchors.map(source=>source.lid))];
+    for(const lid of lids){
+      const anchor=anchors.find(source=>source.lid===lid);
+      if(!await verifyStoredNativeIdentitySource(store,c,transport,{id:anchor.id,phone,line:line.phone,at:anchor.at,fromMe:false,forwarded:false}))throw Error('STORED_NATIVE_IDENTITY_ANCHOR_UNVERIFIED');
+      const seen=new Set();let total=null,read=0;
+      for(let page=1;page<=2;page++){
+        const data=await transport.request(line,'/chat/findMessages/'+encodeURIComponent(line.instance),{where:{key:{remoteJid:lid,fromMe:outgoing},messageTimestamp:{gte:new Date(since).toISOString(),lte:new Date(through).toISOString()}},offset:50,page}),value=data?.messages;
+        if(!value||!Number.isSafeInteger(value.total)||value.total<0||value.total>100||!Array.isArray(value.records)||value.records.length>50||total!==null&&total!==value.total)throw Error('STORED_NATIVE_LID_COVERAGE_UNVERIFIED');
+        total=value.total;read+=value.records.length;
+        for(const record of value.records){
+          const key=record?.key;if(key?.remoteJid!==lid)continue; // Native OR overfetch never confers identity.
+          if(typeof key.fromMe!=='boolean')throw Error('STORED_NATIVE_LID_SOURCE_UNVERIFIED');
+          if(key.fromMe!==outgoing)continue;
+          const at=Number(typeof record.messageTimestamp==='object'?record.messageTimestamp.low:record.messageTimestamp)*1000;
+          if(!/^[A-Za-z0-9_-]{8,100}$/.test(key.id||'')||!Number.isSafeInteger(at)||at<since||at>through||seen.has(key.id))throw Error('STORED_NATIVE_LID_SOURCE_UNVERIFIED');
+          seen.add(key.id);const pn=phone+'@s.whatsapp.net';
+          if(key.remoteJidAlt!=null&&key.remoteJidAlt!==''&&key.remoteJidAlt!==pn)throw Error('STORED_NATIVE_LID_IDENTITY_CONFLICT');
+          if(!outgoing&&key.remoteJidAlt!==pn&&!await verifyStoredNativeIdentitySource(store,c,transport,{id:key.id,phone,line:line.phone,at,fromMe:false,forwarded:false},record))throw Error('STORED_NATIVE_LID_UNPROCESSED_SOURCE');
+          if(outgoing){
+            const m=record.message?.ephemeralMessage?.message??record.message??{},text=m.conversation??m.extendedTextMessage?.text??'',written=typeof text==='string'&&text.trim(),media=Boolean(m.audioMessage||m.imageMessage||m.videoMessage||m.documentMessage),edited=record.isEdited===true||record.edited===true||[record.status,...(record.MessageUpdate??[]).map(update=>update.status)].includes('EDITED');
+            if(written||media||edited)sources.push({id:key.id,line:line.phone,at,kind:media?'media':written?'text':'edited-body-unavailable',...(edited?{edited:true}:{})});
+          }else sources.push({id:key.id,line:line.phone,at});
+        }
+        if(read===total)break;
+        if(!value.records.length||read>total||page===2)throw Error('STORED_NATIVE_LID_COVERAGE_UNVERIFIED');
+      }
+      checks.push({line:line.phone,addressField:'stored-native-lid',lidHash:createHash('sha256').update(lid).digest('hex'),anchorSourceId:anchor.id,total,read});
+      await transport.verifyLine(line.phone);
+    }
+  }
+  return {sources,checks};
 }
 function protocolHistorySourceInScope(record,addressField,phone,cutoff){
   const key=record?.key,pn=phone+'@s.whatsapp.net',at=Number(record?.messageTimestamp)*1000;
@@ -190,7 +198,7 @@ export class Transport {
     return {cutoff:c.activatedAt,checkedAt:Date.now(),guardVersion:operationalHistoryGuard(c),priorOutgoing:checks.some(x=>x.attentionOutgoing??(x.total>0)),checks,coverage:operationalCoverage(c),scope:assertOperationalLineScope(c)?'authorized-own-blue-line-and-explicit-phone-alternatives; red-history-not-read; metadata-only; historical-author-unattributed':'own-two-lines-and-explicit-phone-alternatives; metadata-only; historical-author-unattributed',
       ...(c.company==='fumigacion'&&checks.some(x=>x.protocolGuard===MARIA_HISTORY_PROTOCOL_GUARD)?{classificationScope:'explicit-native-synchronization-packets-and-outgoing-attention; no-complete-chat-history'}:{})};
   }
-  async currentAttention(phone) {
+  async currentAttention(phone,{store=null}={}) {
     const c=this.config;if(!/^57\d{10}$/.test(phone)||!Number.isFinite(c.activatedAt))throw new Error('ATTENTION_SCOPE_REQUIRED');
     const through=Date.now(),sources=new Map(),checks=[];
     for(const line of operationalLines(c)){
@@ -220,6 +228,7 @@ export class Transport {
         checks.push({line:line.phone,addressField,total:expectedTotal,read});
       }
     }
+    const lids=await knownNativeLidWindow(this,store,phone,c.activatedAt,through,{outgoing:true});for(const source of lids.sources){const old=sources.get(source.line+':'+source.id);if(old&&old.at!==source.at)throw Error('ATTENTION_SOURCE_CONFLICT');sources.set(source.line+':'+source.id,source);}checks.push(...lids.checks);
     return {sources:[...sources.values()],checks,through,complete:true,coverage:operationalCoverage(c),scope:assertOperationalLineScope(c)?'authorized-own-blue-line-and-explicit-phone-alternatives; red-attention-not-read; written-or-media-outgoing':'own-two-lines-and-explicit-phone-alternatives; written-or-media-outgoing'};
   }
   async programContext(phone) {
@@ -232,7 +241,7 @@ export class Transport {
     if(result.system!==c.name||String(result.companyId)!==c.expectedProgramCompanyId||result.phone!==phone)throw new Error('PROGRAM_SCOPE_MISMATCH');
     return {...result,verified:true};
   }
-  async currentCustomerActivity(phone,since){
+  async currentCustomerActivity(phone,since,{store=null}={}){
     const c=this.config;
     if(c.company!=='fumigacion'||!/^57\d{10}$/.test(phone)||!Number.isFinite(since)||since<c.activatedAt)throw Error('INACTIVITY_SOURCE_SCOPE_REQUIRED');
     const through=Date.now(),sources=new Map(),checks=[];
@@ -256,6 +265,7 @@ export class Transport {
         checks.push({line:line.phone,addressField,total,read});
       }
     }
+    const lids=await knownNativeLidWindow(this,store,phone,since,through);for(const source of lids.sources){const old=sources.get(source.line+':'+source.id);if(old&&old.at!==source.at)throw Error('INACTIVITY_NATIVE_SOURCE_CONFLICT');sources.set(source.line+':'+source.id,source);}checks.push(...lids.checks);
     return {complete:true,through,sources:[...sources.values()],checks,coverage:operationalCoverage(c),scope:assertOperationalLineScope(c)?'authorized-own-blue-line-and-explicit-phone-alternatives; red-customer-activity-not-read':'own-two-lines-and-explicit-phone-alternatives'};
   }
   async understand(event,context,knowledge,store) {
@@ -428,7 +438,7 @@ export async function flushOutbox(store,config,transport){
     // are checked after every model await and before the delivery reservation.
     if(!o.internal&&config.historyCheckRequired&&typeof transport.currentAttention==='function'){
       try{
-        const attention=await transport.currentAttention(o.phone);
+        const attention=await transport.currentAttention(o.phone,{store});
         if(!attention.complete)throw new Error('ATTENTION_COVERAGE_UNVERIFIED');
         const release=priorAttentionRelease(store,config,o,attention),releasedSources=[];
         const unknown=attention.sources.find(source=>{

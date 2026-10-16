@@ -85,7 +85,7 @@ export async function revalidateInactivity(store,config,transport,candidate,now=
  // deleting their durable once-per-case record.
  if(!current||current.id!==candidate.id||current.sourceId!==candidate.sourceId||current.revision!==candidate.revision)return false;
  if(typeof transport.currentCustomerActivity!=='function')return false;
- const native=await transport.currentCustomerActivity(candidate.phone,candidate.lastSourceAt);
+ const native=await transport.currentCustomerActivity(candidate.phone,candidate.lastSourceAt,{store});
  if(!native.complete||!native.sources.some(s=>s.id===candidate.sourceId&&s.line===candidate.line&&s.at===candidate.lastSourceAt)||native.sources.some(s=>s.at>candidate.lastSourceAt||s.at===candidate.lastSourceAt&&s.id!==candidate.sourceId))return false;
  if(!await programFollowupEligible(config,store,transport,candidate.phone))return false;
  const latest=store.conversation(candidate.phone);
@@ -124,7 +124,7 @@ export async function inactivityDeliveryValid(store,config,transport,row){
  const quote=conv.state.quotedPrice,prior=store.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND case_id=? AND state IN ('DELIVERED','READ')").get(candidate.lastReplyId,row.phone,candidate.caseId);
  if(!prior||prior.mid!==candidate.lastReplyMid||!store.approvedReplyStillValid(prior)||!store.priceReplyStillValid(prior)||!quoteCurrent(quote,now))return false;
  if(store.db.prepare('SELECT 1 FROM events WHERE phone=? AND from_me=0 AND (at>? OR (at=? AND id<>?))').get(row.phone,candidate.lastSourceAt,candidate.lastSourceAt,candidate.sourceId)||store.db.prepare("SELECT 1 FROM questions WHERE phone=? AND case_id=? AND state IN ('PENDING','LEGACY_PENDING','ANSWER_REVIEW')").get(row.phone,candidate.caseId))return false;
- const native=await transport.currentCustomerActivity(row.phone,candidate.lastSourceAt);
+ const native=await transport.currentCustomerActivity(row.phone,candidate.lastSourceAt,{store});
  if(!native.complete||!native.sources.some(s=>s.id===candidate.sourceId&&s.line===candidate.line&&s.at===candidate.lastSourceAt)||native.sources.some(s=>s.at>candidate.lastSourceAt||s.at===candidate.lastSourceAt&&s.id!==candidate.sourceId))return false;
  if(!await programFollowupEligible(config,store,transport,row.phone))return false;
  const latest=store.conversation(row.phone);

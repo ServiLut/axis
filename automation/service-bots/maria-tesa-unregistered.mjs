@@ -4,6 +4,7 @@ import {getTesaConfig} from './tesa-config.mjs';
 import {tesaOutboxScopeSafe} from './tesa-operations.mjs';
 import {selectBusinessPrice,BUSINESS_PRICE_HASH} from './business-prices.mjs';
 import {priceText,selectPrice} from './prices.mjs';
+import {partitionNativeAttention} from './explicit-return-attention.mjs';
 
 export const MARIA_UNREGISTERED_TESA_GUARD='own-prospective-native-tesa-closed-unregistered-answer-v1';
 export const MARIA_UNREGISTERED_TESA_PREFIX='tesa-unregistered:';
@@ -80,9 +81,11 @@ async function verified(s,c,t,plan,verifiers,{queued=false}={}){
  if(typeof verifiers?.verifyQuestionDelivery!=='function'||typeof verifiers?.verifyHumanAnswer!=='function'||typeof t?.currentAttention!=='function'||typeof t.currentCustomerActivity!=='function')return null;
  const revision=current.conv.revision,answerHash=digest(current.answer),own=s.db.prepare('SELECT * FROM tesa_outbox WHERE question_id=?').get(plan.questionId);
  if(!await verifiers.verifyQuestionDelivery(s,c,t,own)||!await verifiers.verifyHumanAnswer(c,t,current.q,current.answer))return null;
- const attention=await t.currentAttention(plan.phone);if(!attention?.complete)return null;
- if(attention.sources.some(item=>!s.db.prepare('SELECT 1 FROM outbox WHERE mid=? AND phone=? AND line=?').get(item.id,plan.phone,item.line))){s.audit('MARIA_UNREGISTERED_TESA_NATIVE_ATTENTION_REVIEW',current.answer.sourceId,{questionId:plan.questionId,caseId:plan.caseId,customerReplyQueued:false});return null;}
- const activity=await t.currentCustomerActivity(plan.phone,plan.customerAt);
+ const attention=await t.currentAttention(plan.phone,{store:s});if(!attention?.complete)return null;
+ const classified=partitionNativeAttention(s,c,{phone:plan.phone,line:plan.line,revision,created:plan.createdAt,sourceAt:plan.customerAt},attention);
+ if(classified.releasedSources.length)s.audit('MARIA_UNREGISTERED_TESA_PRE_RETURN_ATTENTION_PRESERVED',current.answer.sourceId,{sources:classified.releasedSources,releaseSource:classified.release.source,holdReleased:false,authorUnverified:true,businessWritten:false});
+ if(classified.unknown.length){s.audit('MARIA_UNREGISTERED_TESA_NATIVE_ATTENTION_REVIEW',current.answer.sourceId,{questionId:plan.questionId,caseId:plan.caseId,customerReplyQueued:false});return null;}
+ const activity=await t.currentCustomerActivity(plan.phone,plan.customerAt,{store:s});
  if(!activity?.complete||!Array.isArray(activity.sources)||!activity.sources.length||activity.sources.some(item=>{const row=s.db.prepare('SELECT line,at,revision FROM events WHERE id=? AND phone=? AND from_me=0').get(item.id,plan.phone);return !row||row.line!==plan.line||row.at!==item.at||row.revision>revision;}))return null;
  if(!await verifiers.verifyHumanAnswer(c,t,current.q,current.answer))return null;
  current=local(s,c,plan,{queued});return current&&current.conv.revision===revision&&digest(current.answer)===answerHash?current:null;

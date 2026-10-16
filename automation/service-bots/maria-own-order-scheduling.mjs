@@ -2,6 +2,8 @@ import {createHash,randomUUID} from 'node:crypto';
 import {normalize,publicTextSafe,SANDRA} from './config.mjs';
 import {registrationHash,ownRegisteredReceiptForPresentation,MARIA_COMPANY,MARIA_TENANT} from './maria-program.mjs';
 import {ownSchedulingEnabled,ownSchedulingAccessStatus} from './maria-scheduling-access.mjs';
+import {verifyStoredNativeIdentitySource} from './native-identity-resolution.mjs';
+import {partitionNativeAttention} from './explicit-return-attention.mjs';
 
 export const MARIA_OWN_SCHEDULING_GUARD='own-new-receipt-native-tesa-explicit-slot-customer-confirmed-first-schedule-v1';
 export const MARIA_SCHEDULING_PROOF_GUARD='maria-own-order-scheduling-proof-v1';
@@ -114,7 +116,8 @@ async function nativeCustomer(s,c,t,expected,{outgoing=false,mid=null}={}){
  const found=(data.messages?.records??[]).filter(r=>r.key?.id===(mid||expected.id));
  if(found.length!==1)throw Error('SCHEDULING_NATIVE_UNIQUE_REQUIRED');
  const r=found[0],primary=r.key.remoteJid,alt=r.key.remoteJidAlt,pn=expected.phone+'@s.whatsapp.net';
- if(primary!==pn&&!( /^\d+@lid$/.test(primary??'')&&alt===pn)||alt?.endsWith('@s.whatsapp.net')&&alt!==pn)throw Error('SCHEDULING_NATIVE_IDENTITY_REQUIRED');
+ const direct=!(primary!==pn&&!( /^\d+@lid$/.test(primary??'')&&alt===pn)||alt?.endsWith('@s.whatsapp.net')&&alt!==pn);
+ if(!direct&&(outgoing||!await verifyStoredNativeIdentitySource(s,c,t,{...expected,fromMe:false,forwarded:false},r)))throw Error('SCHEDULING_NATIVE_IDENTITY_REQUIRED');
  const m=r.message?.ephemeralMessage?.message??r.message??{},contexts=[m.extendedTextMessage?.contextInfo,m.messageContextInfo,r.contextInfo].filter(x=>x&&typeof x==='object'),citations=[...new Set(contexts.map(x=>x.stanzaId).filter(x=>typeof x==='string'&&x.trim()))],text=m.conversation??m.extendedTextMessage?.text;
  if(r.key.fromMe!==outgoing||text!==expected.text||typeof m.conversation==='string'&&typeof m.extendedTextMessage?.text==='string'&&m.conversation!==m.extendedTextMessage.text||contexts.some(x=>x.isForwarded===true||Number(x.forwardingScore)>0)||citations.length>1||m.editedMessage||m.protocolMessage||r.message?.protocolMessage||r.deleted||r.isEdited||[r.status,...(r.MessageUpdate??[]).map(u=>u.status)].some(v=>['EDITED','DELETED','REVOKED'].includes(v)))throw Error('SCHEDULING_NATIVE_BODY_REQUIRED');
  const timestamp=typeof r.messageTimestamp==='object'?Number(r.messageTimestamp.low):Number(r.messageTimestamp);
@@ -132,8 +135,9 @@ export async function ownSchedulingProof(s,c,t,body,{verifyRegistered}={}){
  const out=s.db.prepare("SELECT * FROM outbox WHERE id=? AND state IN ('DELIVERED','READ') AND mid IS NOT NULL").get(entry.proposalId),delivery=get(s,'first-delivery:'+entry.proposalId);if(!out||s.open(out.body)!==entry.proposalText||!delivery||delivery.mid!==out.mid||delivery.line!==p.line||entry.confirmation.at<Math.floor(delivery.verifiedAt/1000)*1000)throw Error('OWN_SCHEDULING_PROPOSAL_REQUIRED');
  await nativeCustomer(s,c,t,{...entry.confirmation,phone:p.phone,line:p.line});await nativeCustomer(s,c,t,{id:out.id,text:entry.proposalText,phone:p.phone,line:p.line},{outgoing:true,mid:out.mid});
  await verifyCourtesies(s,c,t,entry,current.events);
- const attention=await t.currentAttention(p.phone);if(!attention.complete||attention.sources.some(v=>!s.db.prepare('SELECT 1 FROM outbox WHERE mid=? AND phone=? AND line=?').get(v.id,p.phone,v.line)))throw Error('OWN_SCHEDULING_HUMAN_ATTENTION_REVIEW');
- const activity=await t.currentCustomerActivity(p.phone,entry.confirmation.at);if(!activity.complete||!activity.sources.length||activity.sources.some(v=>!s.db.prepare('SELECT 1 FROM events WHERE id=? AND phone=? AND line=? AND from_me=0 AND at=? AND revision<=?').get(v.id,p.phone,p.line,v.at,proofRevision)))throw Error('OWN_SCHEDULING_LATEST_ACTIVITY_REQUIRED');
+ const attention=await t.currentAttention(p.phone,{store:s}),classified=partitionNativeAttention(s,c,{phone:p.phone,line:p.line,revision:proofRevision,created:entry.createdAt,sourceAt:entry.confirmation.at},attention);if(classified.unknown.length)throw Error('OWN_SCHEDULING_HUMAN_ATTENTION_REVIEW');
+ if(classified.releasedSources.length)s.audit('OWN_SCHEDULING_PRE_RETURN_ATTENTION_PRESERVED',entry.confirmation.id,{sources:classified.releasedSources,releaseSource:classified.release.source,holdReleased:false,authorUnverified:true,businessWritten:false});
+ const activity=await t.currentCustomerActivity(p.phone,entry.confirmation.at,{store:s});if(!activity.complete||!activity.sources.length||activity.sources.some(v=>!s.db.prepare('SELECT 1 FROM events WHERE id=? AND phone=? AND line=? AND from_me=0 AND at=? AND revision<=?').get(v.id,p.phone,p.line,v.at,proofRevision)))throw Error('OWN_SCHEDULING_LATEST_ACTIVITY_REQUIRED');
  const again=await verifyRegistered(entry);if(!again||again.answer.sourceId!==entry.answerId||again.answer.text!==entry.answerText||!unchanged())throw Error(pendingClassification(s,p.phone)?'OWN_SCHEDULING_CLASSIFICATION_PENDING':'OWN_SCHEDULING_PROOF_CHANGED');
  await nativeCustomer(s,c,t,{...entry.confirmation,phone:p.phone,line:p.line});await nativeCustomer(s,c,t,{id:out.id,text:entry.proposalText,phone:p.phone,line:p.line},{outgoing:true,mid:out.mid});
  await verifyCourtesies(s,c,t,entry,current.events);

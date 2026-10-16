@@ -14,7 +14,7 @@ import {MARIA_DIMENSIONS_GUARD} from './intake-dimensions.mjs';
 import { Transport,drain,MARIA_HISTORY_PROTOCOL_GUARD } from './transport.mjs';
 import { pathToFileURL } from 'node:url';
 import { decodeWebhook,observePrivateIdentity,privateIdentityStatus,initializePrivateNativeCachePair,prospectivePrivateNativeCacheBody,recordPrivateNativeCachePairs,decodePrivateNativeCachePairs } from './webhook.mjs';
-import {resolveOwnBlueNativeIdentity} from './native-identity-resolution.mjs';
+import {resolveOwnBlueNativeIdentity,NATIVE_IDENTITY_RESOLUTION_GUARD} from './native-identity-resolution.mjs';
 import {validateApprovedAnswers} from './faq.mjs';
 import {customerActivity} from './chief-status.mjs';
 import {queueChiefDocument} from './chief-document.mjs';
@@ -50,6 +50,22 @@ import {createRetentionDispatchRuntime,restoreRetentionNoteAccess,installRetenti
 
 export const HTTP_BODY_DECODING_GUARD='authenticated-byte-bounded-complete-utf8-json-v1';
 export const FUMIGACION_WEBHOOK_BODY_LIMIT=2*1024*1024;
+
+function auditPrivateNativeCacheUnresolved(store,body,result,{startedAt,receivedAt}){
+  const rows=Array.isArray(body.data)?body.data:[body.data],sources=new Map(rows.filter(row=>/^[A-Za-z0-9_-]{8,100}$/.test(row?.key?.id||'')).map(row=>[row.key.id,row])),seen=new Set();
+  for(const unresolved of result.unresolved||[]){
+    const reason=/^[A-Z][A-Z0-9_]{0,99}$/.test(unresolved?.reason||'')?unresolved.reason:'NATIVE_CACHE_RESOLUTION_FAILED';
+    const diagnostics={};
+    if(Number.isSafeInteger(unresolved?.diagnostics?.exactMatches)&&unresolved.diagnostics.exactMatches>=0&&unresolved.diagnostics.exactMatches<=100)diagnostics.exactMatches=unresolved.diagnostics.exactMatches;
+    for(const field of ['sourceBodyMatches','sourceContextMatches','nativePageContainsSource','nativeChanged'])if(typeof unresolved?.diagnostics?.[field]==='boolean')diagnostics[field]=unresolved.diagnostics[field];
+    const ids=unresolved?.sourceId==null?[...sources.keys()]:sources.has(unresolved.sourceId)?[unresolved.sourceId]:[];
+    for(const id of ids){
+      const marker=id+':'+reason;if(seen.has(marker))continue;seen.add(marker);
+      const raw=sources.get(id),seconds=typeof raw.messageTimestamp==='object'?raw.messageTimestamp?.low:raw.messageTimestamp,providerAt=Number(seconds)*1000;
+      store.audit('PRIVATE_NATIVE_IDENTITY_CACHE_PAIR_UNRESOLVED',id,{guard:NATIVE_IDENTITY_RESOLUTION_GUARD,line:'573126944997',instance:body.instance,reason,...(Object.keys(diagnostics).length?{diagnostics}:{}),receivedAt,providerAt:Number.isSafeInteger(providerAt)?providerAt:null,firstInstalledAt:startedAt,originalJournalPreserved:true,customerEventQueued:false,historicalReplayEnabled:false});
+    }
+  }
+}
 
 export function createDrainScheduler(config,store,runner,{blocked=()=>false,setImmediateFn=setImmediate,setIntervalFn=setInterval,clearIntervalFn=clearInterval}={}){
   const fast=config.company==='fumigacion'&&config.responseTargetMs===3000,key='verified-ingestion-drain-wake-v1';
@@ -366,8 +382,9 @@ export function createBotServer(config,store,transport,engine) {
         if(prospectiveIdentityBody){
           try{
             const resolution=await resolveOwnBlueNativeIdentity(config,transport,prospectiveIdentityBody,{startedAt:privateNativeCacheStartedAt,now:serverReceivedAt,authenticated:true});
+            auditPrivateNativeCacheUnresolved(store,prospectiveIdentityBody,resolution,{startedAt:privateNativeCacheStartedAt,receivedAt:serverReceivedAt});
             recordPrivateNativeCachePairs(store,config,prospectiveIdentityBody,resolution,{startedAt:privateNativeCacheStartedAt});
-          }catch{store.audit('PRIVATE_NATIVE_IDENTITY_CACHE_PAIR_REVIEW','own-blue-ingress',{originalJournalPreserved:true,customerIdentityResolved:false,historicalReplayEnabled:false});}
+          }catch{auditPrivateNativeCacheUnresolved(store,prospectiveIdentityBody,{unresolved:[{sourceId:null,reason:'NATIVE_CACHE_RESOLUTION_FAILED'}]},{startedAt:privateNativeCacheStartedAt,receivedAt:serverReceivedAt});}
         }
         // The original callback never acquires a fictional native PN field.
         // Only separately proven future sources add a derived decoding envelope.
