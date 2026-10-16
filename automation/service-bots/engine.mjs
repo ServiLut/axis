@@ -13,7 +13,7 @@ import {ownIntent} from './maria-understanding.mjs';
 import {ownMiguelIntent,miguelLiteralSlotAllowed} from './miguel-understanding.mjs';
 import {literalPaintingRequest} from './technical-scope.mjs';
 import {afterServiceKind,afterServiceRequest,afterServiceDecision,explicitNewService,mariaLiteralServiceContext,literalOwnAfterServiceRequest,MARIA_LITERAL_SERVICE_CONTEXT_GUARD,mariaIncidentalPetMention} from './after-service.mjs';
-import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,acceptsOwnQuotedAmount,quotationAmountAffirmation,literalIntakeTextWithoutRegistrationFields,literalProgramPreference,prepareRegisteredTesaContinuation,registeredTesaConfirmation,ownRegisteredReceiptForPresentation,ownSavedPendingOperation,queueOwnSavedServiceReview,ownQuoteOutboxId,ownDeliveredQuoteEntry,ordinaryDataInformationTurn,pendingOrdinaryDataInformationTurn} from './maria-program.mjs';
+import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,acceptsOwnQuotedAmount,quotationAmountAffirmation,literalIntakeTextWithoutRegistrationFields,literalProgramPreference,prepareRegisteredTesaContinuation,registeredTesaConfirmation,ownRegisteredReceiptForPresentation,ownSavedPendingOperation,queueOwnSavedServiceReview,ownQuoteOutboxId,ownDeliveredQuoteEntry,ordinaryDataInformationTurn,pendingOrdinaryDataInformationTurn,ordinaryProgramDeferralTurn} from './maria-program.mjs';
 import {prepareMariaUnregisteredTesaPlan,mariaCaseQuoteCustomerTurn} from './maria-tesa-unregistered.mjs';
 import {prepareOwnSchedulingPlan,ownSchedulingCustomerTurn} from './maria-own-order-scheduling.mjs';
 import {createHash} from 'node:crypto';
@@ -610,7 +610,7 @@ export function customerDecision(company,state,e,analysis={}) {
   const ordinarySocial=/^[¡ ]*(?:hola[,!. ]+)?(?:(?:buenos dias|buen dia|buenas tardes|buenas noches)[,!. ]+)?[¿¡ ]*como esta(?:s|n)?[?!.,! ]*$/.test(socialSource);
   const existingSocial=/^(?:(?:hola|buenos dias|buen dia|buenas tardes|buenas noches)[,!. ]+)?[¿¡ ]*como esta(?:s|n)?[?!.,! ]*$/.test(socialSource);
   if(e.kind==='text'&&!e.forwarded&&(company==='fumigacion'?ordinarySocial:company==='servicio-tecnico'&&existingSocial))return {state:{...state,slots:{...state.slots},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)},courtesy:true,socialGreeting:true,reply:'Gracias por preguntar. Estoy aquí para ayudarte.'};
-  if(e.kind==='text'&&!e.forwarded&&(state.introduced||state.initialIntakeAllRequested||state.asked?.length)&&literalGreetingText(e.text))return {state:{...state,slots:{...state.slots},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)},courtesy:true,greeting:true,reply:/buenas noches/.test(normalize(e.text))?'Buenas noches.':/buenas tardes/.test(normalize(e.text))?'Buenas tardes.':/buen(?:os dias| dia)/.test(normalize(e.text))?'Buen día.':'Hola.'};
+  if(e.kind==='text'&&!e.forwarded&&(state.introduced||state.initialIntakeAllRequested||state.asked?.length||company==='fumigacion'&&state.customerDeferral?.active)&&literalGreetingText(e.text))return {state:{...state,slots:{...state.slots},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)},courtesy:true,greeting:true,reply:/buenas noches/.test(normalize(e.text))?'Buenas noches.':/buenas tardes/.test(normalize(e.text))?'Buenas tardes.':/buen(?:os dias| dia)/.test(normalize(e.text))?'Buen día.':'Hola.'};
   const validity=company==='fumigacion'&&mariaQuotationValidityTurn(state,e);
   if(validity)return validity;
   const currentLiteralContext=company==='fumigacion'&&mariaLiteralServiceContext(e);
@@ -899,6 +899,16 @@ export class Engine {
         if(literalIntakeTurn(e,c.company)&&Object.keys(extractSlots(e.text,c.company)).length)pendingQuestion=turns.filter(turn=>turn.id!==e.id&&turn.kind==='text'&&!turn.forwarded&&isCustomerQuestion(turn.text)).at(-1)||null;
       }
       rememberAdditionalLiteralFields(s,c,caseState,e);
+      const programDeferral=ordinaryProgramDeferralTurn(s,c,caseState,e);
+      if(programDeferral){
+        s.audit(programDeferral.resumed?'OWN_CUSTOMER_DEFERRAL_RESUMED':'OWN_PROGRAM_CUSTOMER_DEFERRAL',e.id,{caseId:caseState.caseId,kind:programDeferral.kind,sourceId:e.id,acceptedByMarker:false,businessWritten:false,humanHoldReleased:false});
+        if(!programDeferral.resumed){
+          caseState.lastHandledSourceId=e.id;caseState.lastText=e.text;s.saveConversation(e.phone,caseState);
+          if(!publicTextSafe(programDeferral.reply))throw new Error('EXTERNAL_TEXT_REJECTED');
+          s.queue(e.id+':reply',e.phone,e.line,programDeferral.reply,false,conv.revision,caseState.caseId);
+          finish('OWN_PROGRAM_CUSTOMER_DEFERRAL');return;
+        }
+      }
       const caseQuoteTurn=mariaCaseQuoteCustomerTurn(s,c,caseState,e);
       const schedulingTurn=ownSchedulingCustomerTurn(s,c,caseState,e);
       if(schedulingTurn){schedulingTurn.state.lastHandledSourceId=e.id;schedulingTurn.state.lastText=e.text;s.saveConversation(e.phone,schedulingTurn.state);s.queue(e.id+':reply',e.phone,e.line,schedulingTurn.reply,false,conv.revision,caseState.caseId);finish('OWN_SCHEDULING_CUSTOMER_TURN');return;}
@@ -1021,7 +1031,7 @@ export class Engine {
       // An affirmative amount without the quotation's delivery proof cannot
       // grant consent or silently issue a replacement quotation either.
       const unverifiedAmountAttempt=currentQuote&&!priceNow&&e.kind==='text'&&e.fromMe===false&&!e.forwarded&&!e.quotedId&&quotationAmountAffirmation(e.text)!==null;
-      const continuingQuote=!decision.quoteClarification&&!decision.literalServiceContext&&!decision.observed&&c.company==='fumigacion'&&currentQuote&&priceNow?.id===currentQuote.entryId&&priceNow.priceCop===currentQuote.priceCop&&
+      const continuingQuote=!decision.state.customerDeferral?.active&&!decision.quoteClarification&&!decision.literalServiceContext&&!decision.observed&&c.company==='fumigacion'&&currentQuote&&priceNow?.id===currentQuote.entryId&&priceNow.priceCop===currentQuote.priceCop&&
         ((!decision.review&&!decision.courtesy)||(naturalAcceptance&&(decision.courtesy||decision.reviewTopic==='customer-question')))&&!specialQuotation(textWithoutLinks(literalIntakeTextWithoutRegistrationFields(e.text)),decision.state.slots)&&
         (currentQuote.accepted||naturalAcceptance);
       if(continuingQuote){
@@ -1059,7 +1069,7 @@ export class Engine {
       }
       const ordinaryInformation=ordinaryDataInformationTurn(s,c,decision.state,e);
       if(ordinaryInformation){selectedPrice=null;decision=ordinaryInformation;}
-      if(c.company==='fumigacion'&&!decision.registrationInformation&&!(currentQuote&&(naturalAcceptance||unverifiedAmountAttempt))&&(decision.question?.topic==='cotizacion-verificada'||decision.reviewTopic==='customer-question'&&quotationInquiry(e.text))){
+      if(c.company==='fumigacion'&&!decision.state.customerDeferral?.active&&!decision.registrationInformation&&!(currentQuote&&(naturalAcceptance||unverifiedAmountAttempt))&&(decision.question?.topic==='cotizacion-verificada'||decision.reviewTopic==='customer-question'&&quotationInquiry(e.text))){
         const selection=selectPrice(decision.state.slots,s.approvedPriceCatalogs(),null,{scheduleHash:businessPriceHashAt(e.at),issuedAt:e.at});
         if(selection.entry&&!e.forwarded&&!ambiguousIntake(e.text)&&!specialQuotation(textWithoutLinks(literalIntakeTextWithoutRegistrationFields(e.text)),decision.state.slots)){
           selectedPrice=selection.entry;

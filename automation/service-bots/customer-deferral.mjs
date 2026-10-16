@@ -18,7 +18,9 @@ export function customerDeferralResumeEvidence(event,literal={}){
  const t=normalize(event.text).replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim();
  if(/^(?:(?:si|ahora|ya) )?(?:quiero|deseo|necesito) (?:continuar|seguir|tomar el servicio|el servicio|contratar el servicio)(?: (?:con la cotizacion|con el servicio|por favor|gracias))?$/.test(t))return {kind:'explicit-request',sourceId:event.id,at:event.at,line:event.line,textHash:textHash(event.text)};
  if(/\b(?:no|nunca|todavia|aun|quizas|tal vez|si|cuando|pero|pensar|pensarlo|pensare)\b/.test(t))return null;
- const fields=Object.entries(literal).filter(([field,value])=>['service','site','location','rooms','area','mattresses'].includes(field)&&typeof value==='string'&&normalize(event.text).includes(normalize(value)));
+ // Name/address are supplied only by the registration caller after it verifies
+ // the exact own delivered data prompt. They resume conversation, not consent.
+ const fields=Object.entries(literal).filter(([field,value])=>['service','site','location','rooms','area','mattresses','name','address'].includes(field)&&typeof value==='string'&&normalize(event.text).includes(normalize(value)));
  return fields.length?{kind:'literal-intake',sourceId:event.id,at:event.at,line:event.line,textHash:textHash(event.text),fields:Object.fromEntries(fields)}:null;
 }
 

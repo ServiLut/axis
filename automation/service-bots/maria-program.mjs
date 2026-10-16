@@ -8,6 +8,7 @@ import {mariaIncidentalPetMention} from './after-service.mjs';
 import {verifyStoredNativeIdentitySource} from './native-identity-resolution.mjs';
 import {partitionNativeAttention} from './explicit-return-attention.mjs';
 import {currentMariaLocationProjection} from './current-location-projection.mjs';
+import {CUSTOMER_DEFERRAL_GUARD,customerDeferralRequested,customerDeferralResumeEvidence,customerDeclinesAfterDeferral} from './customer-deferral.mjs';
 
 export const MARIA_PROGRAM_GUARD='own-accepted-ordinary-service-literal-fields-and-atomic-receipt-v2';
 export const MARIA_PROGRAM_PIPELINE_GUARD='processed-customer-turn-before-registration-v1';
@@ -343,6 +344,48 @@ export function ordinaryRegistrationDataQuestion(text){
  const t=normalize(text).replace(/^[¿?\s]+|[¿?!.\s]+$/g,'').replace(/\s+/g,' ');
  return /^(?:por favor[, ]+)?que (?:datos|informacion) (?:necesitas|necesitan|te envio|te mando|debo enviar|tengo que enviar|te debo enviar|me pides)(?: para (?:agendar|programar|registrar|continuar)(?: (?:el servicio|la solicitud|con el servicio))?)?(?: por favor)?$/.test(t);
 }
+// A customer's pause during data collection is neither a cancellation nor a
+// new permission to write. Keep the original accepted quote and sourced facts.
+export function ordinaryProgramDeferralTurn(s,c,state,e){
+ if(!programEnabled(c)||!state.programIntake||!state.caseId?.startsWith('fumigacion:')||state.closed||!Number.isSafeInteger(e.at)||e.at<c.mariaProgram.startsAt||!operationalLineAllowed(c,e.line)||c.operationalLineScope&&(e.at<Date.parse(c.operationalLineScope.authorizedAt)||typeof s.hasSourcesOutsideLine!=='function'||s.hasSourcesOutsideLine(e.phone,e.line)))return null;
+ const pi=state.programIntake,marker=state.customerDeferral,requested=customerDeferralRequested(e),active=marker?.guard===CUSTOMER_DEFERRAL_GUARD&&marker.active===true&&marker.caseId===state.caseId&&marker.line===e.line&&e.at>marker.at;
+ if(!requested&&!active)return null;
+ const conv=s.conversation(e.phone),row=s.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(e.id,e.phone,e.line),native=row&&s.open(row.body),anchor=s.db.prepare('SELECT at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(state.caseId.slice(11),e.phone,e.line);
+ if(!conv||conv.hold||conv.state.caseId!==state.caseId||!anchor||anchor.at>e.at||native?.id!==e.id||native.phone!==e.phone||native.line!==e.line||native.at!==e.at||native.text!==e.text||native.kind!==e.kind||native.fromMe!==false||native.forwarded||native.quotedId)return null;
+ if(['pending','review','registered'].includes(pi.stage)){
+  if(!requested)return null;
+  const entry=get(s,prefix+state.caseId),p=entry?.payload;
+  if(!p||entry.requestHash!==registrationHash(p)||p.caseId!==state.caseId||p.phone!==e.phone||p.line!==e.line)return null;
+  const saved=pi.stage==='registered'&&ownRegisteredReceiptForPresentation(s,c,{phone:e.phone,line:e.line,caseId:state.caseId});
+  return {state,kind:'post-registration-status',reply:saved?'Tu solicitud ya está registrada. Antes de aplazarla, necesitamos revisar su estado; no he modificado ni cancelado el servicio.':'El registro de tu solicitud está pendiente de verificación. No tengo confirmada una cancelación ni un cambio.'};
+ }
+ if(!['name','address','details','confirm','correction'].includes(pi.stage))return null;
+ if(requested){
+  state.customerDeferral={guard:CUSTOMER_DEFERRAL_GUARD,active:true,caseId:state.caseId,line:e.line,sourceId:e.id,at:e.at,registrationStage:pi.stage,...(marker?.sourceId&&marker.sourceId!==e.id?{previousSources:[...(marker.previousSources||[]),{sourceId:marker.sourceId,at:marker.at}].slice(-10)}:{})};
+  return {state,kind:'collection-deferred',reply:'Claro, puedes pensarlo con calma. Si te surge alguna duda, aquí estoy.'};
+ }
+ if(e.kind!=='text'||e.fromMe||e.forwarded||e.quotedId)return null;
+ let resumedBy=customerDeferralResumeEvidence(e),resumedFields=null;
+ if(!resumedBy){
+  const prompt=pi.promptId&&s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND internal=0 AND state IN ('DELIVERED','READ') AND mid IS NOT NULL").get(pi.promptId,e.phone,e.line,state.caseId),proof=prompt&&get(s,'first-delivery:'+prompt.id);
+  if(prompt&&proof?.mid===prompt.mid&&proof.line===e.line&&['DELIVERED','READ'].includes(proof.state)&&Number.isSafeInteger(proof.verifiedAt)&&e.at>=Math.floor(proof.verifiedAt/1000)*1000){
+   const fields=explicitFields(e.text),wanted=pi.requestedFields||(['name','address'].includes(pi.stage)?[pi.stage]:['name','address']),literal={};
+   if(!fields.conflict){if(wanted.includes('name'))literal.name=fields.name||literalName(e.text,true);if(wanted.includes('address'))literal.address=fields.address||literalAddress(e.text,true);}
+   resumedBy=customerDeferralResumeEvidence(e,literal);if(resumedBy)resumedFields=literal;
+  }
+ }
+ if(resumedBy){
+  state.customerDeferral={...marker,active:false,resumedBy};
+  // A resumed summary must be delivered again before a NEW confirmation. The
+  // old prompt/preview remain in original outbox/history, never replayed.
+  state.programIntake={...pi,promptId:null,preview:null,
+   ...(resumedFields?.name?{customerName:resumedFields.name,nameSource:source(e)}:{}),
+   ...(resumedFields?.address?{address:resumedFields.address,addressSource:source(e)}:{})};
+  return {state,kind:'collection-resumed',resumed:true,resumedBy};
+ }
+ if(customerDeclinesAfterDeferral(e)||/[?¿]|\b(?:pague|pago|pagar|comprobante|transfer|consign|abono|refuerzo|garantia|cancel|reprogram|queja|reclamo|denuncia|dolor|intoxic|embaraz|mascota|bebe|nino|producto|segur|toxic|veneno|precaucion|documento|certificado)\w*/.test(normalize(e.text)))return null;
+ return {state,kind:'collection-still-deferred',reply:'Tu solicitud sigue pendiente. Puedes retomarla cuando decidas continuar.'};
+}
 // A pending technical/price consultation does not prevent answering what data
 // will be needed. This path grants no acceptance, registration or schedule and
 // deliberately leaves both the review and its original consultation intact.
@@ -404,6 +447,7 @@ export function registrationTurn(s,c,previous,e,decision){
  if(!operationalLineAllowed(c,e.line)||c.operationalLineScope&&e.at<Date.parse(c.operationalLineScope.authorizedAt))return null;
  if(c.operationalLineScope&&(typeof s.hasSourcesOutsideLine!=='function'||s.hasSourcesOutsideLine(e.phone,e.line)))return null;
  const state=decision.state;
+ if(state.customerDeferral?.guard===CUSTOMER_DEFERRAL_GUARD&&state.customerDeferral.active===true)return null;
  const information=ordinaryDataInformationTurn(s,c,state,e);if(information)return information;
  const priorQuote=state.programIntake&&s.db.prepare('SELECT case_id FROM outbox WHERE id=? AND phone=? AND line=?').get(ownQuoteOutboxId(s,state,e.phone,e.line),e.phone,e.line);
  if(priorQuote&&priorQuote.case_id!==state.caseId){
