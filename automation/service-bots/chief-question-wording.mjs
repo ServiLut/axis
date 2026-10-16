@@ -1,5 +1,6 @@
 import {normalize,SANDRA} from './config.mjs';
 import {projectCurrentMariaLocationDetails} from './current-location-projection.mjs';
+import {literalTermiteFurnitureScope,termiteFurnitureMention,MARIA_TERMITE_FURNITURE_SCOPE_GUARD} from './maria-furniture-scope.mjs';
 
 // Presentation only. The existing question store owns routing, deduplication,
 // source history and authority. Rendering a question grants no business action.
@@ -78,6 +79,14 @@ function ownSourceText(store,config,request,extractLiteralFacts){
   // this formatter never resolves the conflict or rewrites the stored slots.
   if(contradicted(field,value))return null;
   const reference=state.intakeSources?.[field],refs=Array.isArray(reference?.sources)?reference.sources:reference?[reference]:[];
+  if(field==='treatmentScope'&&reference?.guard===MARIA_TERMITE_FURNITURE_SCOPE_GUARD){
+   const row=read(reference.sourceId),e=eventInScope(store,row,request),scope=e&&literalTermiteFurnitureScope(e);
+   if(!e||e.kind!=='text'||reference.at!==e.at||row.rowid<anchorRow.rowid||row.rowid>through.rowid||e.at<anchor.at||e.at>through.at||scope?.guard!==reference.guard||scope.sourceId!==e.id||scope.at!==e.at||scope.literalScope!==value)return null;
+   // A later explicit change or nonasserted mention cannot be overruled by
+   // the old item reference. Only omit the presentation; retain all history.
+   if([source,latest].some(current=>current?.kind==='text'&&current.id!==e.id&&termiteFurnitureMention(current)&&literalTermiteFurnitureScope(current)?.literalScope!==value))return null;
+   return value;
+  }
   const candidates=[source,...refs.flatMap(ref=>{
    const row=read(ref.sourceId),e=eventInScope(store,row,request);
    return e&&row.rowid>=anchorRow.rowid&&row.rowid<=through.rowid&&e.at>=anchor.at&&e.at<=through.at&&(ref.at===undefined||ref.at===e.at)?[e]:[];
@@ -100,6 +109,11 @@ function ownSourceText(store,config,request,extractLiteralFacts){
   for(const field of ['rooms','area','mattresses']){const id=state.intakeSources?.[field]?.sourceId,row=id&&read(id),e=eventInScope(store,row,request);if(e&&e.at>=anchor.at&&e.at<=through.at)originals.push(e);}
   const projection=projectCurrentMariaLocationDetails(state,{phone:request.phone,line:request.line,at:through.at,sources:[anchor,...originals]});
   if(projection.review||!projection.locationDetails)return null;
+  // A whole service request is already quoted below as the client's message.
+  // Do not duplicate it under "location" merely because the intake retained
+  // that source as location context. A pure location/neighborhood stays here.
+  const pureLocationLabel=source.kind==='text'&&/^(?:barrio|sector|vereda|urbanizaci[oó]n|municipio|ciudad)\b[^\r\n.!?;¿]{0,100}[.!]?$/iu.test(source.text.trim());
+  if(source.kind==='text'&&projection.locationDetails===source.text.trim()&&!pureLocationLabel&&typeof parsed(source)?.service==='string')return null;
   return projection.locationDetails.split(' | ').map(part=>short(part,75)).join(' | ');
  })();
  const facts=[],service=literalFor('service'),city=literalFor('location'),site=literalFor('site');
@@ -107,7 +121,7 @@ function ownSourceText(store,config,request,extractLiteralFacts){
  if(locationContext)facts.push({field:'locationContext',value:city&&!normalize(locationContext).includes(normalize(city))?city+'; '+locationContext:locationContext});
  else if(city)facts.push({field:'location',value:city});
  if(site)facts.push({field:'site',value:site});
- const scope=[['rooms','Habitaciones'],['mattresses','Colchones'],['area','Área'],['dimensions','Medidas'],['treatmentScope','Alcance']].flatMap(([field,label])=>{const value=literalFor(field);return value&&(!locationContext||!normalize(locationContext).includes(normalize(value)))?[label+': '+value]:[];});
+ const scope=[['rooms','Habitaciones'],['mattresses','Colchones'],['area','Área'],['dimensions','Medidas'],['treatmentScope','Alcance']].flatMap(([field,label])=>{const value=literalFor(field),itemScope=field==='treatmentScope'&&state.intakeSources?.[field]?.guard===MARIA_TERMITE_FURNITURE_SCOPE_GUARD;return value&&(itemScope||!locationContext||!normalize(locationContext).includes(normalize(value)))?[itemScope?value:label+': '+value]:[];});
  if(scope.length)facts.push({field:'scope',value:scope.join('; ')});
  if(facts.length<4){const value=literalFor('detail');if(value)facts.push({field:'detail',value});}
  return formatMariaChiefQuestion({topic:request.topic,kind:typeof request.conditions?.kind==='string'?request.conditions.kind:undefined,last4:request.phone.slice(-4),lineLast4:request.line.slice(-4),facts,sourceText:source.kind==='text'?source.text:''});
