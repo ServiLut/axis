@@ -34,7 +34,7 @@ function fixture(){
 test('separate pet presence is acknowledged once and reaches the confirmed own order with its full native source',async()=>{
  const f=fixture();try{
   await f.quote();const pets=await f.turn('Tengo dos mascotas.');assert.equal(f.deliver(pets),'Anoté: Tengo dos mascotas.');
-  const address=await f.facts(),summary=f.deliver(address);assert.match(summary,/Presencia de mascotas informada: Tengo dos mascotas\./);assert.doesNotMatch(summary,/segur|inofensiv|retir|protecci/i);
+  const address=await f.facts(),summary=f.deliver(address);assert.match(summary,/• Mascotas informadas: Tengo dos mascotas(?:\n|$)/);assert.doesNotMatch(summary,/segur|inofensiv|retir|protecci/i);
   const confirmation=await f.turn('Sí');assert.equal(f.row(confirmation),undefined);await drainProgramRegistrations(f.store,f.config,f.transport);await drainProgramRegistrations(f.store,f.config,f.transport);
   const {writes,payload}=f.stats();assert.equal(writes,1);assert.equal(payload.petPresence,'Tengo dos mascotas');assert.deepEqual(payload.sources.petPresence,{id:pets.id,text:pets.text,at:new Date(pets.at).toISOString()});assert.equal(payload.quote.acceptanceId,confirmation.id);
   assert.equal(payload.customerName,'Persona Sintética');assert.equal(payload.address,'Calle 50 # 42-18 apartamento 301');assert.equal(payload.quote.priceCop,129000);assert.equal(registrationStatus(f.config,f.store).saved,1);assert.equal(f.store.conversation(pets.phone).state.programServiceId,orderId);
@@ -50,7 +50,7 @@ test('a pet note sent before the original price acceptance permits the prior-fac
 
 test('a new pet source after the delivered summary requires a newly delivered summary and later confirmation',async()=>{
  const f=fixture();try{
-  await f.quote();const address=await f.facts();f.deliver(address);const pets=await f.turn('Tengo dos mascotas.');assert.match(f.deliver(pets),/Presencia de mascotas informada: Tengo dos mascotas/);assert.equal(registrationStatus(f.config,f.store).prepared,0);
+  await f.quote();const address=await f.facts();f.deliver(address);const pets=await f.turn('Tengo dos mascotas.');assert.match(f.deliver(pets),/• Mascotas informadas: Tengo dos mascotas(?:\n|$)/);assert.equal(registrationStatus(f.config,f.store).prepared,0);
   await drainProgramRegistrations(f.store,f.config,f.transport);assert.equal(f.stats().writes,0);const confirmed=await f.turn('Confirmo');await drainProgramRegistrations(f.store,f.config,f.transport);assert.equal(f.stats().writes,1);assert.equal(f.stats().payload.quote.acceptanceId,confirmed.id);
  }finally{f.store.close();}
 });
@@ -63,7 +63,7 @@ test('even the same pet words from a newer source renew the summary source befor
 
 test('the latest validated literal pet presence in the current case replaces the earlier observation',async()=>{
  const f=fixture();try{
-  await f.quote();await f.turn('Tengo dos mascotas.');const pets=await f.turn('Tenemos tres mascotas.');const address=await f.facts();assert.match(f.deliver(address),/Presencia de mascotas informada: Tenemos tres mascotas/);await f.turn('Sí');await drainProgramRegistrations(f.store,f.config,f.transport);assert.equal(f.stats().payload.petPresence,'Tenemos tres mascotas');assert.equal(f.stats().payload.sources.petPresence.id,pets.id);
+  await f.quote();await f.turn('Tengo dos mascotas.');const pets=await f.turn('Tenemos tres mascotas.');const address=await f.facts();assert.match(f.deliver(address),/• Mascotas informadas: Tenemos tres mascotas(?:\n|$)/);await f.turn('Sí');await drainProgramRegistrations(f.store,f.config,f.transport);assert.equal(f.stats().payload.petPresence,'Tenemos tres mascotas');assert.equal(f.stats().payload.sources.petPresence.id,pets.id);
  }finally{f.store.close();}
 });
 
@@ -75,7 +75,7 @@ test('a separate pet source in the same pending facts batch is retained before t
  const f=fixture();try{
   await f.quote();f.deliver(await f.turn('Sí'));const name=f.event('Persona Sintética'),pets=f.event('Tengo dos mascotas.'),address=f.event('Calle 50 # 42-18 apartamento 301');
   for(const e of [name,pets,address])f.store.enqueue(e);for(const e of [name,pets,address])await f.engine.process(e);
-  const pi=f.store.conversation(address.phone).state.programIntake;assert.equal(pi.customerName,name.text);assert.equal(pi.address,address.text);assert.match(f.deliver(address),/Presencia de mascotas informada: Tengo dos mascotas/);await f.turn('Sí');await drainProgramRegistrations(f.store,f.config,f.transport);assert.equal(f.stats().writes,1);assert.equal(f.stats().payload.sources.petPresence.id,pets.id);
+  const pi=f.store.conversation(address.phone).state.programIntake;assert.equal(pi.customerName,name.text);assert.equal(pi.address,address.text);assert.match(f.deliver(address),/• Mascotas informadas: Tengo dos mascotas(?:\n|$)/);await f.turn('Sí');await drainProgramRegistrations(f.store,f.config,f.transport);assert.equal(f.stats().writes,1);assert.equal(f.stats().payload.sources.petPresence.id,pets.id);
  }finally{f.store.close();}
 });
 
@@ -93,7 +93,7 @@ for(const text of ['No tengo mascotas.','Ya no tengo mascotas.','Me equivoqué, 
 
 test('an explicitly corrected name still renews its summary and preserves the valid unchanged pet observation',async()=>{
  const f=fixture();try{
-  await f.quote();f.deliver(await f.turn('Tengo dos mascotas.'));f.deliver(await f.facts());const corrected=await f.turn('Me equivoqué. Mi nombre es Ana Pérez');assert.match(f.deliver(corrected),/a nombre de Ana Pérez/);assert.match(f.store.open(f.row(corrected).body),/Presencia de mascotas informada: Tengo dos mascotas/);await f.turn('Confirmo');await drainProgramRegistrations(f.store,f.config,f.transport);assert.equal(f.stats().writes,1);assert.equal(f.stats().payload.customerName,'Ana Pérez');assert.equal(f.stats().payload.petPresence,'Tengo dos mascotas');
+  await f.quote();f.deliver(await f.turn('Tengo dos mascotas.'));f.deliver(await f.facts());const corrected=await f.turn('Me equivoqué. Mi nombre es Ana Pérez');assert.match(f.deliver(corrected),/• Nombre: Ana Pérez(?:\n|$)/);assert.match(f.store.open(f.row(corrected).body),/• Mascotas informadas: Tengo dos mascotas(?:\n|$)/);await f.turn('Confirmo');await drainProgramRegistrations(f.store,f.config,f.transport);assert.equal(f.stats().writes,1);assert.equal(f.stats().payload.customerName,'Ana Pérez');assert.equal(f.stats().payload.petPresence,'Tengo dos mascotas');
  }finally{f.store.close();}
 });
 

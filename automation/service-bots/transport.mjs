@@ -9,7 +9,8 @@ import {drainProgramRegistrations,acceptsOrdinaryQuotation,savedServiceReviewSti
 import {routeCaseQuestion} from './engine.mjs';
 import {initializeInactivityFollowup,queueInactivityFollowups,inactivityDeliveryValid,recordResponseTiming} from './inactivity-followup.mjs';
 import {tesaCaseAnswers} from './tesa-operations.mjs';
-import {drainTesaGroup,tesaCustomerReplyStillValid,unregisteredTesaReplyValid,schedulingReplyValid,schedulingProofForBackend} from './tesa-transport.mjs';
+import {drainTesaGroup,tesaCustomerReplyStillValid,unregisteredTesaReplyValid,schedulingReplyValid,schedulingProofForBackend,refreshTesaMembership} from './tesa-transport.mjs';
+import {chiefTesaTestSendEntry,chiefTesaTestHash,CHIEF_TESA_TEST_DELIVERY_GUARD} from './chief-tesa-test.mjs';
 import {drainOwnScheduling} from './maria-own-order-scheduling.mjs';
 import {drainTesaGuidanceLists} from './tesa-guidance-list.mjs';
 import {assertOperationalLineScope,operationalLines,operationalLineAllowed,operationalHistoryGuard,operationalCoverage} from './line-scope.mjs';
@@ -159,6 +160,72 @@ export class Transport {
     const checked=validateEvent(decoded.events[0],c);
     if(checked.id!==source.id||checked.phone!==SANDRA||checked.line!==source.line||checked.fromMe!==false||checked.forwarded||checked.kind!==source.kind||checked.text!==source.text||checked.at!==source.at||(checked.quotedId??null)!==(source.quotedId??null))throw Error('CHIEF_NATIVE_SOURCE_UNVERIFIED');
     return {verified:true,sourceId:checked.id,phone:checked.phone,line:checked.line,at:checked.at};
+  }
+  async verifyChiefSimulationOutput(row,text,first){
+    const c=this.config,blue='573126944997',digest=value=>createHash('sha256').update(typeof value==='string'?value:JSON.stringify(canonicalHistoryValue(value))).digest('hex');
+    if(c.company!=='fumigacion'||c.enabled!==false||c.chiefOnly!==true||c.replyOnlyToChief!==true||row?.phone!==SANDRA||row.line!==blue||row.internal!==1||!/^chief-simulation:[a-f0-9-]{36}:SIM_OUTPUT_[a-f0-9]{48}$/.test(row.id??'')||!['DELIVERED','READ'].includes(row.state)||typeof text!=='string'||!text.startsWith('SIMULACIÓN · ')||!row.mid||first?.mid!==row.mid||first.line!==blue||!['DELIVERED','READ'].includes(first.state)||!Number.isSafeInteger(first.verifiedAt)||first.verifiedAt<row.created||first.verifiedAt>Date.now())throw Error('SIMULATION_EXACT_INTERNAL_DELIVERY_REQUIRED');
+    const line=c.lines.find(l=>l.phone===blue);if(!line||!operationalLineAllowed(c,blue))throw Error('SIMULATION_EXACT_INTERNAL_DELIVERY_REQUIRED');
+    await this.verifyLine(blue);
+    const raw=await this.request(line,'/chat/findMessages/'+encodeURIComponent(line.instance),{where:{key:{id:row.mid}},offset:2,page:1}),records=raw?.messages?.records;
+    if(raw?.messages?.total!==1||!Array.isArray(records)||records.length!==1)throw Error('SIMULATION_EXACT_INTERNAL_DELIVERY_REQUIRED');
+    const record=records[0],decoded=decodeWebhook({instance:line.instance,event:'messages.upsert',data:records},c),event=decoded.events.length===1?validateEvent(decoded.events[0],c):null;
+    const m=record?.message?.ephemeralMessage?.message??record?.message??{},contexts=[m.extendedTextMessage?.contextInfo,m.messageContextInfo,record.contextInfo].filter(value=>value&&typeof value==='object'),states=[record?.status,record?.update?.status,...(record?.MessageUpdate??[]).map(update=>update.status)],state=states.some(status=>status==='READ'||status===4)?'READ':states.some(status=>status==='DELIVERY_ACK'||status===3)?'DELIVERED':null;
+    if(!event||event.id!==row.mid||event.phone!==SANDRA||event.line!==blue||event.fromMe!==true||event.forwarded||event.quotedId||event.kind!=='text'||event.text!==text||typeof m.conversation==='string'&&typeof m.extendedTextMessage?.text==='string'&&m.conversation!==m.extendedTextMessage.text||contexts.some(value=>typeof value.stanzaId==='string'&&value.stanzaId.trim())||!state||event.at+999<row.created||event.at>first.verifiedAt||m.protocolMessage||m.editedMessage||record.message?.protocolMessage||['isEdited','edited','deleted','isDeleted','revoked','isRevoked'].some(key=>record[key]!=null&&record[key]!==false)||states.some(value=>['EDITED','DELETED','REVOKED'].includes(value)))throw Error('SIMULATION_EXACT_INTERNAL_DELIVERY_REQUIRED');
+    await this.verifyLine(blue);
+    return {guard:'own-exact-internal-chief-simulation-output-delivery-v1',verified:true,internal:true,recipient:SANDRA,line:blue,outboxId:row.id,mid:row.mid,text,textHash:digest(text),state,verifiedAt:first.verifiedAt,checkedAt:Date.now(),nativeProofHash:digest({record,firstDelivery:first,outboxId:row.id})};
+  }
+  async sendChiefTesaTest(store,cycleId){
+    const c=this.config,initial=chiefTesaTestSendEntry(store,c,cycleId),line=c.lines.find(value=>value.phone===initial.line);
+    let mid=null;
+    try{
+      if(!line?.apiKey)throw Error('CHIEF_TESA_TEST_INSTANCE_ACCESS_REQUIRED');
+      const membership=await refreshTesaMembership(c,this,{force:true});
+      if(!membership||membership.senderLine!==initial.line||membership.groupJid!==initial.groupJid||membership.groupSubject!==initial.groupSubject)throw Error('CHIEF_TESA_TEST_GROUP_UNVERIFIED');
+      const native=await this.verifyChiefCommandSource(initial.source);
+      if(native?.verified!==true||native.sourceId!==initial.source.id||native.phone!==initial.source.phone||native.line!==initial.line||native.at!==initial.source.at)throw Error('CHIEF_TESA_TEST_SOURCE_UNVERIFIED');
+      if(chiefTesaTestHash(chiefTesaTestSendEntry(store,c,cycleId))!==chiefTesaTestHash(initial)||Date.now()-initial.source.at>120000)throw Error('CHIEF_TESA_TEST_SNAPSHOT_CHANGED');
+      // This is the sole, fixed-body exception. Generic /message routes and
+      // every ordinary/customer/group queue keep the Sandra-only restriction.
+      const response=await this.fetcher(c.provider+'/message/sendText/'+encodeURIComponent(line.instance),{method:'POST',headers:{apikey:line.apiKey,'Content-Type':'application/json'},body:JSON.stringify({number:initial.groupJid,text:initial.text,linkPreview:false}),redirect:'error',signal:AbortSignal.timeout(20000)});
+      if(!response?.ok)throw Error('CHIEF_TESA_TEST_SEND_UNCERTAIN');
+      const sent=await response.json();
+      if(typeof sent?.key?.id==='string'&&/^[A-Za-z0-9_-]{8,100}$/.test(sent.key.id))mid=sent.key.id;
+      if(!mid||sent.key.remoteJid!==initial.groupJid||sent.key.fromMe!==true)throw Error('CHIEF_TESA_TEST_SEND_UNCERTAIN');
+      const after=await refreshTesaMembership(c,this,{force:true});
+      if(!after||after.senderLine!==initial.line||after.groupJid!==initial.groupJid||after.groupSubject!==initial.groupSubject||chiefTesaTestHash(chiefTesaTestSendEntry(store,c,cycleId))!==chiefTesaTestHash(initial))throw Error('CHIEF_TESA_TEST_SNAPSHOT_CHANGED');
+      return {mid,line:initial.line,groupJid:initial.groupJid,textHash:initial.textHash,deliveryVerified:false,responseHash:chiefTesaTestHash(sent)};
+    }catch(error){if(mid)error.mid=mid;throw error;}
+  }
+  async verifyChiefTesaTestDelivery(store,cycleId){
+    const c=this.config,initial=chiefTesaTestSendEntry(store,c,cycleId,{lookup:true}),line=c.lines.find(value=>value.phone===initial.line);
+    if(!line?.apiKey)throw Error('CHIEF_TESA_TEST_INSTANCE_ACCESS_REQUIRED');
+    const before=await refreshTesaMembership(c,this,{force:true});
+    if(!before||before.senderLine!==initial.line||before.groupJid!==initial.groupJid||before.groupSubject!==initial.groupSubject)throw Error('CHIEF_TESA_TEST_GROUP_UNVERIFIED');
+    const key=initial.mid?{id:initial.mid}:{remoteJid:initial.groupJid,fromMe:true};
+    const raw=await this.request(line,'/chat/findMessages/'+encodeURIComponent(line.instance),{where:{key,...(!initial.mid?{messageTimestamp:{gte:new Date(Math.floor(initial.sendStartedAt/1000)*1000).toISOString(),lte:new Date().toISOString()}}:{})},offset:initial.mid?2:100,page:1}),messages=raw?.messages;
+    if(!messages||!Number.isSafeInteger(messages.total)||messages.total<0||messages.total>(initial.mid?1:100)||!Array.isArray(messages.records)||messages.records.length!==messages.total)throw Error('CHIEF_TESA_TEST_NATIVE_COVERAGE_UNVERIFIED');
+    const matches=[],seen=new Set();
+    for(const record of messages.records){
+      if(record?.key?.remoteJid!==initial.groupJid||record.key.fromMe!==true)continue;
+      const id=record.key.id,m=record.message?.ephemeralMessage?.message??record.message??{},text=m.conversation??m.extendedTextMessage?.text;
+      if(initial.mid&&id!==initial.mid)throw Error('CHIEF_TESA_TEST_NATIVE_SOURCE_UNVERIFIED');
+      if(text!==initial.text)continue;
+      const at=Number(typeof record.messageTimestamp==='object'?record.messageTimestamp.low:record.messageTimestamp)*1000;
+      const contexts=[m.extendedTextMessage?.contextInfo,m.messageContextInfo,record.contextInfo].filter(value=>value&&typeof value==='object');
+      if(!/^[A-Za-z0-9_-]{8,100}$/.test(id??'')||seen.has(id)||!Number.isSafeInteger(at)||at+999<initial.sendStartedAt||at>Date.now()||typeof m.conversation==='string'&&typeof m.extendedTextMessage?.text==='string'&&m.conversation!==m.extendedTextMessage.text||contexts.some(value=>value.isForwarded||Number(value.forwardingScore)>0||value.stanzaId)||[record.key.participant,record.key.participantAlt].some(value=>/^57\d{10}@s\.whatsapp\.net$/.test(value??'')&&value!==initial.line+'@s.whatsapp.net')||m.protocolMessage||m.editedMessage||record.message?.protocolMessage||['isEdited','edited','deleted','isDeleted','revoked','isRevoked'].some(k=>record[k]!=null&&record[k]!==false)||record.MessageUpdate!=null&&!Array.isArray(record.MessageUpdate))throw Error('CHIEF_TESA_TEST_NATIVE_SOURCE_UNVERIFIED');
+      const allowedStates=new Set(['PENDING','SENT','SERVER_ACK','DELIVERY_ACK','READ','PLAYED','ERROR','FAILED','EDITED','DELETED','REVOKED',0,1,2,3,4,5]);
+      if(record.update!=null||record.status!=null&&!allowedStates.has(record.status)||(record.MessageUpdate??[]).length>100||(record.MessageUpdate??[]).some(update=>!historyObject(update)||typeof record.id!=='string'||!record.id||!allowedStates.has(update.status)||Object.keys(update).some(key=>!['status','id','messageId','keyId','messageKeyId','instanceId'].includes(key))||update.messageId!==undefined&&update.messageId!==record.id||update.instanceId!==undefined&&update.instanceId!==record.instanceId||update.keyId!==undefined&&update.keyId!==record.key.id||update.messageKeyId!==undefined&&update.messageKeyId!==record.key.id))throw Error('CHIEF_TESA_TEST_NATIVE_SOURCE_UNVERIFIED');
+      seen.add(id);
+      const states=[record.status,...(record.MessageUpdate??[]).map(update=>update.status)];
+      if(states.some(value=>['ERROR','FAILED','EDITED','DELETED','REVOKED',0].includes(value)))throw Error('CHIEF_TESA_TEST_NATIVE_SOURCE_UNVERIFIED');
+      const state=states.some(value=>value==='READ'||value===4)?'READ':states.some(value=>value==='DELIVERY_ACK'||value===3)?'DELIVERED':null;
+      matches.push({record,mid:id,at,state});
+    }
+    if(matches.length>1)throw Error('CHIEF_TESA_TEST_NATIVE_AMBIGUOUS');
+    const after=await refreshTesaMembership(c,this,{force:true});
+    if(!after||after.senderLine!==initial.line||after.groupJid!==initial.groupJid||after.groupSubject!==initial.groupSubject||chiefTesaTestHash(chiefTesaTestSendEntry(store,c,cycleId,{lookup:true}))!==chiefTesaTestHash(initial))throw Error('CHIEF_TESA_TEST_SNAPSHOT_CHANGED');
+    const exact=matches[0];if(!exact?.state)return {verified:false,pending:true,cycleId,mid:exact?.mid??initial.mid,deliveryVerified:false};
+    return {guard:CHIEF_TESA_TEST_DELIVERY_GUARD,verified:true,cycleId,line:initial.line,groupJid:initial.groupJid,groupSubject:initial.groupSubject,mid:exact.mid,text:initial.text,textHash:initial.textHash,state:exact.state,at:exact.at,checkedAt:Date.now(),nativeProofHash:chiefTesaTestHash({record:exact.record,beforeMembership:before.verifiedMembership.sourceHash,afterMembership:after.verifiedMembership.sourceHash})};
   }
   async send(row,text) {
     if(!outboundRecipientAllowed(this.config,row?.phone))throw Error('CHIEF_ONLY_DELIVERY_RESTRICTION');

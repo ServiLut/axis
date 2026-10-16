@@ -8,12 +8,16 @@ import {dailyProgramCross,programSupervisionStatus} from './program-supervision.
 import {bogotaDayWindow,dailyManagementReportText} from './daily-operational-audit.mjs';
 import {MARIA_PROGRAM_URL,MARIA_TENANT,MARIA_COMPANY,programEnabled,registrationStatus} from './maria-program.mjs';
 import {planChiefCommand,CHIEF_COMMAND_AI_GUARD} from './chief-command-ai.mjs';
+import {parseChiefCustomerSimulationCommand} from './chief-customer-simulation.mjs';
+import {executeChiefCustomerSimulation,CHIEF_CUSTOMER_SIMULATION_HOOK_GUARD} from './chief-customer-simulation-hook.mjs';
+import {parseMariaTestOrderCommand,mariaTestOrderAccessStatus} from './maria-test-order-access.mjs';
+import {parseChiefTesaTestCommand,executeChiefTesaTest,chiefTesaTestStatus} from './chief-tesa-test.mjs';
 
 export const CHIEF_ACTIONS_GUARD='own-native-directed-chief-durable-command-and-verified-result-v1';
 export const CHIEF_CONVERSATION_RULE_GUARD='own-native-chief-versioned-conversation-rules-only-v1';
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const dayAt=at=>new Date(at-5*3600000).toISOString().slice(0,10);
-const actions=new Set(['whatsapp-counts','whatsapp-list','whatsapp-calls','program-day','program-contacts','own-receipt','release-one','learn-conversation','unsupported']);
+const actions=new Set(['whatsapp-counts','whatsapp-list','whatsapp-calls','program-day','program-contacts','own-receipt','release-one','learn-conversation','customer-simulation','chief-tesa-test','unsupported']);
 const tableExists=s=>Boolean(s.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='chief_commands'").get());
 const sourceKey=e=>'chief-command:'+e.id;
 const forbiddenReference=text=>/["“”«»]|\b(?:dijo|dice|escribio|comento|segun|me dijeron|un tercero|que harias|si te digo|supongamos|hipotetic\w*|no ejecutes|no hagas|no retomes|no liberes)\b/.test(normalize(text));
@@ -34,6 +38,10 @@ function communicationCategory(text){
 }
 export function parseChiefCommand(e,c,{quotedOwn=false}={}){
  if(!ownSource(e,c))return null;
+ const tesaTest=parseChiefTesaTestCommand(e.text);
+ if(tesaTest)return {action:'chief-tesa-test',params:{command:tesaTest.action},body:e.text,directed:true,guard:CHIEF_ACTIONS_GUARD};
+ const simulation=parseChiefCustomerSimulationCommand(e.text)??parseMariaTestOrderCommand(e.text);
+ if(simulation)return {action:'customer-simulation',params:{command:simulation.action},body:e.text,directed:true,guard:CHIEF_ACTIONS_GUARD};
  if(/^(?:maria angel|mariangel|maria|bot)\s+(?:dijo|dice|respondio|comento|me dijo|le dijo)\b/.test(normalize(e.text)))return null;
  const directed=/^[¿¡ ]*(?:(?:hola|buenos dias|buen dia|buenas tardes|buenas noches)[, :]+)?(?:maria angel|mariangel|maria|bot)(?:[, :¿?!]|$)/i.exec(normalize(e.text));
  if(!directed&&!quotedOwn)return null;
@@ -74,7 +82,9 @@ export function enqueueChiefCommand(s,c,e,plan){
 export function chiefActionsStatus(s,c){
  if(c.company!=='fumigacion'||s.company!==c.company)return {guard:null,enabled:false};
  const states=tableExists(s)?s.db.prepare('SELECT state,COUNT(*) n FROM chief_commands GROUP BY state').all():[];
- return {guard:CHIEF_ACTIONS_GUARD,enabled:Boolean(c.enabled||c.chiefOnly),states:Object.fromEntries(states.map(r=>[r.state,r.n])),historicalReviewAutoExecuted:false,businessWritesEnabled:false,communicationMemory:chiefConversationRules(s,c).rules.length};
+ const testOrderAccess=mariaTestOrderAccessStatus(c);
+ const chiefTesaTest=chiefTesaTestStatus(s,testOrderAccess.enabled?c:{...c,chiefTesaTest:{enabled:false}});
+ return {guard:CHIEF_ACTIONS_GUARD,enabled:Boolean(c.enabled||c.chiefOnly),states:Object.fromEntries(states.map(r=>[r.state,r.n])),historicalReviewAutoExecuted:false,businessWritesEnabled:false,ordinaryBusinessWritesEnabled:false,testBusinessWritesEnabled:testOrderAccess.enabled,testOrderAccess,chiefTesaTest:{...chiefTesaTest,...(chiefTesaTest.enabled?{startsAt:new Date(c.chiefTesaTest.startsAt).toISOString(),expiresAt:new Date(c.chiefTesaTest.expiresAt).toISOString()} : {}),scope:'single-explicit-PRUEBA-question-to-exact-TESA; normal-messages-remain-Sandra-only'},communicationMemory:chiefConversationRules(s,c).rules.length};
 }
 export function reviewChiefActions(s,c,{afterRow=0,limit=50}={}){
  if(c.company!=='fumigacion'||s.company!==c.company||!Number.isSafeInteger(afterRow)||afterRow<0||!Number.isSafeInteger(limit)||limit<1||limit>50)throw Error('CHIEF_COMMAND_REVIEW_SCOPE');
@@ -91,8 +101,17 @@ export function chiefConversationRules(s,c){
 function splitReply(text){const parts=[];let current='';for(const line of text.split('\n')){if(current.length+line.length+1>4800){if(current)parts.push(current);current='';}if(line.length>4800)throw Error('CHIEF_RESULT_LINE_TOO_LONG');current+=(current?'\n':'')+line;}if(current)parts.push(current);return parts;}
 function finishCommand(s,row,state,result){
  s.tx(()=>{const current=s.db.prepare('SELECT state FROM chief_commands WHERE id=?').get(row.id);if(current?.state!=='RUNNING')return;const responseIds=[];
-  for(const [index,text] of splitReply(result.text).entries()){const id=row.id+':result:'+index;s.queue(id,SANDRA,row.line,text,true,0);responseIds.push(id);}
-  const recorded={...result,responseIds};s.db.prepare('UPDATE chief_commands SET state=?,result=?,updated=? WHERE id=?').run(state,s.seal(recorded),Date.now(),row.id);s.audit('CHIEF_COMMAND_RESULT',row.source_id,{id:row.id,action:row.action,state,resultHash:hash(recorded),guard:CHIEF_ACTIONS_GUARD,businessWrites:0});
+  let replies=splitReply(result.text).map((text,index)=>({id:row.id+':result:'+index,text}));
+  if(result.simulationOutputs?.length){
+   if(row.action!=='customer-simulation'||result.guard!==CHIEF_CUSTOMER_SIMULATION_HOOK_GUARD||!Array.isArray(result.simulationOutputs)||result.simulationOutputs.length>20)throw Error('SIMULATION_RESULT_OUTPUT_SCOPE');
+   const ids=new Set();replies=result.simulationOutputs.map(output=>{
+    const expected='chief-simulation:'+result.data?.simulationId+':'+output.id;
+    if(!/^SIM_OUTPUT_[a-f0-9]{48}$/.test(output.id??'')||output.outboxId!==expected||output.simulationId!==result.data?.simulationId||output.sourceId!==row.source_id||output.recipient!==SANDRA||output.line!==row.line||output.internal!==true||output.synthetic!==true||output.commercialDeliveryVerified!==false||typeof output.text!=='string'||!output.text.startsWith('SIMULACIÓN · ')||!output.text.trim()||output.text.length>4800||output.textHash!==createHash('sha256').update(output.text).digest('hex')||ids.has(expected))throw Error('SIMULATION_RESULT_OUTPUT_SCOPE');
+    ids.add(expected);return {id:expected,text:output.text};
+   });
+  }
+  for(const {id,text} of replies){s.queue(id,SANDRA,row.line,text,true,0);responseIds.push(id);}
+  const recorded={...result,responseIds};s.db.prepare('UPDATE chief_commands SET state=?,result=?,updated=? WHERE id=?').run(state,s.seal(recorded),Date.now(),row.id);s.audit('CHIEF_COMMAND_RESULT',row.source_id,{id:row.id,action:row.action,state,resultHash:hash(recorded),guard:CHIEF_ACTIONS_GUARD,businessWrites:result.testBusinessWrites?{ordinary:0,test:result.testBusinessWrites}:0,...(result.testBusinessWrites?{ordinaryBusinessWrites:0,testBusinessWrites:result.testBusinessWrites}:{})});
  });
 }
 async function programRequest(c,t,path,body,ownReceipt=false){
@@ -110,8 +129,18 @@ function contactFormText(a){
   return 'Orden '+fieldValue(o.id)+': cliente '+fieldValue([customer?.name?.nombre,customer?.name?.apellido].filter(Boolean).join(' '))+'; dirección guardada en orden: '+fieldValue(snapshot.address)+'; municipio: '+fieldValue(snapshot.municipality)+'; barrio: '+fieldValue(snapshot.neighborhood)+'; tipo de visita: '+fieldValue(o.typeVisit)+'. Dirección actual del cliente: '+fieldValue(address?.address)+'; municipio actual: '+fieldValue(address?.municipality)+'; tipo de ubicación: '+fieldValue(address?.type)+'. Observación (extracto máximo 220 caracteres): '+fieldValue(o.observations)+'.';
  }).join('\n');
 }
-async function execute(s,c,t,source,plan,now){
+async function execute(s,c,t,source,plan,now,native){
  const {action,params}=plan;
+ if(action==='chief-tesa-test'){
+  if(parseChiefTesaTestCommand(source.text)?.action!==params.command)return {state:'BLOCKED',text:'Sandra, necesito una instrucción literal para esta pregunta PRUEBA.',data:{businessWrites:0,reservationCreated:false},scope:'one-explicit-test-question-only'};
+  if(!mariaTestOrderAccessStatus(c).enabled)return {state:'BLOCKED',text:'Sandra, el acceso limitado de esta pregunta PRUEBA no está vigente. No inicié un envío.',data:{businessWrites:0,reservationCreated:false},scope:'one-explicit-test-question-only'};
+  try{
+   const data=await executeChiefTesaTest(s,c,t,{source,native,action:params.command}),delivered=data.deliveryVerified===true;
+   const text=delivered?(data.status==='READ'?'La pregunta PRUEBA de TESA registra un acuse de lectura.':'La pregunta PRUEBA quedó entregada al grupo TESA.')+'\n\nAún no he verificado una respuesta humana citada para esta prueba. No se reservó agenda ni se envió personal.':data.status==='NOT_PREPARED'?'Sandra, todavía no hay una pregunta PRUEBA iniciada en este ciclo.':'Sandra, la entrega de la pregunta PRUEBA de TESA sigue pendiente de comprobación.\n\nNo repetiré el envío. No se reservó agenda ni se envió personal.';
+   return {state:delivered?'DONE':'NEEDS_CONTEXT',text,data,scope:'one-explicit-test-question-only; no-ordinary-group-messages-or-business-authority'};
+  }catch{return {state:'BLOCKED',text:'Sandra, no pude comprobar esta pregunta PRUEBA con el acceso limitado actual. No afirmo que se haya entregado ni que exista una reserva.',data:{businessWrites:0,reservationCreated:false},scope:'one-explicit-test-question-only'};}
+ }
+ if(action==='customer-simulation')return executeChiefCustomerSimulation(s,c,t,source,plan,native);
  if(action==='unsupported')return {state:'NEEDS_CONTEXT',text:unsupportedText(params.reason),data:{reason:params.reason},scope:'own-current-capabilities'};
  if(action==='release-one'){
   const exists=s.db.prepare('SELECT 1 FROM conversations WHERE phone=?').get(params.phone),ownIncoming=s.db.prepare('SELECT body FROM events WHERE phone=? AND from_me=0 ORDER BY rowid DESC LIMIT 100').all(params.phone).some(row=>{const e=s.open(row.body);return e.phone===params.phone&&e.fromMe===false&&!e.forwarded&&c.lines.some(l=>l.phone===e.line)&&operationalLineAllowed(c,e.line)&&Number.isFinite(e.at)&&e.at>=c.activatedAt;});
@@ -177,8 +206,8 @@ export async function drainChiefActions(s,c,t,{now=Date.now()}={}){
    const current=s.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(source.id,SANDRA,source.line),stored=current&&s.open(current.body);
    if(!ownSource(source,c)||!stored||hash(stored)!==hash(source)||!native||native.verified!==true||native.sourceId!==source.id||native.phone!==SANDRA||native.line!==source.line||native.at!==source.at||now-source.at>86400000)throw Error('CHIEF_NATIVE_SOURCE_UNVERIFIED');
    let plan=body.plan;
-   if(plan.action==='unsupported'&&plan.params.reason==='NO_SUPPORTED_COMMAND'&&plan.params.modelEligible){const candidate=await planChiefCommand(c,s,t.fetcher,source,{body:plan.body,sourceVerified:true});if(candidate?.sourceId===source.id&&candidate.guard===CHIEF_COMMAND_AI_GUARD&&actions.has(candidate.action)&&!['release-one','learn-conversation'].includes(candidate.action))plan=candidate;}
-   const response=await execute(s,c,t,source,plan,now);finishCommand(s,row,response.state,{...response,executedAction:plan.action,validatedPlan:plan!==body.plan?plan:null,checkedAt:new Date(now).toISOString()});if(response.state==='DONE')result.completed++;else result.blocked++;
+   if(plan.action==='unsupported'&&plan.params.reason==='NO_SUPPORTED_COMMAND'&&plan.params.modelEligible){const candidate=await planChiefCommand(c,s,t.fetcher,source,{body:plan.body,sourceVerified:true});if(candidate?.sourceId===source.id&&candidate.guard===CHIEF_COMMAND_AI_GUARD&&actions.has(candidate.action)&&!['release-one','learn-conversation','customer-simulation','chief-tesa-test'].includes(candidate.action))plan=candidate;}
+   const response=await execute(s,c,t,source,plan,now,native);finishCommand(s,row,response.state,{...response,executedAction:plan.action,validatedPlan:plan!==body.plan?plan:null,checkedAt:new Date(now).toISOString()});if(response.state==='DONE')result.completed++;else result.blocked++;
   }catch(error){const reason=['PROGRAM_ACCESS_UNAVAILABLE','PROGRAM_READ_FAILED','PROGRAM_READ_SCOPE_UNVERIFIED','PROGRAM_PHONE_SCOPE_UNVERIFIED','PROGRAM_RECEIPT_SCOPE_UNVERIFIED','CHIEF_NATIVE_SOURCE_UNVERIFIED'].includes(error.message)?error.message:'ACTION_RESULT_UNVERIFIED';
    finishCommand(s,row,'BLOCKED',{text:reason==='CHIEF_NATIVE_SOURCE_UNVERIFIED'?'Sandra, no pude verificar la fuente original de esa orden; no ejecuté la acción.':'Sandra, no pude comprobar el resultado con mi acceso actual. La consulta o fuente necesaria sigue pendiente; no afirmo que la acción se completó.',error:reason,data:{businessWritten:false},checkedAt:new Date(now).toISOString(),scope:'own-current-access-only'});result.blocked++;}
  }

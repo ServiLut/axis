@@ -3,6 +3,8 @@ import {aiConfiguration} from './ai-settings.mjs';
 import {registrationConfig} from './maria-program.mjs';
 import {tesaConfiguration} from './tesa-config.mjs';
 import {assertOperationalLineScope,operationalLineAllowed} from './line-scope.mjs';
+import {mariaTestOrderAccessConfig} from './maria-test-order-access.mjs';
+import {CHIEF_TESA_TEST_CYCLE} from './chief-tesa-test.mjs';
 
 export const BUSINESSES = Object.freeze({
   fumigacion: { name: 'FUMIGACION', bot: 'María Ángel', phones: ['573126944997','573126938721'] },
@@ -42,6 +44,12 @@ export function questionRecipients(config,topic,conditions={}) {
 export const digits = value => String(value ?? '').replace(/\D/g, '');
 export const normalize = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
 
+export function chiefTesaTestConfiguration(env,company,testOrder,activatedAt){
+  if(env.BOT_CHIEF_TESA_TEST_ENABLED===undefined||env.BOT_CHIEF_TESA_TEST_ENABLED==='false')return {enabled:false};
+  if(env.BOT_CHIEF_TESA_TEST_ENABLED!=='true'||company!=='fumigacion'||env.BOT_ENABLED==='true'||env.BOT_CHIEF_ONLY!=='true'||env.BOT_REPLY_ONLY_TO_CHIEF!=='true'||testOrder?.enabled!==true||!Number.isSafeInteger(testOrder.startsAt)||!Number.isSafeInteger(testOrder.expiresAt)||!Number.isSafeInteger(activatedAt)||testOrder.startsAt<activatedAt||testOrder.expiresAt<=testOrder.startsAt||testOrder.expiresAt>Date.parse('2026-10-17T13:00:00.000Z'))throw Error('CHIEF_TESA_TEST_CONFIGURATION_REQUIRED');
+  return Object.freeze({enabled:true,cycleId:CHIEF_TESA_TEST_CYCLE,startsAt:testOrder.startsAt,expiresAt:testOrder.expiresAt});
+}
+
 export function configFromEnv(env = process.env) {
   const company = env.BOT_COMPANY;
   if (!BUSINESSES[company]) throw new Error('COMPANY_REQUIRED');
@@ -76,6 +84,8 @@ export function configFromEnv(env = process.env) {
     inactivityFollowupEnabled:company==='fumigacion'&&env.BOT_CUSTOMER_INACTIVITY_FOLLOWUP==='true',
     tesaOperations:tesaConfiguration(env,company,lines,Date.parse(env.BOT_ACTIVATED_AT || '')),
     mariaProgram:registrationConfig(env,company),
+    mariaTestOrder:mariaTestOrderAccessConfig(env,company,registrationConfig(env,company)),
+    chiefTesaTest:chiefTesaTestConfiguration(env,company,mariaTestOrderAccessConfig(env,company,registrationConfig(env,company)),Date.parse(env.BOT_ACTIVATED_AT||'')),
     conversationalAi:aiConfiguration(env,company) };
 }
 

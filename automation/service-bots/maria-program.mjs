@@ -116,7 +116,30 @@ export function quotationAmountAffirmation(text){
 export function acceptsOwnQuotedAmount(text,priceCop){
  return Number.isSafeInteger(priceCop)&&priceCop>0&&priceCop<=10000000&&quotationAmountAffirmation(text)===priceCop;
 }
-const confirms=acceptsOrdinaryQuotation;
+export const MARIA_SUMMARY_DATA_CONFIRMATION_GUARD='own-delivered-summary-data-confirmation-v1';
+// Data agreement is scoped to a delivered current summary. It is deliberately
+// separate from price acceptance, and never admits extra test/price/date text.
+export function confirmsOrdinarySummaryData(text){
+ if(typeof text!=='string'||text.length>200||/[?¿]|https?:/i.test(text))return false;
+ const raw=text.trim(),affirmative=raw.match(/^(?:sí(?=[\s,.!;])|si\s*[,.;!])[\s,.!;]*/iu);
+ const t=normalize(affirmative?raw.slice(affirmative[0].length):raw).replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim();
+ return /^(?:confirmo que )?(?:(?:todos )?(?:los|mis)) datos (?:son correctos|estan correctos|estan bien)(?: (?:gracias|muchas gracias|por favor))*$/.test(t);
+}
+const confirms=text=>acceptsOrdinaryQuotation(text)||confirmsOrdinarySummaryData(text);
+function legacyOrdinarySummaryText(preview){
+ return 'Registraré el servicio de '+preview.service+' por $'+preview.priceCop.toLocaleString('es-CO')+' en '+preview.address+', '+preview.municipality+', a nombre de '+preview.customerName+'.'+(preview.preference?' Preferencia solicitada: '+preview.preference+'. El horario sigue pendiente de coordinación.':'')+(preview.petPresence?' Presencia de mascotas informada: '+preview.petPresence+'.':'')+' ¿Confirmas que estos datos son correctos?';
+}
+function ordinarySummaryText(preview){
+ return ['Revisa los datos de tu solicitud:','','• Servicio: '+preview.service,'• Valor: $'+preview.priceCop.toLocaleString('es-CO'),'• Nombre: '+preview.customerName,'• Dirección: '+preview.address,'• Municipio: '+preview.municipality,...(preview.preference?['• Preferencia solicitada: '+preview.preference]:[]),...(preview.petPresence?['• Mascotas informadas: '+preview.petPresence]:[]),'','El horario sigue pendiente de coordinación.','','¿Confirmas que estos datos son correctos?'].join('\n');
+}
+function ownSummaryDataProof(s,state,e,prompt,preview){
+ if(!prompt||e.quotedId||e.forwarded||e.fromMe||e.kind!=='text'||prompt.phone!==e.phone||prompt.line!==e.line||prompt.case_id!==state.caseId||prompt.internal!==0||!['DELIVERED','READ'].includes(prompt.state)||typeof prompt.mid!=='string'||prompt.mid===state.quotedPrice?.mid||![ordinarySummaryText(preview),legacyOrdinarySummaryText(preview)].includes(s.open(prompt.body)))return null;
+ const proof=get(s,'first-delivery:'+prompt.id),promptSourceId=prompt.id?.endsWith(':reply')?prompt.id.slice(0,-6):null;
+ const origin=promptSourceId&&s.db.prepare('SELECT rowid,at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(promptSourceId,e.phone,e.line),current=s.db.prepare('SELECT rowid FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(e.id,e.phone,e.line);
+ if(!origin||!current||origin.rowid>=current.rowid||origin.at>e.at||proof?.mid!==prompt.mid||proof.line!==e.line||!['DELIVERED','READ'].includes(proof.state)||!Number.isSafeInteger(proof.verifiedAt)||proof.verifiedAt<prompt.created||proof.verifiedAt>Date.now()+5000||e.at<Math.floor(proof.verifiedAt/1000)*1000)return null;
+ const text=s.open(prompt.body);
+ return {guard:MARIA_SUMMARY_DATA_CONFIRMATION_GUARD,caseId:state.caseId,phone:e.phone,line:e.line,mid:prompt.mid,text,textSha256:createHash('sha256').update(text).digest('hex'),deliveredAt:iso(proof.verifiedAt),state:proof.state};
+}
 const fieldLabels=()=>/(?:\b(?:mi nombre(?: completo)?(?: es)?|nombre completo|nombre(?=\s*:)|me llamo|a nombre de)|\b(?:(?:mi|la) direcci[oó]n(?: completa)?(?: es)?|direcci[oó]n(?: completa)?))\s*[: ,]*\s*/giu;
 const fieldValue=(text,hits,i)=>text.slice(hits[i].index+hits[i][0].length,hits[i+1]?.index??text.length).trim().replace(/(?:\s+y)?[\s,;.!]*$/u,'').trim();
 function explicitFields(text){
@@ -526,15 +549,17 @@ export function registrationTurn(s,c,previous,e,decision){
  // delivered price, the acceptance is sufficient for an unscheduled order.
  // New/corrected facts supplied after acceptance still need a delivered summary.
  const originalAcceptance=own.q.acceptanceSource&&s.db.prepare('SELECT rowid,at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(own.q.acceptanceSource,e.phone,e.line);
- const preprovided=!info&&confirms(e.text)&&!conflicting&&!explicit.conflict&&!['confirm','correction'].includes(prior.stage)&&originalAcceptance&&sourcePosition(s,e,pi.nameSource)<=originalAcceptance.rowid&&sourcePosition(s,e,pi.addressSource)<=originalAcceptance.rowid&&Date.parse(pi.nameSource.at)<=originalAcceptance.at&&Date.parse(pi.addressSource.at)<=originalAcceptance.at&&(!petPresence||petPresence.position<=originalAcceptance.rowid&&Date.parse(petPresence.source.at)<=originalAcceptance.at);
+ const preprovided=!info&&acceptsOrdinaryQuotation(e.text)&&!conflicting&&!explicit.conflict&&!['confirm','correction'].includes(prior.stage)&&originalAcceptance&&sourcePosition(s,e,pi.nameSource)<=originalAcceptance.rowid&&sourcePosition(s,e,pi.addressSource)<=originalAcceptance.rowid&&Date.parse(pi.nameSource.at)<=originalAcceptance.at&&Date.parse(pi.addressSource.at)<=originalAcceptance.at&&(!petPresence||petPresence.position<=originalAcceptance.rowid&&Date.parse(petPresence.source.at)<=originalAcceptance.at);
  const preference=casePreferenceSource(s,c,state,e);
  const preview={customerName:pi.customerName,address:pi.address,municipality:state.slots.location,service:state.slots.service,priceCop:own.entry.priceCop,...(preference?{preference:preference.value}:{}),...(petPresence?{petPresence:petPresence.value,petPresenceSource:petPresence.source}:{})};
  if(!preprovided&&(prior.stage!=='confirm'||changed||JSON.stringify(pi.preview)!==JSON.stringify(preview))){
   pi.stage='confirm';pi.promptId=e.id+':reply';pi.preview=preview;
-  return {state,reply:'Registraré el servicio de '+state.slots.service+' por $'+own.entry.priceCop.toLocaleString('es-CO')+' en '+pi.address+', '+state.slots.location+', a nombre de '+pi.customerName+'.'+(preference?' Preferencia solicitada: '+preference.value+'. El horario sigue pendiente de coordinación.':'')+(petPresence?' Presencia de mascotas informada: '+petPresence.value+'.':'')+' ¿Confirmas que estos datos son correctos?'};
+  return {state,reply:ordinarySummaryText(preview)};
  }
  if(!preprovided&&(!prompt||!confirms(e.text)))return {state,observed:true,observedState:'PROGRAM_SUMMARY_CONFIRMATION_PENDING'};
  if(!preprovided&&JSON.stringify(pi.preview)!==JSON.stringify(preview))return {state,observed:true,observedState:'PROGRAM_SUMMARY_REVIEW'};
+ const summaryConfirmation=confirmsOrdinarySummaryData(e.text)?ownSummaryDataProof(s,state,e,prompt,preview):null;
+ if(confirmsOrdinarySummaryData(e.text)&&!summaryConfirmation)return {state,observed:true,observedState:'PROGRAM_SUMMARY_CONFIRMATION_PENDING'};
  const conv=s.conversation(e.phone),allowed=['service','site','location','area','rooms','mattresses','patio','floors','roomScale','siteScale','treatmentScope','affectedFurniture'];
  const slots=Object.fromEntries(allowed.filter(k=>state.slots[k]!=null).map(k=>[k,String(state.slots[k])]));
  if(preference)slots.preference=preference.value;
@@ -544,7 +569,7 @@ export function registrationTurn(s,c,previous,e,decision){
   return {state,reviewTopic:'program-registration-review',reviewConditions:{kind:'current-location-details-unverified',caseId:state.caseId},review:'Una indicación del inmueble mezcla datos anteriores corregidos y otros detalles que no pueden separarse con certeza. Se conservaron las fuentes originales y no se creó un servicio.',reviewQuestion:'¿Qué indicaciones actuales de ubicación y acceso corresponden a esta solicitud, sin los datos de tamaño ya corregidos?',reply:'Antes de registrar tu solicitud, necesito aclarar las indicaciones actuales de ubicación y acceso.'};
  }
  if(locationProjection.applied)s.audit('OWN_CURRENT_LOCATION_PROJECTED',e.id,{caseId:state.caseId,guard:locationProjection.guard,omissions:locationProjection.omissions,retained:locationProjection.retained,originalHistoryPreserved:true,businessWritten:false});
- const payload={caseId:state.caseId,phone:e.phone,line:e.line,sourceId:e.id,customerName:pi.customerName,address:pi.address,municipality:state.slots.location,locationDetails:locationProjection.locationDetails,slots,...(petPresence?{petPresence:petPresence.value}:{}),
+ const payload={caseId:state.caseId,phone:e.phone,line:e.line,sourceId:e.id,customerName:pi.customerName,address:pi.address,municipality:state.slots.location,locationDetails:locationProjection.locationDetails,slots,...(petPresence?{petPresence:petPresence.value}:{}),...(summaryConfirmation?{summaryConfirmation}:{}),
   quote:{entryId:own.entry.id,priceCop:own.entry.priceCop,scheduleHash:own.entry.source.scheduleHash,mid:own.row.mid,sourceId:own.q.sourceId,deliveredAt:iso(own.row.firstDeliveryAt),acceptedAt:iso(e.at),acceptanceId:e.id},
   sources:{customerName:pi.nameSource,address:pi.addressSource,...(preference?{preference:preference.source}:{}),...(petPresence?{petPresence:petPresence.source}:{}),acceptance:{...source(e),phone:e.phone,line:e.line,fromMe:false,forwarded:false}}};
  const key=prefix+state.caseId,existing=get(s,key),hash=registrationHash(payload);
@@ -647,7 +672,11 @@ async function verifyNative(s,c,t,entry){
   const summary=s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND state IN ('DELIVERED','READ') AND mid IS NOT NULL").get(entry.summaryOutboxId,p.phone,p.line);
   if(!summary)throw Error('PROGRAM_SUMMARY_DELIVERY_UNVERIFIED');
   deliveries.push([await nativeMessage(s,t,c,summary.mid,p.phone,p.line),summary]);
- }else if(entry.confirmationKind!=='price-accepted-with-prior-literal-facts'||!confirms(p.sources.acceptance.text)||Date.parse(p.sources.customerName.at)>Date.parse(p.sources.acceptance.at)||Date.parse(p.sources.address.at)>Date.parse(p.sources.acceptance.at))throw Error('PROGRAM_CUSTOMER_CONFIRMATION_UNVERIFIED');
+  if(confirmsOrdinarySummaryData(p.sources.acceptance.text)){
+   const event=s.open(acceptanceRow.body),preview={customerName:p.customerName,address:p.address,municipality:p.municipality,service:p.slots.service,priceCop:p.quote.priceCop,...(p.slots.preference?{preference:p.slots.preference}:{}),...(p.petPresence?{petPresence:p.petPresence}:{})};
+   if(JSON.stringify(ownSummaryDataProof(s,state,event,summary,preview))!==JSON.stringify(p.summaryConfirmation))throw Error('PROGRAM_SUMMARY_DELIVERY_UNVERIFIED');
+  }
+ }else if(entry.confirmationKind!=='price-accepted-with-prior-literal-facts'||!acceptsOrdinaryQuotation(p.sources.acceptance.text)||Date.parse(p.sources.customerName.at)>Date.parse(p.sources.acceptance.at)||Date.parse(p.sources.address.at)>Date.parse(p.sources.acceptance.at))throw Error('PROGRAM_CUSTOMER_CONFIRMATION_UNVERIFIED');
  for(const [r,row] of deliveries)if(r.key.fromMe!==true||nativeText(r)!==s.open(row.body)||![r.status,...(r.MessageUpdate||[]).map(u=>u.status)].some(v=>['DELIVERY_ACK','READ','PLAYED'].includes(v)))throw Error('PROGRAM_NATIVE_DELIVERY_MISMATCH');
  for(const src of Object.values(p.sources)){
   const eventRow=s.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(src.id,p.phone,p.line);if(!eventRow)throw Error('PROGRAM_SOURCE_SCOPE');
