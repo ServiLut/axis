@@ -16,15 +16,16 @@ const rules=[
  {id:'payment',source:'user-checkpoint-20261006',text:'Una imagen de comprobante no confirma ingreso bancario ni pago del caso. Conservar revisión de pagos, devoluciones y excepciones.'},
  {id:'tone-and-privacy',source:'user-checkpoint-20261006',text:'Mensajes breves, cálidos y respetuosos. Reconocer datos ya aportados cuando ayude a continuar sin repetirlos en cada turno. Comunicar sólo el resultado pertinente o un dato necesario, sin destinatarios ni pasos internos, presión comercial o promesas de resultado.'}
 ];
-const compiled={company:'FUMIGACION',guard:MARIA_KNOWLEDGE_GUARD,rules,priceScheduleHash:BUSINESS_PRICE_HASH};
+const scopedPriceExamples=[{scope:'one-mattress-and-one-sofa-only',mattresses:1,furnitureLiteral:'un sofá',totalCop:115000,source:{questionId:'3EB05EE7B26D69356F2E0F',answerId:'3EB0BF43EE714C64495EBF',answer:'ASI ES',delegationSource:'direct-user-chat-20261016-ask-3043332213-for-current-prices'},generalFurnitureTariffApproved:false,ordinaryRegistrationEnabled:false,otherFurnitureTypesPending:true}];
+const compiled={company:'FUMIGACION',guard:MARIA_KNOWLEDGE_GUARD,rules,priceScheduleHash:BUSINESS_PRICE_HASH,scopedPriceExamples};
 export const MARIA_KNOWLEDGE_HASH=createHash('sha256').update(JSON.stringify(compiled)).digest('hex');
 
 export function mariaKnowledgeDocument(){
  const p=approvedBusinessPriceSchedule();
  return {...structuredClone(compiled),hash:MARIA_KNOWLEDGE_HASH,complete:false,modelTrainingPerformed:false,
-  pricing:{source:p.source,mattressCorrectionSource:p.mattressPriceAuthorization,
+  pricing:{source:p.version??p.source,mattressCorrectionSource:p.version??p.mattressPriceAuthorization,
    standardRows:p.entries.map(({rooms,minM2,maxM2,cucarachas,roedores})=>({rooms,minM2,maxM2,cucarachasCop:cucarachas,roedoresCop:roedores})),
-   chinchesPerMattressCop:p.chinchesPerMattressCop,comejenExtraCop:p.comejenExtraCop,scope:structuredClone(p.scope)},
+   chinchesPerMattressCop:p.chinchesPerMattressCop,chinchesBulkFrom:p.chinchesBulkFrom,chinchesBulkPerMattressCop:p.chinchesBulkPerMattressCop,comejenExtraCop:p.comejenExtraCop,scope:structuredClone(p.scope)},
   pending:['approved-faq-coverage','verified-product-and-original-safety-sources','own-program-and-saved-service','legitimate-new-ai-conversation-and-delivery']};
 }
 export function persistMariaKnowledge(config,store){

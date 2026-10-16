@@ -1,10 +1,13 @@
+import {mock as historicalPriceClock} from 'node:test';
+// Historical quotation fixtures use their original immutable table and clock.
+historicalPriceClock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T18:00:00.000Z')});
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
 import {Store} from '../automation/service-bots/store.mjs';
 import {Engine} from '../automation/service-bots/engine.mjs';
 import {BUSINESSES} from '../automation/service-bots/config.mjs';
-import {approvedBusinessPriceSchedule} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 import {CONVERSATIONAL_AI_GUARD} from '../automation/service-bots/ai-settings.mjs';
 import {MARIA_UNDERSTANDING_GUARD} from '../automation/service-bots/maria-understanding.mjs';
 import {commonQuestionTopics} from '../automation/service-bots/faq.mjs';
@@ -13,12 +16,12 @@ import {mariaIncidentalPetMention,MARIA_INCIDENTAL_PETS_GUARD} from '../automati
 const original='Buenas tardes. Tan amable 6 me informa que cuesta un servicio de fumigación. pero hay mascotas.';
 const source=(text,extra={})=>({id:'SYNTHETIC_PETS_SOURCE',phone:'573000001234',line:BUSINESSES.fumigacion.phones[0],at:Date.now(),kind:'text',fromMe:false,forwarded:false,text,...extra});
 function fixture(company='fumigacion'){
- const s=new Store(':memory:',company,randomBytes(32));if(company==='fumigacion')s.importKnowledge(approvedBusinessPriceSchedule());
+ const s=new Store(':memory:',company,randomBytes(32));if(company==='fumigacion')s.importKnowledge(approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH));
  const c={company,...BUSINESSES[company],enabled:true,chiefOnly:true,lines:BUSINESSES[company].phones.map((phone,i)=>({phone,instance:'ISOLATED_PETS_'+i}))},engine=new Engine(s,c);let sequence=0;
  const process=async(text,{mockAi=false,...extra}={})=>{
   const e=source(text,{id:'SYNTHETIC_PETS_'+ ++sequence,line:c.lines[0].phone,at:Date.now()+sequence,...extra});
   const analysis=mockAi?{guard:CONVERSATIONAL_AI_GUARD,semanticGuard:MARIA_UNDERSTANDING_GUARD,company:'FUMIGACION',eventId:e.id,intent:{kind:'general-question',evidence:'que cuesta un servicio de fumigación'},slots:{service:'fumigación',detail:'hay mascotas'}}:{};
-  s.enqueue(e);await engine.process(e,analysis);const row=s.db.prepare('SELECT body FROM outbox WHERE id=?').get(e.id+':reply');
+  historicalPriceClock.timers.setTime(e.at);s.enqueue(e);await engine.process(e,analysis);const row=s.db.prepare('SELECT body FROM outbox WHERE id=?').get(e.id+':reply');
   return {e,reply:row?s.open(row.body):null,state:s.conversation(e.phone).state,eventState:s.db.prepare('SELECT state FROM events WHERE id=?').get(e.id).state};
  };return {s,c,process};
 }

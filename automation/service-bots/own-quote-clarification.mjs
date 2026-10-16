@@ -1,5 +1,5 @@
 import {normalize} from './config.mjs';
-import {selectPrice} from './prices.mjs';
+import {ownDeliveredQuoteEntry} from './maria-program.mjs';
 
 export const OWN_QUOTE_CLARIFICATION_GUARD='literal-same-service-current-delivered-own-quote-v1';
 export function ownQuoteClarification(store,config,state,event){
@@ -10,11 +10,9 @@ export function ownQuoteClarification(store,config,state,event){
  const match=text.match(/^(?:(?:maria(?: angel)?|mariangel)[, ]+)?(?:(?:hola|buenos dias|buenas tardes|buenas noches)[,!. ]+)?[¿ ]*(?:(?:(?:el precio|la cotizacion|el servicio) )?es para (?:el control de |tratar )?|(?:el precio|la cotizacion) (?:ya )?incluye (?:el servicio )?(?:para |de control de |el control de ))(comejen|cucarachas?|chinches?|roedores|ratas?|ratones|hormigas?|avispas?)(?:[, ]+(?:cierto|verdad|correcto))?[?!., ]*$/);
  const quote=state.quotedPrice;
  if(!match||!quote||normalize(quote.slots?.service)!==match[1]||normalize(state.slots?.service)!==match[1])return null;
- const entry=selectPrice(state.slots,store.approvedPriceCatalogs(),quote.entryId).entry;
- if(!entry||entry.id!==quote.entryId||entry.priceCop!==quote.priceCop)return null;
- const row=store.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND internal=0 AND case_id=? AND mid IS NOT NULL AND state IN ('DELIVERED','READ')").get(quote.sourceId+':reply',event.phone,event.line,state.caseId);
- if(!row||row.created<Date.now()-86400000||!store.priceReplyReference(row)||!store.priceReplyStillValid(row))return null;
- return {entry,quotationSource:quote.sourceId,quotationMid:row.mid,
+ const own=ownDeliveredQuoteEntry(store,state,event.phone,event.line);if(!own||own.row.created<Date.now()-86400000)return null;
+ const {entry,row}=own;
+ return {entry,quotationSource:quote.sourceId,quotationMid:row.mid,quotationReference:{...store.priceReplyReference(row),...(own.version?{scheduleHash:own.version.scheduleHash,issuedAt:own.version.issuedAt}:{}),referenceKind:'prior-quotation-clarification',quotationOutboxId:row.id},
   decision:{state:{...state,slots:{...state.slots},lastText:event.text},quoteClarification:true,
    reply:'Sí, la cotización de $'+entry.priceCop.toLocaleString('es-CO')+' COP es para el control de '+state.slots.service+'.'}};
 }

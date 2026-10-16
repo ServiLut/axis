@@ -1,3 +1,6 @@
+import {mock as historicalPriceClock} from 'node:test';
+// Historical quotation fixtures use their original immutable table and clock.
+historicalPriceClock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T18:00:00.000Z')});
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
@@ -7,7 +10,7 @@ import {BUSINESSES,OPERATOR_ROUTING,SANDRA,configFromEnv} from '../automation/se
 import {Store} from '../automation/service-bots/store.mjs';
 import {Engine,customerDecision} from '../automation/service-bots/engine.mjs';
 import {Transport,drain} from '../automation/service-bots/transport.mjs';
-import {approvedBusinessPriceSchedule} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 
 const phone='573001112233',slots=()=>({service:null,site:null,location:null,detail:null,preference:null});
 const setup=extra=>({BOT_AI_PROVIDER:'openai',BOT_AI_SCOPE:'FUMIGACION',BOT_AI_MODEL:'isolated-model',BOT_OPENAI_API_KEY:'isolated-own-key',BOT_AI_MONTHLY_CALL_LIMIT:'20',BOT_AI_ENABLED_FROM:new Date(Date.now()-10000).toISOString(),...extra});
@@ -15,7 +18,7 @@ function fixture({limit=20,handler}={}){
  const c={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,chiefOnly:true,operatorRouting:OPERATOR_ROUTING,historyCheckRequired:true,activatedAt:Date.now()-20000,
   lines:BUSINESSES.fumigacion.phones.map((phone,i)=>({phone,instance:'own-'+i})),conversationalAi:aiConfiguration(setup({BOT_AI_MONTHLY_CALL_LIMIT:String(limit)}),'fumigacion')};
  const s=new Store(':memory:','fumigacion',randomBytes(32)),engine=new Engine(s,c),requests=[],sent=[];
- s.importKnowledge(approvedBusinessPriceSchedule());
+ s.importKnowledge(approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH));
  const fetcher=async(url,options)=>{
   const body=JSON.parse(options.body);requests.push({url,options,body});
   const input=JSON.parse(body.input),value=handler?await handler(body,input,s,c):body.text.format.name==='maria_literal_slots'?{slots:slots()}:body.text.format.name==='maria_contextual_reply'?{opening:'none',acknowledgements:[],nextStep:input.replyContract.mandatorySteps[Math.min(1,input.replyContract.mandatorySteps.length-1)].id,factualAnchors:input.replyContract.factualAnchors}:{choice:1};
@@ -304,7 +307,7 @@ test('a pending reply reuses the same Maria wording without extra calls or dupli
  try{
   await f.run('AI_REUSE0001','Cucarachas en Medellín');
   const e={id:'AI_REUSE0002',text:'Apartamento',phone,line:f.c.lines[0].phone,at:Date.now(),fromMe:false,kind:'text'};
-  f.s.enqueue(e);await f.engine.process(e);
+  historicalPriceClock.timers.setTime(e.at);f.s.enqueue(e);await f.engine.process(e);
   const row=f.reply(e.id),first=await composeOwnReply(f.c,f.s,f.fetcher,row,row.text),calls=f.requests.length;assert.equal(row.state,'READY');assert.equal(first,'¿Cuántas habitaciones o metros cuadrados tiene el lugar?');assert.doesNotMatch(first,/El inmueble|apartamento/);
   assert.equal(await composeOwnReply(f.c,f.s,f.fetcher,row,row.text),first);assert.equal(f.requests.length,calls);
   f.s.db.prepare('UPDATE outbox SET body=? WHERE id=?').run(f.s.seal(first),row.id);

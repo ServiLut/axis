@@ -1,3 +1,6 @@
+import {mock as historicalPriceClock} from 'node:test';
+// Historical quotation fixtures use their original immutable table and clock.
+historicalPriceClock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T18:00:00.000Z')});
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
@@ -6,7 +9,7 @@ import {Engine} from '../automation/service-bots/engine.mjs';
 import {Transport,drain,flushOutbox} from '../automation/service-bots/transport.mjs';
 import {BUSINESSES} from '../automation/service-bots/config.mjs';
 import {selectPrice,verifyPriceSource} from '../automation/service-bots/prices.mjs';
-import {approvedBusinessPriceSchedule} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 import {assertOperationalLineScope,operationalCoverage,operationalHistoryGuard} from '../automation/service-bots/line-scope.mjs';
 
 const customer='573001112233';
@@ -96,8 +99,8 @@ test('blue owner mismatch, HTTP error and partial native coverage remain conserv
 
 test('approved direct price table rechecks only the authorized blue owner; a legacy red source remains blocked',async()=>{
  const {t,c,calls}=fixture();
- const entry=selectPrice({service:'cucarachas',site:'casa',area:'50 m²',location:'medellin'},[approvedBusinessPriceSchedule()]).entry;
- assert.equal(await verifyPriceSource(entry,t),true);assert.equal(calls.length,1);assert.equal(calls[0].line,c.lines[0].phone);
+ const entry=selectPrice({service:'cucarachas',site:'casa',area:'50 m²',location:'medellin'},[approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH)],null,{scheduleHash:LEGACY_BUSINESS_PRICE_HASH,issuedAt:Date.now()}).entry;
+ assert.equal(await verifyPriceSource(entry,t,{issuedAt:Date.now()}),true);assert.equal(calls.length,1);assert.equal(calls[0].line,c.lines[0].phone);
  await assert.rejects(()=>verifyPriceSource({source:{line:c.lines[1].phone}},t),/LINE_SUSPENDED_BY_AUTHORIZED_SCOPE/);
  assert.equal(calls.length,1);
 });

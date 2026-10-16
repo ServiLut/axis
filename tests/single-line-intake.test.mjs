@@ -1,3 +1,6 @@
+import {mock as historicalPriceClock} from 'node:test';
+// Historical quotation fixtures use their original immutable table and clock.
+historicalPriceClock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T18:00:00.000Z')});
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes,createHash} from 'node:crypto';
@@ -7,7 +10,7 @@ import {Store} from '../automation/service-bots/store.mjs';
 import {Engine} from '../automation/service-bots/engine.mjs';
 import {createBotServer} from '../automation/service-bots/server.mjs';
 import {drainProgramRegistrations,registrationStatus,registrationHash,MARIA_TENANT,MARIA_COMPANY} from '../automation/service-bots/maria-program.mjs';
-import {approvedBusinessPriceSchedule,BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH as BUSINESS_PRICE_HASH,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 const blue='573126944997',red='573126938721',phone='573001112233';
 const actorId='7508385b-536e-4aa2-8137-d734dfc900ef',orderId='85c47fc8-5314-4f68-a8d6-dde112640f5d';
 const scope=at=>({version:'authorized-fumigacion-blue-only-v1',company:'fumigacion',activeLines:[blue],suspendedLines:[red],authorizedAt:new Date(at).toISOString(),authorizationSource:'direct-user-20261009-red-block-24h',reportedBlockedDurationHours:24});
@@ -67,10 +70,10 @@ test('red delivery metadata changes only its existing ledger entry and never que
  const result=await post('/delivery',{instance:'own-1',owner:red,mid:'RED_OLD_MID',state:'DELIVERED'});assert.equal(result.body.observedOnly,true);assert.equal(store.db.prepare("SELECT state FROM outbox WHERE id='red-previous'").get().state,'DELIVERED');assert.deepEqual(calls,[['binding',red]]);assert.equal(store.db.prepare('SELECT COUNT(*) n FROM outbox').get().n,1);
 }));
 function programFixture(){
- const start=Math.floor((Date.now()-30000)/1000)*1000,store=new Store(':memory:','fumigacion',randomBytes(32));store.importKnowledge(approvedBusinessPriceSchedule());
+ const start=Math.floor((Date.now()-30000)/1000)*1000,store=new Store(':memory:','fumigacion',randomBytes(32));store.importKnowledge(approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH));
  const config={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,activatedAt:start-60000,lines:BUSINESSES.fumigacion.phones.map((phone,i)=>({phone,instance:'own-'+i})),mariaProgram:{enabled:true,url:'https://tenaxis-backend-0zeuja.servilutioncrm.cloud/integrations/maria-service-registration',token:'a'.repeat(43),actorId,tenantId:MARIA_TENANT,companyId:MARIA_COMPANY,startsAt:start-60000,expiresAt:start+86400000}};
  const engine=new Engine(store,config);let count=0;
- const turn=async text=>{const event={id:'BLUE_SOURCE_'+ ++count,phone,at:start+count*1000,line:blue,fromMe:false,kind:'text',text};store.enqueue(event);await engine.process(event);return event;};
+ const turn=async text=>{const event={id:'BLUE_SOURCE_'+ ++count,phone,at:start+count*1000,line:blue,fromMe:false,kind:'text',text};historicalPriceClock.timers.setTime(event.at);store.enqueue(event);await engine.process(event);return event;};
  const deliver=event=>{const row=store.db.prepare('SELECT * FROM outbox WHERE id=?').get(event.id+':reply');assert.ok(row);const mid='MID_'+event.id;store.db.prepare("UPDATE outbox SET mid=?,state='ACCEPTED' WHERE id=?").run(mid,row.id);store.recordFirstBotReply({...row,mid},mid,config.bot,event.at);store.delivery(mid,event.line,'DELIVERED');store.db.prepare('UPDATE meta SET value=? WHERE key=?').run(store.seal({verifiedAt:event.at,mid,line:blue,state:'DELIVERED'}),'first-delivery:'+row.id);};
  const transport={verifyLine:async line=>assert.equal(line,blue),currentAttention:async()=>({complete:true,sources:store.db.prepare('SELECT mid id,line FROM outbox WHERE mid IS NOT NULL').all()}),currentCustomerActivity:async(p,at)=>({complete:true,sources:store.db.prepare('SELECT id,line,at FROM events WHERE phone=? AND from_me=0 AND at>=?').all(p,at)}),request:async(l,path,body)=>{assert.equal(l.phone,blue);const id=body.where.key.id,inbound=store.db.prepare('SELECT body FROM events WHERE id=?').get(id),outbound=store.db.prepare('SELECT * FROM outbox WHERE mid=?').get(id);if(inbound){const e=store.open(inbound.body);return {messages:{records:[{key:{id,remoteJid:phone+'@s.whatsapp.net',fromMe:false},message:{conversation:e.text},messageTimestamp:e.at/1000}]}};}return {messages:{records:outbound?[{key:{id,remoteJid:phone+'@s.whatsapp.net',fromMe:true},message:{conversation:store.open(outbound.body)},status:'DELIVERY_ACK'}]:[]}};}};
  return {config,store,start,turn,deliver,transport};

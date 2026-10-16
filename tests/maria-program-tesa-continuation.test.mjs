@@ -1,10 +1,13 @@
+import {mock as historicalPriceClock} from 'node:test';
+// Historical quotation fixtures use their original immutable table and clock.
+historicalPriceClock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T18:00:00.000Z')});
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
 import {Store} from '../automation/service-bots/store.mjs';
 import {Engine,routeCaseQuestion} from '../automation/service-bots/engine.mjs';
 import {BUSINESSES,CURRENT_OPERATOR_ROUTING} from '../automation/service-bots/config.mjs';
-import {approvedBusinessPriceSchedule,BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH as BUSINESS_PRICE_HASH,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 import {drainProgramRegistrations,registrationHash,registrationStatus,MARIA_TENANT,MARIA_COMPANY} from '../automation/service-bots/maria-program.mjs';
 import {TESA_GROUP_JID,TESA_GROUP_SUBJECT,TESA_BOT_PHONES} from '../automation/service-bots/tesa-config.mjs';
 import {drainTesaGroup,ingestTesaWebhook,tesaCustomerReplyStillValid} from '../automation/service-bots/tesa-transport.mjs';
@@ -13,12 +16,12 @@ import {initializeInactivityFollowup} from '../automation/service-bots/inactivit
 
 const actor='7508385b-536e-4aa2-8137-d734dfc900ef',order='85c47fc8-5314-4f68-a8d6-dde112640f5d',customer='573001112233',human='573043332213',groupMid='TESA_NEW_ORDER_001';
 function fixture(){
- const now=Date.now(),start=Math.floor((now-30000)/1000)*1000,store=new Store(':memory:','fumigacion',randomBytes(32));store.importKnowledge(approvedBusinessPriceSchedule());
+ const now=Date.now(),start=Math.floor((now-30000)/1000)*1000,store=new Store(':memory:','fumigacion',randomBytes(32));store.importKnowledge(approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH));
  const participants=[...TESA_BOT_PHONES,human].map(phone=>({id:phone+'@s.whatsapp.net',phoneNumber:phone+'@s.whatsapp.net'}));
  const config={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,operatorRouting:CURRENT_OPERATOR_ROUTING,activatedAt:start-60000,historyCheckRequired:true,lines:BUSINESSES.fumigacion.phones.map((phone,i)=>({phone,instance:'isolated-'+i})),mariaProgram:{enabled:true,url:'https://tenaxis-backend-0zeuja.servilutioncrm.cloud/integrations/maria-service-registration',token:'a'.repeat(43),actorId:actor,tenantId:MARIA_TENANT,companyId:MARIA_COMPANY,startsAt:start-60000,expiresAt:start+86400000},tesaOperations:{enabled:true,groupJid:TESA_GROUP_JID,groupSubject:TESA_GROUP_SUBJECT,senderLine:BUSINESSES.fumigacion.phones[0],activatedAt:start-60000,allowedParticipantPhones:[human],verifiedMembership:{owner:BUSINESSES.fumigacion.phones[0],ownerOpen:true,verifiedAt:now,expiresAt:now+300000,sourceHash:'a'.repeat(64),participantPhones:participants.map(p=>p.id.split('@')[0]),participantBindings:participants.map(p=>({jid:p.id,phone:p.id.split('@')[0]}))}}};
  initializeInactivityFollowup(config,store);
  const engine=new Engine(store,config);let count=0,writes=0,groupSends=0,customerSends=0,payload,nativeAnswer;const customerSendIds=[];
- const turn=async text=>{const e={id:'FULL_PIPELINE_'+ ++count,phone:customer,line:config.lines[0].phone,fromMe:false,kind:'text',text,at:start+count*1000};store.enqueue(e);await engine.process(e);return e;};
+ const turn=async text=>{const e={id:'FULL_PIPELINE_'+ ++count,phone:customer,line:config.lines[0].phone,fromMe:false,kind:'text',text,at:start+count*1000};historicalPriceClock.timers.setTime(e.at);store.enqueue(e);await engine.process(e);return e;};
  const delivered=e=>{const row=store.db.prepare('SELECT * FROM outbox WHERE id=?').get(e.id+':reply');assert.ok(row);const mid='MID_'+e.id;store.db.prepare("UPDATE outbox SET mid=?,state='ACCEPTED' WHERE id=?").run(mid,row.id);store.recordFirstBotReply({...row,mid},mid,config.bot,e.at);store.delivery(mid,e.line,'DELIVERED');store.db.prepare('UPDATE meta SET value=? WHERE key=?').run(store.seal({verifiedAt:e.at,mid,line:e.line,state:'DELIVERED'}),'first-delivery:'+row.id);return store.open(row.body);};
  const receipt=p=>({company:'FUMIGACION',tenantId:MARIA_TENANT,companyId:MARIA_COMPANY,advisorMembershipId:actor,createdById:actor,phone:p.phone,persisted:true,orderId:order,caseId:p.caseId,acceptanceId:p.quote.acceptanceId,requestHash:registrationHash(p),state:'NUEVO',scheduled:false,paymentRecorded:false});
  const transport={verifyLine:async()=>{},currentAttention:async()=>({complete:true,sources:store.db.prepare('SELECT mid id,line FROM outbox WHERE mid IS NOT NULL').all()}),currentCustomerActivity:async(phone,at)=>({complete:true,sources:store.db.prepare('SELECT id,line,at FROM events WHERE phone=? AND from_me=0 AND at>=?').all(phone,at)}),send:async out=>{customerSends++;customerSendIds.push(out.id);return 'CUSTOMER_SEND_'+customerSends;},request:async(line,path,body)=>{

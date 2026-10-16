@@ -1,3 +1,6 @@
+import {mock as historicalPriceClock} from 'node:test';
+// Historical quotation fixtures use their original immutable table and clock.
+historicalPriceClock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T18:00:00.000Z')});
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
@@ -5,13 +8,13 @@ import {Store} from '../automation/service-bots/store.mjs';
 import {Engine,extractSlots} from '../automation/service-bots/engine.mjs';
 import {drain} from '../automation/service-bots/transport.mjs';
 import {BUSINESSES,OPERATOR_ROUTING} from '../automation/service-bots/config.mjs';
-import {approvedBusinessPriceSchedule,BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH as BUSINESS_PRICE_HASH,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 import {selectPrice} from '../automation/service-bots/prices.mjs';
 
 function fixture(){
  const c={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,chiefOnly:true,operatorRouting:OPERATOR_ROUTING,historyCheckRequired:true,activatedAt:Date.now()-10000,lines:BUSINESSES.fumigacion.phones.map((phone,i)=>({phone,instance:'isolated-'+i}))};
  const s=new Store(':memory:','fumigacion',randomBytes(32)),engine=new Engine(s,c);let seq=0;
- s.importKnowledge(approvedBusinessPriceSchedule());
+ s.importKnowledge(approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH));
  const t={config:c,verifyLine:async()=>{},priorHistory:async()=>({cutoff:c.activatedAt,priorOutgoing:false}),currentAttention:async()=>({complete:true,sources:[]}),understand:async()=>({}),send:async()=> 'ISOLATED'+(++seq)};
  const process=async(id,text,extra={})=>{const e={id,text,phone:'573001112233',line:c.lines[0].phone,at:Date.now(),fromMe:false,kind:'text',...extra};s.enqueue(e);await drain(s,c,t,engine);return e;};
  const reply=id=>{const r=s.db.prepare('SELECT * FROM outbox WHERE id=?').get(id+':reply');return r&&s.open(r.body);};
@@ -46,7 +49,7 @@ test('explicit mt2 and mts2 variants use the unchanged approved area band while 
  for(const literal of ['42 mts2','42 mts²','42 mt2','42 mt²','42 MTS2','42 m 2','42,5 mts2','42.5 mts²']){
   const slots={...extractSlots('Cucarachas en apartamento en Medellín de '+literal,'fumigacion')};
   assert.equal(slots.area,literal);
-  const entry=selectPrice(slots,[approvedBusinessPriceSchedule()]).entry;
+  const entry=selectPrice(slots,[approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH)],null,{scheduleHash:LEGACY_BUSINESS_PRICE_HASH,issuedAt:Date.now()}).entry;
   assert.equal(entry?.priceCop,129000);
   assert.equal(entry.appliesTo.area,literal);
   assert.equal(entry.source.scheduleHash,BUSINESS_PRICE_HASH);
@@ -56,11 +59,11 @@ test('explicit mt2 and mts2 variants use the unchanged approved area band while 
 test('linear units, ranges, cubic units, conflicting rooms and special properties do not gain an automatic square-area price',()=>{
  for(const literal of ['42 mts','42 mt','42 metros','42 mts3','entre 42 y 50 mts2','42 mts2 de tubería']){
   const slots={service:'cucarachas',site:'apartamento',location:'medellin',area:literal};
-  assert.equal(selectPrice(slots,[approvedBusinessPriceSchedule()]).entry,undefined);
+  assert.equal(selectPrice(slots,[approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH)],null,{scheduleHash:LEGACY_BUSINESS_PRICE_HASH,issuedAt:Date.now()}).entry,undefined);
  }
  for(const literal of ['42 mts','42 mt','42 mts3'])assert.equal(extractSlots(literal,'fumigacion').area,undefined);
  const good={service:'cucarachas',site:'apartamento',location:'medellin',area:'42 mts2'};
- for(const patch of [{rooms:'3 habitaciones'},{site:'edificio'},{locationDetails:'dos apartamentos en Medellín'},{location:'itagüía'},{service:'cucarachas y hormigas'}])assert.equal(selectPrice({...good,...patch},[approvedBusinessPriceSchedule()]).entry,undefined);
+ for(const patch of [{rooms:'3 habitaciones'},{site:'edificio'},{locationDetails:'dos apartamentos en Medellín'},{location:'itagüía'},{service:'cucarachas y hormigas'}])assert.equal(selectPrice({...good,...patch},[approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH)],null,{scheduleHash:LEGACY_BUSINESS_PRICE_HASH,issuedAt:Date.now()}).entry,undefined);
  assert.equal(extractSlots('42 mts2','servicio-tecnico').area,undefined);
 });
 

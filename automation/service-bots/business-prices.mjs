@@ -2,12 +2,15 @@ import {createHash} from 'node:crypto';
 import {normalize} from './config.mjs';
 import {specialPropertyScope} from './property-scope.mjs';
 
-export const BUSINESS_PRICE_AUTHORITY='direct-user-chat-20261005-mariangel-prices-and-reception';
+export const LEGACY_BUSINESS_PRICE_AUTHORITY='direct-user-chat-20261005-mariangel-prices-and-reception';
+export const BUSINESS_PRICE_AUTHORITY='user-delegated-native-573043332213-20261016-excel-prices';
 export const BUSINESS_PRICE_GUARD='direct-approved-table-standard-price-and-scoped-extras-v1';
+// Coordinated deployment boundary; deliberately external to immutable document hashes.
+export const BUSINESS_PRICE_CUTOVER_AT='2026-10-16T19:45:00.000Z';
 // The user's direct instruction approves only the pricing material. The other
 // brochure content (chemicals, safety, guarantees) is not operational policy.
-const schedule={company:'fumigacion',kind:'approved_price_schedule',source:BUSINESS_PRICE_AUTHORITY,
- authorizationSource:BUSINESS_PRICE_AUTHORITY,at:'2026-10-05',approval:{source:BUSINESS_PRICE_AUTHORITY,reviewed:true},
+const legacySchedule={company:'fumigacion',kind:'approved_price_schedule',source:LEGACY_BUSINESS_PRICE_AUTHORITY,
+ authorizationSource:LEGACY_BUSINESS_PRICE_AUTHORITY,at:'2026-10-05',approval:{source:LEGACY_BUSINESS_PRICE_AUTHORITY,reviewed:true},
  materials:{cucarachas:'8fe591a33d154b5f808c16faf0ad9642be4499b6a5bf8732ec4a594594c0ccb8',roedores:'159dbef76389587131c15ae51208350e2b2ae6f22b25be85fe02eebad8fb2254',writtenClarification:'2fc3b51b8cd9d58dd60b1ac185ea97018597807eab46ddeae7a1ceb804aedb64',audio:'a409fcdcbb41f34d978024bd633bb8851df047ac48f79b4449d2636ec1fc11b0'},
  entries:[
   {rooms:1,minM2:30,maxM2:40,cucarachas:99000,cucarachasMinimum:89000,roedores:129000,roedoresMinimum:109000},
@@ -20,13 +23,29 @@ const schedule={company:'fumigacion',kind:'approved_price_schedule',source:BUSIN
  mattressPriceAuthorization:'direct-user-20261005-correction-99000-per-mattress',
  automaticDiscounts:false,avispaPrice:'inspection-required',
  scope:{properties:['casa','apartamento'],municipalities:['medellin','bello','envigado','itagui','sabaneta','la estrella','copacabana','girardota'],specialProperties:'human-review',multipleProperties:'human-review',travelOutsideMetro:'human-review',mattressVolumeFrom:6,extraAffectedFurniture:'human-review',priceColumn:'valor-de-fumigacion',minimumColumn:'internal-reference-only'}};
-const canonical=JSON.stringify(schedule);
+const schedule=structuredClone(legacySchedule);
+schedule.source=BUSINESS_PRICE_AUTHORITY;schedule.authorizationSource=BUSINESS_PRICE_AUTHORITY;schedule.at='2026-10-16';
+schedule.approval={source:BUSINESS_PRICE_AUTHORITY,reviewed:true,delegationSource:'direct-user-chat-20261016-ask-3043332213-for-current-prices',confirmation:{sender:'573043332213',questionId:'3EB0D1A35A2166B3C72005',answerId:'3EB077024063F4A81039A2',text:'si'}};
+schedule.materials.excel='5c3a421b2def031105243b7fea8bf83c34ef8b33b882eca5402c45d4d8264d22';
+schedule.entries[0].roedores=119000;schedule.chinchesPerMattressCop=100000;
+delete schedule.chinchesProposedPriceCop;delete schedule.scope.mattressVolumeFrom;
+schedule.mattressPriceAuthorization=BUSINESS_PRICE_AUTHORITY;
+schedule.chinchesBulkFrom=7;schedule.chinchesBulkPerMattressCop=70000;
+schedule.version='2026-10-16-confirmed-excel-v2';
+// This existing registration DTO cap is technical, not a commercial volume rule.
+schedule.scope.maxQuoteCop=10000000;
+const canonical=JSON.stringify(schedule),legacyCanonical=JSON.stringify(legacySchedule);
 export const BUSINESS_PRICE_HASH=createHash('sha256').update(canonical).digest('hex');
+export const LEGACY_BUSINESS_PRICE_HASH=createHash('sha256').update(legacyCanonical).digest('hex');
+const schedules=new Map([[BUSINESS_PRICE_HASH,schedule],[LEGACY_BUSINESS_PRICE_HASH,legacySchedule]]);
+function instant(value){const n=typeof value==='number'?value:typeof value==='string'&&/Z$/.test(value)?Date.parse(value):NaN;return Number.isSafeInteger(n)?n:null;}
+export function businessPriceHashAt(at){const t=instant(at);return t===null?null:t<Date.parse(BUSINESS_PRICE_CUTOVER_AT)?LEGACY_BUSINESS_PRICE_HASH:BUSINESS_PRICE_HASH;}
+export function priceScheduleValidAt(scheduleHash,issuedAt){return schedules.has(scheduleHash)&&businessPriceHashAt(issuedAt)===scheduleHash;}
 // Preserve the exact previous version as evidence, while excluding it from new quotations.
 export function supersededBusinessPriceSchedule(document){return document?.kind==='approved_price_schedule'&&createHash('sha256').update(JSON.stringify(document)).digest('hex')==='e906be8ff20357d7c6c3bdc229a926b610e1008442fb3597b2db6171224b8d9b';}
-export const approvedBusinessPriceSchedule=()=>JSON.parse(canonical);
+export function approvedBusinessPriceSchedule(scheduleHash=BUSINESS_PRICE_HASH){const s=schedules.get(scheduleHash);if(!s)throw Error('UNKNOWN_APPROVED_PRICE_VERSION');return structuredClone(s);}
 export function validateBusinessPriceSchedule(doc,company){
- if(company!=='fumigacion'||JSON.stringify(doc)!==canonical)throw Error('DIRECT_APPROVED_PRICE_SCHEDULE_REQUIRED');
+ if(company!=='fumigacion'||![canonical,legacyCanonical].includes(JSON.stringify(doc)))throw Error('DIRECT_APPROVED_PRICE_SCHEDULE_REQUIRED');
  return doc;
 }
 function count(value){
@@ -35,15 +54,18 @@ function count(value){
  return m?(words[m[1]]??Number(m[1])):null;
 }
 function squareArea(value){const m=normalize(value).match(/^(\d{1,5}(?:[.,]\d{1,2})?)\s*(?:m(?:ts?)?\s*(?:2|²)|m(?:ts?)?\.?\s*cuadrados?|metros?\s*cuadrados?)$/);return m?Number(m[1].replace(',','.')):null;}
-export function selectBusinessPrice(slots){
+export function selectBusinessPrice(slots,{scheduleHash=BUSINESS_PRICE_HASH}={}){
+ const schedule=schedules.get(scheduleHash);if(!schedule)return {reason:'BUSINESS_PRICE_VERSION_REVIEW'};
  if(specialPropertyScope(Object.values(slots).join(' '),slots))return {reason:'BUSINESS_SPECIAL_PROPERTY_REVIEW'};
  if(!schedule.scope.properties.includes(normalize(slots.site))||!schedule.scope.municipalities.includes(normalize(slots.location)))return {reason:'BUSINESS_PRICE_SCOPE_REVIEW'};
  if(slots.roomScale||slots.siteScale||slots.treatmentScope||slots.patio&&slots.patio!=='sin patio'||slots.floors&&!/^1(?:er|ro)?\s+(?:piso|nivel)$/.test(normalize(slots.floors)))return {reason:'BUSINESS_PRICE_EXTRA_SCOPE_REVIEW'};
- const service=normalize(slots.service);let amount,row,basis,category;
+ const service=normalize(slots.service);let amount,row,basis,category,unitPrice;
  if(service==='chinches'){
   const n=count(slots.mattresses);
-  if(!n||n>=schedule.scope.mattressVolumeFrom||slots.affectedFurniture)return {reason:'MATTRESS_VOLUME_OR_FURNITURE_REVIEW'};
-  amount=n*schedule.chinchesPerMattressCop;basis=n;category='chinches';
+  if(!n||schedule.scope.mattressVolumeFrom&&n>=schedule.scope.mattressVolumeFrom||slots.affectedFurniture)return {reason:'MATTRESS_VOLUME_OR_FURNITURE_REVIEW'};
+  unitPrice=schedule.chinchesBulkFrom&&n>=schedule.chinchesBulkFrom?schedule.chinchesBulkPerMattressCop:schedule.chinchesPerMattressCop;
+  amount=n*unitPrice;if(!Number.isSafeInteger(amount)||amount>(schedule.scope.maxQuoteCop??10000000))return {reason:'BUSINESS_PRICE_TECHNICAL_AMOUNT_REVIEW'};
+  basis=n;category='chinches';
  }else{
   category=service==='cucarachas'?'cucarachas':['ratas','ratones','ratas y ratones','ratones y ratas','roedores'].includes(service)?'roedores':service==='comején'||service==='comejen'?'comejen':null;
   if(!category)return {reason:'NO_APPROVED_BUSINESS_PEST_PRICE'};
@@ -55,12 +77,14 @@ export function selectBusinessPrice(slots){
  }
  const id='approved-table-'+category+'-'+basis;
  const entry={id,priceCop:amount,currency:'COP',active:true,scope:'direct-approved-ordinary-residential-service',appliesTo:{...slots},
-  source:{type:'direct_user_approved_schedule',quoteId:BUSINESS_PRICE_AUTHORITY,at:schedule.at,scheduleHash:BUSINESS_PRICE_HASH},
-  category,...(category==='chinches'?{mattresses:basis,unitPriceCop:schedule.chinchesPerMattressCop}:{roomsBand:row.rooms,areaBand:[row.minM2,row.maxM2]})};
- return {entry,sourceIds:[BUSINESS_PRICE_AUTHORITY]};
+  source:{type:'direct_user_approved_schedule',quoteId:schedule.source,at:schedule.at,scheduleHash},
+  category,...(category==='chinches'?{mattresses:basis,unitPriceCop:unitPrice}:{roomsBand:row.rooms,areaBand:[row.minM2,row.maxM2]})};
+ return {entry,sourceIds:[schedule.source]};
 }
-export function verifyBusinessPriceEntry(entry){
- const selected=entry&&selectBusinessPrice(entry.appliesTo).entry;
+export function verifyBusinessPriceEntry(entry,{issuedAt}={}){
+ const scheduleHash=entry?.source?.scheduleHash;
+ if(!schedules.has(scheduleHash)||issuedAt!==undefined&&!priceScheduleValidAt(scheduleHash,issuedAt)||scheduleHash===LEGACY_BUSINESS_PRICE_HASH&&issuedAt===undefined)throw Error('APPROVED_BUSINESS_PRICE_VERSION_REQUIRED');
+ const selected=entry&&selectBusinessPrice(entry.appliesTo,{scheduleHash}).entry;
  if(!selected||JSON.stringify(selected)!==JSON.stringify(entry))throw Error('APPROVED_BUSINESS_PRICE_CHANGED');
  return true;
 }

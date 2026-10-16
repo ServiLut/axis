@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {normalize,questionRecipients,SANDRA} from './config.mjs';
-import {BUSINESS_PRICE_HASH,selectBusinessPrice} from './business-prices.mjs';
+import {BUSINESS_PRICE_HASH,LEGACY_BUSINESS_PRICE_HASH,BUSINESS_PRICE_CUTOVER_AT,businessPriceHashAt,selectBusinessPrice} from './business-prices.mjs';
+import {selectPrice} from './prices.mjs';
 import {operationalLineAllowed,operationalCoverage} from './line-scope.mjs';
 import {getTesaConfig} from './tesa-config.mjs';
 import {mariaIncidentalPetMention} from './after-service.mjs';
@@ -63,7 +64,8 @@ export async function installProgramSetup(c,s,body,fetcher){
  if(hash&&[c.authHash,c.webhookHash,c.retentionProofAccess?.tokenHash,...[c.programSupervision?.token,c.retentionNoteAccess?.token].filter(x=>typeof x==='string').map(x=>createHash('sha256').update(x).digest('hex'))].includes(hash))throw Error('OWN_SEPARATE_PROGRAM_ACCESS_REQUIRED');
  const candidate=validated(body,c.company),test={...c,mariaProgram:candidate};
  const status=await request(test,'/status',{},fetcher);
- if(!ownScope(test,status)||status.username!=='maria.angel.bot'||status.enabled!==true||status.businessWritesEnabled!==true||status.registrationKind!=='new-service-pending-scheduling'||status.priceScheduleHash!==BUSINESS_PRICE_HASH||Date.parse(status.startsAt)!==candidate.startsAt||Date.parse(status.expiresAt)!==candidate.expiresAt)throw Error('PROGRAM_SCOPE_NOT_VERIFIED');
+ const priceVersionVerified=status.configuredPriceScheduleHash!==undefined?status.configuredPriceScheduleHash===BUSINESS_PRICE_HASH&&status.legacyPriceScheduleHash===LEGACY_BUSINESS_PRICE_HASH&&status.priceScheduleEffectiveAt===BUSINESS_PRICE_CUTOVER_AT&&status.priceScheduleHash===businessPriceHashAt(Date.now()):status.priceScheduleHash===BUSINESS_PRICE_HASH&&status.priceScheduleHash===businessPriceHashAt(Date.now());
+ if(!ownScope(test,status)||status.username!=='maria.angel.bot'||status.enabled!==true||status.businessWritesEnabled!==true||status.registrationKind!=='new-service-pending-scheduling'||!priceVersionVerified||Date.parse(status.startsAt)!==candidate.startsAt||Date.parse(status.expiresAt)!==candidate.expiresAt)throw Error('PROGRAM_SCOPE_NOT_VERIFIED');
  s.tx(()=>{put(s,setupKey,candidate);s.audit('OWN_PROGRAM_SETUP_VERIFIED',MARIA_PROGRAM_GUARD,{actorId:candidate.actorId,tenantId:MARIA_TENANT,companyId:MARIA_COMPANY,startsAt:iso(candidate.startsAt),expiresAt:iso(candidate.expiresAt),testBusinessWritten:false});});c.mariaProgram=candidate;
  return registrationStatus(c,s);
 }
@@ -307,14 +309,23 @@ export function ownQuoteOutboxId(s,state,phone,line){
  const ref=get(s,'maria-tesa-unregistered-reply:'+q.replyId);
  return ref?.guard==='own-prospective-native-tesa-closed-unregistered-answer-v1'&&ref.ordinaryPrice===true&&ref.plan?.caseId===state.caseId&&ref.plan.phone===phone&&ref.plan.line===line&&ref.plan.sourceId===q.sourceId&&ref.entryId===q.entryId?q.replyId:null;
 }
+// The outbox and its immutable first-delivery proof determine the price version.
+// A state/caller hash cannot select a historical tariff on its own.
+export function ownDeliveredQuoteEntry(s,state,phone,line,slots=state.slots){
+ const q=state.quotedPrice;if(!q)return null;
+ const row=s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND internal=0 AND case_id=? AND state IN ('DELIVERED','READ') AND mid IS NOT NULL").get(ownQuoteOutboxId(s,state,phone,line),phone,line,state.caseId);
+ if(!row||!s.priceReplyReference(row)||!s.priceReplyStillValid(row))return null;
+ const table=q.entryId?.startsWith('approved-table-'),version=table?s.priceReplyVersion(row):null;
+ if(table&&(!version?.deliveryVerified||version.clarification||q.scheduleHash!==undefined&&q.scheduleHash!==version.scheduleHash||q.issuedAt!==undefined&&q.issuedAt!==version.sourceAt))return null;
+ const entry=selectPrice(slots,s.approvedPriceCatalogs(),q.entryId,version||{}).entry;
+ return entry&&entry.id===q.entryId&&entry.priceCop===q.priceCop?{q,entry,row,version}:null;
+}
 function eligibleQuote(s,state,phone,line){
- const q=state.quotedPrice,entry=selectBusinessPrice(state.slots).entry;
- if(!q?.accepted||!entry||entry.id!==q.entryId||entry.priceCop!==q.priceCop||entry.source.scheduleHash!==BUSINESS_PRICE_HASH)return null;
- const row=s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND state IN ('DELIVERED','READ') AND mid IS NOT NULL").get(ownQuoteOutboxId(s,state,phone,line),phone,line,state.caseId);
- const firstDelivery=row&&get(s,'first-delivery:'+row.id);
- if(!row||row.created<Date.now()-86400000||!firstDelivery||firstDelivery.mid!==row.mid||!s.priceReplyReference(row)||!s.priceReplyStillValid(row)||firstDelivery.verifiedAt<Date.now()-86400000)return null;
+ const own=ownDeliveredQuoteEntry(s,state,phone,line);if(!own?.q.accepted||own.entry.source?.type!=='direct_user_approved_schedule')return null;
+ const {row}=own,firstDelivery=get(s,'first-delivery:'+row.id);
+ if(row.created<Date.now()-86400000||!firstDelivery||firstDelivery.mid!==row.mid||firstDelivery.verifiedAt<Date.now()-86400000)return null;
  row.firstDeliveryAt=Math.floor(firstDelivery.verifiedAt/1000)*1000;
- return {q,entry,row};
+ return own;
 }
 export function registrationQuoteReady(s,state,phone,line){return Boolean(eligibleQuote(s,state,phone,line));}
 function blockedText(text){return /[?¿]|^no\b|\b(?:refuerzo|garantia|verificacion|visita anterior|ya fumig|certificado|documento|cancel|no quiero|no acepto|pague|pago|pagar|transfer|comprobante|consign|descuento|gratis|otra solicitud|nuevo servicio|otro servicio|otro inmueble)\w*/.test(normalize(text));}
@@ -418,7 +429,7 @@ export function registrationTurn(s,c,previous,e,decision){
  }
  if(locationProjection.applied)s.audit('OWN_CURRENT_LOCATION_PROJECTED',e.id,{caseId:state.caseId,guard:locationProjection.guard,omissions:locationProjection.omissions,retained:locationProjection.retained,originalHistoryPreserved:true,businessWritten:false});
  const payload={caseId:state.caseId,phone:e.phone,line:e.line,sourceId:e.id,customerName:pi.customerName,address:pi.address,municipality:state.slots.location,locationDetails:locationProjection.locationDetails,slots,...(petPresence?{petPresence:petPresence.value}:{}),
-  quote:{entryId:own.entry.id,priceCop:own.entry.priceCop,scheduleHash:BUSINESS_PRICE_HASH,mid:own.row.mid,sourceId:own.q.sourceId,deliveredAt:iso(own.row.firstDeliveryAt),acceptedAt:iso(e.at),acceptanceId:e.id},
+  quote:{entryId:own.entry.id,priceCop:own.entry.priceCop,scheduleHash:own.entry.source.scheduleHash,mid:own.row.mid,sourceId:own.q.sourceId,deliveredAt:iso(own.row.firstDeliveryAt),acceptedAt:iso(e.at),acceptanceId:e.id},
   sources:{customerName:pi.nameSource,address:pi.addressSource,...(preference?{preference:preference.source}:{}),...(petPresence?{petPresence:petPresence.source}:{}),acceptance:{...source(e),phone:e.phone,line:e.line,fromMe:false,forwarded:false}}};
  const key=prefix+state.caseId,existing=get(s,key),hash=registrationHash(payload);
  if(existing){if(existing.requestHash!==hash)throw Error('PROGRAM_CASE_ALREADY_RESERVED');return {state,observed:true,observedState:'PROGRAM_REGISTRATION_PENDING'};}
@@ -695,7 +706,7 @@ function saved(s,c,key,entry,r,routeQuestion){
   s.audit('OWN_SERVICE_REGISTRATION_SAVED',p.sourceId,{caseId:p.caseId,orderId:r.orderId,createdById:r.advisorMembershipId,requestHash:r.requestHash,scheduled:false,paymentRecorded:false,confirmationSuppressed:!active});
   if(active){const preference=conv.state.slots.preference;s.queue('program:'+p.caseId+':saved',p.phone,p.line,'Tu solicitud de servicio de '+p.slots.service+' por $'+p.quote.priceCop.toLocaleString('es-CO')+' quedó registrada a nombre de '+p.customerName+' en '+p.address+', '+p.municipality+'. El horario aún está pendiente de confirmación.'+(preference?'':' ¿Qué día y franja horaria prefieres?'),false,conv.revision,p.caseId);
    if(preference){
-    const question={phone:p.phone,line:p.line,caseId:p.caseId,topic:'disponibilidad-y-tecnico',conditions:{...conv.state.slots,quotedPriceCop:p.quote.priceCop,priceSource:selectBusinessPrice(p.slots).entry?.source.quoteId,programServiceId:r.orderId},recipients:questionRecipients(c,'disponibilidad-y-tecnico'),source:p.sourceId,text:c.name+': solicitud ordinaria guardada, servicio '+p.slots.service+' en '+p.municipality+'. Precio aceptado $'+p.quote.priceCop+'. Pendiente de programación. ¿Qué disponibilidad y técnico corresponden a este caso?'};
+    const question={phone:p.phone,line:p.line,caseId:p.caseId,topic:'disponibilidad-y-tecnico',conditions:{...conv.state.slots,quotedPriceCop:p.quote.priceCop,priceSource:selectBusinessPrice(p.slots,{scheduleHash:p.quote.scheduleHash}).entry?.source.quoteId,programServiceId:r.orderId},recipients:questionRecipients(c,'disponibilidad-y-tecnico'),source:p.sourceId,text:c.name+': solicitud ordinaria guardada, servicio '+p.slots.service+' en '+p.municipality+'. Precio aceptado $'+p.quote.priceCop+'. Pendiente de programación. ¿Qué disponibilidad y técnico corresponden a este caso?'};
     let routed=null,routeError=null;
     try{
      if(typeof routeQuestion!=='function'&&c.tesaOperations?.enabled)throw Error('PROGRAM_OPERATIONAL_ROUTER_REQUIRED');

@@ -1,3 +1,6 @@
+import {mock as historicalPriceClock} from 'node:test';
+// Historical quotation fixtures use their original immutable table and clock.
+historicalPriceClock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T18:00:00.000Z')});
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
@@ -6,13 +9,13 @@ import {Engine} from '../automation/service-bots/engine.mjs';
 import {BUSINESSES,CURRENT_OPERATOR_ROUTING,HILARY} from '../automation/service-bots/config.mjs';
 import {TESA_GROUP_JID,TESA_GROUP_SUBJECT,TESA_BOT_PHONES} from '../automation/service-bots/tesa-config.mjs';
 import {initializeTesaStore,prepareTesaQuestion,bindTesaQuestionDelivery,acceptTesaQuotedAnswer} from '../automation/service-bots/tesa-operations.mjs';
-import {approvedBusinessPriceSchedule} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 import {MARIA_UNREGISTERED_TESA_PREFIX,parseMariaUnregisteredTesaAnswer,prepareMariaUnregisteredTesaPlan,continueMariaUnregisteredTesaCustomer,mariaUnregisteredTesaReplyStillValid,mariaCaseQuoteCustomerTurn} from '../automation/service-bots/maria-tesa-unregistered.mjs';
 import {MARIA_TENANT,MARIA_COMPANY} from '../automation/service-bots/maria-program.mjs';
 
 function fixture({slots={service:'cucarachas',site:'apartamento',rooms:'2 habitaciones',location:'medellin'},topic='cotizacion-verificada',plan=true,engineMode=false}={}){
  const now=Date.now(),start=now-5000,phone='573000002345',line=BUSINESSES.fumigacion.phones[0],participants=[...TESA_BOT_PHONES,HILARY];
- const s=new Store(':memory:','fumigacion',randomBytes(32));s.importKnowledge(approvedBusinessPriceSchedule());initializeTesaStore(s);
+ const s=new Store(':memory:','fumigacion',randomBytes(32));s.importKnowledge(approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH));initializeTesaStore(s);
  const c={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,activatedAt:start,operatorRouting:CURRENT_OPERATOR_ROUTING,lines:BUSINESSES.fumigacion.phones.map((phone,i)=>({phone,instance:'unregistered-local-'+i})),
   mariaTesaUnregistered:{enabled:true,startsAt:start},tesaOperations:{enabled:true,groupJid:TESA_GROUP_JID,groupSubject:TESA_GROUP_SUBJECT,senderLine:line,activatedAt:start,allowedParticipantPhones:[HILARY],verifiedMembership:{owner:line,ownerOpen:true,verifiedAt:now,expiresAt:now+300000,sourceHash:'a'.repeat(64),participantPhones:participants,participantBindings:participants.map(phone=>({jid:phone+'@s.whatsapp.net',phone}))}}};
  if(engineMode)return {s,c,phone,line,start};
@@ -51,7 +54,7 @@ function freshEngineFixture(){
  const f=fixture({engineMode:true}),{s,c,phone,line}=f,now=Date.now();c.mariaProgram={enabled:true,url:'https://tenaxis-backend-0zeuja.servilutioncrm.cloud/integrations/maria-service-registration',token:'a'.repeat(43),actorId:'7508385b-536e-4aa2-8137-d734dfc900ef',tenantId:MARIA_TENANT,companyId:MARIA_COMPANY,startsAt:f.start,expiresAt:now+86400000};
  const engine=new Engine(s,c);let seq=0;
  const native=(text,patch={})=>({id:'TESA_ENGINE_NATIVE_'+ ++seq,phone,line,kind:'text',fromMe:false,forwarded:false,at:Math.floor(Date.now()/1000)*1000+seq*1000,text,...patch});
- const turn=async(text,patch={})=>{const e=native(text,patch);s.enqueue(e);await engine.process(e);return e;};
+ const turn=async(text,patch={})=>{const e=native(text,patch);historicalPriceClock.timers.setTime(e.at);s.enqueue(e);await engine.process(e);return e;};
  const row=id=>s.db.prepare('SELECT * FROM outbox WHERE id=?').get(id);
  const deliver=(id,at=Math.floor(Date.now()/1000)*1000)=>{const out=row(id);assert.ok(out,id);const mid='MID_'+id.replace(/[^a-zA-Z0-9_]/g,'_');s.db.prepare("UPDATE outbox SET state='ACCEPTED',mid=? WHERE id=?").run(mid,id);s.recordFirstBotReply({...out,mid},mid,c.bot,at);s.delivery(mid,line,'DELIVERED');s.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('first-delivery:'+id,s.seal({mid,line,state:'DELIVERED',verifiedAt:at}));return mid;};
  const ownQuestion=()=>s.db.prepare('SELECT * FROM tesa_questions ORDER BY rowid DESC LIMIT 1').get();

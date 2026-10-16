@@ -1,23 +1,26 @@
+import {mock as historicalPriceClock} from 'node:test';
+// Historical quotation fixtures use their original immutable table and clock.
+historicalPriceClock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T18:00:00.000Z')});
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
 import {Store} from '../automation/service-bots/store.mjs';
 import {Engine} from '../automation/service-bots/engine.mjs';
 import {BUSINESSES} from '../automation/service-bots/config.mjs';
-import {approvedBusinessPriceSchedule} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 import {CONVERSATIONAL_AI_GUARD} from '../automation/service-bots/ai-settings.mjs';
 import {MARIA_UNDERSTANDING_GUARD} from '../automation/service-bots/maria-understanding.mjs';
 
 function fixture(){
  const s=new Store(':memory:','fumigacion',randomBytes(32)),at=Date.now()-10000;
  const c={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,activatedAt:at-1000,lines:BUSINESSES.fumigacion.phones.map(phone=>({phone}))};
- s.importKnowledge(approvedBusinessPriceSchedule());const engine=new Engine(s,c);let count=0;
+ s.importKnowledge(approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH));const engine=new Engine(s,c);let count=0;
  const turn=async(text,{semantic,forwarded=false,fromMe=false,line=c.lines[0].phone}={})=>{
-  const e={id:'OWN_QUOTE_SOURCE_'+ ++count,phone:'573000000111',line,at:at+count,kind:'text',fromMe,forwarded,text};s.enqueue(e);
+  const e={id:'OWN_QUOTE_SOURCE_'+ ++count,phone:'573000000111',line,at:at+count,kind:'text',fromMe,forwarded,text};historicalPriceClock.timers.setTime(e.at);s.enqueue(e);
   await engine.process(e,semantic?{company:'FUMIGACION',eventId:e.id,guard:CONVERSATIONAL_AI_GUARD,semanticGuard:MARIA_UNDERSTANDING_GUARD,intent:{kind:semantic,evidence:text},slots:{}}:{});
   const row=s.db.prepare('SELECT * FROM outbox WHERE id=?').get(e.id+':reply');return {e,row,text:row&&s.open(row.body),state:s.conversation(e.phone)?.state};
  };
- const quote=async(delivery='READ')=>{const result=await turn('Comején en casa de 3 habitaciones en Envigado');s.db.prepare('UPDATE outbox SET mid=?,state=? WHERE id=?').run('OWN_QUOTE_MID_001',delivery,result.row.id);return result;};
+ const quote=async(delivery='READ')=>{const result=await turn('Comején en casa de 3 habitaciones en Envigado');s.db.prepare('UPDATE outbox SET mid=?,state=? WHERE id=?').run('OWN_QUOTE_MID_001',delivery,result.row.id);if(['DELIVERED','READ'].includes(delivery)){s.delivery('OWN_QUOTE_MID_001',result.e.line,delivery);s.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('first-delivery:'+result.row.id,s.seal({mid:'OWN_QUOTE_MID_001',line:result.e.line,state:delivery,verifiedAt:result.e.at}));}return result;};
  return {s,c,turn,quote};
 }
 test('same delivered own comején quote answers its literal clarification despite an ambiguous model label',async()=>{

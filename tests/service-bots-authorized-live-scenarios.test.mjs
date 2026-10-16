@@ -1,10 +1,13 @@
+import {mock as historicalPriceClock} from 'node:test';
+// Historical quotation fixtures use their original immutable table and clock.
+historicalPriceClock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T18:00:00.000Z')});
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
 import {Store} from '../automation/service-bots/store.mjs';
 import {Engine,extractSlots} from '../automation/service-bots/engine.mjs';
 import {BUSINESSES,CURRENT_OPERATOR_ROUTING,SANDRA,HILARY} from '../automation/service-bots/config.mjs';
-import {approvedBusinessPriceSchedule} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 import {registrationStatus} from '../automation/service-bots/maria-program.mjs';
 import {TESA_GROUP_JID,TESA_GROUP_SUBJECT} from '../automation/service-bots/tesa-config.mjs';
 import {initializeTesaStore,prepareTesaQuestion,bindTesaQuestionDelivery,acceptTesaQuotedAnswer,tesaCaseAnswers} from '../automation/service-bots/tesa-operations.mjs';
@@ -14,12 +17,12 @@ import {initializeTesaStore,prepareTesaQuestion,bindTesaQuestionDelivery,acceptT
 const PHONE='573000007321';
 function fixture(){
  const start=Math.floor((Date.now()-120000)/1000)*1000,s=new Store(':memory:','fumigacion',randomBytes(32));
- s.importKnowledge(approvedBusinessPriceSchedule());
+ s.importKnowledge(approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH));
  const c={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,chiefOnly:true,activatedAt:start-1000,operatorRouting:CURRENT_OPERATOR_ROUTING,lines:BUSINESSES.fumigacion.phones.map((phone,i)=>({phone,instance:'isolated-authorized-'+i})),mariaProgram:{enabled:true,url:'https://invalid.example/integrations/maria-service-registration',token:'local-only-token-no-external-access',actorId:'7508385b-536e-4aa2-8137-d734dfc900ef',startsAt:start-1000,expiresAt:start+86400000}};
  const engine=new Engine(s,c);let seq=0;
  const read=e=>{const row=s.db.prepare('SELECT * FROM outbox WHERE id=?').get(e.id+':reply');return {e,row,text:row?s.open(row.body):null,state:s.conversation(PHONE).state,eventState:s.db.prepare('SELECT state FROM events WHERE id=?').get(e.id)?.state};};
  const process=async e=>{await engine.process(e);return read(e);};
- const turn=async(text,extra={})=>{const e={id:'ISOLATED_BROAD_'+ ++seq,phone:PHONE,line:c.lines[0].phone,at:start+seq*1000,kind:'text',fromMe:false,forwarded:false,text,...extra};s.enqueue(e);return process(e);};
+ const turn=async(text,extra={})=>{const e={id:'ISOLATED_BROAD_'+ ++seq,phone:PHONE,line:c.lines[0].phone,at:start+seq*1000,kind:'text',fromMe:false,forwarded:false,text,...extra};historicalPriceClock.timers.setTime(e.at);s.enqueue(e);return process(e);};
  const deliver=r=>{assert.ok(r.row,r.e.text);const mid='SYNTHETIC_MID_'+r.e.id;s.db.prepare("UPDATE outbox SET mid=?,state='ACCEPTED' WHERE id=?").run(mid,r.row.id);s.recordFirstBotReply({...r.row,mid},mid,c.bot,r.e.at);s.delivery(mid,r.e.line,'DELIVERED');s.db.prepare('UPDATE meta SET value=? WHERE key=?').run(s.seal({verifiedAt:r.e.at,mid,line:r.e.line,state:'DELIVERED'}),'first-delivery:'+r.row.id);};
  return {s,c,engine,turn,process,read,deliver};
 }

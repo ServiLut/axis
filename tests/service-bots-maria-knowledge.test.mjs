@@ -8,11 +8,13 @@ import {mariaKnowledgeDocument,persistMariaKnowledge,mariaKnowledgeStatus,mariaM
 test('compiled Maria knowledge has exact approved rates and preserves unapproved topics as pending',()=>{
  const d=mariaKnowledgeDocument();
  assert.equal(d.company,'FUMIGACION');assert.equal(d.priceScheduleHash,BUSINESS_PRICE_HASH);
- assert.equal(d.pricing.chinchesPerMattressCop,99000);assert.equal(d.rules.length,9);
+ assert.equal(d.pricing.chinchesPerMattressCop,100000);assert.equal(d.pricing.chinchesBulkFrom,7);assert.equal(d.pricing.chinchesBulkPerMattressCop,70000);assert.equal(d.rules.length,9);
  assert.equal(d.complete,false);assert.equal(d.modelTrainingPerformed,false);
  const text=JSON.stringify(d);
- assert.doesNotMatch(text,/cucarachasMinimum|roedoresMinimum|100000|70000|573\d{9}|PSICOLOGOS|S\.TECNICO/);
+ assert.doesNotMatch(text,/cucarachasMinimum|roedoresMinimum|573\d{9}|PSICOLOGOS|S\.TECNICO/);
  assert.ok(d.pending.includes('approved-faq-coverage'));
+ assert.equal(d.scopedPriceExamples.length,1);assert.equal(d.scopedPriceExamples[0].totalCop,115000);
+ assert.equal(d.scopedPriceExamples[0].source.answerId,'3EB0BF43EE714C64495EBF');assert.equal(d.scopedPriceExamples[0].generalFurnitureTariffApproved,false);assert.equal(d.scopedPriceExamples[0].ordinaryRegistrationEnabled,false);
 });
 
 test('approved knowledge persists encrypted and one version produces only one installation audit',()=>{
@@ -44,19 +46,19 @@ test('other service remains isolated and model context excludes observations, cl
  }finally{s.close();other.close();}
 });
 
-test('22 independent pricing examples retain approved amounts and special scope controls',()=>{
+test('25 independent pricing examples retain confirmed tiers and special scope controls',()=>{
  const standard=[
-  ['30 m²',99000,129000],['42 mts2',129000,129000],['60 m²',149000,149000],
+  ['30 m²',99000,119000],['42 mts2',129000,129000],['60 m²',149000,149000],
   ['90 m²',169000,169000],['120 m²',189000,189000],['180 m²',209000,209000]
  ];
  const base={site:'apartamento',location:'medellin'};let examples=0;
  for(const [area,cucarachas,roedores] of standard)for(const [service,amount] of [['cucarachas',cucarachas],['roedores',roedores]]){
   const price=selectBusinessPrice({...base,service,area});assert.equal(price.entry.priceCop,amount);examples++;
  }
- for(let n=1;n<=5;n++){assert.equal(selectBusinessPrice({...base,service:'chinches',mattresses:n+' colchones'}).entry.priceCop,n*99000);examples++;}
+ for(let n=1;n<=8;n++){assert.equal(selectBusinessPrice({...base,service:'chinches',mattresses:n+' colchones'}).entry.priceCop,n*(n>=7?70000:100000));examples++;}
  assert.equal(selectBusinessPrice({...base,service:'comejen',area:'42 mts2'}).entry.priceCop,179000);examples++;
- for(const extra of [{site:'restaurante'},{location:'rionegro'},{mattresses:'6 colchones'},{mattresses:'2 colchones',affectedFurniture:'sofá'}]){
+ for(const extra of [{site:'restaurante'},{location:'rionegro'},{mattresses:'143 colchones'},{mattresses:'2 colchones',affectedFurniture:'sofá'}]){
   assert.equal(selectBusinessPrice({...base,service:'chinches',mattresses:'2 colchones',...extra}).entry,undefined);examples++;
  }
- assert.equal(examples,22);
+ assert.equal(examples,25);
 });

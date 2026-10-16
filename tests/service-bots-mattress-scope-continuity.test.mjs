@@ -1,17 +1,20 @@
+import {mock as historicalPriceClock} from 'node:test';
+// Historical quotation fixtures use their original immutable table and clock.
+historicalPriceClock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T18:00:00.000Z')});
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
 import {Store} from '../automation/service-bots/store.mjs';
 import {Engine} from '../automation/service-bots/engine.mjs';
 import {BUSINESSES,CURRENT_OPERATOR_ROUTING} from '../automation/service-bots/config.mjs';
-import {approvedBusinessPriceSchedule} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 
 const initial='Quiero cotizar otro servicio nuevo para chinches: son dos colchones en un apartamento de Itagüí, barrio Santa María. No hay otros muebles afectados.';
 const uncertainCount='Todavía no sé si será uno o dos colchones.';
 function fixture(){
- const at=Math.floor((Date.now()-60000)/1000)*1000,s=new Store(':memory:','fumigacion',randomBytes(32));s.importKnowledge(approvedBusinessPriceSchedule());
+ const at=Math.floor((Date.now()-60000)/1000)*1000,s=new Store(':memory:','fumigacion',randomBytes(32));s.importKnowledge(approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH));
  const c={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,chiefOnly:true,activatedAt:at-1000,operatorRouting:CURRENT_OPERATOR_ROUTING,lines:BUSINESSES.fumigacion.phones.map((phone,i)=>({phone,instance:'scope-memory-local-'+i}))},engine=new Engine(s,c);let seq=0;
- const turn=async(text,extra={})=>{const e={id:'MATTRESS_MEMORY_LOCAL_'+ ++seq,phone:'573000007389',line:c.lines[0].phone,at:at+seq*1000,kind:'text',fromMe:false,forwarded:false,text,...extra};s.enqueue(e);await engine.process(e);const row=s.db.prepare('SELECT * FROM outbox WHERE id=?').get(e.id+':reply');return {e,state:s.conversation(e.phone).state,text:row?s.open(row.body):null};};
+ const turn=async(text,extra={})=>{const e={id:'MATTRESS_MEMORY_LOCAL_'+ ++seq,phone:'573000007389',line:c.lines[0].phone,at:at+seq*1000,kind:'text',fromMe:false,forwarded:false,text,...extra};historicalPriceClock.timers.setTime(e.at);s.enqueue(e);await engine.process(e);const row=s.db.prepare('SELECT * FROM outbox WHERE id=?').get(e.id+':reply');return {e,state:s.conversation(e.phone).state,text:row?s.open(row.body):null};};
  return {s,c,turn};
 }
 const isolated=fn=>async()=>{const f=fixture();try{await fn(f);}finally{f.s.close();}};

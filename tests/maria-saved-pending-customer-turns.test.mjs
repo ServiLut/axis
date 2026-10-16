@@ -1,17 +1,20 @@
+import {mock as historicalPriceClock} from 'node:test';
+// Historical quotation fixtures use their original immutable table and clock.
+historicalPriceClock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T18:00:00.000Z')});
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
 import {Store} from '../automation/service-bots/store.mjs';
 import {Engine,routeCaseQuestion} from '../automation/service-bots/engine.mjs';
 import {BUSINESSES,CURRENT_OPERATOR_ROUTING,SANDRA,HILARY} from '../automation/service-bots/config.mjs';
-import {approvedBusinessPriceSchedule} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 import {drainProgramRegistrations,registrationHash,registrationStatus,MARIA_TENANT,MARIA_COMPANY} from '../automation/service-bots/maria-program.mjs';
 import {TESA_GROUP_JID,TESA_GROUP_SUBJECT,TESA_BOT_PHONES} from '../automation/service-bots/tesa-config.mjs';
 
 const actor='7508385b-536e-4aa2-8137-d734dfc900ef',order='85c47fc8-5314-4f68-a8d6-dde112640f5d',phone='573001112233';
 function fixture({preference=true}={}){
  const now=Date.now(),start=Math.floor((now-30000)/1000)*1000,store=new Store(':memory:','fumigacion',randomBytes(32));
- store.importKnowledge(approvedBusinessPriceSchedule());
+ store.importKnowledge(approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH));
  const business=BUSINESSES.fumigacion,blue=business.phones[0],participants=[...TESA_BOT_PHONES,HILARY];
  const config={company:'fumigacion',...business,enabled:true,operatorRouting:CURRENT_OPERATOR_ROUTING,activatedAt:start-60000,
   lines:business.phones.map((phone,i)=>({phone,instance:'isolated-pending-'+i})),
@@ -19,7 +22,7 @@ function fixture({preference=true}={}){
   mariaProgram:{enabled:true,url:'https://tenaxis-backend-0zeuja.servilutioncrm.cloud/integrations/maria-service-registration',token:'a'.repeat(43),actorId:actor,tenantId:MARIA_TENANT,companyId:MARIA_COMPANY,startsAt:start-60000,expiresAt:start+86400000},
   tesaOperations:{enabled:true,groupJid:TESA_GROUP_JID,groupSubject:TESA_GROUP_SUBJECT,senderLine:blue,activatedAt:start-60000,allowedParticipantPhones:[HILARY],verifiedMembership:{owner:blue,ownerOpen:true,verifiedAt:now,expiresAt:now+300000,sourceHash:'a'.repeat(64),participantPhones:participants,participantBindings:participants.map(p=>({jid:p+'@s.whatsapp.net',phone:p}))}}};
  const engine=new Engine(store,config);let count=0,writes=0;
- const turn=async(text,patch={})=>{const e={id:'SAVED_PENDING_'+ ++count,phone,line:blue,fromMe:false,kind:'text',text,at:start+count*1000,...patch};store.enqueue(e);await engine.process(e);return e;};
+ const turn=async(text,patch={})=>{const e={id:'SAVED_PENDING_'+ ++count,phone,line:blue,fromMe:false,kind:'text',text,at:start+count*1000,...patch};historicalPriceClock.timers.setTime(e.at);store.enqueue(e);await engine.process(e);return e;};
  const reply=e=>{const r=store.db.prepare('SELECT * FROM outbox WHERE id=?').get(e.id+':reply');return r&&store.open(r.body);};
  const delivered=e=>{const r=store.db.prepare('SELECT * FROM outbox WHERE id=?').get(e.id+':reply');assert.ok(r,e.text);const mid='MID_'+e.id;store.db.prepare("UPDATE outbox SET mid=?,state='ACCEPTED' WHERE id=?").run(mid,r.id);store.recordFirstBotReply({...r,mid},mid,config.bot,e.at);store.delivery(mid,e.line,'DELIVERED');store.db.prepare('UPDATE meta SET value=? WHERE key=?').run(store.seal({verifiedAt:e.at,mid,line:e.line,state:'DELIVERED'}),'first-delivery:'+r.id);return store.open(r.body);};
  const receipt=p=>({company:'FUMIGACION',tenantId:MARIA_TENANT,companyId:MARIA_COMPANY,advisorMembershipId:actor,createdById:actor,phone:p.phone,persisted:true,orderId:order,caseId:p.caseId,acceptanceId:p.quote.acceptanceId,requestHash:registrationHash(p),state:'NUEVO',scheduled:false,paymentRecorded:false});

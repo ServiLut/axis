@@ -2,7 +2,7 @@ import {createHash} from 'node:crypto';
 import {normalize,publicTextSafe} from './config.mjs';
 import {getTesaConfig} from './tesa-config.mjs';
 import {tesaOutboxScopeSafe} from './tesa-operations.mjs';
-import {selectBusinessPrice,BUSINESS_PRICE_HASH} from './business-prices.mjs';
+import {selectBusinessPrice,businessPriceHashAt} from './business-prices.mjs';
 import {priceText,selectPrice} from './prices.mjs';
 import {partitionNativeAttention} from './explicit-return-attention.mjs';
 
@@ -103,8 +103,8 @@ export async function continueMariaUnregisteredTesaCustomer(s,c,t,accepted,verif
  let text,entry=null;
  if(parsed.kind==='missing-field')text=parsed.reply;
  else{
-  const own=selectBusinessPrice(current.conv.state.slots).entry,approved=own&&selectPrice(current.conv.state.slots,s.approvedPriceCatalogs(),own.id).entry;
-  if(own&&approved?.id===own.id&&approved.priceCop===own.priceCop&&own.priceCop===parsed.priceCop&&own.source.scheduleHash===BUSINESS_PRICE_HASH&&genericOwnScope(parsed.scope,current.conv.state.slots)){entry=own;text=priceText(entry);}
+  const version={scheduleHash:businessPriceHashAt(answer.at),issuedAt:answer.at},own=selectBusinessPrice(current.conv.state.slots,version).entry,approved=own&&selectPrice(current.conv.state.slots,s.approvedPriceCatalogs(),own.id,version).entry;
+  if(own&&approved?.id===own.id&&approved.priceCop===own.priceCop&&own.priceCop===parsed.priceCop&&own.source.scheduleHash===version.scheduleHash&&genericOwnScope(parsed.scope,current.conv.state.slots)){entry=own;text=priceText(entry);}
   else text='Para este caso, la cotización es de $'+parsed.priceCop.toLocaleString('es-CO')+' COP e incluye '+parsed.scope+'. ¿Deseas continuar con esta cotización? Esta cotización no confirma una reserva ni un horario.';
  }
  if(!publicTextSafe(text))return {prepared:true,queued:false,review:true};
@@ -113,7 +113,7 @@ export async function continueMariaUnregisteredTesaCustomer(s,c,t,accepted,verif
   const ref={guard:MARIA_UNREGISTERED_TESA_GUARD,questionId:plan.questionId,plan,sourceId:answer.sourceId,answerHash:digest(answer),text,revision:latest.conv.revision,kind:parsed.kind,ordinaryPrice:Boolean(entry),entryId:entry?.id??null};
   put(s,replyKey(id),ref);const queued=s.queue(id,plan.phone,plan.line,text,false,latest.conv.revision,plan.caseId);
   const next={...latest.conv.state,awaitingHumanReview:false,pendingTesaQuestionId:null,verifiedTesaAnswerSource:answer.sourceId};
-  if(entry){s.savePriceReplyReference(id,{entryId:entry.id,priceCop:entry.priceCop,context:{...next.slots},finalText:text});next.quotedPrice={entryId:entry.id,priceCop:entry.priceCop,sourceId:plan.sourceId,replyId:id,accepted:false};}
+  if(entry){s.savePriceReplyReference(id,{entryId:entry.id,priceCop:entry.priceCop,context:{...next.slots},finalText:text,scheduleHash:entry.source.scheduleHash,issuedAt:answer.at});next.quotedPrice={entryId:entry.id,priceCop:entry.priceCop,sourceId:plan.sourceId,replyId:id,accepted:false,scheduleHash:entry.source.scheduleHash,issuedAt:answer.at};}
   else if(parsed.kind==='case-quote')next.quotedCasePrice={guard:MARIA_UNREGISTERED_TESA_GUARD,caseId:plan.caseId,phone:plan.phone,line:plan.line,questionId:plan.questionId,sourceId:answer.sourceId,questionSourceId:plan.sourceId,replyId:id,priceCop:parsed.priceCop,scope:parsed.scope,accepted:false,ordinaryRegistrationEligible:false};
   else next.pendingTesaCustomerField={guard:MARIA_UNREGISTERED_TESA_GUARD,field:parsed.field,questionId:plan.questionId,sourceId:answer.sourceId,replyId:id};
   s.saveConversation(plan.phone,next);s.audit('MARIA_UNREGISTERED_TESA_CUSTOMER_REPLY_PREPARED',answer.sourceId,{guard:MARIA_UNREGISTERED_TESA_GUARD,questionId:plan.questionId,caseId:plan.caseId,kind:parsed.kind,ownApprovedPrice:Boolean(entry),casePriceOnly:parsed.kind==='case-quote'&&!entry,customerReplyQueued:queued,businessWritten:false,humanHoldReleased:false,policyChanged:false});

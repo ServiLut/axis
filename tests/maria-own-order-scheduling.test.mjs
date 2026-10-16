@@ -1,10 +1,13 @@
+import {mock as historicalPriceClock} from 'node:test';
+// Historical quotation fixtures use their original immutable table and clock.
+historicalPriceClock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T18:00:00.000Z')});
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
 import {Store} from '../automation/service-bots/store.mjs';
 import {Engine,routeCaseQuestion} from '../automation/service-bots/engine.mjs';
 import {BUSINESSES,CURRENT_OPERATOR_ROUTING,HILARY} from '../automation/service-bots/config.mjs';
-import {approvedBusinessPriceSchedule} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 import {drainProgramRegistrations,registrationHash,MARIA_TENANT,MARIA_COMPANY} from '../automation/service-bots/maria-program.mjs';
 import {TESA_GROUP_JID,TESA_GROUP_SUBJECT,TESA_BOT_PHONES} from '../automation/service-bots/tesa-config.mjs';
 import {bindTesaQuestionDelivery,acceptTesaQuotedAnswer} from '../automation/service-bots/tesa-operations.mjs';
@@ -13,13 +16,13 @@ import {parseOwnTesaSchedulingSlot,prepareOwnSchedulingPlan,ownSchedulingPlan,co
 
 const actor='7508385b-536e-4aa2-8137-d734dfc900ef',order='85c47fc8-5314-4f68-a8d6-dde112640f5d',technicianId='29d3c685-cacb-4337-8365-53fe4d830e51';
 function fixture({createdAt}={}){
- const now=Date.now(),start=Math.floor((now-30000)/1000)*1000,s=new Store(':memory:','fumigacion',randomBytes(32));s.importKnowledge(approvedBusinessPriceSchedule());
+ const now=Date.now(),start=Math.floor((now-30000)/1000)*1000,s=new Store(':memory:','fumigacion',randomBytes(32));s.importKnowledge(approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH));
  const line=BUSINESSES.fumigacion.phones[0],phone='573000003456',participants=[...TESA_BOT_PHONES,HILARY];
  const c={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,activatedAt:start-60000,operatorRouting:CURRENT_OPERATOR_ROUTING,lines:BUSINESSES.fumigacion.phones.map((phone,i)=>({phone,instance:'schedule-isolated-'+i})),mariaProgram:{enabled:true,url:'https://tenaxis-backend-0zeuja.servilutioncrm.cloud/integrations/maria-service-registration',token:'a'.repeat(43),actorId:actor,tenantId:MARIA_TENANT,companyId:MARIA_COMPANY,startsAt:start-60000,expiresAt:now+86400000},tesaOperations:{enabled:true,groupJid:TESA_GROUP_JID,groupSubject:TESA_GROUP_SUBJECT,senderLine:line,activatedAt:start-60000,allowedParticipantPhones:[HILARY],verifiedMembership:{owner:line,ownerOpen:true,verifiedAt:now,expiresAt:now+300000,sourceHash:'a'.repeat(64),participantPhones:participants,participantBindings:participants.map(phone=>({jid:phone+'@s.whatsapp.net',phone}))}}};
  installOwnSchedulingAccess(c,s,{actorId:actor,url:MARIA_SCHEDULING_URL,token:'x'.repeat(43),proofToken:'y'.repeat(43),startsAt:start-1000,expiresAt:c.mariaProgram.expiresAt});
  const engine=new Engine(s,c);let seq=0,registrationWrites=0,backendMode='success';const schedulingCalls=[];
  const event=(text,patch={})=>({id:'SCHEDULING_NATIVE_'+ ++seq,phone,line,fromMe:false,forwarded:false,kind:'text',at:start+seq*1000,text,...patch});
- const turn=async(text,patch={})=>{const e=event(text,patch);s.enqueue(e);await engine.process(e);return e;};
+ const turn=async(text,patch={})=>{const e=event(text,patch);historicalPriceClock.timers.setTime(e.at);s.enqueue(e);await engine.process(e);return e;};
  const row=id=>s.db.prepare('SELECT * FROM outbox WHERE id=?').get(id);
  const deliver=(id,at=null)=>{const r=row(id);assert.ok(r,id);const mid='MID_'+id.replace(/[^a-zA-Z0-9_]/g,'_');s.db.prepare("UPDATE outbox SET state='ACCEPTED',mid=? WHERE id=?").run(mid,id);s.recordFirstBotReply({...r,mid},mid,c.bot,at??now);s.delivery(mid,line,'DELIVERED');s.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('first-delivery:'+id,s.seal({mid,line,state:'DELIVERED',verifiedAt:at??Math.floor(Date.now()/1000)*1000}));return s.open(r.body);};
  const registrationReceipt=p=>({company:'FUMIGACION',tenantId:MARIA_TENANT,companyId:MARIA_COMPANY,advisorMembershipId:actor,createdById:actor,phone:p.phone,persisted:true,orderId:order,caseId:p.caseId,acceptanceId:p.quote.acceptanceId,requestHash:registrationHash(p),state:'NUEVO',scheduled:false,paymentRecorded:false,...(createdAt===null?{}:{createdAt:createdAt??new Date().toISOString()})});

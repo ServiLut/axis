@@ -4,7 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import {validateApprovedAnswers,selectCommonAnswer} from './faq.mjs';
 import {validatePriceCatalog,selectPrice,quotationInquiry} from './prices.mjs';
-import {supersededBusinessPriceSchedule} from './business-prices.mjs';
+import {supersededBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH,selectBusinessPrice,priceScheduleValidAt} from './business-prices.mjs';
 import {customerQuestionKey,technicalAvailabilityQuestion} from './technical-scope.mjs';
 
 export class Store {
@@ -275,8 +275,39 @@ export class Store {
   approvedPriceCatalogs(){return this.db.prepare("SELECT body FROM knowledge WHERE kind IN ('approved_price_catalog','approved_price_schedule') ORDER BY imported,rowid").all().map(row=>this.open(row.body)).filter(doc=>!supersededBusinessPriceSchedule(doc));}
   savePriceReplyReference(outboxId,reference){this.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('price-reply:'+outboxId,this.seal(reference));}
   priceReplyReference(row){const r=this.db.prepare('SELECT value FROM meta WHERE key=?').get('price-reply:'+row.id);return r?this.open(r.value):null;}
-  priceReplyStillValid(row){
+  priceReplyVersion(candidate){
+    // Re-read durable ownership and ciphertext; caller conversation state or an
+    // entry ID alone cannot provide the version of a historical quotation.
+    const row=candidate?.id&&this.db.prepare('SELECT * FROM outbox WHERE id=? AND internal=0').get(candidate.id);
+    if(!row||row.phone!==candidate.phone||row.line!==candidate.line)return null;
+    const ref=this.priceReplyReference(row);if(!ref?.entryId?.startsWith('approved-table-')||!ref.context||this.open(row.body)!==ref.finalText)return null;
+    const delivered=['DELIVERED','READ'].includes(row.state),saved=this.db.prepare('SELECT value FROM meta WHERE key=?').get('first-delivery:'+row.id),proof=saved?this.open(saved.value):null;
+    if(delivered&&(!row.mid||!proof||proof.mid!==row.mid||proof.line!==row.line||!['DELIVERED','READ'].includes(proof.state)||!Number.isSafeInteger(proof.verifiedAt)))return null;
+    if(Object.hasOwn(ref,'quotationOutboxId')||Object.hasOwn(ref,'referenceKind')){
+      if(ref.referenceKind!=='prior-quotation-clarification'||typeof ref.quotationOutboxId!=='string'||ref.quotationOutboxId===row.id||!row.case_id)return null;
+      const original=this.db.prepare("SELECT * FROM outbox WHERE id=? AND internal=0 AND state IN ('DELIVERED','READ')").get(ref.quotationOutboxId);
+      if(!original||original.phone!==row.phone||original.line!==row.line||original.case_id!==row.case_id)return null;
+      const originalRef=this.priceReplyReference(original);
+      if(!originalRef||Object.hasOwn(originalRef,'quotationOutboxId')||Object.hasOwn(originalRef,'referenceKind')||ref.entryId!==originalRef.entryId||ref.priceCop!==originalRef.priceCop||JSON.stringify(ref.context)!==JSON.stringify(originalRef.context))return null;
+      const version=this.priceReplyVersion(original);
+      if(!version?.deliveryVerified||ref.scheduleHash!==version.scheduleHash||ref.issuedAt!==version.issuedAt)return null;
+      return {...version,clarification:true,quotationOutboxId:original.id};
+    }
+    const hasHash=Object.hasOwn(ref,'scheduleHash'),hasAt=Object.hasOwn(ref,'issuedAt');
+    if(hasHash!==hasAt)return null;
+    const scheduleHash=hasHash?ref.scheduleHash:LEGACY_BUSINESS_PRICE_HASH;
+    if(!hasHash&&!delivered)return null;
+    if(!priceScheduleValidAt(scheduleHash,row.created)||hasAt&&!priceScheduleValidAt(scheduleHash,ref.issuedAt)||delivered&&(!priceScheduleValidAt(scheduleHash,proof.verifiedAt)||proof.verifiedAt<row.created))return null;
+    const selected=selectBusinessPrice(ref.context,{scheduleHash}).entry;
+    if(!selected||selected.id!==ref.entryId||selected.priceCop!==ref.priceCop)return null;
+    return {scheduleHash,issuedAt:delivered?proof.verifiedAt:ref.issuedAt,sourceAt:hasAt?ref.issuedAt:null,deliveryVerified:delivered};
+  }
+  priceReplyStillValid(row,{at=Date.now()}={}){
     const ref=this.priceReplyReference(row);if(!ref)return true;
+    if(ref.entryId?.startsWith('approved-table-')){
+      const version=this.priceReplyVersion(row);if(!version||!version.deliveryVerified&&!version.clarification&&!priceScheduleValidAt(version.scheduleHash,at))return false;
+      const selected=selectPrice(ref.context,this.approvedPriceCatalogs(),ref.entryId,version);return selected.entry?.id===ref.entryId&&selected.entry.priceCop===ref.priceCop&&this.open(row.body)===ref.finalText;
+    }
     const selected=selectPrice(ref.context,this.approvedPriceCatalogs(),ref.entryId);return selected.entry?.id===ref.entryId&&selected.entry.priceCop===ref.priceCop&&this.open(row.body)===ref.finalText;
   }
   saveApprovedReplyReference(outboxId,reference){

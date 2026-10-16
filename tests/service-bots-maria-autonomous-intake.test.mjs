@@ -1,15 +1,18 @@
+import {mock as historicalPriceClock} from 'node:test';
+// Historical quotation fixtures use their original immutable table and clock.
+historicalPriceClock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T18:00:00.000Z')});
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
 import {Store} from '../automation/service-bots/store.mjs';
 import {Engine,extractSlots,capabilitiesReply} from '../automation/service-bots/engine.mjs';
 import {BUSINESSES,SANDRA} from '../automation/service-bots/config.mjs';
-import {approvedBusinessPriceSchedule,selectBusinessPrice} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,selectBusinessPrice,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 import {CONVERSATIONAL_AI_GUARD} from '../automation/service-bots/ai-settings.mjs';
 import {MARIA_UNDERSTANDING_GUARD} from '../automation/service-bots/maria-understanding.mjs';
 function fixture(){
  const start=Date.now()-60000,s=new Store(':memory:','fumigacion',randomBytes(32));
- s.importKnowledge(approvedBusinessPriceSchedule());
+ s.importKnowledge(approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH));
  const c={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,chiefOnly:true,activatedAt:start-1000,lines:BUSINESSES.fumigacion.phones.map(phone=>({phone}))};
  const engine=new Engine(s,c);let seq=0;
  const turn=async(text,semantic=null,slots={})=>{const e={id:'AUTONOMY_SOURCE_'+ ++seq,phone:'573009000011',line:c.lines[1].phone,at:start+seq*1000,fromMe:false,kind:'text',text};s.enqueue(e);
@@ -42,8 +45,8 @@ test('ordinary customer availability question quotes approved facts rather than 
  }finally{f.s.close();}
 });
 test('explicit square abbreviation prices; bare metres remain unresolved instead of receiving invented square units',()=>{
- for(const area of ['72 mts cuadrados','72 mt cuadrados','72 mts. cuadrados']){assert.equal(extractSlots(area,'fumigacion').area,area);assert.equal(selectBusinessPrice({service:'cucarachas',site:'apartamento',location:'medellin',area}).entry?.priceCop,149000);}
- assert.equal(selectBusinessPrice({service:'cucarachas',site:'apartamento',location:'medellin',area:'72 metros'}).entry,undefined);
+ for(const area of ['72 mts cuadrados','72 mt cuadrados','72 mts. cuadrados']){assert.equal(extractSlots(area,'fumigacion').area,area);assert.equal(selectBusinessPrice({service:'cucarachas',site:'apartamento',location:'medellin',area},{scheduleHash:LEGACY_BUSINESS_PRICE_HASH}).entry?.priceCop,149000);}
+ assert.equal(selectBusinessPrice({service:'cucarachas',site:'apartamento',location:'medellin',area:'72 metros'},{scheduleHash:LEGACY_BUSINESS_PRICE_HASH}).entry,undefined);
 });
 test('registration-enabled factual capabilities never deny the installed own program or claim a saved service',()=>{
  const f=fixture();try{const now=Date.now();f.c.mariaProgram={enabled:true,startsAt:now-1000,expiresAt:now+60000};const reply=capabilitiesReply(f.c,SANDRA,4);

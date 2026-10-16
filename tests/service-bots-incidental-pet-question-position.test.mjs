@@ -1,10 +1,13 @@
+import {mock as historicalPriceClock} from 'node:test';
+// Historical quotation fixtures use their original immutable table and clock.
+historicalPriceClock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T18:00:00.000Z')});
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
 import {Store} from '../automation/service-bots/store.mjs';
 import {Engine} from '../automation/service-bots/engine.mjs';
 import {BUSINESSES} from '../automation/service-bots/config.mjs';
-import {approvedBusinessPriceSchedule} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 import {registrationStatus} from '../automation/service-bots/maria-program.mjs';
 import {mariaIncidentalPetMention,MARIA_INCIDENTAL_PETS_GUARD} from '../automation/service-bots/after-service.mjs';
 
@@ -47,9 +50,9 @@ for(const text of reviewVariants)test('an additional request or actual safety is
 test('the complete ordinary request quotes the approved price and keeps pets as a sourced note without accepting or creating a service',async()=>{
  const store=new Store(':memory:','fumigacion',randomBytes(32));
  try{
-  store.importKnowledge(approvedBusinessPriceSchedule());
+  store.importKnowledge(approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH));
   const config={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,chiefOnly:true,lines:BUSINESSES.fumigacion.phones.map((phone,i)=>({phone,instance:'ISOLATED_PET_POSITION_'+i}))};
-  const engine=new Engine(store,config),e=source(ordinaryVariants[0]);store.enqueue(e);await engine.process(e);
+  const engine=new Engine(store,config),e=source(ordinaryVariants[0]);historicalPriceClock.timers.setTime(e.at);store.enqueue(e);await engine.process(e);
   const row=store.db.prepare('SELECT body FROM outbox WHERE id=?').get(e.id+':reply'),reply=row?store.open(row.body):null,state=store.conversation(e.phone).state;
   assert.notEqual(store.db.prepare('SELECT state FROM events WHERE id=?').get(e.id).state,'REVIEW');
   assert.match(reply,/149\.000/);assert.equal(state.quotedPrice.priceCop,149000);assert.notEqual(state.quotedPrice.accepted,true);

@@ -1,24 +1,27 @@
+import {mock as historicalPriceClock} from 'node:test';
+// Historical quotation fixtures use their original immutable table and clock.
+historicalPriceClock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T18:00:00.000Z')});
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
 import {Store} from '../automation/service-bots/store.mjs';
 import {Engine,customerDecision} from '../automation/service-bots/engine.mjs';
 import {BUSINESSES} from '../automation/service-bots/config.mjs';
-import {approvedBusinessPriceSchedule} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 import {registrationStatus} from '../automation/service-bots/maria-program.mjs';
 import {MARIA_INTAKE_TIMING_GUARD} from '../automation/service-bots/intake-timing.mjs';
 import {CONVERSATIONAL_AI_GUARD} from '../automation/service-bots/ai-settings.mjs';
 import {MARIA_UNDERSTANDING_GUARD} from '../automation/service-bots/maria-understanding.mjs';
 
 function fixture(){
- const start=Math.floor((Date.now()-60000)/1000)*1000,s=new Store(':memory:','fumigacion',randomBytes(32));s.importKnowledge(approvedBusinessPriceSchedule());
+ const start=Math.floor((Date.now()-60000)/1000)*1000,s=new Store(':memory:','fumigacion',randomBytes(32));s.importKnowledge(approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH));
  const c={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,chiefOnly:true,activatedAt:start-1000,lines:BUSINESSES.fumigacion.phones.map((phone,i)=>({phone,instance:'reception-'+i})),mariaProgram:{enabled:true,url:'https://tenaxis-backend-0zeuja.servilutioncrm.cloud/integrations/maria-service-registration',token:'a'.repeat(43),actorId:'7508385b-536e-4aa2-8137-d734dfc900ef',startsAt:start-1000,expiresAt:start+86400000}};
  const engine=new Engine(s,c);let seq=0;
  const event=(text,extra={})=>({id:'RECEPTION'+ ++seq,phone:'573009000011',line:c.lines[0].phone,at:start+seq*1000,kind:'text',fromMe:false,forwarded:false,text,...extra});
  const row=e=>s.db.prepare('SELECT * FROM outbox WHERE id=?').get(e.id+':reply');
  const result=e=>{const r=row(e);return {e,row:r,text:r?s.open(r.body):null,state:s.conversation(e.phone).state};};
  const process=async(e,semantic=null)=>{const analysis=semantic?{company:'FUMIGACION',eventId:e.id,guard:CONVERSATIONAL_AI_GUARD,semanticGuard:MARIA_UNDERSTANDING_GUARD,intent:{kind:semantic,evidence:e.text.slice(0,200)},slots:{}}:{};await engine.process(e,analysis);return result(e);};
- const turn=async(text,semantic=null,extra={})=>{const e=event(text,extra);s.enqueue(e);return process(e,semantic);};
+ const turn=async(text,semantic=null,extra={})=>{const e=event(text,extra);historicalPriceClock.timers.setTime(e.at);s.enqueue(e);return process(e,semantic);};
  const deliver=e=>{const r=row(e);assert.ok(r,e.id);const mid='MID'+e.id;s.db.prepare("UPDATE outbox SET mid=?,state='ACCEPTED' WHERE id=?").run(mid,r.id);s.recordFirstBotReply({...r,mid},mid,c.bot,e.at);s.delivery(mid,e.line,'DELIVERED');s.db.prepare('UPDATE meta SET value=? WHERE key=?').run(s.seal({verifiedAt:e.at,mid,line:e.line,state:'DELIVERED'}),'first-delivery:'+r.id);};
  return {s,c,engine,event,process,turn,deliver,result};
 }

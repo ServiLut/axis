@@ -1,20 +1,23 @@
+import {mock as historicalPriceClock} from 'node:test';
+// Historical quotation fixtures use their original immutable table and clock.
+historicalPriceClock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T18:00:00.000Z')});
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
 import {Store} from '../automation/service-bots/store.mjs';
 import {Engine} from '../automation/service-bots/engine.mjs';
 import {BUSINESSES} from '../automation/service-bots/config.mjs';
-import {approvedBusinessPriceSchedule} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 import {mariaIncidentalPetMention} from '../automation/service-bots/after-service.mjs';
 import {drainProgramRegistrations,registrationHash,registrationStatus,MARIA_PROGRAM_PET_PRESENCE_GUARD,MARIA_TENANT,MARIA_COMPANY} from '../automation/service-bots/maria-program.mjs';
 
 const actorId='7508385b-536e-4aa2-8137-d734dfc900ef',orderId='85c47fc8-5314-4f68-a8d6-dde112640f5d';
 function fixture(){
- const start=Math.floor((Date.now()-60000)/1000)*1000,store=new Store(':memory:','fumigacion',randomBytes(32));store.importKnowledge(approvedBusinessPriceSchedule());
+ const start=Math.floor((Date.now()-60000)/1000)*1000,store=new Store(':memory:','fumigacion',randomBytes(32));store.importKnowledge(approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH));
  const config={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,activatedAt:start-60000,lines:BUSINESSES.fumigacion.phones.map((phone,i)=>({phone,instance:'synthetic-pet-'+i})),mariaProgram:{enabled:true,url:'https://tenaxis-backend-0zeuja.servilutioncrm.cloud/integrations/maria-service-registration',token:'a'.repeat(43),actorId,startsAt:start-60000,expiresAt:start+86400000}};
  const engine=new Engine(store,config);let sequence=0,writes=0,payload;
  const event=(text,patch={})=>({id:'PET_SOURCE_'+ ++sequence,phone:'573001112233',at:start+sequence*1000,line:config.lines[0].phone,fromMe:false,kind:'text',text,...patch});
- const process=async e=>{store.enqueue(e);await engine.process(e);return e;},turn=async(text,patch={})=>process(event(text,patch));
+ const process=async e=>{historicalPriceClock.timers.setTime(e.at);store.enqueue(e);await engine.process(e);return e;},turn=async(text,patch={})=>process(event(text,patch));
  const row=e=>store.db.prepare('SELECT * FROM outbox WHERE id=?').get(e.id+':reply');
  const deliver=e=>{const reply=row(e);assert.ok(reply,'reply for '+e.text);const mid='MID'+e.id;store.db.prepare("UPDATE outbox SET mid=?,state='ACCEPTED' WHERE id=?").run(mid,reply.id);store.recordFirstBotReply({...reply,mid},mid,config.bot,e.at);store.delivery(mid,e.line,'DELIVERED');store.db.prepare('UPDATE meta SET value=? WHERE key=?').run(store.seal({verifiedAt:e.at,mid,line:e.line,state:'DELIVERED'}),'first-delivery:'+reply.id);return store.open(reply.body);};
  const transport={verifyLine:async()=>{},currentAttention:async()=>({complete:true,sources:store.db.prepare('SELECT mid id,line FROM outbox WHERE mid IS NOT NULL').all()}),currentCustomerActivity:async(phone,at)=>({complete:true,sources:store.db.prepare('SELECT id,line,at FROM events WHERE phone=? AND from_me=0 AND at>=?').all(phone,at)}),request:async(line,path,body)=>{
@@ -127,7 +130,7 @@ for(const variant of ['missing-source','wrong-phone','wrong-line','wrong-at','be
    const eventRow=f.store.db.prepare('SELECT body FROM events WHERE id=?').get(pets.id),native=f.store.open(eventRow.body);
    if(variant==='wrong-phone')native.phone='573005556677';
    if(variant==='wrong-line')native.line=f.config.lines[1].phone;
-   if(variant==='before-case')conv.state.caseId='fumigacion:'+address.id;
+   if(variant==='before-case'){const first=f.store.db.prepare('SELECT at FROM events WHERE id=?').get(conv.state.caseId.slice(11));native.at=first.at-1000;note.at=native.at;}
    if(variant==='before-access'){native.at=f.config.mariaProgram.startsAt-1000;note.at=native.at;}
    if(variant==='forwarded')native.forwarded=true;
    if(variant==='quoted')native.quotedId='ANOTHER_SOURCE';

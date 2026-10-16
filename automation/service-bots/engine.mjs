@@ -2,6 +2,7 @@ import { normalize, SANDRA, DIEGO, CURRENT_OPERATOR_ROUTING,TECHNICAL_COORDINATO
 import {selectCommonAnswer,commonQuestionTopics,faqNeedsPersonalReview,faqTopicLabel} from './faq.mjs';
 import {chiefStatusTopic,chiefStatusReply} from './chief-status.mjs';
 import {chiefReadOnlyTopic,chiefReadOnlyReply} from './chief-readonly.mjs';
+import {businessPriceHashAt} from './business-prices.mjs';
 import {selectPrice,priceText,quotationInquiry,specialQuotation,currentPriceEntries} from './prices.mjs';
 import {adviserReply} from './adviser-tone.mjs';
 import {literalIntakeTiming} from './intake-timing.mjs';
@@ -11,7 +12,7 @@ import {ownIntent} from './maria-understanding.mjs';
 import {ownMiguelIntent,miguelLiteralSlotAllowed} from './miguel-understanding.mjs';
 import {literalPaintingRequest} from './technical-scope.mjs';
 import {afterServiceKind,afterServiceRequest,afterServiceDecision,explicitNewService,mariaLiteralServiceContext,literalOwnAfterServiceRequest,MARIA_LITERAL_SERVICE_CONTEXT_GUARD,mariaIncidentalPetMention} from './after-service.mjs';
-import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,literalIntakeTextWithoutRegistrationFields,literalProgramPreference,prepareRegisteredTesaContinuation,registeredTesaConfirmation,ownRegisteredReceiptForPresentation,ownSavedPendingOperation,queueOwnSavedServiceReview,ownQuoteOutboxId} from './maria-program.mjs';
+import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,literalIntakeTextWithoutRegistrationFields,literalProgramPreference,prepareRegisteredTesaContinuation,registeredTesaConfirmation,ownRegisteredReceiptForPresentation,ownSavedPendingOperation,queueOwnSavedServiceReview,ownQuoteOutboxId,ownDeliveredQuoteEntry} from './maria-program.mjs';
 import {prepareMariaUnregisteredTesaPlan,mariaCaseQuoteCustomerTurn} from './maria-tesa-unregistered.mjs';
 import {prepareOwnSchedulingPlan,ownSchedulingCustomerTurn} from './maria-own-order-scheduling.mjs';
 import {createHash} from 'node:crypto';
@@ -482,10 +483,7 @@ function mariaQuotationValidityTurn(state,event,verifiedOwnEntry=null){
 function ownQuotationValidityEntry(store,state,event){
   const quote=state.quotedPrice;
   if(!quote||!state.caseId?.startsWith('fumigacion:'))return null;
-  const entry=selectPrice(state.slots,store.approvedPriceCatalogs(),quote.entryId).entry;
-  if(!entry||entry.id!==quote.entryId||entry.priceCop!==quote.priceCop)return null;
-  const row=store.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND internal=0 AND case_id=? AND mid IS NOT NULL AND state IN ('DELIVERED','READ')").get(ownQuoteOutboxId(store,state,event.phone,event.line),event.phone,event.line,state.caseId);
-  return row&&store.priceReplyReference(row)&&store.priceReplyStillValid(row)?entry:null;
+  return ownDeliveredQuoteEntry(store,state,event.phone,event.line)?.entry||null;
 }
 function mattressRoomScopeQuestion(state,event){
   if(event.kind!=='text'||event.fromMe||event.forwarded||state.requestedAfterServiceReview||state.requestedControlReview||contextNeedsPersonalPriority(event.text,event))return false;
@@ -988,7 +986,7 @@ export class Engine {
       if(pendingQuestion&&decision.review&&!decision.state.requestedAfterServiceReview){decision.reviewSource=pendingQuestion.id;decision.pendingQuestion=pendingQuestion.text;}
       let selectedPrice=quoteClarification?.entry||null;
       const currentQuote=caseState.quotedPrice;
-      const priceNow=currentQuote&&selectPrice(decision.state.slots,s.approvedPriceCatalogs(),currentQuote.entryId).entry;
+      const priceNow=currentQuote&&ownDeliveredQuoteEntry(s,caseState,e.phone,e.line,decision.state.slots)?.entry;
       const incidentalPetNote=c.company==='fumigacion'&&mariaIncidentalPetMention(e);
       const pureIncidentalPetNote=incidentalPetNote&&!normalize(incidentalPetNote.classificationText).replace(/[.!¡,;\s]+/g,'');
       if(pureIncidentalPetNote&&currentQuote&&priceNow?.id===currentQuote.entryId&&priceNow.priceCop===currentQuote.priceCop&&priceNow.source?.type==='direct_user_approved_schedule'&&!caseState.requestedAfterServiceReview&&!caseState.requestedControlReview&&!caseState.requestedDocumentReview&&!decision.review&&(!decision.question||decision.question.topic==='cotizacion-verificada')){
@@ -1019,11 +1017,24 @@ export class Engine {
           }else decision={state:decision.state,reviewTopic:'missing-intake:preference',reviewConditions:{missing:'preference'},review:'La persona aceptó la cotización verificada, pero falta una preferencia de horario clara.',reviewQuestion:'¿Qué día y franja horaria prefiere esta persona?',reply:'Aún no tengo confirmado el horario del servicio.'};
         }else decision={state:decision.state,observed:true,observedState:'QUOTATION_DELIVERY_REVIEW'};
       }
-      if(c.company==='fumigacion'&&(decision.question?.topic==='cotizacion-verificada'||decision.reviewTopic==='customer-question'&&quotationInquiry(e.text))){
-        const selection=selectPrice(decision.state.slots,s.approvedPriceCatalogs());
+      // A stored status without its complete original delivery proof cannot
+      // grant acceptance, nor silently issue today's replacement price.
+      if(c.company==='fumigacion'&&naturalAcceptance&&currentQuote&&!priceNow&&!e.fromMe&&!e.forwarded&&!e.quotedId&&e.kind==='text'&&!caseState.customerDeferral?.active&&!caseState.awaitingHumanReview&&!decision.review&&!decision.literalServiceContext&&!decision.quoteClarification&&(!decision.question||decision.question.topic==='cotizacion-verificada')&&!contextNeedsPersonalPriority(e.text,e)){
+        const original=s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND internal=0 AND case_id=? AND state IN ('DELIVERED','READ') AND mid IS NOT NULL").get(ownQuoteOutboxId(s,caseState,e.phone,e.line),e.phone,e.line,caseState.caseId);
+        if(original&&currentQuote.entryId?.startsWith('approved-table-')&&s.priceReplyReference(original)){
+          selectedPrice=null;decision={state:decision.state,quoteEvidenceReview:true,reply:'Antes de continuar, necesito verificar la cotización que te envié.'};
+          s.audit('OWN_QUOTE_ACCEPTANCE_EVIDENCE_INCOMPLETE',e.id,{caseId:caseState.caseId,quotationOutboxId:original.id,firstDeliveryPresent:Boolean(s.db.prepare('SELECT 1 FROM meta WHERE key=?').get('first-delivery:'+original.id)),accepted:false,replacementQuoteIssued:false,businessWritten:false});
+        }
+      }
+      if(c.company==='fumigacion'&&naturalAcceptance&&currentQuote&&!priceNow&&!e.fromMe&&!e.forwarded&&!e.quotedId&&e.kind==='text'&&!caseState.customerDeferral?.active&&!caseState.awaitingHumanReview&&!decision.review&&!decision.literalServiceContext&&!decision.quoteClarification&&(!decision.question||decision.question.topic==='cotizacion-verificada')&&!contextNeedsPersonalPriority(e.text,e)){
+        const uncertain=s.db.prepare("SELECT state FROM outbox WHERE id=? AND phone=? AND line=? AND internal=0 AND case_id=? AND state IN ('READY','SENDING','ACCEPTED','UNCERTAIN')").get(ownQuoteOutboxId(s,caseState,e.phone,e.line),e.phone,e.line,caseState.caseId);
+        if(uncertain){selectedPrice=null;decision={state:decision.state,observed:true,observedState:'QUOTATION_DELIVERY_REVIEW'};}
+      }
+      if(c.company==='fumigacion'&&!(currentQuote&&naturalAcceptance)&&(decision.question?.topic==='cotizacion-verificada'||decision.reviewTopic==='customer-question'&&quotationInquiry(e.text))){
+        const selection=selectPrice(decision.state.slots,s.approvedPriceCatalogs(),null,{scheduleHash:businessPriceHashAt(e.at),issuedAt:e.at});
         if(selection.entry&&!e.forwarded&&!ambiguousIntake(e.text)&&!specialQuotation(textWithoutLinks(literalIntakeTextWithoutRegistrationFields(e.text)),decision.state.slots)){
           selectedPrice=selection.entry;
-          decision={state:{...decision.state,quotedPrice:{entryId:selectedPrice.id,priceCop:selectedPrice.priceCop,slots:{...decision.state.slots},sourceId:e.id}},reply:priceText(selectedPrice)};
+          decision={state:{...decision.state,quotedPrice:{entryId:selectedPrice.id,priceCop:selectedPrice.priceCop,slots:{...decision.state.slots},sourceId:e.id,...(selectedPrice.source?.scheduleHash?{scheduleHash:selectedPrice.source.scheduleHash,issuedAt:e.at}:{})}},reply:priceText(selectedPrice)};
           s.audit('REVIEWED_PRICE_SELECTED',e.id,{entryId:selectedPrice.id,priceCop:selectedPrice.priceCop,quoteSources:selection.sourceIds,caseId:caseState.caseId,businessWritten:false});
         }
       }
@@ -1037,7 +1048,7 @@ export class Engine {
       // descriptions. In particular a street number before "apartamento"
       // must not become a quantity of apartments for quotation scope.
       const literalProgramStage=['name','address','details','confirm','correction'].includes(caseState.programIntake?.stage);
-      const registration=decision.quoteClarification||decision.literalServiceContext?null:registrationTurn(s,c,caseState,e,literalProgramStage?{...decision,state:{...decision.state,slots:{...caseState.slots,...(decision.state.slots.preference?{preference:decision.state.slots.preference}:{})}}}:decision);
+      const registration=decision.quoteClarification||decision.literalServiceContext||decision.quoteEvidenceReview?null:registrationTurn(s,c,caseState,e,literalProgramStage?{...decision,state:{...decision.state,slots:{...caseState.slots,...(decision.state.slots.preference?{preference:decision.state.slots.preference}:{})}}}:decision);
       if(registration)decision=registration;
        if(caseState.customerDeferral?.active===true&&decision.state.customerDeferral?.active===false&&decision.state.customerDeferral.resumedBy?.sourceId===e.id)s.audit('OWN_CUSTOMER_DEFERRAL_RESUMED',e.id,{caseId:caseState.caseId,deferralSourceId:caseState.customerDeferral.sourceId,resumeSourceId:e.id,kind:decision.state.customerDeferral.resumedBy.kind,humanHoldReleased:false,acceptanceGrantedByMarker:false});
       decision.state.lastHandledSourceId=e.id;
@@ -1124,7 +1135,7 @@ export class Engine {
         if(!publicTextSafe(decision.reply))throw new Error('EXTERNAL_TEXT_REJECTED');
         s.queue(e.id+':reply',e.phone,e.line,decision.reply,false,conv.revision,decision.courtesy?null:caseState.caseId);
         if(faq?.answer)s.saveApprovedReplyReference(e.id+':reply',{question:faqQuestion.text,context:caseState.slots,caseId:caseState.caseId,answer:faq.answer,finalText:decision.reply,answerIds:faq.answerIds,sourceIds:faq.sourceIds});
-        if(selectedPrice)s.savePriceReplyReference(e.id+':reply',{entryId:selectedPrice.id,priceCop:selectedPrice.priceCop,context:{...decision.state.slots},finalText:decision.reply});
+        if(selectedPrice)s.savePriceReplyReference(e.id+':reply',quoteClarification?.quotationReference?{...quoteClarification.quotationReference,finalText:decision.reply}:{entryId:selectedPrice.id,priceCop:selectedPrice.priceCop,context:{...decision.state.slots},finalText:decision.reply,...(selectedPrice.source?.scheduleHash?{scheduleHash:selectedPrice.source.scheduleHash,issuedAt:e.at}:{})});
       }
       finish(decision.observed?decision.observedState||'OBSERVED_CALL':decision.review?'REVIEW':decision.question?'WAITING_COORDINATOR':'DONE');
     });

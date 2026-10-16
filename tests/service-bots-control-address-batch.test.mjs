@@ -1,3 +1,6 @@
+import {mock as historicalPriceClock} from 'node:test';
+// Historical quotation fixtures use their original immutable table and clock.
+historicalPriceClock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T18:00:00.000Z')});
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
@@ -5,7 +8,7 @@ import {Store} from '../automation/service-bots/store.mjs';
 import {Engine,customerDecision} from '../automation/service-bots/engine.mjs';
 import {BUSINESSES,OPERATOR_ROUTING,DIEGO,HILARY} from '../automation/service-bots/config.mjs';
 import {specialQuotation,selectPrice} from '../automation/service-bots/prices.mjs';
-import {approvedBusinessPriceSchedule} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 
 const address='Carrera 12 Sur 34 Apto 503 Torre 1 Conjunto Alameda Sabaneta';
 function fixture(){
@@ -62,7 +65,7 @@ test('an apartment address inside a complex is not a request for the whole prope
   for(const text of [address,'Cucarachas en mi apartamento en un conjunto residencial en Sabaneta','Un apartamento en el edificio Alameda, 3 habitaciones en Sabaneta']){
     assert.equal(specialQuotation(text,{site:'apartamento'}),false);
   }
-  const selected=selectPrice({service:'cucarachas',site:'apartamento',rooms:'3 habitaciones',location:'sabaneta',locationDetails:address},[approvedBusinessPriceSchedule()]);
+  const selected=selectPrice({service:'cucarachas',site:'apartamento',rooms:'3 habitaciones',location:'sabaneta',locationDetails:address},[approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH)],null,{scheduleHash:LEGACY_BUSINESS_PRICE_HASH,issuedAt:Date.now()});
   assert.equal(selected.entry.priceCop,149000);
 });
 test('common areas, whole buildings and multiple properties still require special review',()=>{

@@ -1,3 +1,6 @@
+import {mock as historicalPriceClock} from 'node:test';
+// Historical quotation fixtures use their original immutable table and clock.
+historicalPriceClock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T18:00:00.000Z')});
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
@@ -5,13 +8,13 @@ import {Store} from '../automation/service-bots/store.mjs';
 import {Engine} from '../automation/service-bots/engine.mjs';
 import {BUSINESSES,SANDRA,validateEvent} from '../automation/service-bots/config.mjs';
 import {decodeWebhook} from '../automation/service-bots/webhook.mjs';
-import {approvedBusinessPriceSchedule} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 import {acceptsOrdinaryQuotation,registrationStatus} from '../automation/service-bots/maria-program.mjs';
 import {afterServiceKind} from '../automation/service-bots/after-service.mjs';
 const actorId='7508385b-536e-4aa2-8137-d734dfc900ef';
 const complaint='Buenas noches. Contratamos el servicio de fumigación y pagamos en dos ocasiones para controlar cucarachas. Han pasado más de 10 días desde los servicios y el problema está peor. Solicitamos una garantía y una solución efectiva.';
 function fixture(){
- const start=Math.floor(Date.now()/1000)*1000-30000,s=new Store(':memory:','fumigacion',randomBytes(32));s.importKnowledge(approvedBusinessPriceSchedule());
+ const start=Math.floor(Date.now()/1000)*1000-30000,s=new Store(':memory:','fumigacion',randomBytes(32));s.importKnowledge(approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH));
  const c={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,chiefOnly:true,activatedAt:start-60000,lines:BUSINESSES.fumigacion.phones.map((phone,i)=>({phone,instance:'SYNTHETIC_OWN_'+i})),mariaProgram:{enabled:true,url:'https://tenaxis-backend-0zeuja.servilutioncrm.cloud/integrations/maria-service-registration',token:'a'.repeat(43),actorId,startsAt:start-60000,expiresAt:start+86400000}};
  const engine=new Engine(s,c);let seq=0;
  const turn=async(text,extra={})=>{
@@ -19,7 +22,7 @@ function fixture(){
   const line=c.lines.find(value=>value.phone===raw.line),contextInfo={...(raw.quotedId?{stanzaId:raw.quotedId}:{}),...(raw.forwarded?{isForwarded:true}:{})};
   const native={event:'messages.upsert',instance:line.instance,data:{key:{id:raw.id,remoteJid:raw.phone+'@s.whatsapp.net',fromMe:raw.fromMe},messageTimestamp:raw.at/1000,message:{extendedTextMessage:{text:raw.text,contextInfo}}}};
   const parsed=decodeWebhook(native,c);assert.equal(parsed.events.length,1);const e=validateEvent(parsed.events[0],c,start+30000);assert.ok(e);assert.equal(e.quotedId,raw.quotedId||null);assert.equal(e.quoteId,undefined);
-  s.enqueue(e);await engine.process(e);return e;
+  historicalPriceClock.timers.setTime(e.at);s.enqueue(e);await engine.process(e);return e;
  };
  const row=e=>s.db.prepare('SELECT * FROM outbox WHERE id=?').get(e.id+':reply');
  const reply=e=>{const r=row(e);return r?s.open(r.body):null;};

@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import {normalize} from './config.mjs';
-import {validateBusinessPriceSchedule,selectBusinessPrice,verifyBusinessPriceEntry} from './business-prices.mjs';
+import {validateBusinessPriceSchedule,selectBusinessPrice,verifyBusinessPriceEntry,BUSINESS_PRICE_HASH,LEGACY_BUSINESS_PRICE_HASH,businessPriceHashAt,priceScheduleValidAt} from './business-prices.mjs';
 import {specialPropertyScope} from './property-scope.mjs';
 import {operationalLines} from './line-scope.mjs';
 
@@ -44,7 +44,7 @@ export function currentPriceEntries(catalogs){
  for(const d of catalogs){validatePriceCatalog(d,'fumigacion');if(d.kind==='approved_price_catalog')for(const e of d.entries)entries.set(e.id,e);}
  return [...entries.values()].filter(e=>e.active);
 }
-export function selectPrice(slots,catalogs,preferredId=null){
+export function selectPrice(slots,catalogs,preferredId=null,options={}){
  // A price already issued for this case keeps its own reviewed source. A new
  // general table must not silently reprice it or redistribute pending work.
  if(preferredId&&!preferredId.startsWith('approved-table-')){
@@ -54,8 +54,12 @@ export function selectPrice(slots,catalogs,preferredId=null){
   if(exact&&previous.entry&&previous.entry.priceCop===exact.priceCop)return {entry:exact,sourceIds:previous.sourceIds};
   return {reason:'PRIOR_CASE_PRICE_REQUIRES_REVIEW'};
  }
- const approved=catalogs.find(d=>d.kind==='approved_price_schedule');
- if(approved){validateBusinessPriceSchedule(approved,'fumigacion');const selected=selectBusinessPrice(slots);if(selected.entry)return selected;}
+ const scheduleHash=options.scheduleHash??(options.issuedAt===undefined?BUSINESS_PRICE_HASH:businessPriceHashAt(options.issuedAt));
+ if(![BUSINESS_PRICE_HASH,LEGACY_BUSINESS_PRICE_HASH].includes(scheduleHash)||options.issuedAt!==undefined&&!priceScheduleValidAt(scheduleHash,options.issuedAt)||scheduleHash===LEGACY_BUSINESS_PRICE_HASH&&options.issuedAt===undefined)return {reason:'PRICE_VERSION_AND_ISSUED_AT_REQUIRED'};
+ if(preferredId?.startsWith('approved-table-')&&!options.scheduleHash)return {reason:'PRIOR_CASE_PRICE_VERSION_REQUIRED'};
+ const approved=catalogs.find(d=>d.kind==='approved_price_schedule'&&createHash('sha256').update(JSON.stringify(d)).digest('hex')===scheduleHash);
+ if(approved){validateBusinessPriceSchedule(approved,'fumigacion');const selected=selectBusinessPrice(slots,{scheduleHash});if(selected.entry&&(!preferredId||selected.entry.id===preferredId))return selected;}
+ if(preferredId?.startsWith('approved-table-'))return {reason:'PRIOR_CASE_PRICE_REQUIRES_REVIEW'};
  const matches=currentPriceEntries(catalogs).filter(e=>Object.entries(e.appliesTo).every(([k,v])=>fieldEqual(k,v,slots[k]))&&
   // An extra area or count, size qualification, floor or treatment scope cannot
   // be dropped to force a historical quote to fit a different property.
@@ -66,10 +70,10 @@ export function selectPrice(slots,catalogs,preferredId=null){
 }
 export function priceText(entry){return 'Con gusto. '+(entry.category==='chinches'?'El tratamiento de '+entry.mattresses+' '+(entry.mattresses===1?'colchón':'colchones'):'El servicio')+' tiene un valor de $'+new Intl.NumberFormat('es-CO').format(entry.priceCop)+' COP. ¿Deseas continuar con esta cotización?';}
 export function priceBodyHash(text){return createHash('sha256').update(text).digest('hex');}
-export async function verifyPriceSource(entry,transport){
+export async function verifyPriceSource(entry,transport,options={}){
  if(entry?.source?.type==='direct_user_approved_schedule'){
   if(transport.config.company!=='fumigacion')throw Error('PRICE_OWN_LINE_REQUIRED');
-  verifyBusinessPriceEntry(entry);
+  verifyBusinessPriceEntry(entry,options);
   for(const line of operationalLines(transport.config))await transport.verifyLine(line.phone);
   return true;
  }

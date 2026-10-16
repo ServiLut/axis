@@ -1,17 +1,20 @@
+import {mock as historicalPriceClock} from 'node:test';
+// Historical quotation fixtures use their original immutable table and clock.
+historicalPriceClock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T18:00:00.000Z')});
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
 import {Store} from '../automation/service-bots/store.mjs';
 import {Engine} from '../automation/service-bots/engine.mjs';
 import {BUSINESSES} from '../automation/service-bots/config.mjs';
-import {approvedBusinessPriceSchedule} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 import {registrationStatus} from '../automation/service-bots/maria-program.mjs';
 
 function fixture(){
- const start=Math.floor((Date.now()-120000)/1000)*1000,store=new Store(':memory:','fumigacion',randomBytes(32));store.importKnowledge(approvedBusinessPriceSchedule());
+ const start=Math.floor((Date.now()-120000)/1000)*1000,store=new Store(':memory:','fumigacion',randomBytes(32));store.importKnowledge(approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH));
  const config={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,chiefOnly:true,activatedAt:start-1000,lines:BUSINESSES.fumigacion.phones.map((phone,i)=>({phone,instance:'ISOLATED_NAME_CORRECTION_'+i})),mariaProgram:{enabled:true,url:'https://invalid.example/integrations/maria-service-registration',token:'isolated-only-not-network',actorId:'7508385b-536e-4aa2-8137-d734dfc900ef',startsAt:start-1000,expiresAt:start+86400000}};
  const engine=new Engine(store,config);let seq=0;
- const turn=async(text,extra={})=>{const e={id:'ISOLATED_NAME_CORRECTION_'+ ++seq,phone:'573000006921',line:config.lines[0].phone,at:start+seq*1000,kind:'text',fromMe:false,forwarded:false,text,...extra};store.enqueue(e);await engine.process(e);const row=store.db.prepare('SELECT * FROM outbox WHERE id=?').get(e.id+':reply');return {e,row,text:row?store.open(row.body):null,state:store.conversation(e.phone).state};};
+ const turn=async(text,extra={})=>{const e={id:'ISOLATED_NAME_CORRECTION_'+ ++seq,phone:'573000006921',line:config.lines[0].phone,at:start+seq*1000,kind:'text',fromMe:false,forwarded:false,text,...extra};historicalPriceClock.timers.setTime(e.at);store.enqueue(e);await engine.process(e);const row=store.db.prepare('SELECT * FROM outbox WHERE id=?').get(e.id+':reply');return {e,row,text:row?store.open(row.body):null,state:store.conversation(e.phone).state};};
  const deliver=r=>{assert.ok(r.row,r.e.text);const mid='ISOLATED_NAME_MID_'+r.e.id;store.db.prepare("UPDATE outbox SET mid=?,state='ACCEPTED' WHERE id=?").run(mid,r.row.id);store.recordFirstBotReply({...r.row,mid},mid,config.bot,r.e.at);store.delivery(mid,r.e.line,'DELIVERED');store.db.prepare('UPDATE meta SET value=? WHERE key=?').run(store.seal({verifiedAt:r.e.at,mid,line:r.e.line,state:'DELIVERED'}),'first-delivery:'+r.row.id);};
  const ready=async()=>{const quote=await turn('Cucarachas en apartamento de 60 m² en Medellín, ¿cuánto cuesta?');deliver(quote);const accept=await turn('Sí');deliver(accept);const facts=await turn('Nombre: Juan Pérez\nDirección: Calle 50 # 42-18 apartamento 301');deliver(facts);assert.equal(facts.state.programIntake.stage,'confirm');return {quote,accept,facts};};
  return {store,config,turn,deliver,ready};

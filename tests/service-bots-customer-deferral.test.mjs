@@ -1,10 +1,13 @@
+import {mock as historicalPriceClock} from 'node:test';
+// Historical quotation fixtures use their original immutable table and clock.
+historicalPriceClock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T18:00:00.000Z')});
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
 import {Store} from '../automation/service-bots/store.mjs';
 import {Engine} from '../automation/service-bots/engine.mjs';
 import {BUSINESSES} from '../automation/service-bots/config.mjs';
-import {approvedBusinessPriceSchedule} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 import {MARIA_COMPANY,MARIA_TENANT} from '../automation/service-bots/maria-program.mjs';
 import {CUSTOMER_DEFERRAL_GUARD,customerDeferralRequested,customerDeferralResumeEvidence} from '../automation/service-bots/customer-deferral.mjs';
 import {initializeInactivityFollowup,inactivityCandidate,queueInactivityFollowups,revalidateInactivity,inactivityDeliveryValid} from '../automation/service-bots/inactivity-followup.mjs';
@@ -13,8 +16,8 @@ const phone='573000007387',line=BUSINESSES.fumigacion.phones[0],deferral='Gracia
 const event=(text,id='DEFERRAL_LOCAL_SOURCE',at=Date.now())=>({id,phone,line,at,kind:'text',fromMe:false,forwarded:false,text});
 function config(now){return {company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,activatedAt:now-86400000,inactivityFollowupEnabled:true,lines:BUSINESSES.fumigacion.phones.map((phone,i)=>({phone,instance:'deferral-local-'+i})),mariaProgram:{enabled:true,url:'https://invalid.example/integrations/maria-service-registration',token:'a'.repeat(43),actorId:'7508385b-536e-4aa2-8137-d734dfc900ef',tenantId:MARIA_TENANT,companyId:MARIA_COMPANY,startsAt:now-86400000,expiresAt:now+86400000}};}
 function engineFixture(){
- const now=Date.now(),s=new Store(':memory:','fumigacion',randomBytes(32)),c=config(now),engine=new Engine(s,c);s.importKnowledge(approvedBusinessPriceSchedule());let seq=0;
- const turn=async(text,extra={})=>{const e={...event(text,'DEFERRAL_ENGINE_'+ ++seq,now-60000+seq*1000),...extra};s.enqueue(e);await engine.process(e);const row=s.db.prepare('SELECT * FROM outbox WHERE id=?').get(e.id+':reply');return {e,state:s.conversation(phone).state,text:row?s.open(row.body):null};};
+ const now=Date.now(),s=new Store(':memory:','fumigacion',randomBytes(32)),c=config(now),engine=new Engine(s,c);s.importKnowledge(approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH));let seq=0;
+ const turn=async(text,extra={})=>{const e={...event(text,'DEFERRAL_ENGINE_'+ ++seq,now-60000+seq*1000),...extra};historicalPriceClock.timers.setTime(e.at);s.enqueue(e);await engine.process(e);const row=s.db.prepare('SELECT * FROM outbox WHERE id=?').get(e.id+':reply');return {e,state:s.conversation(phone).state,text:row?s.open(row.body):null};};
  return {s,c,turn};
 }
 test('actual quoted-price deferral receives empathy without repetition, CTA, acceptance or registration',async()=>{

@@ -1,3 +1,6 @@
+import {mock as historicalPriceClock} from 'node:test';
+// Historical quotation fixtures use their original immutable table and clock.
+historicalPriceClock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T18:00:00.000Z')});
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash,randomBytes} from 'node:crypto';
@@ -7,7 +10,7 @@ import {createBotServer} from '../automation/service-bots/server.mjs';
 import {BUSINESSES,CURRENT_OPERATOR_ROUTING} from '../automation/service-bots/config.mjs';
 import {TESA_GROUP_JID,TESA_GROUP_SUBJECT,TESA_BOT_PHONES} from '../automation/service-bots/tesa-config.mjs';
 import {BLUE_ONLY_SCOPE_VERSION,BLUE_ONLY_AUTHORIZATION_SOURCE,FUMIGACION_BLUE,FUMIGACION_RED} from '../automation/service-bots/line-scope.mjs';
-import {approvedBusinessPriceSchedule} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 import {drainProgramRegistrations,registrationHash,registrationStatus,MARIA_TENANT,MARIA_COMPANY} from '../automation/service-bots/maria-program.mjs';
 import {initializeInactivityFollowup} from '../automation/service-bots/inactivity-followup.mjs';
 const hash=x=>createHash('sha256').update(x).digest('hex');
@@ -61,8 +64,8 @@ test('an arbitrary programServiceId or unbacked registered state cannot present 
 test('an accepted own registration receipt presents saved-awaiting-schedule and keeps fields, authorship and native sources',async()=>{
  const f=fixture();try{
   const actor='7508385b-536e-4aa2-8137-d734dfc900ef',order='85c47fc8-5314-4f68-a8d6-dde112640f5d',phone='573000006789',start=Math.floor((Date.now()-30000)/1000)*1000;
-  f.config.mariaProgram={enabled:true,url:'https://tenaxis-backend-0zeuja.servilutioncrm.cloud/integrations/maria-service-registration',token:'a'.repeat(43),actorId:actor,tenantId:MARIA_TENANT,companyId:MARIA_COMPANY,startsAt:start-60000,expiresAt:start+86400000};f.store.importKnowledge(approvedBusinessPriceSchedule());initializeInactivityFollowup(f.config,f.store);let count=0,writes=0,payload;
-  const turn=async text=>{const e={id:'CLEAR_SAVED_'+ ++count,phone,line:f.config.lines[0].phone,fromMe:false,kind:'text',text,at:start+count*1000};f.store.enqueue(e);await f.engine.process(e);return e;};
+  f.config.mariaProgram={enabled:true,url:'https://tenaxis-backend-0zeuja.servilutioncrm.cloud/integrations/maria-service-registration',token:'a'.repeat(43),actorId:actor,tenantId:MARIA_TENANT,companyId:MARIA_COMPANY,startsAt:start-60000,expiresAt:start+86400000};f.store.importKnowledge(approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH));initializeInactivityFollowup(f.config,f.store);let count=0,writes=0,payload;
+  const turn=async text=>{const e={id:'CLEAR_SAVED_'+ ++count,phone,line:f.config.lines[0].phone,fromMe:false,kind:'text',text,at:start+count*1000};historicalPriceClock.timers.setTime(e.at);f.store.enqueue(e);await f.engine.process(e);return e;};
   const delivered=e=>{const row=f.store.db.prepare('SELECT * FROM outbox WHERE id=?').get(e.id+':reply');assert.ok(row,e.text);const mid='MID_'+e.id;f.store.db.prepare("UPDATE outbox SET state='ACCEPTED',mid=? WHERE id=?").run(mid,row.id);f.store.recordFirstBotReply({...row,mid},mid,f.config.bot,e.at);f.store.delivery(mid,e.line,'DELIVERED');f.store.db.prepare('UPDATE meta SET value=? WHERE key=?').run(f.store.seal({verifiedAt:e.at,mid,line:e.line,state:'DELIVERED'}),'first-delivery:'+row.id);return f.store.open(row.body);};
   const transport={verifyLine:async()=>{},currentAttention:async()=>({complete:true,sources:f.store.db.prepare('SELECT mid id,line FROM outbox WHERE mid IS NOT NULL').all()}),currentCustomerActivity:async(number,at)=>({complete:true,sources:f.store.db.prepare('SELECT id,line,at FROM events WHERE phone=? AND from_me=0 AND at>=?').all(number,at)}),request:async(line,path,body)=>{
    const id=body.where.key.id,source=f.store.db.prepare('SELECT body FROM events WHERE id=?').get(id),out=f.store.db.prepare('SELECT * FROM outbox WHERE mid=?').get(id);

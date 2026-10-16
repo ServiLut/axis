@@ -1,3 +1,6 @@
+import {mock as historicalPriceClock} from 'node:test';
+// Historical quotation fixtures use their original immutable table and clock.
+historicalPriceClock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T18:00:00.000Z')});
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
@@ -7,14 +10,14 @@ import {BUSINESSES,SANDRA} from '../automation/service-bots/config.mjs';
 import {CONVERSATIONAL_AI_GUARD} from '../automation/service-bots/ai-settings.mjs';
 import {MARIA_UNDERSTANDING_GUARD} from '../automation/service-bots/maria-understanding.mjs';
 import {mariaLiteralServiceContext} from '../automation/service-bots/after-service.mjs';
-import {approvedBusinessPriceSchedule} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 import {MARIA_TENANT,MARIA_COMPANY} from '../automation/service-bots/maria-program.mjs';
 
 const event=(text,id='SYNTHETIC_CONTEXT_SOURCE')=>({id,at:Date.now(),kind:'text',text,fromMe:false,forwarded:false,phone:'573000001234',line:BUSINESSES.fumigacion.phones[0]});
 const empty=()=>({slots:{},asked:[],caseId:'SYNTHETIC_CONTEXT_CASE'});
 const complete=()=>({slots:{service:'cucarachas',site:'apartamento',rooms:'2 habitaciones',location:'medellin'},asked:['service','site','size','location'],caseId:'SYNTHETIC_CONTEXT_CASE'});
 const analysis=(e,kind='new-service')=>({guard:CONVERSATIONAL_AI_GUARD,semanticGuard:MARIA_UNDERSTANDING_GUARD,company:'FUMIGACION',eventId:e.id,intent:{kind,evidence:e.text.slice(0,200)},slots:{service:'cucarachas'}});
-function fixture(){const s=new Store(':memory:','fumigacion',randomBytes(32)),c={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,chiefOnly:true,lines:BUSINESSES.fumigacion.phones.map(phone=>({phone}))},engine=new Engine(s,c);return {s,c,engine,async process(text,id,extra={}){const e={...event(text,id),...extra};s.enqueue(e);await engine.process(e);return e;}};}
+function fixture(){const s=new Store(':memory:','fumigacion',randomBytes(32)),c={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,chiefOnly:true,lines:BUSINESSES.fumigacion.phones.map(phone=>({phone}))},engine=new Engine(s,c);return {s,c,engine,async process(text,id,extra={}){const e={...event(text,id),...extra};historicalPriceClock.timers.setTime(e.at);s.enqueue(e);await engine.process(e);return e;}};}
 
 test('the verified plural invoice complaint preserves the case before intake and requotation',()=>{
  for(const state of [empty(),complete()]){
@@ -142,7 +145,7 @@ test('hypothetical product interest cannot create a product purchase or a new qu
 test('document, schedule and supplier context cannot advance an already accepted service registration form',async()=>{
  for(const text of ['Necesito mis facturas','Estamos esperando su llegada','Ya me agendaron para mañana','Necesito comprar gel para cucarachas','Les ofrecemos productos para control de plagas','No me agendaron para mañana','Mi vecina dijo: ya me agendaron mañana','Les ofrecemos productos para control de plagas disponibles mañana']){
   const f=fixture();try{
-   const now=Date.now();f.s.importKnowledge(approvedBusinessPriceSchedule());
+   const now=Date.now();f.s.importKnowledge(approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH));
    f.c.mariaProgram={enabled:true,startsAt:now-60000,expiresAt:now+86400000,actorId:'7508385b-536e-4aa2-8137-d734dfc900ef',tenantId:MARIA_TENANT,companyId:MARIA_COMPANY};
    const first=await f.process('Tengo cucarachas en apartamento de 42 mts2 en Itagüí. Cuánto cuesta?','SYNTH_ACCEPTED_QUOTE');
    const row=f.s.db.prepare('SELECT * FROM outbox WHERE id=?').get(first.id+':reply'),mid='SYNTH_OWN_QUOTE_MID';assert.ok(row);

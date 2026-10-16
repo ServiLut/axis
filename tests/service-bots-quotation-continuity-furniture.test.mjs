@@ -1,3 +1,6 @@
+import {mock as historicalPriceClock} from 'node:test';
+// Historical quotation fixtures use their original immutable table and clock.
+historicalPriceClock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T18:00:00.000Z')});
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
@@ -5,7 +8,7 @@ import {Store} from '../automation/service-bots/store.mjs';
 import {Engine,extractSlots,customerDecision} from '../automation/service-bots/engine.mjs';
 import {drain} from '../automation/service-bots/transport.mjs';
 import {BUSINESSES,OPERATOR_ROUTING} from '../automation/service-bots/config.mjs';
-import {approvedBusinessPriceSchedule,selectBusinessPrice} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,selectBusinessPrice,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 
 // Desidentified regressions from two prospectively observed own READ outputs.
 // Memory-only store, fake transport and synthetic identities: no network/model.
@@ -13,7 +16,7 @@ const phone='573000000001',line=BUSINESSES.fumigacion.phones[0];
 function fixture(){
  const c={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,chiefOnly:true,operatorRouting:OPERATOR_ROUTING,historyCheckRequired:true,activatedAt:Date.now()-10000,lines:BUSINESSES.fumigacion.phones.map((phone,i)=>({phone,instance:'isolated-'+i}))};
  const s=new Store(':memory:','fumigacion',randomBytes(32)),engine=new Engine(s,c);let sequence=0;
- s.importKnowledge(approvedBusinessPriceSchedule());
+ s.importKnowledge(approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH));
  const transport={config:c,verifyLine:async()=>{},priorHistory:async()=>({cutoff:c.activatedAt,priorOutgoing:false}),currentAttention:async()=>({complete:true,sources:[]}),understand:async()=>({}),send:async()=> 'SYNTHETIC'+(++sequence)};
  const process=async(id,text,extra={})=>{const event={id,text,phone,line:c.lines[0].phone,at:Date.now(),fromMe:false,kind:'text',...extra};s.enqueue(event);await drain(s,c,transport,engine);return event;};
  const reply=id=>{const row=s.db.prepare('SELECT * FROM outbox WHERE id=?').get(id+':reply');return row&&{...row,text:s.open(row.body)};};
@@ -117,7 +120,7 @@ test('new quote, safety priority and a human hold retain their existing routes',
 test('base cama variants and unresolved scope cannot receive the one-mattress price',()=>{
  for(const text of ['Un colchón y creo que la base cama también','Un colchón y dos bases cama','Un colchón y la base de cama','Un colchón y las bases de la cama','Un colchón y la basecama','Un colchón y dos basecamas','Un colchón y las bases de camas','¿Cuánto cuesta un colchón y la base cama?','No sé si hay chinches en la base cama, tengo un colchón','¿Cuánto cuesta un colchón si no hay chinches en la base cama?','No solo la base cama, también un colchón']){
   const slots=extractSlots(text,'fumigacion');assert.ok(slots.affectedFurniture,text);
-  assert.equal(selectBusinessPrice({service:'chinches',site:'casa',location:'medellin',...slots}).entry,undefined,text);
+  assert.equal(selectBusinessPrice({service:'chinches',site:'casa',location:'medellin',...slots},{scheduleHash:LEGACY_BUSINESS_PRICE_HASH}).entry,undefined,text);
  }
  assert.equal(extractSlots('Un colchón y base de datos','fumigacion').affectedFurniture,undefined);
  assert.equal(extractSlots('Un colchón y base cama','servicio-tecnico').affectedFurniture,undefined);
@@ -126,7 +129,7 @@ test('base cama variants and unresolved scope cannot receive the one-mattress pr
 test('explicitly excluded furniture does not become extra affected furniture',()=>{
  for(const text of ['Un colchón, no la base cama','Un colchón sin base cama','Un colchón sin basecama','Un colchón; no hay chinches en las basecamas','Un colchón; no hay chinches en la base cama','Un colchón; la base cama no tiene chinches','Un colchón; no quiero tratar la base cama']){
   const slots=extractSlots(text,'fumigacion');assert.equal(slots.affectedFurniture,undefined,text);
-  assert.equal(selectBusinessPrice({service:'chinches',site:'casa',location:'medellin',...slots}).entry?.priceCop,99000,text);
+  assert.equal(selectBusinessPrice({service:'chinches',site:'casa',location:'medellin',...slots},{scheduleHash:LEGACY_BUSINESS_PRICE_HASH}).entry?.priceCop,99000,text);
  }
 });
 

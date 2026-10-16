@@ -1,18 +1,21 @@
+import {mock as historicalPriceClock} from 'node:test';
+// Historical quotation fixtures use their original immutable table and clock.
+historicalPriceClock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T18:00:00.000Z')});
 import test from 'node:test';import assert from 'node:assert/strict';import {randomBytes} from 'node:crypto';
 import {Store} from '../automation/service-bots/store.mjs';
 import {Engine} from '../automation/service-bots/engine.mjs';
 import {drain} from '../automation/service-bots/transport.mjs';
 import {BUSINESSES} from '../automation/service-bots/config.mjs';
-import {approvedBusinessPriceSchedule} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 import {registrationHash,registrationStatus,drainProgramRegistrations,MARIA_PROGRAM_GUARD,MARIA_PROGRAM_PIPELINE_GUARD,MARIA_TENANT,MARIA_COMPANY} from '../automation/service-bots/maria-program.mjs';
 
 const ACTOR='7508385b-536e-4aa2-8137-d734dfc900ef',ORDER='85c47fc8-5314-4f68-a8d6-dde112640f5d';
 function fixture(){
- const start=Math.floor((Date.now()-30000)/1000)*1000,store=new Store(':memory:','fumigacion',randomBytes(32));store.importKnowledge(approvedBusinessPriceSchedule());
+ const start=Math.floor((Date.now()-30000)/1000)*1000,store=new Store(':memory:','fumigacion',randomBytes(32));store.importKnowledge(approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH));
  const config={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,responseTargetMs:3000,activatedAt:start-60000,lines:BUSINESSES.fumigacion.phones.map((phone,i)=>({phone,instance:'own-'+i})),mariaProgram:{enabled:true,url:'https://tenaxis-backend-0zeuja.servilutioncrm.cloud/integrations/maria-service-registration',token:'a'.repeat(43),actorId:ACTOR,tenantId:MARIA_TENANT,companyId:MARIA_COMPANY,startsAt:start-60000,expiresAt:start+86400000}};
  const engine=new Engine(store,config);let counter=0,writes=0,receipts=0,sends=0,latestPayload;
  const event=(text,patch={})=>({id:'DRAINORDER'+ ++counter,phone:'573001112233',at:start+counter*1000,line:config.lines[0].phone,fromMe:false,kind:'text',text,...patch});
- const turn=async text=>{const e=event(text);store.enqueue(e);await engine.process(e);return e;};
+ const turn=async text=>{const e=event(text);historicalPriceClock.timers.setTime(e.at);store.enqueue(e);await engine.process(e);return e;};
  const delivered=e=>{const row=store.db.prepare('SELECT * FROM outbox WHERE id=?').get(e.id+':reply');assert.ok(row);const mid='MID'+e.id;store.db.prepare("UPDATE outbox SET mid=?,state='ACCEPTED' WHERE id=?").run(mid,row.id);store.recordFirstBotReply({...row,mid},mid,config.bot,e.at);store.delivery(mid,e.line,'DELIVERED');store.db.prepare('UPDATE meta SET value=? WHERE key=?').run(store.seal({verifiedAt:e.at,mid,line:e.line,state:'DELIVERED'}),'first-delivery:'+row.id);};
  const receipt=p=>({company:'FUMIGACION',tenantId:MARIA_TENANT,companyId:MARIA_COMPANY,advisorMembershipId:ACTOR,createdById:ACTOR,phone:p.phone,persisted:true,orderId:ORDER,caseId:p.caseId,acceptanceId:p.quote.acceptanceId,requestHash:registrationHash(p),state:'NUEVO',scheduled:false,paymentRecorded:false});
  const transport={verifyLine:async()=>{},understand:async()=>{throw Error('registration pipeline must not call a model');},send:async()=> 'MOCKSEND'+ ++sends,currentAttention:async()=>({complete:true,sources:store.db.prepare('SELECT mid id,line FROM outbox WHERE mid IS NOT NULL').all()}),currentCustomerActivity:async(phone,at)=>({complete:true,sources:store.db.prepare('SELECT id,line,at FROM events WHERE phone=? AND from_me=0 AND at>=?').all(phone,at)}),request:async(line,path,body)=>{

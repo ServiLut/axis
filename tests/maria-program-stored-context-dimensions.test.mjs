@@ -1,3 +1,6 @@
+import {mock as historicalPriceClock} from 'node:test';
+// Historical quotation fixtures use their original immutable table and clock.
+historicalPriceClock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T18:00:00.000Z')});
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
@@ -5,17 +8,17 @@ import {Store} from '../automation/service-bots/store.mjs';
 import {Engine,customerDecision,extractSlots} from '../automation/service-bots/engine.mjs';
 import {BUSINESSES,SANDRA,validateEvent} from '../automation/service-bots/config.mjs';
 import {decodeWebhook} from '../automation/service-bots/webhook.mjs';
-import {approvedBusinessPriceSchedule} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 import {registrationStatus} from '../automation/service-bots/maria-program.mjs';
 const complaint='Contratamos dos fumigaciones y el problema sigue peor. Solicitamos una garantía del servicio anterior.';
 function fixture(){
- const start=Math.floor(Date.now()/1000)*1000-30000,s=new Store(':memory:','fumigacion',randomBytes(32));s.importKnowledge(approvedBusinessPriceSchedule());
+ const start=Math.floor(Date.now()/1000)*1000-30000,s=new Store(':memory:','fumigacion',randomBytes(32));s.importKnowledge(approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH));
  const c={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,chiefOnly:true,activatedAt:start-60000,lines:BUSINESSES.fumigacion.phones.map((phone,i)=>({phone,instance:'synthetic-context-'+i})),mariaProgram:{enabled:true,url:'https://tenaxis-backend-0zeuja.servilutioncrm.cloud/integrations/maria-service-registration',token:'a'.repeat(43),actorId:'7508385b-536e-4aa2-8137-d734dfc900ef',startsAt:start-60000,expiresAt:start+86400000}};
  const engine=new Engine(s,c);let seq=0;
  const turn=async(text,extra={})=>{
   const raw={id:'STORED_DIMENSIONS_'+ ++seq,phone:'573009000011',line:c.lines[0].phone,at:start+seq*1000,kind:'text',fromMe:false,forwarded:false,text,...extra},line=c.lines.find(l=>l.phone===raw.line);
   const parsed=decodeWebhook({event:'messages.upsert',instance:line.instance,data:{key:{id:raw.id,remoteJid:raw.phone+'@s.whatsapp.net',fromMe:raw.fromMe},messageTimestamp:raw.at/1000,message:{extendedTextMessage:{text:raw.text,contextInfo:{...(raw.quotedId?{stanzaId:raw.quotedId}:{}),...(raw.forwarded?{isForwarded:true}:{})}}}}},c);
-  const e=validateEvent(parsed.events[0],c,start+30000);assert.ok(e);s.enqueue(e);await engine.process(e);return e;
+  const e=validateEvent(parsed.events[0],c,start+30000);assert.ok(e);historicalPriceClock.timers.setTime(e.at);s.enqueue(e);await engine.process(e);return e;
  };
  const row=e=>s.db.prepare('SELECT * FROM outbox WHERE id=?').get(e.id+':reply'),reply=e=>{const r=row(e);return r?s.open(r.body):null;};
  const deliver=e=>{const r=row(e);assert.ok(r);const mid='SYNTH_STORED_MID_'+e.id;s.db.prepare("UPDATE outbox SET mid=?,state='ACCEPTED' WHERE id=?").run(mid,r.id);s.recordFirstBotReply({...r,mid},mid,c.bot,e.at);s.delivery(mid,e.line,'READ');s.db.prepare('UPDATE meta SET value=? WHERE key=?').run(s.seal({verifiedAt:e.at,mid,line:e.line,state:'READ'}),'first-delivery:'+r.id);return reply(e);};

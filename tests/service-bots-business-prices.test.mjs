@@ -9,21 +9,22 @@ import {Engine,extractSlots} from '../automation/service-bots/engine.mjs';
 import {drain} from '../automation/service-bots/transport.mjs';
 import {BUSINESSES,OPERATOR_ROUTING} from '../automation/service-bots/config.mjs';
 import {selectPrice,verifyPriceSource,priceText,PRICE_AUTHORITY} from '../automation/service-bots/prices.mjs';
-import {approvedBusinessPriceSchedule,validateBusinessPriceSchedule,BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,validateBusinessPriceSchedule,BUSINESS_PRICE_HASH,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 
 const phone='573001112233';
 const scope={site:'apartamento',location:'medellin'};
 test('the exact superseded 70000 schedule stays encrypted but never blocks status or corrected quotes',()=>{
- const old=approvedBusinessPriceSchedule();old.chinchesPerMattressCop=70000;delete old.mattressPriceAuthorization;
+ const old=approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH);old.chinchesPerMattressCop=70000;delete old.mattressPriceAuthorization;
  const hash=createHash('sha256').update(JSON.stringify(old)).digest('hex');assert.equal(hash,'e906be8ff20357d7c6c3bdc229a926b610e1008442fb3597b2db6171224b8d9b');
  const store=new Store(':memory:','fumigacion',randomBytes(32));try{
   store.db.prepare('INSERT INTO knowledge VALUES(?,?,?,?,?)').run(hash,old.kind,store.seal(old),hash,Date.now()-1000);
   assert.equal(store.approvedPriceCatalogs().length,0);store.importKnowledge(approvedBusinessPriceSchedule());assert.equal(store.approvedPriceCatalogs().length,1);
   assert.equal(store.db.prepare('SELECT COUNT(*) n FROM knowledge').get().n,2);
-  assert.equal(selectPrice({...scope,service:'chinches',mattresses:'2 colchones'},store.approvedPriceCatalogs()).entry.priceCop,198000);
+  assert.equal(selectPrice({...scope,service:'chinches',mattresses:'2 colchones'},store.approvedPriceCatalogs()).entry.priceCop,200000);
  }finally{store.close();}
 });
-function fixture(){
+function fixture(testContext){
+ testContext.mock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T20:00:00.000Z')});
  const c={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,chiefOnly:true,operatorRouting:OPERATOR_ROUTING,historyCheckRequired:true,activatedAt:Date.now()-10000,lines:BUSINESSES.fumigacion.phones.map((phone,i)=>({phone,instance:'own-'+i}))};
  const s=new Store(':memory:','fumigacion',randomBytes(32)),engine=new Engine(s,c);let seq=0;
  s.importKnowledge(approvedBusinessPriceSchedule());
@@ -43,7 +44,7 @@ for(const row of approvedBusinessPriceSchedule().entries){
 }
 test('a direct schedule has exact reviewed contents and cannot be changed or imported into ST',()=>{
  const d=approvedBusinessPriceSchedule();assert.equal(validateBusinessPriceSchedule(d,'fumigacion'),d);
- for(const alter of [x=>x.entries[0].cucarachas=89000,x=>x.chinchesPerMattressCop=100000,x=>x.automaticDiscounts=true,x=>x.materials.audio='a'.repeat(64)]){
+ for(const alter of [x=>x.entries[0].cucarachas=89000,x=>x.chinchesPerMattressCop=99000,x=>x.automaticDiscounts=true,x=>x.materials.audio='a'.repeat(64)]){
   const changed=structuredClone(d);alter(changed);assert.throws(()=>validateBusinessPriceSchedule(changed,'fumigacion'));
  }
  const st=new Store(':memory:','servicio-tecnico',randomBytes(32));try{assert.throws(()=>st.importKnowledge(d));assert.equal(st.approvedPriceCatalogs().length,0);}finally{st.close();}
@@ -53,30 +54,30 @@ test('ordinary selection refuses conflicting sizes, units, extra scope, out of r
  for(const patch of [{rooms:'2 habitaciones'},{area:'60 metros'},{area:'40.5 m²'},{area:'201 m²'},{rooms:'7 habitaciones',area:undefined},{service:'cucarachas y hormigas'},{site:'edificio'},{location:'sopetrán'},{floors:'2 pisos'},{patio:'patio'},{roomScale:'grandes'},{locationDetails:'dos casas en Medellín'}])assert.equal(selectPrice({...good,...patch},[approvedBusinessPriceSchedule()]).entry,undefined);
  assert.equal(selectPrice({...good,service:'avispas'},[approvedBusinessPriceSchedule()]).entry,undefined);
 });
-test('direct correction uses 99000 per confirmed mattress and retains furniture and volume review',()=>{
- for(let n=1;n<=5;n++){const e=selectPrice({...scope,service:'chinches',mattresses:n+' '+(n===1?'colchón':'colchones')},[approvedBusinessPriceSchedule()]).entry;assert.equal(e.priceCop,n*99000);assert.equal(e.unitPriceCop,99000);assert.match(priceText(e),/tratamiento de/);}
- for(const patch of [{mattresses:'6 colchones'},{mattresses:'10 colchones'},{mattresses:'2 colchones',affectedFurniture:'base de cama'},{mattresses:'entre 2 y 3 colchones'}])assert.equal(selectPrice({...scope,service:'chinches',...patch},[approvedBusinessPriceSchedule()]).entry,undefined);
+test('confirmed Excel uses its two mattress tiers and retains furniture and ambiguous quantity review',()=>{
+ for(let n=1;n<=8;n++){const e=selectPrice({...scope,service:'chinches',mattresses:n+' '+(n===1?'colchón':'colchones')},[approvedBusinessPriceSchedule()]).entry;assert.equal(e.priceCop,n*(n>=7?70000:100000));assert.equal(e.unitPriceCop,n>=7?70000:100000);assert.match(priceText(e),/tratamiento de/);}
+ for(const patch of [{mattresses:'143 colchones'},{mattresses:'2 colchones',affectedFurniture:'base de cama'},{mattresses:'entre 2 y 3 colchones'}])assert.equal(selectPrice({...scope,service:'chinches',...patch},[approvedBusinessPriceSchedule()]).entry,undefined);
  assert.equal(extractSlots('Tengo chinches en un colchón','fumigacion').mattresses,'un colchón');
 });
-test('receives the complete source, quotes the approved table and asks no repeated intake or internal quote',async()=>{
- const f=fixture();try{await f.process('TABLEQUOTE01','Tengo cucarachas en un apartamento de 60 m² en Medellín. ¿Cuánto cuesta?');assert.match(f.reply('TABLEQUOTE01').text,/149\.000 COP/);assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);assert.equal(f.s.conversation(phone).state.slots.area,'60 m²');}finally{f.s.close();}
+test('receives the complete source, quotes the approved table and asks no repeated intake or internal quote',async(t)=>{
+ const f=fixture(t);try{await f.process('TABLEQUOTE01','Tengo cucarachas en un apartamento de 60 m² en Medellín. ¿Cuánto cuesta?');assert.match(f.reply('TABLEQUOTE01').text,/149\.000 COP/);assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);assert.equal(f.s.conversation(phone).state.slots.area,'60 m²');}finally{f.s.close();}
 });
-test('the single mattress and comejen paths use their scoped new prices without assuming a reservation',async()=>{
- for(const [text,amount] of [['Chinches en un colchón en apartamento de Medellín',99000],['Comején en casa de 2 habitaciones en Bello',179000]]){
-  const f=fixture();try{await f.process('NEWPEST001',text);assert.ok(f.reply('NEWPEST001').text.includes(new Intl.NumberFormat('es-CO').format(amount)));assert.doesNotMatch(f.reply('NEWPEST001').text,/reservad|confirmad|programad/i);}finally{f.s.close();}
+test('the single mattress and comejen paths use their scoped new prices without assuming a reservation',async(t)=>{
+ for(const [text,amount] of [['Chinches en un colchón en apartamento de Medellín',100000],['Comején en casa de 2 habitaciones en Bello',179000]]){
+  const f=fixture(t);try{await f.process('NEWPEST001',text);assert.ok(f.reply('NEWPEST001').text.includes(new Intl.NumberFormat('es-CO').format(amount)));assert.doesNotMatch(f.reply('NEWPEST001').text,/reservad|confirmad|programad/i);}finally{f.s.close();t.mock.timers.reset();}
  }
 });
-test('avispas goes once to inspection and never receives a room or fixed price questionnaire',async()=>{
- const f=fixture();try{await f.process('WASPNEST01','Tengo avispas en casa en Medellín');assert.match(f.reply('WASPNEST01').text,/tamaño y la altura.*inspección/);assert.doesNotMatch(f.reply('WASPNEST01').text,/\$|habitaciones|metros/);assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,1);assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE internal=1').get().n,2);await f.process('WASPNEST02','El panal está a cuatro metros');assert.equal(f.reply('WASPNEST02'),undefined);}finally{f.s.close();}
+test('avispas goes once to inspection and never receives a room or fixed price questionnaire',async(t)=>{
+ const f=fixture(t);try{await f.process('WASPNEST01','Tengo avispas en casa en Medellín');assert.match(f.reply('WASPNEST01').text,/tamaño y la altura.*inspección/);assert.doesNotMatch(f.reply('WASPNEST01').text,/\$|habitaciones|metros/);assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,1);assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE internal=1').get().n,2);await f.process('WASPNEST02','El panal está a cuatro metros');assert.equal(f.reply('WASPNEST02'),undefined);}finally{f.s.close();}
 });
-test('acceptance uses a delivered own quote, preserves the price and consults Diego and Hilary without booking',async()=>{
- const f=fixture();try{await f.process('ACCEPTABLE01','Ratas en casa de 3 habitaciones en Medellín');f.s.delivery(f.reply('ACCEPTABLE01').mid,f.c.lines[0].phone,'DELIVERED');await f.process('ACCEPTABLE02','Sí, por favor');assert.match(f.reply('ACCEPTABLE02').text,/día y franja/);await f.process('ACCEPTABLE03','Mañana en la tarde');assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,1);assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE internal=1').get().n,2);assert.doesNotMatch(f.reply('ACCEPTABLE03').text,/reservad|servicio confirmad/);}finally{f.s.close();}
+test('acceptance uses a delivered own quote, preserves the price and consults Diego and Hilary without booking',async(t)=>{
+ const f=fixture(t);try{await f.process('ACCEPTABLE01','Ratas en casa de 3 habitaciones en Medellín');f.s.delivery(f.reply('ACCEPTABLE01').mid,f.c.lines[0].phone,'DELIVERED');await f.process('ACCEPTABLE02','Sí, por favor');assert.match(f.reply('ACCEPTABLE02').text,/día y franja/);await f.process('ACCEPTABLE03','Mañana en la tarde');assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,1);assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE internal=1').get().n,2);assert.doesNotMatch(f.reply('ACCEPTABLE03').text,/reservad|servicio confirmad/);}finally{f.s.close();}
 });
-test('a human hold suppresses quotes and source verification rejects changed prices or a different company',async()=>{
- const f=fixture();try{await f.process('STAFFPRICE01','Asesora atendiendo',{fromMe:true});await f.process('HELDPRICE01','Cucarachas en casa de 2 habitaciones en Medellín');assert.equal(f.reply('HELDPRICE01'),undefined);const e=selectPrice({...scope,service:'cucarachas',rooms:'2 habitaciones'},f.s.approvedPriceCatalogs()).entry;assert.equal(await verifyPriceSource(e,f.t),true);await assert.rejects(()=>verifyPriceSource({...e,priceCop:119000},f.t));await assert.rejects(()=>verifyPriceSource(e,{config:{company:'servicio-tecnico'}}));}finally{f.s.close();}
+test('a human hold suppresses quotes and source verification rejects changed prices or a different company',async(t)=>{
+ const f=fixture(t);try{await f.process('STAFFPRICE01','Asesora atendiendo',{fromMe:true});await f.process('HELDPRICE01','Cucarachas en casa de 2 habitaciones en Medellín');assert.equal(f.reply('HELDPRICE01'),undefined);const e=selectPrice({...scope,service:'cucarachas',rooms:'2 habitaciones'},f.s.approvedPriceCatalogs()).entry;assert.equal(await verifyPriceSource(e,f.t),true);await assert.rejects(()=>verifyPriceSource({...e,priceCop:119000},f.t));await assert.rejects(()=>verifyPriceSource(e,{config:{company:'servicio-tecnico'}}));}finally{f.s.close();}
 });
-test('a forwarded or hypothetical price source cannot force a new quote',async()=>{
- for(const [text,extra]of [['Si fuera una casa de 2 habitaciones en Medellín con cucarachas, ¿cuánto cuesta?',{}],['Cucarachas en apartamento de 60 m² en Medellín, ¿cuánto cuesta?',{forwarded:true}]]){const f=fixture();try{await f.process('UNCLEAR001',text,extra);assert.doesNotMatch(f.reply('UNCLEAR001')?.text||'',/\$129\.000|\$149\.000/);}finally{f.s.close();}}
+test('a forwarded or hypothetical price source cannot force a new quote',async(t)=>{
+ for(const [text,extra]of [['Si fuera una casa de 2 habitaciones en Medellín con cucarachas, ¿cuánto cuesta?',{}],['Cucarachas en apartamento de 60 m² en Medellín, ¿cuánto cuesta?',{forwarded:true}]]){const f=fixture(t);try{await f.process('UNCLEAR001',text,extra);assert.doesNotMatch(f.reply('UNCLEAR001')?.text||'',/\$129\.000|\$149\.000/);}finally{f.s.close();t.mock.timers.reset();}}
 });
 test('the approved schedule survives encrypted persistence and deduplicated reimport',()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'maria-price-')),file=path.join(dir,'bot.sqlite'),key=randomBytes(32),doc=approvedBusinessPriceSchedule();

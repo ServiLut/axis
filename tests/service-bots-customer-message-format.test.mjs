@@ -1,3 +1,6 @@
+import {mock as historicalPriceClock} from 'node:test';
+// Historical quotation fixtures use their original immutable table and clock.
+historicalPriceClock.timers.enable({apis:['Date'],now:Date.parse('2026-10-16T18:00:00.000Z')});
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
@@ -5,14 +8,14 @@ import {Store} from '../automation/service-bots/store.mjs';
 import {Engine} from '../automation/service-bots/engine.mjs';
 import {BUSINESSES,OPERATOR_ROUTING} from '../automation/service-bots/config.mjs';
 import {aiConfiguration} from '../automation/service-bots/ai-settings.mjs';
-import {approvedBusinessPriceSchedule} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
 import {adviserReply,mariaOrdinaryIntakeReply} from '../automation/service-bots/adviser-tone.mjs';
 import {composeOwnReply,MARIA_CONVERSATION_GUARD,ownReplyTextAllowed} from '../automation/service-bots/conversational-ai.mjs';
 import {literalGreetingReplyProof,literalGreetingReplyStillValid} from '../automation/service-bots/literal-reception.mjs';
 
 const phone='573009000011';
 function fixture({attack=false}={}){
- const start=Date.now()-60000,s=new Store(':memory:','fumigacion',randomBytes(32));s.importKnowledge(approvedBusinessPriceSchedule());
+ const start=Date.now()-60000,s=new Store(':memory:','fumigacion',randomBytes(32));s.importKnowledge(approvedBusinessPriceSchedule(LEGACY_BUSINESS_PRICE_HASH));
  const c={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,chiefOnly:true,activatedAt:start,operatorRouting:OPERATOR_ROUTING,
   lines:BUSINESSES.fumigacion.phones.map((phone,i)=>({phone,instance:'isolated-format-'+i})),
   conversationalAi:aiConfiguration({BOT_AI_PROVIDER:'openai',BOT_AI_SCOPE:'FUMIGACION',BOT_AI_MODEL:'isolated-format-model',BOT_OPENAI_API_KEY:'isolated-key',BOT_AI_MONTHLY_CALL_LIMIT:'40',BOT_AI_ENABLED_FROM:new Date(start).toISOString()},'fumigacion')};
@@ -23,7 +26,7 @@ function fixture({attack=false}={}){
   return {ok:true,json:async()=>({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify(plan)}]}],usage:{input_tokens:10,output_tokens:10}})};
  };
  const turn=async text=>{
-  const e={id:'FORMAT'+ ++n,phone,line:c.lines[0].phone,at:start+1000+n*1000,kind:'text',fromMe:false,forwarded:false,text};s.enqueue(e);await engine.process(e);
+  const e={id:'FORMAT'+ ++n,phone,line:c.lines[0].phone,at:start+1000+n*1000,kind:'text',fromMe:false,forwarded:false,text};historicalPriceClock.timers.setTime(e.at);s.enqueue(e);await engine.process(e);
   const row=s.db.prepare('SELECT * FROM outbox WHERE id=?').get(e.id+':reply'),original=row?s.open(row.body):null;
   const composed=row?await composeOwnReply(c,s,fetcher,row,original):null;
   return {e,row,original,composed,state:s.conversation(phone).state};
