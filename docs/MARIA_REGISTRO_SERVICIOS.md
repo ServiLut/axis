@@ -1,5 +1,17 @@
 # Registro propio de servicios nuevos de María
 
+## Primera programación preparada y autorizada; activación pendiente — 16/10/2026 14:43Z
+
+Runtime `e4f6bf319ed6ac80662c41fc2e7a79a1a0d0bc28` y Backend `a8d208dd8c21d65d71dd8b7ff5bb7c8d1fa9399a` se desplegaron el 15/10. El control propio del 16/10 **14:43:05Z** comprobó recepción y continuación TESA activas, primera programación **OFF**, SAVED=1 histórico y pendientes/inciertos/revisión=0. No acredita una segunda alta o primera agenda nueva. Detalle y fuentes vigentes al inicio de `BOTS_MARIA_MIGUEL.md`.
+
+Está resuelta la aprobación humana para un acceso **separado** de primera programación, máximo **07/11/2026 16:56:52.680Z**, sin renovación. Sólo nuevas órdenes propias FUMIGACIÓN: técnico, fecha, inicio, fin y PROGRAMADO, tras respuesta TESA humana verificada y nueva confirmación del cliente a la propuesta propia entregada. No modifica el contrato original de creación NUEVO, pagos, precios, autoría, órdenes del personal ni reprogramaciones. Las credenciales están preparadas en privado; no generarlas de nuevo ni repetir la solicitud de aprobación.
+
+Backend recibe únicamente IDs propios y referencias de prueba, no técnico/horas libres del cliente HTTP. Comprueba recibo inmutable y campos actuales, coincidencia literal de cliente/servicio/precio/dirección, técnico único activo, intervalos y concurrencia. La confirmación anterior del formulario no se reutiliza para programar. La escritura nueva conserva clave estable y recibo append-only; un resultado incierto sólo permite buscar su recibo. Una cancelación solicitada se registra como REQUEST/revisión, sin ejecutar cancelación del negocio.
+
+**1304 pruebas runtime y 59 backend aprobadas**, compilación productiva y contrato runtime → Backend incluidos. El ensayo de esquema real en PostgreSQL 18.6 aprobó quince comprobaciones en restauración aislada y revirtió sus pruebas; no instaló DDL productivo ni modificó filas de negocio. Faltan instalación de esquema, variables nuevas, recarga y configuración del runtime. La sesión Dokploy terminó y muestra Sign in; se solicitó el ingreso personal necesario. El permiso de programación está aprobado, la función desplegada sigue desactivada. Esta distinción prevalece sobre las frases históricas «no implementada/no autorizada» siguientes.
+
+La continuación de respuestas TESA de casos aún no registrados sí está activa para nuevas fuentes exactas. Precio/alcance ordinarios permiten la cotización propia y el recorrido normal; un precio especial no se transforma en tarifa o permiso de registro. BF23DF14 conserva su único recibo histórico y las correcciones humanas auditadas; no se presenta como alta nueva ni se usa para probar la programación prospectiva. Roja, humanos, reactivación, otras empresas y resultados inciertos se preservan.
+
 ## Continuidad de conversación y formularios preservados — 15/10/2026 21:26Z
 
 Sólo María instaló `cacb1c87c75d4d12c46d74c92407f8f085945c94` (DONE 2 s), corrección funcional `438b18e87e7ef99a69e52cc20f27951fc40b4d72`. API propia verificó recepción, Luna, registro, scope, precio y vencimiento originales; SAVED=1 histórico, otras colas=0. Backend `7cc76009a97cf2ab5a674a86d369c6b2d51b324f` sin cambios. El detalle de queja, fuentes y guardias nuevas está al inicio de `BOTS_MARIA_MIGUEL.md`.
