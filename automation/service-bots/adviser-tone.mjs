@@ -12,6 +12,7 @@ const initialRequests=new Map([
  ['El municipio donde necesitas el servicio; ya conservé la ubicación indicada.','el municipio donde necesitas el servicio']
 ]);
 const ordinaryIntakeQuestions=new Set([
+ 'Para cotizarte, me falta:\n1. Qué plaga deseas tratar o si buscas prevención.\n2. En qué barrio o vereda necesitas el servicio.',
  '¿Qué plaga deseas tratar o buscas un servicio preventivo?',
  'Cuéntame qué plaga necesitas tratar o si buscas un servicio preventivo.',
  '¿En qué tipo de inmueble necesitas el servicio?',

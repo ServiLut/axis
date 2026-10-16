@@ -317,7 +317,10 @@ export async function composeOwnReply(config,store,fetcher,row,text){
   // This applies only after the saved-wording branch above: historical wording
   // reservations remain byte-for-byte reusable under their original contract.
   const clearIntake=mariaOrdinaryIntakeReply(text)||/^(?:Hola|Buen día|Buenas tardes|Buenas noches), soy María Ángel\./.test(text);
-  const planningContract=clearIntake?{...contract,facts:[]}:contract;
+  // A verified price and its next question already carry the useful result.
+  // Its literal scope remains in the contract, without an extra facts preface.
+  const clearQuotation=contract.anchors.includes('runtime-quotation-price-and-scope');
+  const planningContract=clearIntake||clearQuotation?{...contract,facts:[]}:contract;
   const plannerFacts=planningContract.facts.filter(f=>f.newlyProvided);
   const plannerOpenings=Object.fromEntries(Object.entries(replyOpenings).filter(([id])=>id!=='helpful'));
   const plannerSteps=contract.alternatives.map((text,i)=>({id:'step:'+i,text})).filter((step,i)=>i===0||!/^Con gusto\./.test(step.text));

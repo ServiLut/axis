@@ -6,6 +6,7 @@ import {getTesaConfig} from './tesa-config.mjs';
 import {mariaIncidentalPetMention} from './after-service.mjs';
 import {verifyStoredNativeIdentitySource} from './native-identity-resolution.mjs';
 import {partitionNativeAttention} from './explicit-return-attention.mjs';
+import {currentMariaLocationProjection} from './current-location-projection.mjs';
 
 export const MARIA_PROGRAM_GUARD='own-accepted-ordinary-service-literal-fields-and-atomic-receipt-v2';
 export const MARIA_PROGRAM_PIPELINE_GUARD='processed-customer-turn-before-registration-v1';
@@ -410,7 +411,13 @@ export function registrationTurn(s,c,previous,e,decision){
  const conv=s.conversation(e.phone),allowed=['service','site','location','area','rooms','mattresses','patio','floors','roomScale','siteScale','treatmentScope','affectedFurniture'];
  const slots=Object.fromEntries(allowed.filter(k=>state.slots[k]!=null).map(k=>[k,String(state.slots[k])]));
  if(preference)slots.preference=preference.value;
- const payload={caseId:state.caseId,phone:e.phone,line:e.line,sourceId:e.id,customerName:pi.customerName,address:pi.address,municipality:state.slots.location,locationDetails:String(state.slots.locationDetails||''),slots,...(petPresence?{petPresence:petPresence.value}:{}),
+ const locationProjection=currentMariaLocationProjection(s,state,e);
+ if(locationProjection.review){
+  pi.stage='review';pi.preview=null;s.audit('OWN_CURRENT_LOCATION_PROJECTION_REVIEW',e.id,{caseId:state.caseId,reason:locationProjection.reason,originalHistoryPreserved:true,businessWritten:false});
+  return {state,reviewTopic:'program-registration-review',reviewConditions:{kind:'current-location-details-unverified',caseId:state.caseId},review:'Una indicación del inmueble mezcla datos anteriores corregidos y otros detalles que no pueden separarse con certeza. Se conservaron las fuentes originales y no se creó un servicio.',reviewQuestion:'¿Qué indicaciones actuales de ubicación y acceso corresponden a esta solicitud, sin los datos de tamaño ya corregidos?',reply:'Antes de registrar tu solicitud, necesito aclarar las indicaciones actuales de ubicación y acceso.'};
+ }
+ if(locationProjection.applied)s.audit('OWN_CURRENT_LOCATION_PROJECTED',e.id,{caseId:state.caseId,guard:locationProjection.guard,omissions:locationProjection.omissions,retained:locationProjection.retained,originalHistoryPreserved:true,businessWritten:false});
+ const payload={caseId:state.caseId,phone:e.phone,line:e.line,sourceId:e.id,customerName:pi.customerName,address:pi.address,municipality:state.slots.location,locationDetails:locationProjection.locationDetails,slots,...(petPresence?{petPresence:petPresence.value}:{}),
   quote:{entryId:own.entry.id,priceCop:own.entry.priceCop,scheduleHash:BUSINESS_PRICE_HASH,mid:own.row.mid,sourceId:own.q.sourceId,deliveredAt:iso(own.row.firstDeliveryAt),acceptedAt:iso(e.at),acceptanceId:e.id},
   sources:{customerName:pi.nameSource,address:pi.addressSource,...(preference?{preference:preference.source}:{}),...(petPresence?{petPresence:petPresence.source}:{}),acceptance:{...source(e),phone:e.phone,line:e.line,fromMe:false,forwarded:false}}};
  const key=prefix+state.caseId,existing=get(s,key),hash=registrationHash(payload);

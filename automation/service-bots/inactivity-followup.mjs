@@ -2,6 +2,7 @@ import {createHash} from 'node:crypto';
 import {knownInternalRecipient,normalize,publicTextSafe} from './config.mjs';
 import {programEnabled,programFollowupEligible} from './maria-program.mjs';
 import {assertOperationalLineScope,operationalLineAllowed} from './line-scope.mjs';
+import {customerDeferralStillBlocks,CUSTOMER_DEFERRAL_GUARD} from './customer-deferral.mjs';
 
 export const INACTIVITY_GUARD='own-delivered-open-case-once-after-20-minutes-and-native-recheck-v1';
 const WAIT=20*60000,WINDOW=86400000;
@@ -27,7 +28,7 @@ export function inactivityStatus(config,store){
 }
 
 function completed(state){return Boolean(state.programServiceId||state.serviceRegistered||state.serviceCompleted||state.closed||state.completed||state.programRegistration?.serviceId);}
-function blockedState(state){return state.awaitingHumanReview||state.requestedAfterServiceReview||state.requestedControlReview||state.pendingFaqQuestion||state.programIntake||completed(state);}
+function blockedState(state){return state.customerDeferral?.guard===CUSTOMER_DEFERRAL_GUARD&&state.customerDeferral.active===true&&state.customerDeferral.caseId===state.caseId||state.awaitingHumanReview||state.requestedAfterServiceReview||state.requestedControlReview||state.pendingFaqQuestion||state.programIntake||completed(state);}
 function quoteCurrent(quote,now){return !quote||!((quote.validUntil&&quote.validUntil<=now)||(quote.expiresAt&&quote.expiresAt<=now));}
 function lineScopeEligible(config,store,phone,line,sourceAt){
  const scope=assertOperationalLineScope(config);
@@ -67,7 +68,7 @@ export function inactivityCandidate(config,store,phone,now=Date.now()){
  const caseTurns=store.db.prepare('SELECT body FROM events WHERE phone=? AND from_me=0 AND at BETWEEN ? AND ? ORDER BY at,rowid LIMIT 40').all(phone,first.at,latest.at).map(r=>store.open(r.body));
  // A later courtesy does not revoke a prior rejection. Unread media and any
  // after-service/payment/document exception in this case remain in review.
- if(caseTurns.some(turn=>turn.kind!=='text'||turn.forwarded||excluded.test(normalize(turn.text))))return null;
+ if(caseTurns.some(turn=>turn.kind!=='text'||turn.forwarded||excluded.test(normalize(turn.text)))||customerDeferralStillBlocks(state,caseTurns))return null;
  if(store.db.prepare("SELECT 1 FROM events WHERE phone=? AND state IN ('PENDING','HISTORY_REVIEW','REVIEW','WAITING_COORDINATOR','ANSWER_REVIEW')").get(phone)||
     store.db.prepare("SELECT 1 FROM questions WHERE phone=? AND case_id=? AND state IN ('PENDING','LEGACY_PENDING','ANSWER_REVIEW')").get(phone,state.caseId)||
     store.db.prepare("SELECT 1 FROM outbox WHERE phone=? AND internal=0 AND state IN ('READY','SENDING','UNCERTAIN','ACCEPTED')").get(phone))return null;

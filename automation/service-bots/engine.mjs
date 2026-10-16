@@ -25,6 +25,7 @@ import {literalIntakeDimensions,MARIA_DIMENSIONS_GUARD} from './intake-dimension
 import {parseChiefCommand,enqueueChiefCommand} from './chief-actions.mjs';
 import {mariaPendingReviewReply} from './maria-pending-review.mjs';
 import {literalMariaPartialLocation,literalMariaRoomCount,mariaMediaBurstContinuation,MARIA_BATCH_INTAKE_GUARD} from './maria-batch-intake.mjs';
+import {customerDeferralRequested,customerDeferralResumeEvidence,customerDeferralContinues,customerDeclinesAfterDeferral,CUSTOMER_DEFERRAL_GUARD} from './customer-deferral.mjs';
 
 export const MARIA_AUTONOMOUS_INTAKE_GUARD='literal-ordinary-intake-without-staff-delegation-v1';
 export const MARIA_AFTER_SERVICE_CONTINUITY_GUARD='own-same-case-stored-or-quoted-postservice-context-and-priority-preservation-v2';
@@ -353,10 +354,23 @@ function literalFields(state,e,company){
     fields.service=[...new Set((state.slots.service+' y '+fields.service).split(' y '))].join(' y ');
   return fields;
 }
+function discardSupersededSizeDuplicate(state,previous,fields,conflicts=[]){
+  const detail=previous.slots.detail,source=previous.intakeSources?.detail,current=state.intakeSources?.detail;
+  if(!detail||!source?.sourceId||!Number.isSafeInteger(source.at)||state.slots.detail!==detail||current?.sourceId!==source.sourceId||current?.at!==source.at)return;
+  for(const field of ['rooms','area','mattresses','dimensions']){
+    const old=previous.slots[field],prior=previous.intakeSources?.[field];
+    if(old!==detail||prior?.sourceId!==source.sourceId||prior?.at!==source.at)continue;
+    if(!conflicts.includes(field)&&(!fields[field]||fields[field]===old))continue;
+    // This exact same-source copy is obsolete, not a new technician finding.
+    // Extra details and original native events remain unchanged.
+    delete state.slots.detail;state.intakeSources={...state.intakeSources};delete state.intakeSources.detail;return;
+  }
+}
 function rememberFields(state,e,company,fields=literalFields(state,e,company)){
   state.intakeSources={...state.intakeSources};
   if(company==='fumigacion'){
     const conflicts=literalQuoteFieldConflicts(e.text);
+    discardSupersededSizeDuplicate(state,state,fields,conflicts);
     // A new contradictory quantity invalidates the old ordinary quote. Keep
     // all raw events; never turn the rejected endpoint into a field source.
     for(const field of conflicts){delete state.slots[field];delete state.intakeSources[field];}
@@ -570,6 +584,14 @@ export function customerDecision(company,state,e,analysis={}) {
     else understood=Object.fromEntries(Object.entries(understood).filter(([k,v])=>!existing[k]&&(company!=='fumigacion'||k!=='location'||ordinaryLiteralMunicipality(v)&&normalize(ordinaryLiteralMunicipality(v))===normalize(literal.location))));
   }
   const next={...state,slots:{...existing,...understood},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)};
+  if(company==='fumigacion')discardSupersededSizeDuplicate(next,state,literal,literalQuoteFieldConflicts(e.text));
+  if(company==='fumigacion'&&state.customerDeferral?.guard===CUSTOMER_DEFERRAL_GUARD&&state.customerDeferral.active===true&&state.customerDeferral.caseId===state.caseId&&state.customerDeferral.line===e.line&&e.at>state.customerDeferral.at&&!contextNeedsPersonalPriority(e.text,e)){
+    if(customerDeclinesAfterDeferral(e))return {state:{...next,closed:true},courtesy:true,reply:'Entendido, gracias por avisarme.'};
+    if(customerDeferralContinues(e))return {state:next,courtesy:true,customerDeferred:true,reply:'Claro, puedes pensarlo con calma. Si te surge alguna duda, aquí estoy.'};
+  }
+  if(company==='fumigacion'&&state.customerDeferral?.guard===CUSTOMER_DEFERRAL_GUARD&&state.customerDeferral.active===true&&state.customerDeferral.caseId===state.caseId&&state.customerDeferral.line===e.line&&e.at>state.customerDeferral.at&&literalIntakeTurn(e,company)&&!contextNeedsPersonalPriority(e.text,e)){
+    const resumedBy=customerDeferralResumeEvidence(e,literal);if(resumedBy)next.customerDeferral={...state.customerDeferral,active:false,resumedBy};
+  }
   // An exception may take priority over a warranty/followup route, but must
   // not erase the customer's existing-service context for later turns.
   const preservedFollowup=company==='fumigacion'&&afterServiceDecision(state,next,e,analysis);
@@ -641,6 +663,7 @@ export function customerDecision(company,state,e,analysis={}) {
   if(company==='fumigacion'&&plannedRevisit(e.text))return {state:{...next,slots:{...state.slots}},reviewTopic:'service-followup',reviewConditions:{kind:'planned-revisit',directCustomerReport:!e.forwarded},pendingQuestion:questionExcerpt(literalText.slice(literalText.search(/\b(?:necesito|quiero|agend\w*|program\w*|confirm\w*)\b/i))),review:'La persona relata una fumigación anterior y solicita una nueva visita, con preferencias de horario y técnico. La recomendación relatada no acredita reserva, disponibilidad ni precio; hay que contrastar el servicio guardado y sus condiciones.',reviewQuestion:'¿Qué antecedente, disponibilidad, técnico y precio verificados corresponden a esta revisita?',reply:'Gracias por contarnos. Tu solicitud de nueva visita sigue pendiente de confirmación.'};
   if(requestedTechnicalContact(e.text))return {state:{...next,slots:{...state.slots}},reviewTopic:'requested-technician-contact',reviewConditions:{kind:'technician-contact'},review:'La persona solicita un medio de contacto del técnico para hacerle preguntas. No consta aquí un contacto autorizado para compartir; no es una nueva solicitud de cotización.',reviewQuestion:'¿Qué contacto está autorizado para atender sus dudas y qué dato podemos compartirle?',reply:'Entiendo. Aún falta confirmar el contacto que puede atender tus dudas.'};
   if(serviceFollowup(e.text))return {state:{...next,slots:{...state.slots}},reviewTopic:'service-followup',reviewConditions:{kind:'arrival'},review:'La persona pregunta por la llegada del servicio. Hace falta contrastar el antecedente y comprobar el estado actual; no consta aquí una hora verificada.',reviewQuestion:'¿Cuál es el estado actual del servicio y qué respuesta confirmada podemos darle sobre la llegada?',reply:'Entiendo tu preocupación. Aún no tengo una hora de llegada confirmada.'};
+  if(company==='fumigacion'&&state.quotedPrice&&!state.quotedPrice.accepted&&!state.programIntake&&customerDeferralRequested(e))return {state:{...next,customerDeferral:{guard:CUSTOMER_DEFERRAL_GUARD,active:true,caseId:state.caseId,line:e.line,sourceId:e.id,at:e.at}},courtesy:true,customerDeferred:true,reply:'Claro, puedes pensarlo con calma. Si te surge alguna duda, aquí estoy.'};
   if(/^(gracias|muchas gracias|muy amable|ok|listo)[.! ]*$/.test(t))return {state:next,reply:'Con gusto.'};
   if(company==='servicio-tecnico'&&!e.forwarded){
     const painting=state.technicalPaintingRequest||literalPaintingRequest(e);
@@ -980,6 +1003,7 @@ export class Engine {
       const literalProgramStage=['name','address','details','confirm','correction'].includes(caseState.programIntake?.stage);
       const registration=decision.quoteClarification||decision.literalServiceContext?null:registrationTurn(s,c,caseState,e,literalProgramStage?{...decision,state:{...decision.state,slots:{...caseState.slots,...(decision.state.slots.preference?{preference:decision.state.slots.preference}:{})}}}:decision);
       if(registration)decision=registration;
+       if(caseState.customerDeferral?.active===true&&decision.state.customerDeferral?.active===false&&decision.state.customerDeferral.resumedBy?.sourceId===e.id)s.audit('OWN_CUSTOMER_DEFERRAL_RESUMED',e.id,{caseId:caseState.caseId,deferralSourceId:caseState.customerDeferral.sourceId,resumeSourceId:e.id,kind:decision.state.customerDeferral.resumedBy.kind,humanHoldReleased:false,acceptanceGrantedByMarker:false});
       decision.state.lastHandledSourceId=e.id;
       if(/^[¡! ]*(?:hola\b|buenos dias\b|buen dia\b|buenas tardes\b|buenas noches\b)/.test(normalize(e.text))&&!conv.state.introduced&&decision.reply){
         if(c.company==='fumigacion'&&!selectedPrice&&!decision.courtesy&&!decision.review&&!decision.question&&!decision.observed){
