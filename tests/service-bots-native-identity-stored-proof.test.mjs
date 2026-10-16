@@ -75,6 +75,16 @@ test('delivery progression on source and explicit pair preserves immutable body 
   assert.equal((await f.verify())?.verified,true);
 });
 
+test('existing exact-body proofs without the new comparison metadata remain valid and unchanged',async t=>{
+  const f=await fixture(t);f.changeProof(value=>{delete value.proof.messageBodyComparisonGuard;delete value.proof.rawMessageBodiesEqual;});
+  const before=f.snapshot();assert.equal((await f.verify())?.verified,true);assert.equal(f.list().length,1);assert.equal(f.snapshot(),before);
+});
+
+for(const mode of ['wrong-guard','wrong-flag-type','missing-guard','missing-flag'])test('new body-comparison metadata must be a closed valid pair: '+mode,async t=>{
+  const f=await fixture(t);f.changeProof(value=>{if(mode==='wrong-guard')value.proof.messageBodyComparisonGuard='future-format';if(mode==='wrong-flag-type')value.proof.rawMessageBodiesEqual='true';if(mode==='missing-guard')delete value.proof.messageBodyComparisonGuard;if(mode==='missing-flag')delete value.proof.rawMessageBodiesEqual;});
+  assert.equal(await f.verify(),null);assert.throws(()=>f.list(),/STORED_NATIVE_IDENTITY_COVERAGE_UNVERIFIED/);
+});
+
 test('pure enumeration exposes only matching processed own-phone proof sources',async t=>{
   const f=await fixture(t),before=f.snapshot();assert.deepEqual(f.list(),[{id:f.event.id,phone:PHONE,line:FUMIGACION_BLUE,lid:LID,at:SOURCE,proofHash:f.resolution.resolutions[0].proof.proofHash}]);
   assert.deepEqual(listStoredNativeIdentitySources(f.store,f.config,{phone:'573000009322',line:FUMIGACION_BLUE,since:f.config.activatedAt,through:f.clock.now}),[]);

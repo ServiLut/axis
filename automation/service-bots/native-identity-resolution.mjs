@@ -18,6 +18,70 @@ const canonical=value=>Array.isArray(value)?value.map(canonical):object(value)?O
 const hash=value=>createHash('sha256').update(JSON.stringify(canonical(value))??'null').digest('hex');
 export const nativeIdentityEvidenceHash=hash;
 export const nativeIdentityResolutionHash=hash;
+export const NATIVE_MESSAGE_BYTE_EQUIVALENCE_GUARD='three-demonstrated-message-context-byte-fields-v1';
+const bytePaths=[['messageContextInfo','messageSecret'],['messageContextInfo','deviceListMetadata','senderKeyHash'],['messageContextInfo','deviceListMetadata','recipientKeyHash']];
+const plainObject=value=>object(value)&&[Object.prototype,null].includes(Object.getPrototypeOf(value));
+function denseBytes(value){
+  if(!Array.isArray(value)||Object.getPrototypeOf(value)!==Array.prototype||value.length<1||value.length>512||Reflect.ownKeys(value).length!==value.length+1)return null;
+  const bytes=[];for(let index=0;index<value.length;index++){
+    const property=Object.getOwnPropertyDescriptor(value,String(index));
+    if(!property||!Object.prototype.hasOwnProperty.call(property,'value')||!Number.isInteger(property.value)||property.value<0||property.value>255)return null;
+    bytes.push(property.value);
+  }
+  return bytes;
+}
+function canonicalByteString(value){
+  if(typeof value==='string'){
+    if(!value.length||value.length>684||value.length%4!==0||!/^[A-Za-z0-9+/]+={0,2}$/.test(value))throw Error('INVALID_NATIVE_BYTES');
+    const bytes=Buffer.from(value,'base64');if(bytes.length<1||bytes.length>512||bytes.toString('base64')!==value)throw Error('INVALID_NATIVE_BYTES');return value;
+  }
+  if(!plainObject(value))throw Error('INVALID_NATIVE_BYTES');
+  const keys=Reflect.ownKeys(value);let bytes;
+  if(keys.length===2&&keys.includes('type')&&keys.includes('data')){
+    const type=Object.getOwnPropertyDescriptor(value,'type'),data=Object.getOwnPropertyDescriptor(value,'data');
+    if(!type||!data||!Object.prototype.hasOwnProperty.call(type,'value')||!Object.prototype.hasOwnProperty.call(data,'value')||type.value!=='Buffer')throw Error('INVALID_NATIVE_BYTES');
+    bytes=denseBytes(data.value);
+  }else{
+    if(keys.length<1||keys.length>512)throw Error('INVALID_NATIVE_BYTES');bytes=[];
+    for(let index=0;index<keys.length;index++){
+      const property=Object.getOwnPropertyDescriptor(value,String(index));
+      if(!property||!Object.prototype.hasOwnProperty.call(property,'value')||!Number.isInteger(property.value)||property.value<0||property.value>255)throw Error('INVALID_NATIVE_BYTES');
+      bytes.push(property.value);
+    }
+    if(keys.some(key=>typeof key!=='string'||!/^0$|^[1-9]\d*$/.test(key)||Number(key)>=keys.length))throw Error('INVALID_NATIVE_BYTES');
+  }
+  if(!bytes)throw Error('INVALID_NATIVE_BYTES');return Buffer.from(bytes).toString('base64');
+}
+function messageByteProjection(value,path=[]){
+  if(bytePaths.some(parts=>parts.length===path.length&&parts.every((part,index)=>part===path[index])))return canonicalByteString(value);
+  if(Array.isArray(value))return value.map((item,index)=>messageByteProjection(item,[...path,String(index)]));
+  if(object(value))return Object.fromEntries(Object.keys(value).map(key=>[key,messageByteProjection(value[key],[...path,key])]));
+  return value;
+}
+function jsonDataOnly(value,ancestors=new Set(),depth=0){
+  if(value===null||['string','boolean'].includes(typeof value))return true;
+  if(typeof value==='number')return Number.isFinite(value);
+  if(typeof value!=='object'||depth>100||ancestors.has(value)||!Array.isArray(value)&&!plainObject(value))return false;
+  const keys=Reflect.ownKeys(value),array=Array.isArray(value);
+  if(array&&(Object.getPrototypeOf(value)!==Array.prototype||keys.length!==value.length+1))return false;
+  ancestors.add(value);
+  for(const key of keys){
+    if(array&&key==='length')continue;
+    const property=Object.getOwnPropertyDescriptor(value,key);
+    if(typeof key!=='string'||array&&(!/^(?:0|[1-9]\d*)$/.test(key)||Number(key)>=value.length)||!property||!property.enumerable||!Object.prototype.hasOwnProperty.call(property,'value')||!jsonDataOnly(property.value,ancestors,depth+1)){ancestors.delete(value);return false;}
+  }
+  ancestors.delete(value);return true;
+}
+// The original body, raw hashes and proof hashes retain their exact semantics.
+// Only these three observed byte encodings receive an equivalence comparison;
+// all other message fields, citations and forwarding metadata remain present.
+export function nativeMessageBodiesEquivalent(first,second){
+  try{
+    if(!object(first)||!object(second)||!jsonDataOnly(first)||!jsonDataOnly(second))return false;
+    if(hash(first)===hash(second))return true; // Preserve the original exact-body admission.
+    return hash(messageByteProjection(first))===hash(messageByteProjection(second));
+  }catch{return false;}
+}
 function timestamp(record){
   const value=record?.messageTimestamp;
   if(object(value)&&value.high!==undefined&&value.high!==0)return null;
@@ -126,7 +190,7 @@ export async function resolveOwnBlueNativeIdentity(config,transport,originalBody
     const rows=page.records.filter(value=>value?.key?.remoteJid===key.remoteJid);
     const exact=rows.filter(value=>value?.key?.id===key.id);
     const diagnostics={exactMatches:exact.length,nativePageContainsSource:page.records.some(value=>value?.key?.id===key.id),sourceBodyMatches:exact.length===1&&hash(exact[0].message)===hash(record.message),sourceContextMatches:exact.length===1&&hash(exact[0].contextInfo??null)===hash(record.contextInfo??null),nativeChanged:exact.some(value=>changed(value)),...(exact.length===1?contentMismatchDiagnostics(record,exact[0]):{})};
-    if(exact.length!==1||exact[0].key.fromMe!==false||timestamp(exact[0])!==at||!ownRecord(exact[0],line)||forwarded(exact[0])||changed(exact[0])||exact[0].key.remoteJidAlt!=null&&exact[0].key.remoteJidAlt!==''&&!phoneJid(exact[0].key.remoteJidAlt)||hash(exact[0].message)!==hash(record.message)||hash(exact[0].contextInfo??null)!==hash(record.contextInfo??null)){
+    if(exact.length!==1||exact[0].key.fromMe!==false||timestamp(exact[0])!==at||!ownRecord(exact[0],line)||forwarded(exact[0])||changed(exact[0])||exact[0].key.remoteJidAlt!=null&&exact[0].key.remoteJidAlt!==''&&!phoneJid(exact[0].key.remoteJidAlt)||!nativeMessageBodiesEquivalent(exact[0].message,record.message)||hash(exact[0].contextInfo??null)!==hash(record.contextInfo??null)){
       fail(key.id,'EXACT_CURRENT_NATIVE_SOURCE_UNVERIFIED',diagnostics);continue;
     }
     const pairs=[],seenNativeSources=new Map(),rawPhones=new Set();let conflict=false;
@@ -151,7 +215,7 @@ export async function resolveOwnBlueNativeIdentity(config,transport,originalBody
     for(const pair of pairs){if(sourceIds.has(pair.id)&&sourceIds.get(pair.id)!==pair.sourceHash)conflict=true;sourceIds.set(pair.id,pair.sourceHash);}
     if(conflict){fail(key.id,'NATIVE_PAIR_SOURCE_CONFLICT');continue;}
     const pairSources=[...new Map(pairs.map(value=>[value.id,{id:value.id,at:value.at,fromMe:value.fromMe,sourceHash:value.sourceHash,immutableHash:value.immutableHash}])).values()];
-    const proof={guard:NATIVE_IDENTITY_RESOLUTION_GUARD,line:line.phone,instance:line.instance,sourceId:key.id,phone:phones[0],lid:key.remoteJid,sourceAt:at,sourceHash:recordHash(exact[0]),callbackHash:hash(record),immutableFingerprintVersion:NATIVE_IDENTITY_STORED_FINGERPRINT_VERSION,sourceImmutableHash:immutableRecordHash(exact[0]),pairSources,owner:{phone:binding.phone,instance:binding.instance,open:true,ownerVerified:true},checkedAt:now,startsAt:startedAt,boundedPage:{page:1,limit:PAGE_SIZE,returned:page.records.length,matchingLid:rows.length},historicalCoverageComplete:false,phoneInferred:false,originalKeyPreserved:true};
+    const proof={guard:NATIVE_IDENTITY_RESOLUTION_GUARD,line:line.phone,instance:line.instance,sourceId:key.id,phone:phones[0],lid:key.remoteJid,sourceAt:at,sourceHash:recordHash(exact[0]),callbackHash:hash(record),messageBodyComparisonGuard:NATIVE_MESSAGE_BYTE_EQUIVALENCE_GUARD,rawMessageBodiesEqual:hash(exact[0].message)===hash(record.message),immutableFingerprintVersion:NATIVE_IDENTITY_STORED_FINGERPRINT_VERSION,sourceImmutableHash:immutableRecordHash(exact[0]),pairSources,owner:{phone:binding.phone,instance:binding.instance,open:true,ownerVerified:true},checkedAt:now,startsAt:startedAt,boundedPage:{page:1,limit:PAGE_SIZE,returned:page.records.length,matchingLid:rows.length},historicalCoverageComplete:false,phoneInferred:false,originalKeyPreserved:true};
     proof.proofHash=hash(proof);
     result.resolutions.push({sourceId:key.id,phone:phones[0],lid:key.remoteJid,line:line.phone,instance:line.instance,proof});
   }
@@ -185,6 +249,10 @@ function processedProof(store,config,expected,now){
     !object(value)||value.guard!==NATIVE_IDENTITY_RESOLUTION_GUARD||value.state!=='RESOLVED_NATIVE_CACHE_PAIR'||value.company!==config.company||value.sourceId!==row.id||value.phone!==row.phone||value.line!==row.line||value.instance!==INSTANCE||!lidJid(value.lid)||value.firstInstalledAt!==start.startedAt||value.originalCarriedPhone!==false||value.authority!=='external-customer-only'||value.historicalReplayEnabled!==false||
     !object(identity)||identity.sourceId!==row.id||identity.line!==row.line||identity.phone!==row.phone||identity.lid!==value.lid||identity.at!==event.at||identity.fromMe!==false||identity.state!=='RESOLVED_NATIVE_CACHE_PAIR'||identity.guard!==NATIVE_IDENTITY_RESOLUTION_GUARD||identity.originalCarriedPhone!==false)return null;
   const proof=value.proof;if(!object(proof))return null;
+  const comparisonGuardPresent=Object.prototype.hasOwnProperty.call(proof,'messageBodyComparisonGuard'),rawEqualityPresent=Object.prototype.hasOwnProperty.call(proof,'rawMessageBodiesEqual');
+  // Prior exact-body proofs remain unchanged. New comparison metadata is
+  // closed and must be present as a pair; its flag never replaces native reads.
+  if(comparisonGuardPresent!==rawEqualityPresent||comparisonGuardPresent&&(proof.messageBodyComparisonGuard!==NATIVE_MESSAGE_BYTE_EQUIVALENCE_GUARD||typeof proof.rawMessageBodiesEqual!=='boolean'))return null;
   const {proofHash,...unsigned}=proof;
   if(!hashString(proofHash)||hash(unsigned)!==proofHash||identity.proofHash!==proofHash||proof.guard!==NATIVE_IDENTITY_RESOLUTION_GUARD||proof.immutableFingerprintVersion!==NATIVE_IDENTITY_STORED_FINGERPRINT_VERSION||!hashString(proof.sourceImmutableHash)||!hashString(proof.sourceHash)||!hashString(proof.callbackHash)||value.callbackHash!==proof.callbackHash||!hashString(value.originalBodyHash)||proof.sourceId!==row.id||proof.phone!==row.phone||proof.line!==row.line||proof.instance!==INSTANCE||proof.lid!==value.lid||proof.sourceAt!==event.at||proof.startsAt!==start.startedAt||
     !Number.isSafeInteger(proof.checkedAt)||proof.checkedAt<event.at||proof.checkedAt-event.at>NATIVE_IDENTITY_MAX_AGE_MS||!Number.isSafeInteger(value.recordedAt)||value.recordedAt<proof.checkedAt||value.recordedAt-event.at>NATIVE_IDENTITY_MAX_AGE_MS||value.recordedAt>now||
