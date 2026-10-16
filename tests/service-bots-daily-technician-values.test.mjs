@@ -11,6 +11,17 @@ const snapshot=(orders,extra={})=>({company:'FUMIGACION',tenantId:MARIA_TENANT,c
 const pages=()=>[{company:'fumigacion',day:DAY,readOnly:true,afterRow:0,nextRow:0,remaining:0,sources:[],coverage:{journalStartedAt:iso(FROM),suspendedLines:['573126938721']}}];
 const evaluate=(orders,extra={})=>evaluateDailyOperationalAudit({day:DAY,journalPages:pages(),now:NOW,programSnapshot:snapshot(orders,extra)});
 
+test('verifies the snapshot against its observed response time, not the earlier command start',()=>{
+  const program=snapshot([order('DURING_READ')],{checkedAt:iso(NOW+535)});
+  const result=evaluateDailyOperationalAudit({day:DAY,journalPages:pages(),now:NOW,programSnapshot:program,programSnapshotObservedAt:NOW+800});
+  assert.equal(result.checkedAt,iso(NOW));
+  assert.equal(result.technicianValues.coverage.snapshotTimeVerified,true);
+  assert.doesNotMatch(dailyManagementReportText(result),/fecha del corte por verificar/);
+  const future=evaluateDailyOperationalAudit({day:DAY,journalPages:pages(),now:NOW,programSnapshot:program,programSnapshotObservedAt:NOW+534});
+  assert.equal(future.technicianValues.coverage.snapshotTimeVerified,false);
+  assert.match(dailyManagementReportText(future),/fecha del corte por verificar/);
+});
+
 test('counts the visit day, never the creation day or another booking, and deduplicates identical order IDs',()=>{
   const current=order('TODAY',{createdAt:'2026-09-01T10:00:00Z'}),futureAt=FROM+86400000;
   const future=order('CREATED_TODAY_VISIT_TOMORROW',{scheduledAt:iso(futureAt),schedule:{...current.schedule,scheduledAt:iso(futureAt),calendarDay:'2026-10-17'}});

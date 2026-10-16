@@ -181,7 +181,7 @@ function dailyTechnicianValues(program,window,now){
 /** Pure comparison only. Journal entries retain their native identity and receipt
  * day. A daily order snapshot is not a complete contact-history search, and a
  * matching chat is never authority to create, charge, cancel or delete an order. */
-export function evaluateDailyOperationalAudit({company='fumigacion',day,journalPages,programSnapshot=null,now=Date.now(),target=FUMIGACION_DAILY_TARGET}){
+export function evaluateDailyOperationalAudit({company='fumigacion',day,journalPages,programSnapshot=null,now=Date.now(),programSnapshotObservedAt=now,target=FUMIGACION_DAILY_TARGET}){
   if(company!=='fumigacion')throw Error('DAILY_FUMIGACION_SCOPE_REQUIRED');
   if(!Number.isFinite(now))throw Error('DAILY_AUDIT_TIME_REQUIRED');
   if(target?.minimumTechnicians!==6||target?.servicesPerTechnician!==5||target?.totalServices!==30||typeof target.authorizationSource!=='string')throw Error('AUTHORIZED_DAILY_TARGET_REQUIRED');
@@ -206,7 +206,7 @@ export function evaluateDailyOperationalAudit({company='fumigacion',day,journalP
   const result={guard:DAILY_OPERATIONAL_AUDIT_GUARD,company:'FUMIGACION',day,timeZone:'America/Bogota',from:window.from,to:window.to,checkedAt:new Date(now).toISOString(),dayComplete,recipient:SANDRA,
     dedupKey:'daily-endday-fumigacion-'+day.replace(/-/g,'')+'-sandra-v1',contacts,contactsCount:contacts.length,
     incomingMessages:contacts.reduce((n,c)=>n+c.incomingMessages,0),lines:BUSINESSES.fumigacion.phones.map(line=>({line,incomingContactCount:contacts.filter(c=>c.lines.includes(line)).length,incomingMessageCount:contacts.reduce((n,c)=>n+(c.perLine.find(p=>p.line===line)?.incomingMessages??0),0),suspended:journal.coverage.suspendedLines.includes(line)})),
-    pendingIdentitySources:journal.pending,pendingIdentityCount:journal.pending.length,unlinkedWhatsAppDeletions:journal.unlinkedDeletions,priorDayWhatsAppDeletions:journal.priorDayDeletions,excluded:journal.excluded,coverage:{...journal.coverage,programAvailable:program.available,program:program.coverage,dayComplete},technicianProgress:progress,technicianValues:dailyTechnicianValues(program,window,now),
+    pendingIdentitySources:journal.pending,pendingIdentityCount:journal.pending.length,unlinkedWhatsAppDeletions:journal.unlinkedDeletions,priorDayWhatsAppDeletions:journal.priorDayDeletions,excluded:journal.excluded,coverage:{...journal.coverage,programAvailable:program.available,program:program.coverage,dayComplete},technicianProgress:progress,technicianValues:dailyTechnicianValues(program,window,programSnapshotObservedAt),
     unlinkedProgramDeletions:unlinkedProgramDeletions.map(d=>({orderId:safeId(d.orderId),deletedAt:Number.isFinite(millis(d.deletedAt))?new Date(millis(d.deletedAt)).toISOString():null,source:safeLabel(d.source)})),
     readOnly:true,businessWrites:0,sends:0,paymentsInferred:false,unmatchedContactsAreMissingServices:false};
   result.reportText=dailyOperationalReportText(result);return result;

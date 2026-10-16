@@ -44,8 +44,8 @@ export async function dailyProgramCross(c,s,fetcher,{company,day},now=Date.now()
  bogotaDayWindow(day);
  const pages=[];let afterRow=0;
  for(let i=0;i<200;i++){const page=intakeAudit(s,c,{day,afterRow,limit:500});pages.push(page);if(!page.remaining)break;if(page.nextRow<=afterRow)throw Error('OWN_JOURNAL_PAGINATION_REQUIRED');afterRow=page.nextRow;}
- let snapshot=null,programReviewReason=null;
- if(ready(c)){try{const candidate=await request(c,fetcher,'',{day}),period=bogotaDayWindow(day);if(candidate.day!==day||candidate.from!==period.from||candidate.to!==period.to||!Array.isArray(candidate.orders)||!Array.isArray(candidate.technicians)||!Array.isArray(candidate.deletions))throw Error('OWN_PROGRAM_AUDIT_DAY_REQUIRED');snapshot=candidate;}catch{snapshot=null;programReviewReason='PROGRAM_READ_NOT_VERIFIED';}}
+ let snapshot=null,programSnapshotObservedAt=null,programReviewReason=null;
+ if(ready(c)){try{const candidate=await request(c,fetcher,'',{day}),period=bogotaDayWindow(day);if(candidate.day!==day||candidate.from!==period.from||candidate.to!==period.to||!Array.isArray(candidate.orders)||!Array.isArray(candidate.technicians)||!Array.isArray(candidate.deletions))throw Error('OWN_PROGRAM_AUDIT_DAY_REQUIRED');snapshot=candidate;programSnapshotObservedAt=Date.now();}catch{snapshot=null;programReviewReason='PROGRAM_READ_NOT_VERIFIED';}}
  else programReviewReason='SEPARATE_PROGRAM_AUDIT_ACCESS_REQUIRED';
  if(snapshot){
   const phones=[...new Set(pages.flatMap(p=>p.contacts.map(c=>c.phone)))],searched=[],byId=new Map(snapshot.orders.map(o=>[o.id,o]));let complete=true,noncanonicalCovered=true;
@@ -59,7 +59,7 @@ export async function dailyProgramCross(c,s,fetcher,{company,day},now=Date.now()
   }catch{complete=false;noncanonicalCovered=false;programReviewReason='COMPLETE_CONTACT_SEARCH_NOT_VERIFIED';}}
   snapshot={...snapshot,orders:[...byId.values()],searchedContacts:searched,coverage:{...snapshot.coverage,contactSearchComplete:complete&&noncanonicalCovered,normalizedPnSearchComplete:complete,noncanonicalPhoneFieldsCovered:noncanonicalCovered}};
  }
- const report=evaluateDailyOperationalAudit({company,day,journalPages:pages,programSnapshot:snapshot,now});
+ const report=evaluateDailyOperationalAudit({company,day,journalPages:pages,programSnapshot:snapshot,now,programSnapshotObservedAt:programSnapshotObservedAt??now});
  return {...report,programSupervision:programSupervisionStatus(c),programReviewReason};
 }
 export async function readRetentionCandidates(c,fetcher,body){
