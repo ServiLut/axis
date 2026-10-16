@@ -13,7 +13,7 @@ import {ownIntent} from './maria-understanding.mjs';
 import {ownMiguelIntent,miguelLiteralSlotAllowed} from './miguel-understanding.mjs';
 import {literalPaintingRequest} from './technical-scope.mjs';
 import {afterServiceKind,afterServiceRequest,afterServiceDecision,explicitNewService,mariaLiteralServiceContext,literalOwnAfterServiceRequest,MARIA_LITERAL_SERVICE_CONTEXT_GUARD,mariaIncidentalPetMention} from './after-service.mjs';
-import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,acceptsOwnQuotedAmount,quotationAmountAffirmation,literalIntakeTextWithoutRegistrationFields,literalProgramPreference,prepareRegisteredTesaContinuation,registeredTesaConfirmation,ownRegisteredReceiptForPresentation,ownSavedPendingOperation,queueOwnSavedServiceReview,ownQuoteOutboxId,ownDeliveredQuoteEntry,ordinaryDataInformationTurn,pendingOrdinaryDataInformationTurn,ordinaryProgramDeferralTurn} from './maria-program.mjs';
+import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,acceptsOwnQuotedAmount,quotationAmountAffirmation,literalIntakeTextWithoutRegistrationFields,literalProgramPreference,prepareRegisteredTesaContinuation,registeredTesaConfirmation,ownRegisteredReceiptForPresentation,ownSavedPendingOperation,queueOwnSavedServiceReview,ownQuoteOutboxId,ownDeliveredQuoteEntry,ordinaryDataInformationTurn,pendingOrdinaryDataInformationTurn,ordinaryProgramDeferralTurn,ownStaffPlanningReceipt,staffPlanningCustomerTurn} from './maria-program.mjs';
 import {prepareMariaUnregisteredTesaPlan,mariaCaseQuoteCustomerTurn} from './maria-tesa-unregistered.mjs';
 import {prepareOwnSchedulingPlan,ownSchedulingCustomerTurn} from './maria-own-order-scheduling.mjs';
 import {createHash} from 'node:crypto';
@@ -229,7 +229,7 @@ export function routeCaseQuestion(store,config,request){
   const contextFacts=Object.fromEntries(Object.entries(display).filter(([key,value])=>labels[key]&&typeof value==='string').map(([key,value])=>[key,groupField(value)]));
   const text=config.company==='fumigacion'?formatMariaTesaQuestion({bot:config.bot,name:config.name,reference,last4:request.phone.slice(-4),lineLast4:request.line.slice(-4),facts,contextFacts,topic:request.topic,conditions:request.conditions,presentationStage}):config.bot+' · '+config.name+'. Ref '+reference+'; cliente …'+request.phone.slice(-4)+'; línea …'+request.line.slice(-4)+'. '+(facts?facts+'. ':'')+question;
   const result=prepareTesaQuestion(store,config,{...request,text});
-  if(config.company==='fumigacion'&&result.created===true){prepareRegisteredTesaContinuation(store,config,request,result);prepareMariaUnregisteredTesaPlan(store,config,request,result);prepareOwnSchedulingPlan(store,config,request,result);}
+  if(config.company==='fumigacion'&&result.created===true&&!ownStaffPlanningReceipt(store,config,request)){prepareRegisteredTesaContinuation(store,config,request,result);prepareMariaUnregisteredTesaPlan(store,config,request,result);prepareOwnSchedulingPlan(store,config,request,result);}
   return result;
 }
 
@@ -950,6 +950,8 @@ export class Engine {
           finish(media.suppressed?'OBSERVED_MEDIA_BURST':'MEDIA_CONTEXT_CONTINUED');return;
         }
       }
+      const staffStatus=!caseState.awaitingHumanReview&&ownPendingCustomerKind(e)==='status'&&staffPlanningCustomerTurn(s,c,caseState,e,{status:true});
+      if(staffStatus){staffStatus.state.lastHandledSourceId=e.id;staffStatus.state.lastText=e.text;s.saveConversation(e.phone,staffStatus.state);s.queue(e.id+':reply',e.phone,e.line,staffStatus.reply,false,conv.revision,caseState.caseId);finish('OWN_STAFF_ASSIGNMENT_PENDING_STATUS');return;}
       if(caseState.awaitingHumanReview&&!caseQuoteTurn){
         const information=pendingOrdinaryDataInformationTurn(s,c,caseState,e);
         if(information){
@@ -1071,7 +1073,9 @@ export class Engine {
           const preference=literalPreference||decision.state.slots.preference;
           const operationalConfirmation=registeredTesaConfirmation(s,c,decision.state,e);
           if(literalPreference)decision.state.intakeSources={...decision.state.intakeSources,preference:{sourceId:e.id,at:e.at,context:'literal-customer-preference-pending-coordination'}};
-          if(operationalConfirmation)decision=operationalConfirmation;
+          const staffTurn=staffPlanningCustomerTurn(s,c,decision.state,e);
+          if(staffTurn)decision=staffTurn;
+          else if(operationalConfirmation)decision=operationalConfirmation;
           else if(programEnabled(c)&&priceNow.source?.type==='direct_user_approved_schedule'&&decision.state.programIntake?.stage!=='registered'&&registrationQuoteReady(s,decision.state,e.phone,e.line)){
             if(preference)decision.state.slots.preference=preference;
             decision={state:decision.state};

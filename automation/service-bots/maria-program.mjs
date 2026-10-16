@@ -21,6 +21,7 @@ export const MARIA_PROGRAM_TIMED_ACCEPTANCE_GUARD='own-literal-timed-acceptance-
 export const MARIA_PROGRAM_REQUESTED_TIMING_GUARD='own-literal-preference-source-and-pending-coordination-v1';
 export const MARIA_PROGRAM_PET_PRESENCE_GUARD='own-confirmed-native-incidental-pet-observation-v1';
 export const MARIA_PROGRAM_SCHEDULING_REVIEW_GUARD='own-saved-service-durable-scheduling-exception-without-resend-v1';
+export const MARIA_STAFF_PLANNING_GUARD='own-prospective-accepted-request-literal-preference-staff-assignment-v1';
 export const MARIA_TENANT='9ffea9df-1e06-4590-acec-0e5cde715ba9';
 export const MARIA_COMPANY='35a19d89-15d1-4c32-8353-3471b6d9f0ff';
 export const MARIA_PROGRAM_URL='https://tenaxis-backend-0zeuja.servilutioncrm.cloud/integrations/maria-service-registration';
@@ -42,6 +43,13 @@ export function registrationConfig(env,company){
  if(env.BOT_MARIA_PROGRAM_ENABLED!=='true')return {enabled:false};
  return validated({enabled:true,url:env.BOT_MARIA_PROGRAM_URL,token:env.BOT_MARIA_PROGRAM_TOKEN,actorId:env.BOT_MARIA_PROGRAM_ACTOR_ID,startsAt:env.BOT_MARIA_PROGRAM_STARTS_AT_UTC,expiresAt:env.BOT_MARIA_PROGRAM_EXPIRES_AT_UTC},company);
 }
+export function staffPlanningConfig(env,company,activatedAt){
+ if(env.BOT_MARIA_STAFF_PLANNING_ENABLED===undefined||env.BOT_MARIA_STAFF_PLANNING_ENABLED==='false')return {enabled:false};
+ const startsAt=Date.parse(env.BOT_MARIA_STAFF_PLANNING_STARTS_AT_UTC||'');
+ if(env.BOT_MARIA_STAFF_PLANNING_ENABLED!=='true'||company!=='fumigacion'||!Number.isSafeInteger(startsAt)||!Number.isSafeInteger(activatedAt)||startsAt<activatedAt||!/Z$/.test(env.BOT_MARIA_STAFF_PLANNING_STARTS_AT_UTC||''))throw Error('OWN_STAFF_PLANNING_CONFIGURATION_REQUIRED');
+ return Object.freeze({enabled:true,mode:'internal-staff-assignment',startsAt});
+}
+export function staffPlanningEnabled(c,at=Date.now()){return c.company==='fumigacion'&&c.staffPlanning?.enabled===true&&c.staffPlanning.mode==='internal-staff-assignment'&&Number.isSafeInteger(c.staffPlanning.startsAt)&&at>=c.staffPlanning.startsAt;}
 export function programEnabled(c,now=Date.now()){const p=c.mariaProgram;return c.company==='fumigacion'&&c.enabled&&p?.enabled===true&&p.startsAt<=now&&p.expiresAt>now;}
 export function restoreProgramSetup(c,s){
  if(c.company!=='fumigacion')return;
@@ -347,6 +355,39 @@ function casePreferenceSource(s,c,state,e){
  if(native.id!==reference.sourceId||native.phone!==e.phone||native.line!==e.line||native.fromMe||native.forwarded||native.kind!=='text'||native.at!==reference.at||native.at<c.mariaProgram.startsAt||native.at<first.at||native.at>e.at||typeof native.text!=='string'||native.text.length>8000||!normalize(native.text).includes(normalize(value)))return null;
  return {value,source:source(native)};
 }
+function staffPlanningForCase(s,c,state,e){
+ if(!staffPlanningEnabled(c,e.at))return null;
+ const row=state.caseId?.startsWith('fumigacion:')&&s.db.prepare('SELECT id,at,body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(state.caseId.slice(11),e.phone,e.line);
+ if(row&&row.at<c.staffPlanning.startsAt)return null;
+ const original=row&&s.open(row.body);
+ if(!original||original.id!==row.id||original.at!==row.at||original.phone!==e.phone||original.line!==e.line||original.fromMe!==false||original.forwarded||original.quotedId||original.at>e.at)return {invalid:true};
+ return {guard:MARIA_STAFF_PLANNING_GUARD,mode:'internal-staff-assignment',startsAt:c.staffPlanning.startsAt,caseId:state.caseId,phone:e.phone,line:e.line,caseSourceId:original.id,caseSourceAt:original.at};
+}
+function staffPlanningRecord(s,entry){
+ const p=entry?.payload,m=entry?.staffPlanning;
+ if(!p||!m||m.guard!==MARIA_STAFF_PLANNING_GUARD||m.mode!=='internal-staff-assignment'||!Number.isSafeInteger(m.startsAt)||m.caseId!==p.caseId||m.phone!==p.phone||m.line!==p.line||p.caseId!=='fumigacion:'+m.caseSourceId||m.caseSourceAt<m.startsAt||typeof p.slots?.preference!=='string'||!p.slots.preference||p.slots.preference!==m.requestedTiming||p.sources?.preference?.id!==m.preferenceSourceId||entry.requestHash!==registrationHash(p))return null;
+ const row=s.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(m.caseSourceId,p.phone,p.line),original=row&&s.open(row.body),pref=s.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(m.preferenceSourceId,p.phone,p.line),native=pref&&s.open(pref.body);
+ if(!original||original.id!==m.caseSourceId||original.phone!==p.phone||original.line!==p.line||original.at!==m.caseSourceAt||original.fromMe!==false||original.forwarded||original.quotedId||!native||native.id!==m.preferenceSourceId||native.phone!==p.phone||native.line!==p.line||native.fromMe!==false||native.forwarded||native.kind!=='text'||native.text!==p.sources.preference.text||iso(native.at)!==p.sources.preference.at||native.at<m.caseSourceAt||native.at>Date.parse(p.sources.acceptance.at)||!normalize(native.text).includes(normalize(m.requestedTiming)))return null;
+ return m;
+}
+function staffPlanningSavedText(entry){
+ const p=entry.payload;
+ return ['Tu solicitud quedó aceptada y registrada.','','• Servicio: '+p.slots.service,'• Valor aceptado: $'+p.quote.priceCop.toLocaleString('es-CO'),'• Nombre: '+p.customerName,'• Dirección: '+p.address,'• Municipio: '+p.municipality,'• Horario solicitado: '+p.slots.preference,'','El equipo interno se encargará de asignar el técnico y la ruta. Este registro conserva el horario solicitado; la disponibilidad se confirma por separado.'].join('\n');
+}
+export function ownStaffPlanningReceipt(s,c,request){const entry=ownRegisteredReceiptForPresentation(s,c,request);return entry&&staffPlanningRecord(s,entry)?entry:null;}
+export function staffPlanningCustomerTurn(s,c,state,e,{status=false}={}){
+ if(state.awaitingHumanReview||state.closed||state.requestedAfterServiceReview||state.requestedControlReview||state.requestedDocumentReview||state.requestedProductInquiry||state.requestedProgramCancellationReview||e.kind!=='text'||e.fromMe||e.forwarded||e.quotedId)return null;
+ const entry=ownStaffPlanningReceipt(s,c,{phone:e.phone,line:e.line,caseId:state.caseId});if(!entry)return null;
+ const nativeRow=s.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(e.id,e.phone,e.line),native=nativeRow&&s.open(nativeRow.body);if(!native||native.text!==e.text||native.at!==e.at||native.forwarded||native.quotedId||native.kind!=='text')return null;
+ const preference=literalProgramPreference(e.text);
+ if(!status&&!preference&&!acceptsOrdinaryQuotation(e.text))return null;
+ if(preference&&normalize(preference)!==normalize(entry.payload.slots.preference)){
+  const alert=queueOwnSavedServiceReview(s,c,entry,{motive:'scheduling-unconfirmed',sourceId:e.id,text:'María Ángel · cambio de horario solicitado. El contacto terminado en '+e.phone.slice(-4)+' indicó una preferencia distinta para su solicitud registrada. Preferencia original: '+entry.payload.slots.preference+'. Nueva petición literal: '+e.text+'. No modifiqué la orden ni confirmé disponibilidad. ¿Cómo debemos atender este cambio?'});
+  if(alert?.queued)state.awaitingHumanReview=true;
+  return {state,reply:'Recibí tu nueva preferencia de horario. La solicitud sigue registrada; el cambio y su disponibilidad necesitan revisión del equipo interno.'};
+ }
+ return {state,reply:staffPlanningSavedText(entry)};
+}
 function caseLiteralFields(s,c,state,e){
  const firstId=state.caseId?.startsWith(c.company+':')?state.caseId.slice(c.company.length+1):state.quotedPrice?.sourceId;
  const first=firstId&&s.db.prepare('SELECT rowid,at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(firstId,e.phone,e.line);
@@ -588,8 +629,11 @@ export function registrationTurn(s,c,previous,e,decision,{literalSlots=null}={})
  // delivered price, the acceptance is sufficient for an unscheduled order.
  // New/corrected facts supplied after acceptance still need a delivered summary.
  const originalAcceptance=own.q.acceptanceSource&&s.db.prepare('SELECT rowid,at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(own.q.acceptanceSource,e.phone,e.line);
- const preprovided=!info&&acceptsOrdinaryQuotation(e.text)&&!conflicting&&!explicit.conflict&&!['confirm','correction'].includes(prior.stage)&&originalAcceptance&&sourcePosition(s,e,pi.nameSource)<=originalAcceptance.rowid&&sourcePosition(s,e,pi.addressSource)<=originalAcceptance.rowid&&Date.parse(pi.nameSource.at)<=originalAcceptance.at&&Date.parse(pi.addressSource.at)<=originalAcceptance.at&&(!petPresence||petPresence.position<=originalAcceptance.rowid&&Date.parse(petPresence.source.at)<=originalAcceptance.at);
+ const planning=staffPlanningForCase(s,c,state,e);
+ if(planning?.invalid)return {state,observed:true,observedState:'STAFF_PLANNING_CASE_SOURCE_UNVERIFIED'};
+ const preprovided=!planning&&!info&&acceptsOrdinaryQuotation(e.text)&&!conflicting&&!explicit.conflict&&!['confirm','correction'].includes(prior.stage)&&originalAcceptance&&sourcePosition(s,e,pi.nameSource)<=originalAcceptance.rowid&&sourcePosition(s,e,pi.addressSource)<=originalAcceptance.rowid&&Date.parse(pi.nameSource.at)<=originalAcceptance.at&&Date.parse(pi.addressSource.at)<=originalAcceptance.at&&(!petPresence||petPresence.position<=originalAcceptance.rowid&&Date.parse(petPresence.source.at)<=originalAcceptance.at);
  const preference=casePreferenceSource(s,c,state,e);
+ if(planning&&!preference){pi.stage='details';pi.requestedFields=['preference'];pi.preview=null;pi.promptId=e.id+':reply';return {state,reply:'¿Qué día y franja horaria prefieres para el servicio? Lo guardaré como horario solicitado; el equipo interno se encargará de asignar el técnico y la ruta.'};}
  const basePreview={customerName:pi.customerName,address:pi.address,municipality:state.slots.location,service:state.slots.service,priceCop:own.entry.priceCop,...(preference?{preference:preference.value}:{}),...(petPresence?{petPresence:petPresence.value,petPresenceSource:petPresence.source}:{})};
  const priorSummary=pi.promptId&&s.db.prepare('SELECT created FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND internal=0').get(pi.promptId,e.phone,e.line,state.caseId);
  const legacyPreview=prior.stage==='confirm'&&priorSummary&&own.row.created<=priorSummary.created&&JSON.stringify(pi.preview)===JSON.stringify(basePreview);
@@ -619,7 +663,7 @@ export function registrationTurn(s,c,previous,e,decision,{literalSlots=null}={})
  const key=prefix+state.caseId,existing=get(s,key),hash=registrationHash(payload);
  if(existing){if(existing.requestHash!==hash)throw Error('PROGRAM_CASE_ALREADY_RESERVED');return {state,observed:true,observedState:'PROGRAM_REGISTRATION_PENDING'};}
  const summaryOutboxId=preprovided?null:pi.promptId;
- put(s,key,{status:'PENDING',payload,requestHash:hash,revision:conv.revision,summaryOutboxId,confirmationKind:preprovided?'price-accepted-with-prior-literal-facts':'delivered-summary-confirmed',createdAt:Date.now()});pi.stage='pending';pi.acceptanceId=e.id;
+ put(s,key,{status:'PENDING',payload,requestHash:hash,revision:conv.revision,summaryOutboxId,confirmationKind:preprovided?'price-accepted-with-prior-literal-facts':'delivered-summary-confirmed',...(planning?{staffPlanning:{...planning,requestedTiming:preference.value,preferenceSourceId:preference.source.id}}:{}),createdAt:Date.now()});pi.stage='pending';pi.acceptanceId=e.id;
  s.audit('OWN_SERVICE_REGISTRATION_PREPARED',e.id,{caseId:state.caseId,requestHash:hash,priceCop:own.entry.priceCop,businessWritten:false,summaryOutboxId});
  return {state,observed:true,observedState:'PROGRAM_REGISTRATION_PENDING'};
 }
@@ -889,11 +933,12 @@ function reviewSavedSchedulingRoutes(s,c){
 }
 function saved(s,c,key,entry,r,routeQuestion){
  s.tx(()=>{
-  const p=entry.payload,active=sameCurrent(s,entry)&&registrationOperationalScope(s,c,entry);put(s,key,{...entry,status:'SAVED',receipt:r,savedAt:Date.now()});
-  const conv=s.conversation(p.phone);if(conv?.state.caseId===p.caseId){conv.state.programIntake={...conv.state.programIntake,stage:'registered'};conv.state.programServiceId=r.orderId;s.saveConversation(p.phone,conv.state);}
+  const p=entry.payload,planning=staffPlanningRecord(s,entry),active=sameCurrent(s,entry)&&registrationOperationalScope(s,c,entry)&&(!entry.staffPlanning||Boolean(planning));put(s,key,{...entry,status:'SAVED',receipt:r,savedAt:Date.now()});
+  const conv=s.conversation(p.phone);if(conv?.state.caseId===p.caseId){conv.state.programIntake={...conv.state.programIntake,stage:'registered'};conv.state.programServiceId=r.orderId;if(planning)conv.state.staffAssignment={guard:MARIA_STAFF_PLANNING_GUARD,status:'PENDING_INTERNAL_ASSIGNMENT',orderId:r.orderId,receiptHash:entry.requestHash,requestedTiming:planning.requestedTiming,preferenceSourceId:planning.preferenceSourceId};s.saveConversation(p.phone,conv.state);}
   const authorship=s.caseAuthorship(p.caseId);if(authorship)s.db.prepare('UPDATE case_authorship SET body=? WHERE case_id=?').run(s.seal({...authorship,creatorCreditWritten:true,programServiceId:r.orderId,programCreatorMembershipId:r.advisorMembershipId,programReceiptHash:r.requestHash,serviceCompleted:false}),p.caseId);
   s.audit('OWN_SERVICE_REGISTRATION_SAVED',p.sourceId,{caseId:p.caseId,orderId:r.orderId,createdById:r.advisorMembershipId,requestHash:r.requestHash,scheduled:false,paymentRecorded:false,confirmationSuppressed:!active});
-  if(active){const preference=conv.state.slots.preference;s.queue('program:'+p.caseId+':saved',p.phone,p.line,'Tu solicitud de servicio de '+p.slots.service+' por $'+p.quote.priceCop.toLocaleString('es-CO')+' quedó registrada a nombre de '+p.customerName+' en '+p.address+', '+p.municipality+'. El horario aún está pendiente de confirmación.'+(preference?'':' ¿Qué día y franja horaria prefieres?'),false,conv.revision,p.caseId);
+  if(active&&planning){s.queue('program:'+p.caseId+':saved',p.phone,p.line,staffPlanningSavedText(entry),false,conv.revision,p.caseId);s.audit('OWN_ACCEPTED_REQUEST_PENDING_STAFF_ASSIGNMENT',p.sourceId,{guard:MARIA_STAFF_PLANNING_GUARD,caseId:p.caseId,orderId:r.orderId,preferenceSourceId:planning.preferenceSourceId,scheduled:false,assignmentRequested:true,newTesaQuestion:false});}
+  else if(active&&!entry.staffPlanning){const preference=conv.state.slots.preference;s.queue('program:'+p.caseId+':saved',p.phone,p.line,'Tu solicitud de servicio de '+p.slots.service+' por $'+p.quote.priceCop.toLocaleString('es-CO')+' quedó registrada a nombre de '+p.customerName+' en '+p.address+', '+p.municipality+'. El horario aún está pendiente de confirmación.'+(preference?'':' ¿Qué día y franja horaria prefieres?'),false,conv.revision,p.caseId);
    if(preference){
     const question={phone:p.phone,line:p.line,caseId:p.caseId,topic:'disponibilidad-y-tecnico',conditions:{...conv.state.slots,quotedPriceCop:p.quote.priceCop,priceSource:selectBusinessPrice(p.slots,{scheduleHash:p.quote.scheduleHash}).entry?.source.quoteId,programServiceId:r.orderId},recipients:questionRecipients(c,'disponibilidad-y-tecnico'),source:p.sourceId,text:c.name+': solicitud ordinaria guardada, servicio '+p.slots.service+' en '+p.municipality+'. Precio aceptado $'+p.quote.priceCop+'. Pendiente de programación. ¿Qué disponibilidad y técnico corresponden a este caso?'};
     let routed=null,routeError=null;
@@ -928,6 +973,7 @@ export async function drainProgramRegistrations(s,c,t,routeQuestion=null){
    try{const r=await request(c,'/receipt',{caseId:entry.payload.caseId,acceptanceId:entry.payload.quote.acceptanceId},t.fetcher);if(receiptValid(c,entry,r)){saved(s,c,row.key,entry,r,routeQuestion);persisted++;}else if(ownScope(c,r)&&r.persisted===false){review(s,c,row.key,entry,'UNCERTAIN_WRITE_NOT_FOUND');reviewed++;}else throw Error('PROGRAM_RECEIPT_SCOPE_UNVERIFIED');}
    catch{const failures=(entry.receiptFailures||0)+1;entry={...entry,receiptFailures:failures,nextReceiptAt:Date.now()+60000};put(s,row.key,entry);s.audit('OWN_REGISTRATION_RECEIPT_UNAVAILABLE',entry.payload.sourceId,{caseId:entry.payload.caseId,writeRetried:false});if(failures>=3){review(s,c,row.key,entry,'UNCERTAIN_RECEIPT_REQUIRES_REVIEW');reviewed++;}}continue;
   }
+  if(entry.staffPlanning&&!staffPlanningRecord(s,entry)){review(s,c,row.key,entry,'STAFF_PLANNING_SOURCE_UNVERIFIED');reviewed++;continue;}
   if(!registrationOperationalScope(s,c,entry)){review(s,c,row.key,entry,'OPERATIONAL_LINE_SCOPE_REVIEW',false);reviewed++;continue;}
   // Fast response flush runs before Engine processes the next input. Leave
   // preparation intact until that authenticated source has been classified.

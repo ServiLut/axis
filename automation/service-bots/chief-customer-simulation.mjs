@@ -53,14 +53,15 @@ function expire(){
 }
 function current(id){expire();if(!active||active.id!==id)throw Error('SIMULATION_UNKNOWN_AFTER_RESTART_OR_NOT_STARTED');return active;}
 function sourceReceipt(source){return {id:source.value.id,line:FUMIGACION_BLUE,at:new Date(source.value.at).toISOString(),author:SANDRA,textHash:hash(source.value.text),nativeProofHash:source.proofHash,fromMe:false,forwarded:false};}
-function simulationConfig(at,expiresAt){
+function simulationConfig(at,expiresAt,workflowMode){
   // Construct from literals. In particular, never spread the live config or
   // pass a token, URL, provider, transport, model, grant or native cache here.
-  return {company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,chiefOnly:false,replyOnlyToChief:true,activatedAt:at,lines:[{phone:FUMIGACION_BLUE,instance:'simulation-blue-not-a-provider'},{phone:FUMIGACION_RED,instance:'simulation-red-never-used'}],operationalLineScope:{company:'fumigacion',version:BLUE_ONLY_SCOPE_VERSION,authorizationSource:BLUE_ONLY_AUTHORIZATION_SOURCE,activeLines:[FUMIGACION_BLUE],suspendedLines:[FUMIGACION_RED],authorizedAt:new Date(at).toISOString()},conversationalAi:{ready:false},tesaOperations:{enabled:false},mariaProgram:{enabled:true,startsAt:at,expiresAt,actorId:'00000000-0000-4000-8000-000000000000'}};
+  return {company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,chiefOnly:false,replyOnlyToChief:true,activatedAt:at,lines:[{phone:FUMIGACION_BLUE,instance:'simulation-blue-not-a-provider'},{phone:FUMIGACION_RED,instance:'simulation-red-never-used'}],operationalLineScope:{company:'fumigacion',version:BLUE_ONLY_SCOPE_VERSION,authorizationSource:BLUE_ONLY_AUTHORIZATION_SOURCE,activeLines:[FUMIGACION_BLUE],suspendedLines:[FUMIGACION_RED],authorizedAt:new Date(at).toISOString()},conversationalAi:{ready:false},tesaOperations:{enabled:false},mariaProgram:{enabled:true,startsAt:at,expiresAt,actorId:'00000000-0000-4000-8000-000000000000'},...(workflowMode==='internal-staff-assignment'?{staffPlanning:{enabled:true,mode:'internal-staff-assignment',startsAt:at}}:{})};
 }
-function common(session){return {guard:CHIEF_CUSTOMER_SIMULATION_GUARD,simulationId:session.id,testRunId:session.testRunId,synthetic:true,realRecipient:SANDRA,line:FUMIGACION_BLUE,syntheticCustomerPhone:CHIEF_CUSTOMER_SIMULATION_PHONE,commercialDeliveryVerified:false,ordinaryCustomerAcceptanceVerified:false,businessWrites:0,providerCalls:0,modelCalls:0,memoryOnly:true,lostOnRestart:true};}
+function common(session){return {guard:CHIEF_CUSTOMER_SIMULATION_GUARD,simulationId:session.id,testRunId:session.testRunId,synthetic:true,realRecipient:SANDRA,line:FUMIGACION_BLUE,syntheticCustomerPhone:CHIEF_CUSTOMER_SIMULATION_PHONE,commercialDeliveryVerified:false,ordinaryCustomerAcceptanceVerified:false,businessWrites:0,providerCalls:0,modelCalls:0,memoryOnly:true,lostOnRestart:true,...(session.workflowMode?{workflowMode:session.workflowMode}:{})};}
 
-export function startChiefCustomerSimulation({source,sourceProof,authorizationId}={}){
+export function startChiefCustomerSimulation({source,sourceProof,authorizationId,workflowMode}={}){
+  if(workflowMode!==undefined&&workflowMode!=='internal-staff-assignment')throw Error('SIMULATION_WORKFLOW_MODE_UNSUPPORTED');
   expire();const checked=originalSource(source,sourceProof),seen=seenSources.get(source.id);
   if(seen){if(seen.closed||!active||active.id!==seen.simulationId)throw Error('SIMULATION_OLD_START_NOT_REPLAYED');if(seen.action!=='start')throw Error('SIMULATION_NATIVE_SOURCE_ALREADY_USED');return {...copy(seen.result),created:false};}
   if(typeof authorizationId!=='string'||!/^[A-Za-z0-9:_-]{8,180}$/.test(authorizationId))throw Error('SIMULATION_EXPLICIT_AUTHORIZATION_REFERENCE_REQUIRED');
@@ -70,7 +71,7 @@ export function startChiefCustomerSimulation({source,sourceProof,authorizationId
   const startedAt=Date.now(),id=randomUUID(),expiresAt=startedAt+LIFETIME,store=new Store(':memory:','fumigacion',randomBytes(32));
   try{
     for(const scheduleHash of [LEGACY_BUSINESS_PRICE_HASH,BUSINESS_PRICE_HASH])store.importKnowledge(approvedBusinessPriceSchedule(scheduleHash));
-    const config=simulationConfig(source.at,expiresAt),session={id,testRunId:randomUUID(),authorizationId,startedAt,sourceStartedAt:source.at,expiresAt,store,engine:new Engine(store,config),nativeSources:new Map([[source.id,checked]]),syntheticSources:new Map(),outputs:new Map(),nativeOutputMids:new Map(),turns:0,busy:false};
+    const config=simulationConfig(source.at,expiresAt,workflowMode),session={id,testRunId:randomUUID(),authorizationId,startedAt,sourceStartedAt:source.at,expiresAt,workflowMode,store,engine:new Engine(store,config),nativeSources:new Map([[source.id,checked]]),syntheticSources:new Map(),outputs:new Map(),nativeOutputMids:new Map(),turns:0,busy:false};
     active=session;
     const result={...common(session),created:true,status:'STARTED',expiresAt:new Date(expiresAt).toISOString(),text:'SIMULACIÓN · Atención como cliente\n\nEl ensayo está iniciado. Los datos, cotizaciones y confirmaciones de este recorrido pertenecen a una prueba; todavía no se ha creado una orden PRUEBA en Tenaxis.'};
     rememberSource(checked,session,'start',result);return result;
@@ -98,10 +99,11 @@ function registrationDraft(session){
   const payload=entries[0].payload;if(payload.phone!==CHIEF_CUSTOMER_SIMULATION_PHONE||payload.line!==FUMIGACION_BLUE)throw Error('SIMULATION_SYNTHETIC_PHONE_REQUIRED');
   const nativeId=id=>{const ref=session.syntheticSources.get(id);if(!ref)throw Error('SIMULATION_DRAFT_SOURCE_MAP_REQUIRED');return ref.value.id;};
   const fieldSourceMap={customerName:nativeId(payload.sources.customerName.id),address:nativeId(payload.sources.address.id),acceptance:nativeId(payload.sources.acceptance.id),quote:nativeId(payload.quote.sourceId)};
+  if(Object.hasOwn(payload.sources,'preference'))fieldSourceMap.preference=nativeId(payload.sources.preference.id);
   for(const id of [payload.sourceId,payload.quote.acceptanceId,...Object.values(payload.sources).map(ref=>ref.id).filter(Boolean)])nativeId(id);
   const sourceMap=[...session.syntheticSources].map(([syntheticSourceId,source])=>({syntheticSourceId,chiefSourceId:source.value.id,nativeTextHash:hash(source.value.text),customerTextHash:source.customerTextHash,customerTextOffset:source.customerTextOffset})),chiefSources=[...session.nativeSources.values()].map(sourceReceipt);
   const simulatedDeliveries=[...session.outputs.values()].filter(output=>output.proof).map(output=>({synthetic:true,mid:output.syntheticMid,at:new Date(Math.floor(output.proof.verifiedAt/1000)*1000).toISOString(),state:'DELIVERED'}));
-  const eligible=normalize(payload.slots.service)==='cucarachas'&&normalize(payload.slots.site)==='apartamento'&&/^2\b/.test(normalize(payload.slots.rooms))&&normalize(payload.municipality)==='itagui'&&payload.quote.priceCop===129000&&payload.quote.scheduleHash===BUSINESS_PRICE_HASH&&chiefSources.length<=20&&sourceMap.length<=20&&simulatedDeliveries.length<=10;
+  const eligible=!Object.hasOwn(payload.sources,'preference')&&normalize(payload.slots.service)==='cucarachas'&&normalize(payload.slots.site)==='apartamento'&&/^2\b/.test(normalize(payload.slots.rooms))&&normalize(payload.municipality)==='itagui'&&payload.quote.priceCop===129000&&payload.quote.scheduleHash===BUSINESS_PRICE_HASH&&chiefSources.length<=20&&sourceMap.length<=20&&simulatedDeliveries.length<=10;
   const draft={guard:TEST_ORDER_GUARD,testRunId:session.testRunId,source:'chief-authorized-test',simulationId:session.id,synthetic:true,scenario:'cucarachas-2-rooms',syntheticPayload:copy(payload),syntheticRequestHash:registrationHash(payload),chiefSources,sourceMap,simulatedDeliveries};
   session.preparedDraft={initialTestFixtureEligible:eligible,envelope:{...draft,payloadHash:hash(draft)},fieldSourceMap,realInternalReceipts:[...session.outputs.values()].filter(output=>output.proof).map(output=>({outputId:output.id,realInternalReceipt:copy(output.proof),commercialDeliveryVerified:false}))};
   return copy(session.preparedDraft);
