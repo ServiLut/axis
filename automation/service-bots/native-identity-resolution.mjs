@@ -5,6 +5,10 @@ import {FUMIGACION_BLUE,operationalLineAllowed} from './line-scope.mjs';
 export const NATIVE_IDENTITY_RESOLUTION_GUARD='own-blue-prospective-native-explicit-lid-pair-readonly-v1';
 export const NATIVE_IDENTITY_MAX_AGE_MS=120000;
 export const NATIVE_IDENTITY_STORED_FINGERPRINT_VERSION='native-key-body-without-delivery-state-v1';
+export const NATIVE_IDENTITY_DIAGNOSTIC_CONTENT_KEYS=Object.freeze(['conversation','messageContextInfo','extendedTextMessage','deviceSentMessage','senderKeyDistributionMessage','ephemeralMessage','audioMessage','imageMessage','videoMessage','documentMessage']);
+export const NATIVE_IDENTITY_DIAGNOSTIC_CONTENT_PATHS=Object.freeze(['conversation','messageContextInfo','messageContextInfo.deviceListMetadata','messageContextInfo.deviceListMetadataVersion','messageContextInfo.messageSecret','messageContextInfo.deviceListMetadata.senderKeyHash','messageContextInfo.deviceListMetadata.recipientKeyHash','messageContextInfo.deviceListMetadata.senderTimestamp','messageContextInfo.deviceListMetadata.recipientTimestamp','extendedTextMessage','extendedTextMessage.text','extendedTextMessage.contextInfo','deviceSentMessage','deviceSentMessage.message','senderKeyDistributionMessage','ephemeralMessage','ephemeralMessage.message','audioMessage','imageMessage','videoMessage','documentMessage']);
+export const NATIVE_IDENTITY_DIAGNOSTIC_SEMANTIC_FIELDS=Object.freeze(['textMatches','kindMatches','quotedIdsMatch','forwardingMatches']);
+export const NATIVE_IDENTITY_DIAGNOSTIC_VALUE_TYPES=Object.freeze(['absent','null','array','object','string','number','boolean','other']);
 const INSTANCE='cucaracha-azul',PAGE_SIZE=100;
 const nativeMid=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{8,100}$/.test(value);
 const lidJid=value=>typeof value==='string'&&/^\d{5,30}@lid$/.test(value);
@@ -26,6 +30,15 @@ function contexts(record){
   const m=content(record);return [m?.extendedTextMessage?.contextInfo,m?.audioMessage?.contextInfo,m?.imageMessage?.contextInfo,m?.videoMessage?.contextInfo,m?.documentMessage?.contextInfo,m?.messageContextInfo,record?.contextInfo].filter(object);
 }
 function forwarded(record){return record?.forwarded===true||record?.isForwarded===true||contexts(record).some(value=>value.isForwarded===true||Number(value.forwardingScore)>0);}
+function contentMismatchDiagnostics(callback,native){
+  const present=(message,key)=>object(message)&&Object.prototype.hasOwnProperty.call(message,key);
+  const presence=message=>({...Object.fromEntries(NATIVE_IDENTITY_DIAGNOSTIC_CONTENT_KEYS.map(key=>[key,present(message,key)])),unlistedContentKeysPresent:object(message)&&Object.keys(message).some(key=>!NATIVE_IDENTITY_DIAGNOSTIC_CONTENT_KEYS.includes(key))});
+  const pathValue=(message,path)=>{let value=message;for(const key of path.split('.')){if(!object(value)||!Object.prototype.hasOwnProperty.call(value,key))return {present:false};value=value[key];}return {present:true,value};};
+  const core=record=>{const m=content(record)||{};return {text:m.conversation??m.extendedTextMessage?.text??m.imageMessage?.caption??m.videoMessage?.caption??'',kind:m.audioMessage?'audio':m.imageMessage?'image':m.videoMessage?'video':m.documentMessage?'document':'text',quotedIds:[...new Set(contexts(record).map(value=>value.stanzaId).filter(value=>typeof value==='string'&&value.trim()))].sort(),forwarded:forwarded(record)};};
+  const a=core(callback),b=core(native);
+  const paths=NATIVE_IDENTITY_DIAGNOSTIC_CONTENT_PATHS.filter(path=>hash(pathValue(callback.message,path))!==hash(pathValue(native.message,path))),valueType=value=>!value.present?'absent':value.value===null?'null':Array.isArray(value.value)?'array':object(value.value)?'object':['string','number','boolean'].includes(typeof value.value)?typeof value.value:'other';
+  return {contentKeyPresence:{callback:presence(callback.message),native:presence(native.message)},semanticCore:{textMatches:a.text===b.text,kindMatches:a.kind===b.kind,quotedIdsMatch:hash(a.quotedIds)===hash(b.quotedIds),forwardingMatches:a.forwarded===b.forwarded},differingContentPaths:paths,contentPathTypes:paths.map(path=>({path,callbackType:valueType(pathValue(callback.message,path)),nativeType:valueType(pathValue(native.message,path))}))};
+}
 function readable(record){
   const m=content(record);if(!object(m))return false;
   const text=m.conversation??m.extendedTextMessage?.text??m.imageMessage?.caption??m.videoMessage?.caption;
@@ -112,7 +125,7 @@ export async function resolveOwnBlueNativeIdentity(config,transport,originalBody
     if(page.reason){fail(key.id,page.reason);continue;}
     const rows=page.records.filter(value=>value?.key?.remoteJid===key.remoteJid);
     const exact=rows.filter(value=>value?.key?.id===key.id);
-    const diagnostics={exactMatches:exact.length,nativePageContainsSource:page.records.some(value=>value?.key?.id===key.id),sourceBodyMatches:exact.length===1&&hash(exact[0].message)===hash(record.message),sourceContextMatches:exact.length===1&&hash(exact[0].contextInfo??null)===hash(record.contextInfo??null),nativeChanged:exact.some(value=>changed(value))};
+    const diagnostics={exactMatches:exact.length,nativePageContainsSource:page.records.some(value=>value?.key?.id===key.id),sourceBodyMatches:exact.length===1&&hash(exact[0].message)===hash(record.message),sourceContextMatches:exact.length===1&&hash(exact[0].contextInfo??null)===hash(record.contextInfo??null),nativeChanged:exact.some(value=>changed(value)),...(exact.length===1?contentMismatchDiagnostics(record,exact[0]):{})};
     if(exact.length!==1||exact[0].key.fromMe!==false||timestamp(exact[0])!==at||!ownRecord(exact[0],line)||forwarded(exact[0])||changed(exact[0])||exact[0].key.remoteJidAlt!=null&&exact[0].key.remoteJidAlt!==''&&!phoneJid(exact[0].key.remoteJidAlt)||hash(exact[0].message)!==hash(record.message)||hash(exact[0].contextInfo??null)!==hash(record.contextInfo??null)){
       fail(key.id,'EXACT_CURRENT_NATIVE_SOURCE_UNVERIFIED',diagnostics);continue;
     }

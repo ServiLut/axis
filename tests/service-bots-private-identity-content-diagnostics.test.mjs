@@ -1,0 +1,28 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {resolveOwnBlueNativeIdentity,NATIVE_IDENTITY_DIAGNOSTIC_CONTENT_KEYS,NATIVE_IDENTITY_DIAGNOSTIC_CONTENT_PATHS,NATIVE_IDENTITY_DIAGNOSTIC_SEMANTIC_FIELDS,NATIVE_IDENTITY_DIAGNOSTIC_VALUE_TYPES} from '../automation/service-bots/native-identity-resolution.mjs';
+
+const at=Date.parse('2026-10-16T18:15:00Z'),PHONE='573000006521',LID='123456789012351@lid',SECRET='PRIVATE_CONTENT_MUST_NOT_APPEAR';
+async function diagnostic(change){
+ const c={company:'fumigacion',name:'FUMIGACION',enabled:true,activatedAt:at-3600000,lines:[{phone:'573126944997',instance:'cucaracha-azul'},{phone:'573126938721',instance:'cucaracha-roja'}]},current={key:{id:'ISOLATED_CURRENT_CONTENT',remoteJid:LID,fromMe:false},messageTimestamp:at/1000,message:{conversation:SECRET}},native=structuredClone(current);
+ const pair={key:{id:'ISOLATED_PAIRED_CONTENT',remoteJid:LID,remoteJidAlt:PHONE+'@s.whatsapp.net',fromMe:true},messageTimestamp:(at-1000)/1000,message:{conversation:SECRET},status:'DELIVERY_ACK'};
+ change(current,native);const t={config:c,verifyLine:async phone=>({phone,instance:'cucaracha-azul',open:true,ownerVerified:true,checkedAt:new Date(at).toISOString()}),request:async()=>({messages:{total:2,records:[native,pair]}})};
+ const result=await resolveOwnBlueNativeIdentity(c,t,{instance:'cucaracha-azul',event:'messages.upsert',data:current},{startedAt:at-10000,now:at+1000,authenticated:true});assert.equal(result.resolutions.length,0);assert.equal(result.unresolved[0].reason,'EXACT_CURRENT_NATIVE_SOURCE_UNVERIFIED');
+ const d=result.unresolved[0].diagnostics;assert.doesNotMatch(JSON.stringify(d),/PRIVATE_CONTENT|PRIVATE_UNKNOWN_KEY|@lid|@s\.whatsapp\.net|573000006521/);
+ assert.ok(d.differingContentPaths.every(path=>NATIVE_IDENTITY_DIAGNOSTIC_CONTENT_PATHS.includes(path)));assert.deepEqual(Object.keys(d.semanticCore),NATIVE_IDENTITY_DIAGNOSTIC_SEMANTIC_FIELDS);
+ for(const side of ['callback','native'])assert.ok(Object.entries(d.contentKeyPresence[side]).every(([key,value])=>[...NATIVE_IDENTITY_DIAGNOSTIC_CONTENT_KEYS,'unlistedContentKeysPresent'].includes(key)&&typeof value==='boolean'));
+ for(const value of d.contentPathTypes)assert.ok(NATIVE_IDENTITY_DIAGNOSTIC_CONTENT_PATHS.includes(value.path)&&NATIVE_IDENTITY_DIAGNOSTIC_VALUE_TYPES.includes(value.callbackType)&&NATIVE_IDENTITY_DIAGNOSTIC_VALUE_TYPES.includes(value.nativeType));return d;
+}
+test('messageContextInfo metadata difference is localized without accepting the source or exposing metadata',async()=>{
+ const d=await diagnostic((c,n)=>{n.message.messageContextInfo={deviceListMetadata:{senderKeyHash:SECRET},deviceListMetadataVersion:2,messageSecret:SECRET};});assert.equal(d.contentKeyPresence.callback.messageContextInfo,false);assert.equal(d.contentKeyPresence.native.messageContextInfo,true);assert.ok(d.differingContentPaths.includes('messageContextInfo.messageSecret'));assert.deepEqual(d.semanticCore,{textMatches:true,kindMatches:true,quotedIdsMatch:true,forwardingMatches:true});
+});
+test('known metadata serialization differences retain only fixed JSON types and paths',async()=>{
+ const d=await diagnostic((c,n)=>{c.message.messageContextInfo={deviceListMetadata:{senderKeyHash:{type:'Buffer',data:[1,2]},senderTimestamp:{low:1,high:0,unsigned:true}},messageSecret:{type:'Buffer',data:[1,2]}};n.message.messageContextInfo={deviceListMetadata:{senderKeyHash:SECRET,senderTimestamp:'1'},messageSecret:SECRET};});assert.deepEqual(d.contentPathTypes.find(v=>v.path==='messageContextInfo.messageSecret'),{path:'messageContextInfo.messageSecret',callbackType:'object',nativeType:'string'});assert.deepEqual(d.contentPathTypes.find(v=>v.path==='messageContextInfo.deviceListMetadata.senderTimestamp'),{path:'messageContextInfo.deviceListMetadata.senderTimestamp',callbackType:'object',nativeType:'string'});
+});
+test('a changed conversation identifies text inequality without retaining either text',async()=>{const d=await diagnostic((c,n)=>{n.message.conversation=SECRET+'_OTHER';});assert.equal(d.semanticCore.textMatches,false);assert.ok(d.differingContentPaths.includes('conversation'));});
+test('extended text and exact cited source differences remain separate semantic failures',async()=>{
+ const d=await diagnostic((c,n)=>{c.message={extendedTextMessage:{text:SECRET,contextInfo:{stanzaId:SECRET+'_A'}}};n.message={extendedTextMessage:{text:SECRET+'_OTHER',contextInfo:{stanzaId:SECRET+'_B'}}};});assert.equal(d.semanticCore.textMatches,false);assert.equal(d.semanticCore.quotedIdsMatch,false);assert.ok(d.differingContentPaths.includes('extendedTextMessage.text'));assert.ok(d.differingContentPaths.includes('extendedTextMessage.contextInfo'));
+});
+for(const field of ['deviceSentMessage','senderKeyDistributionMessage'])test('presence of '+field+' is schema limited without nested values',async()=>{const d=await diagnostic((c,n)=>{n.message[field]={message:{conversation:SECRET},groupId:SECRET};});assert.equal(d.contentKeyPresence.callback[field],false);assert.equal(d.contentKeyPresence.native[field],true);assert.ok(d.differingContentPaths.includes(field));});
+test('an unknown content key is indicated without writing its name',async()=>{const d=await diagnostic((c,n)=>{n.message.PRIVATE_UNKNOWN_KEY=SECRET;});assert.equal(d.contentKeyPresence.native.unlistedContentKeysPresent,true);assert.deepEqual(d.differingContentPaths,[]);});
+test('forwarding and kind differences remain visible without authority or content claims',async()=>{const d=await diagnostic((c,n)=>{n.message={imageMessage:{caption:SECRET,contextInfo:{isForwarded:true}}};});assert.equal(d.semanticCore.kindMatches,false);assert.equal(d.semanticCore.forwardingMatches,false);});

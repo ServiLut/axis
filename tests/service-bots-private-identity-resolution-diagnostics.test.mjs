@@ -30,7 +30,7 @@ for(const [kind,reason] of [['source-absent','EXACT_CURRENT_NATIVE_SOURCE_UNVERI
  assert.doesNotMatch(rows[0].detail,/PRIVATE_|PRIVATE_TOKEN|DIFFERENT_PRIVATE|conversation/);
  const detail=f.s.open(rows[0].detail);assert.equal(detail.reason,reason);assert.equal(detail.providerAt,f.at);assert.equal(detail.firstInstalledAt,f.start);assert.ok(detail.receivedAt>=f.at);assert.equal(detail.originalJournalPreserved,true);assert.equal(detail.customerEventQueued,false);assert.equal(detail.historicalReplayEnabled,false);
  if(kind==='provider-failure')assert.equal(detail.diagnostics,undefined);
- else assert.deepEqual(detail.diagnostics,{exactMatches:kind==='source-absent'?0:1,sourceBodyMatches:!['source-absent','body-mismatch'].includes(kind),sourceContextMatches:!['source-absent','context-mismatch'].includes(kind),nativePageContainsSource:kind!=='source-absent',nativeChanged:kind==='native-changed'});
- assert.doesNotMatch(JSON.stringify(detail),/PRIVATE_CUSTOMER|PRIVATE_STAFF|PRIVATE_TOKEN|DIFFERENT_PRIVATE|DIFFERENT_NATIVE_CONTEXT|https:|conversation|@lid|@s\.whatsapp\.net/);
+ else assert.deepEqual(Object.fromEntries(['exactMatches','sourceBodyMatches','sourceContextMatches','nativePageContainsSource','nativeChanged'].map(key=>[key,detail.diagnostics[key]])),{exactMatches:kind==='source-absent'?0:1,sourceBodyMatches:!['source-absent','body-mismatch'].includes(kind),sourceContextMatches:!['source-absent','context-mismatch'].includes(kind),nativePageContainsSource:kind!=='source-absent',nativeChanged:kind==='native-changed'});
+ assert.doesNotMatch(JSON.stringify(detail),/PRIVATE_CUSTOMER|PRIVATE_STAFF|PRIVATE_TOKEN|DIFFERENT_PRIVATE|DIFFERENT_NATIVE_CONTEXT|https:|@lid|@s\.whatsapp\.net/);
  assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM intake_journal WHERE original=1').get().n,1);assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM events').get().n,0);assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox').get().n,0);
 }));

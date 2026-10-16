@@ -14,7 +14,7 @@ import {MARIA_DIMENSIONS_GUARD} from './intake-dimensions.mjs';
 import { Transport,drain,MARIA_HISTORY_PROTOCOL_GUARD } from './transport.mjs';
 import { pathToFileURL } from 'node:url';
 import { decodeWebhook,observePrivateIdentity,privateIdentityStatus,initializePrivateNativeCachePair,prospectivePrivateNativeCacheBody,recordPrivateNativeCachePairs,decodePrivateNativeCachePairs } from './webhook.mjs';
-import {resolveOwnBlueNativeIdentity,NATIVE_IDENTITY_RESOLUTION_GUARD} from './native-identity-resolution.mjs';
+import {resolveOwnBlueNativeIdentity,NATIVE_IDENTITY_RESOLUTION_GUARD,NATIVE_IDENTITY_DIAGNOSTIC_CONTENT_KEYS,NATIVE_IDENTITY_DIAGNOSTIC_CONTENT_PATHS,NATIVE_IDENTITY_DIAGNOSTIC_SEMANTIC_FIELDS,NATIVE_IDENTITY_DIAGNOSTIC_VALUE_TYPES} from './native-identity-resolution.mjs';
 import {validateApprovedAnswers} from './faq.mjs';
 import {customerActivity} from './chief-status.mjs';
 import {queueChiefDocument} from './chief-document.mjs';
@@ -58,6 +58,12 @@ function auditPrivateNativeCacheUnresolved(store,body,result,{startedAt,received
     const diagnostics={};
     if(Number.isSafeInteger(unresolved?.diagnostics?.exactMatches)&&unresolved.diagnostics.exactMatches>=0&&unresolved.diagnostics.exactMatches<=100)diagnostics.exactMatches=unresolved.diagnostics.exactMatches;
     for(const field of ['sourceBodyMatches','sourceContextMatches','nativePageContainsSource','nativeChanged'])if(typeof unresolved?.diagnostics?.[field]==='boolean')diagnostics[field]=unresolved.diagnostics[field];
+    const presence={};for(const side of ['callback','native']){const fields={};for(const key of [...NATIVE_IDENTITY_DIAGNOSTIC_CONTENT_KEYS,'unlistedContentKeysPresent'])if(typeof unresolved?.diagnostics?.contentKeyPresence?.[side]?.[key]==='boolean')fields[key]=unresolved.diagnostics.contentKeyPresence[side][key];if(Object.keys(fields).length)presence[side]=fields;}
+    if(Object.keys(presence).length)diagnostics.contentKeyPresence=presence;
+    const core={};for(const key of NATIVE_IDENTITY_DIAGNOSTIC_SEMANTIC_FIELDS)if(typeof unresolved?.diagnostics?.semanticCore?.[key]==='boolean')core[key]=unresolved.diagnostics.semanticCore[key];
+    if(Object.keys(core).length)diagnostics.semanticCore=core;
+    if(Array.isArray(unresolved?.diagnostics?.differingContentPaths))diagnostics.differingContentPaths=[...new Set(unresolved.diagnostics.differingContentPaths.filter(path=>NATIVE_IDENTITY_DIAGNOSTIC_CONTENT_PATHS.includes(path)))];
+    if(Array.isArray(unresolved?.diagnostics?.contentPathTypes)){const paths=new Map();for(const item of unresolved.diagnostics.contentPathTypes)if(NATIVE_IDENTITY_DIAGNOSTIC_CONTENT_PATHS.includes(item?.path)&&NATIVE_IDENTITY_DIAGNOSTIC_VALUE_TYPES.includes(item.callbackType)&&NATIVE_IDENTITY_DIAGNOSTIC_VALUE_TYPES.includes(item.nativeType))paths.set(item.path,{path:item.path,callbackType:item.callbackType,nativeType:item.nativeType});diagnostics.contentPathTypes=[...paths.values()];}
     const ids=unresolved?.sourceId==null?[...sources.keys()]:sources.has(unresolved.sourceId)?[unresolved.sourceId]:[];
     for(const id of ids){
       const marker=id+':'+reason;if(seen.has(marker))continue;seen.add(marker);
