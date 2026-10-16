@@ -1,5 +1,5 @@
 import {createHash} from 'node:crypto';
-import {normalize} from './config.mjs';
+import {normalize,chiefReplyRestrictionActive} from './config.mjs';
 import {FUMIGACION_BLUE,assertOperationalLineScope,operationalLineAllowed} from './line-scope.mjs';
 import {TESA_GROUP_JID,TESA_GROUP_SUBJECT,getTesaConfig} from './tesa-config.mjs';
 import {refreshTesaMembership} from './tesa-transport.mjs';
@@ -151,6 +151,7 @@ async function delivery(store,config,transport,binding,row){
   });
 }
 export async function drainTesaGuidanceLists(store,config,transport){
+  if(chiefReplyRestrictionActive(config))return {enabled:false,restrictedToChief:true,accepted:0,uncertain:0,delivered:0};
   let binding;try{binding=ownScope(store,config);}catch{return {enabled:false,accepted:0,uncertain:0,delivered:0};}
   if(running.has(store))return {enabled:true,busy:true,accepted:0,uncertain:0,delivered:0};
   initialize(store);running.add(store);
@@ -165,6 +166,7 @@ export async function drainTesaGuidanceLists(store,config,transport){
       try{exactStored(store,row);await preflight(store,config,transport,binding);}catch{
         store.db.prepare('UPDATE '+table+' SET checked_at=? WHERE id=?').run(Date.now(),row.id);preflightBlocked++;continue;
       }
+      if(chiefReplyRestrictionActive(config))break;
       if(row.state!=='READY'){
         try{if(await delivery(store,config,transport,binding,row))delivered++;}catch{}
         finally{store.db.prepare('UPDATE '+table+' SET checked_at=? WHERE id=?').run(Date.now(),row.id);}

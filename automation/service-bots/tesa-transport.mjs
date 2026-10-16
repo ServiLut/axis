@@ -4,7 +4,7 @@ import {decodeTesaGroupWebhook,validateTesaGroupEvent} from './tesa-webhook.mjs'
 import {observeTesaGroupEvent,acceptTesaQuotedAnswer,bindTesaQuestionDelivery,tesaOutboxScopeSafe} from './tesa-operations.mjs';
 import {operationalCoverage} from './line-scope.mjs';
 import {registrationHash,MARIA_PROGRAM_OPERATIONAL_CONTINUATION_GUARD} from './maria-program.mjs';
-import {publicTextSafe,normalize} from './config.mjs';
+import {publicTextSafe,normalize,chiefReplyRestrictionActive} from './config.mjs';
 import {continueMariaUnregisteredTesaCustomer,mariaUnregisteredTesaReplyStillValid} from './maria-tesa-unregistered.mjs';
 import {continueOwnSchedulingOffer,ownSchedulingPlan,ownSchedulingProof,ownSchedulingReplyStillValid} from './maria-own-order-scheduling.mjs';
 import {routeCaseQuestion} from './engine.mjs';
@@ -246,6 +246,7 @@ export async function ingestTesaWebhook(store,config,transport,body){
 }
 
 export async function drainTesaGroup(store,config,transport){
+  if(chiefReplyRestrictionActive(config))return {enabled:false,restrictedToChief:true,accepted:0,uncertain:0};
   if(!config.tesaOperations?.enabled)return {enabled:false,accepted:0,uncertain:0};
   let t;try{t=await refreshTesaMembership(config,transport);}catch{return {enabled:true,membershipReview:true,accepted:0,uncertain:0};}
   if(!t)return {enabled:true,membershipReview:true,accepted:0,uncertain:0};
@@ -278,6 +279,7 @@ export async function drainTesaGroup(store,config,transport){
       await transport.verifyLine(t.senderLine);
       t=getTesaConfig(config);if(!t)continue;
     }catch{store.audit('TESA_MEMBERSHIP_BEFORE_SEND_REVIEW',o.id,{attemptedSend:false});continue;}
+    if(chiefReplyRestrictionActive(config))continue;
     if(!scopedReady(o))continue;
     if(o.company!==config.company||o.group_jid!==t.groupJid||o.sender_line!==t.senderLine||!config.lines.some(l=>l.phone===o.source_line))throw Error('TESA_OUTBOX_SCOPE_MISMATCH');
     if(!store.db.prepare("UPDATE tesa_outbox SET state='SENDING',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id).changes)continue;

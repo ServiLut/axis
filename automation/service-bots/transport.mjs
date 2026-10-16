@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto';
 import {explicitNewService} from './after-service.mjs';
 import {explicitNewTechnicalCase,technicalIntakeMetaQuestion} from './technical-intake-continuity.mjs';
-import { SANDRA, DIEGO, HILARY, CURRENT_OPERATOR_ROUTING, publicTextSafe, normalize,internalRecipients,knownInternalRecipient } from './config.mjs';
+import { SANDRA, DIEGO, HILARY, CURRENT_OPERATOR_ROUTING, publicTextSafe, normalize,internalRecipients,knownInternalRecipient,chiefReplyRestrictionActive,outboundRecipientAllowed } from './config.mjs';
 import {parseChiefDocument} from './chief-document.mjs';
 import {selectPrice,verifyPriceSource} from './prices.mjs';
 import {understandOwnCustomer,composeOwnReply,ownReplyTextAllowed,probeOwnAi} from './conversational-ai.mjs';
@@ -120,6 +120,7 @@ export class Transport {
   constructor(config, fetcher=fetch){this.config=config;this.fetcher=fetcher;}
   async request(line,path,body) {
     if(!this.config.lines.includes(line)||!line.apiKey)throw new Error('INSTANCE_ACCESS_REQUIRED');
+    if(path.startsWith('/message/')&&!outboundRecipientAllowed(this.config,body?.number))throw Error('CHIEF_ONLY_DELIVERY_RESTRICTION');
     if(!operationalLineAllowed(this.config,line.phone)){
       // A suspended line may still supply authenticated staff evidence. These
       // exact provider routes are reads, never sending or reconnecting.
@@ -160,6 +161,7 @@ export class Transport {
     return {verified:true,sourceId:checked.id,phone:checked.phone,line:checked.line,at:checked.at};
   }
   async send(row,text) {
+    if(!outboundRecipientAllowed(this.config,row?.phone))throw Error('CHIEF_ONLY_DELIVERY_RESTRICTION');
     if(!row.internal&&!this.config.enabled)throw new Error('CUSTOMER_GATE_CLOSED');
     if(row.internal&&!internalRecipients(this.config).includes(row.phone))throw new Error('INTERNAL_RECIPIENT_MISMATCH');
     if(!row.internal&&knownInternalRecipient(row.phone))throw new Error('INTERNAL_ROLE_REQUIRED');
@@ -286,7 +288,7 @@ export async function drain(store,config,transport,engine) {
   initializeInactivityFollowup(config,store);
   const fastMaria=config.company==='fumigacion'&&config.responseTargetMs===3000;
   const before=fastMaria?await flushOutbox(store,config,transport):{accepted:0,suppressed:0,uncertain:0};
-  const pending=store.db.prepare("SELECT body,revision FROM events WHERE state='PENDING' AND (?=1 OR phone IN (?,?,?)) ORDER BY from_me DESC,at,rowid LIMIT ?").all(Number(config.enabled),SANDRA,DIEGO,HILARY,fastMaria?1:30);
+  const pending=store.db.prepare("SELECT body,revision FROM events WHERE state='PENDING' AND (?=1 OR phone IN (?,?,?)) AND (?=0 OR phone=?) ORDER BY from_me DESC,at,rowid LIMIT ?").all(Number(config.enabled),SANDRA,DIEGO,HILARY,Number(chiefReplyRestrictionActive(config)),SANDRA,fastMaria?1:30);
   for(const row of pending) {
     const e=store.open(row.body); let analysis={};
     const lineScope=assertOperationalLineScope(config);
@@ -372,8 +374,11 @@ export async function flushOutbox(store,config,transport){
     store.db.prepare("UPDATE outbox SET state='TESA_ANSWER_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),outbox.id);
     store.audit('TESA_CONTINUATION_BEFORE_SEND_REVIEW',outbox.id,{attemptedSend:false,humanAttentionPreserved:true});suppressed++;return false;
   };
-  const out=store.db.prepare("SELECT * FROM outbox WHERE state='READY' AND (?=1 OR (internal=1 AND phone IN (?,?,?))) ORDER BY created,rowid LIMIT 20").all(Number(config.enabled),SANDRA,DIEGO,HILARY);
+  const out=store.db.prepare("SELECT * FROM outbox WHERE state='READY' AND (?=1 OR (internal=1 AND phone IN (?,?,?))) AND (?=0 OR phone=?) ORDER BY created,rowid LIMIT 20").all(Number(config.enabled),SANDRA,DIEGO,HILARY,Number(chiefReplyRestrictionActive(config)),SANDRA);
   for(const o of out) {
+    // Keep blocked rows exactly as recorded; this restriction is not a send
+    // failure, a recipient migration, a hold or permission to replay later.
+    if(!outboundRecipientAllowed(config,o.phone))continue;
     const lineScope=assertOperationalLineScope(config);
     if(lineScope&&(o.created<Date.parse(lineScope.authorizedAt)||
       (!o.internal&&(typeof store.hasSourcesOutsideLine!=='function'||store.hasSourcesOutsideLine(o.phone,o.line))))){
@@ -495,6 +500,7 @@ export async function flushOutbox(store,config,transport){
     // Recheck its exact native proof and customer attention before reserving.
     if(!await checkTesaContinuation(o))continue;
     if(!checkOwnSavedReview(o,text))continue;
+    if(!outboundRecipientAllowed(config,o.phone))continue;
     if(!store.db.prepare("UPDATE outbox SET state='SENDING',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id).changes)continue;
     try {
       const mid=await transport.send(o,text);

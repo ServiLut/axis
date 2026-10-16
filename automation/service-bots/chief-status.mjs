@@ -4,7 +4,7 @@ import {programEnabled} from './maria-program.mjs';
 import {operationalCoverage} from './line-scope.mjs';
 
 export function chiefStatusTopic(text) {
-  const t=normalize(text).replace(/[¿?!.]+$/,'').trim();
+  const t=normalize(text).replace(/^[¿¡\s]+/,'').replace(/[¿¡?!.]+$/,'').trim();
   if(/^(?:cuantos (?:chats|mensajes|clientes) (?:has|haz) (?:respondido|atendido|contestado)(?: (?:de|en) (?:ambas|las dos) lineas(?: de whatsapp)?)?(?: (?:hoy|en total))?|a cuantos (?:chats|clientes) (?:has )?(?:respondido|atendido)(?: hoy)?)$/.test(t))return 'counts';
   if(/^(?:(?:estas|sigues) (?:respondiendo|repsondiendo|contestando|atendiendo)|respondes|atiendes) (?:los |a los )?(?:mensajes|chats|clientes)(?: (?:de|en) (?:ambas|las dos) lineas(?: de whatsapp)?)?$/.test(t))return 'customer-status';
   if(/^(?:estas (?:ahi|presente|funcionando|disponible|activ[oa])|me escuchas|puedes responder|sigues ahi)$/.test(t))return 'presence';

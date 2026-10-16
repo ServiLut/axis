@@ -9,6 +9,10 @@ export const BUSINESSES = Object.freeze({
   'servicio-tecnico': { name: 'S.TECNICO', bot: 'Miguel Ángel', phones: ['573022691941','573137689392'] },
 });
 export const SANDRA = '573016803926';
+// A temporary own-business restriction narrows delivery without rewriting any
+// existing queue, source, attention hold or provider receipt.
+export const chiefReplyRestrictionActive = config => config?.company==='fumigacion'&&config.replyOnlyToChief===true;
+export const outboundRecipientAllowed = (config,recipient) => !chiefReplyRestrictionActive(config)||recipient===SANDRA;
 export const DIEGO = '573233350137';
 export const HILARY = '573043332213';
 export const OPERATOR_ROUTING = 'diego-hilary-20261005';
@@ -60,9 +64,10 @@ export function configFromEnv(env = process.env) {
   if((env.BOT_ENABLED==='true'||env.BOT_CHIEF_ONLY==='true')&&!Number.isFinite(Date.parse(env.BOT_ACTIVATED_AT||'')))throw new Error('ACTIVATION_CUTOFF_REQUIRED');
   if(env.BOT_ENABLED==='true'&&env.BOT_PRIOR_HISTORY_CHECK!=='true')throw new Error('PRIOR_HISTORY_GUARD_REQUIRED');
   if(env.BOT_OPERATIONAL_ROUTING&&!['sandra',OPERATOR_ROUTING,CURRENT_OPERATOR_ROUTING].includes(env.BOT_OPERATIONAL_ROUTING))throw Error('OPERATOR_ROUTING_REQUIRED');
+  if(env.BOT_REPLY_ONLY_TO_CHIEF!==undefined&&!['true','false'].includes(env.BOT_REPLY_ONLY_TO_CHIEF))throw Error('CHIEF_REPLY_RESTRICTION_REQUIRED');
   return { operatorRouting:env.BOT_OPERATIONAL_ROUTING||'sandra',company, ...business, lines, operationalLineScope, database, encryptionKey: Buffer.from(env.BOT_DATA_KEY,'hex'),
     authHash: env.BOT_AUTH_TOKEN_HASH, webhookHash:env.BOT_WEBHOOK_TOKEN_HASH, provider: provider.href.replace(/\/$/,''),
-    enabled: env.BOT_ENABLED === 'true', chiefOnly:env.BOT_CHIEF_ONLY==='true', activatedAt: Date.parse(env.BOT_ACTIVATED_AT || ''),
+    enabled: env.BOT_ENABLED === 'true', chiefOnly:env.BOT_CHIEF_ONLY==='true', replyOnlyToChief:company==='fumigacion'&&env.BOT_REPLY_ONLY_TO_CHIEF==='true', activatedAt: Date.parse(env.BOT_ACTIVATED_AT || ''),
     historyCheckRequired:env.BOT_PRIOR_HISTORY_CHECK==='true',
     port: Number(env.PORT || 8080), programContextUrl: env.BOT_PROGRAM_CONTEXT_URL || null,
     programToken: env.BOT_PROGRAM_READ_TOKEN || null, expectedProgramCompanyId: env.BOT_PROGRAM_COMPANY_ID || null,
