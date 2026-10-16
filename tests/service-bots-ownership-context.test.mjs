@@ -488,7 +488,8 @@ test('an initial price question retains the stated pest and groups the other mis
     const first=await f.process({text:'Hola, ¿cuánto cuesta el servicio para ratas?'});
     const reply=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(first.id+':reply').body);
     assert.match(reply,/tipo de inmueble/);assert.match(reply,/habitaciones o metros cuadrados/);assert.match(reply,/municipio y barrio o vereda/);
-    assert.doesNotMatch(reply,/Qué plaga|precio|\d|asesora|Sandra|Diego/i);
+    assert.match(reply,/\n1\. Qué tipo de inmueble/);assert.match(reply,/\n2\. El municipio/);
+    assert.doesNotMatch(reply,/Qué plaga|precio|\$|asesora|Sandra|Diego/i);
     assert.equal(f.s.conversation(first.phone).state.slots.service,'ratas');
     assert.equal(f.s.conversation(first.phone).state.initialIntakeAllRequested,true);
     assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);

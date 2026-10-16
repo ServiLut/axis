@@ -207,7 +207,8 @@ test('Maria with a three-second target still plans a contextual reply with verif
   const before=f.requests.length;await f.run('AI_CONTEXTUAL002','Apartamento');
   const req=f.requests.slice(before).find(r=>r.body.text.format.name==='maria_contextual_reply');assert.ok(req);
   const input=JSON.parse(req.body.input);assert.equal(input.replyContract.guard,MARIA_CONVERSATION_GUARD);
-  assert.match(f.reply('AI_CONTEXTUAL002').text,/Gracias por la información\. El inmueble que me indicas es un apartamento\./);
+  assert.match(f.reply('AI_CONTEXTUAL002').text,/^Gracias por la información\. Para completar la cotización,/);
+  assert.doesNotMatch(f.reply('AI_CONTEXTUAL002').text,/Me indicas|El inmueble|apartamento/);
   assert.match(f.reply('AI_CONTEXTUAL002').text,/¿cuántas habitaciones o metros cuadrados tiene el lugar\?$/);
   assert.doesNotMatch(f.reply('AI_CONTEXTUAL002').text,/municipio|qué plaga|qué tipo de inmueble/i);
   assert.equal(f.s.conversation(phone).state.slots.site,'apartamento');assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);
@@ -304,7 +305,7 @@ test('a pending reply reuses the same Maria wording without extra calls or dupli
   await f.run('AI_REUSE0001','Cucarachas en Medellín');
   const e={id:'AI_REUSE0002',text:'Apartamento',phone,line:f.c.lines[0].phone,at:Date.now(),fromMe:false,kind:'text'};
   f.s.enqueue(e);await f.engine.process(e);
-  const row=f.reply(e.id),first=await composeOwnReply(f.c,f.s,f.fetcher,row,row.text),calls=f.requests.length;assert.equal(row.state,'READY');assert.match(first,/El inmueble que me indicas es un apartamento\./);
+  const row=f.reply(e.id),first=await composeOwnReply(f.c,f.s,f.fetcher,row,row.text),calls=f.requests.length;assert.equal(row.state,'READY');assert.equal(first,'¿Cuántas habitaciones o metros cuadrados tiene el lugar?');assert.doesNotMatch(first,/El inmueble|apartamento/);
   assert.equal(await composeOwnReply(f.c,f.s,f.fetcher,row,row.text),first);assert.equal(f.requests.length,calls);
   f.s.db.prepare('UPDATE outbox SET body=? WHERE id=?').run(f.s.seal(first),row.id);
   assert.equal(await composeOwnReply(f.c,f.s,f.fetcher,f.reply(e.id),first),first);assert.equal(f.requests.length,calls);
@@ -325,8 +326,9 @@ test('new wording acknowledges only current-source facts while old reserved word
   assert.equal(await composeOwnReply(f.c,f.s,f.fetcher,row,original),oldFinal);assert.equal(f.requests.length,0);
   const next={...current,id:'TONE_BOUND_CUR02',at:old.at+20,text:'Medellín'};f.s.enqueue(next);const state=f.s.conversation(phone).state;
   f.s.saveConversation(phone,{...state,slots:{...state.slots,location:'Medellín'},intakeSources:{...state.intakeSources,location:{sourceId:next.id,at:next.at}}});
-  f.s.queue(next.id+':reply',phone,next.line,original,false,f.s.conversation(phone).revision,caseId);
-  const nextRow=f.reply(next.id),text=await composeOwnReply(f.c,f.s,f.fetcher,nextRow,original),request=f.requests.at(-1).body,input=JSON.parse(request.input);
+  const pendingText='Aún no tengo una respuesta confirmada para este caso.';
+  f.s.queue(next.id+':reply',phone,next.line,pendingText,false,f.s.conversation(phone).revision,caseId);
+  const nextRow=f.reply(next.id),text=await composeOwnReply(f.c,f.s,f.fetcher,nextRow,pendingText),request=f.requests.at(-1).body,input=JSON.parse(request.input);
   assert.deepEqual(input.replyContract.verifiedLiteralFacts.map(f=>f.id),['field:location']);
   assert.equal(request.text.format.schema.properties.acknowledgements.items.enum.includes('field:site'),false);
   assert.equal(input.replyContract.openings.helpful,undefined);assert.equal(input.replyContract.mandatorySteps.some(step=>/^Con gusto\./.test(step.text)),false);

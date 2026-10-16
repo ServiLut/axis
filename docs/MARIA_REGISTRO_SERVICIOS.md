@@ -1,5 +1,9 @@
 # Registro propio de servicios nuevos de María
 
+## Recepción legible y activación de primera agenda en curso — 16/10/2026
+
+La corrección de recepción conserva saludo y preguntas pertinentes, elimina ecos de servicio/inmueble y presenta varios faltantes en una lista numerada. Se preservan fuentes literales, importes, respuestas aprobadas, reservas antiguas y toma humana. El ejemplo aportado por la usuaria se reprodujo exactamente antes y quedó corregido en el ensayo después; **1324/1324 pruebas** pasan. La estructura de primera programación ya tiene recibo productivo post-COMMIT, sin filas de negocio modificadas; acceso/variables/recarga/verificación aún pendientes. No equivale a una primera agenda real ni a otro servicio creado. Estado actual y fuentes al inicio de `BOTS_MARIA_MIGUEL.md`.
+
 ## Regresiones reales de cotización y continuidad corregidas, sin nueva alta — 16/10/2026
 
 La lectura azul de las 14:44Z comprobó dos errores de respuestas propias posteriores a `e4f6bf3`: reinicio de preguntas de plaga ante una consulta de vigencia y omisión de «base cama» al delimitar la cotización por colchón. Corrección **preparada, no desplegada**: conserva propósito y fuente de la consulta previa; reconoce variantes y negación/condición de mobiliario; explica la duda colchón/habitación con su alcance pendiente. No certifica vigencia, inclusión, aceptación o reserva ni cambia precios. No ejecuta o recupera los casos históricos ya atendidos por personal.

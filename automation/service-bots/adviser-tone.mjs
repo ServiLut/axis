@@ -11,6 +11,35 @@ const initialRequests=new Map([
  ['El municipio y barrio o vereda donde necesitas el servicio.','el municipio y barrio o vereda donde necesitas el servicio'],
  ['El municipio donde necesitas el servicio; ya conservé la ubicación indicada.','el municipio donde necesitas el servicio']
 ]);
+const ordinaryIntakeQuestions=new Set([
+ '¿Qué plaga deseas tratar o buscas un servicio preventivo?',
+ 'Cuéntame qué plaga necesitas tratar o si buscas un servicio preventivo.',
+ '¿En qué tipo de inmueble necesitas el servicio?',
+ 'Cuéntame si necesitas el servicio en una casa, apartamento u otro tipo de inmueble.',
+ '¿Cuántas habitaciones o metros cuadrados tiene el lugar?',
+ 'Para completar la cotización, ¿cuántas habitaciones o metros cuadrados tiene el lugar?',
+ '¿Cuántos colchones están afectados? Cuéntame también si hay chinches en bases de cama u otros muebles.',
+ '¿En qué municipio y barrio necesitas el servicio?',
+ '¿Me indicas el municipio y barrio donde necesitas el servicio?',
+ '¿En qué municipio necesitas el servicio? Ya conservé la ubicación que me indicaste.',
+ 'Me falta confirmar el municipio para cotizarte; ya conservé la ubicación que me indicaste.'
+]);
+// This classifies only the deterministic intake wording, not customer text or
+// an approved answer. The composer uses it for new plans; existing reservations
+// continue to use their original text, source and hash without being rewritten.
+export function mariaOrdinaryIntakeReply(text){
+ if(typeof text!=='string')return false;
+ const body=text.replace(/^(?:Hola|Buen día|Buenas tardes|Buenas noches), soy María Ángel\.\s+/,'').replace(/^Entiendo que lo necesitas [^\n.!?]+\.\s+/,'').replace(/^Te ayudo con la cotización\. /,'');
+ if(ordinaryIntakeQuestions.has(body))return true;
+ const title='Para cotizarte, cuéntame';
+ if(!body.startsWith(title))return false;
+ const rest=body.slice(title.length);
+ if(rest.startsWith(':\n')){
+  const items=rest.slice(2).split('\n');
+  return items.length>1&&items.every((line,i)=>line.startsWith((i+1)+'. ')&&[...initialRequests.values()].some(value=>line.slice(String(i+1).length+2)===value[0].toUpperCase()+value.slice(1)+'.'));
+ }
+ return [...initialRequests.values()].some(value=>rest===' '+value+'.');
+}
 const reviewedWording=new Map([
  ['Gracias. Una asesora continuará contigo para preparar la cotización de este inmueble.','La cotización de este inmueble aún necesita confirmación.'],
  ['Gracias. Una asesora continuará contigo para preparar la cotización de tu solicitud.','Tu cotización aún necesita confirmación.'],
@@ -41,9 +70,9 @@ export function adviserReply(company,decision,{firstReply=false,approvedAnswer=f
  const timing=!decision.review&&!decision.question&&!decision.courtesy&&!decision.observed?currentIntakeTimingAcknowledgement(decision.state):null;
  const render=reply=>{
   if(!timing||reply.includes(timing))return reply;
-  const intro=reply.match(/^((?:Hola|Buen día|Buenas tardes|Buenas noches), soy María Ángel\. )/);
+  const intro=reply.match(/^((?:Hola|Buen día|Buenas tardes|Buenas noches), soy María Ángel\.\s+)/);
   const rest=(intro?reply.slice(intro[0].length):reply).replace(/^Con gusto\. /,'');
-  return (intro?.[0]||'')+timing+' '+rest;
+  return (intro?.[0]||'')+timing+(reply.includes('\n')?'\n\n':' ')+rest;
  };
  const greeting=text.match(/^(Hola, soy María Ángel\. )/);
  const body=greeting?text.slice(greeting[0].length):text;
@@ -54,7 +83,11 @@ export function adviserReply(company,decision,{firstReply=false,approvedAnswer=f
  if(reviewed)return render(prefix+reviewed);
  if((firstReply||greeting)&&!decision.review&&!decision.question&&!decision.courtesy&&!decision.observed&&body.startsWith('Para ayudarte con la cotización, cuéntame:\n')){
   const requests=body.slice('Para ayudarte con la cotización, cuéntame:\n'.length).split('\n').map(line=>line.startsWith('• ')?initialRequests.get(line.slice(2)):null);
-  if(requests.length&&requests.every(Boolean))return render(prefix+'Para cotizarte, cuéntame '+requests.join('; ')+'.');
+  if(requests.length&&requests.every(Boolean)){
+   const greetingPrefix=prefix?prefix.trimEnd()+'\n\n':'';
+   const requestText=requests.length===1?'Para cotizarte, cuéntame '+requests[0]+'.':'Para cotizarte, cuéntame:\n'+requests.map((value,i)=>(i+1)+'. '+value[0].toUpperCase()+value.slice(1)+'.').join('\n');
+   return render(greetingPrefix+requestText);
+  }
  }
  // Only the first intake question gets an invitation. Later questions stay brief.
  if(firstReply&&!decision.review&&!decision.question&&!decision.courtesy&&!decision.observed&&

@@ -2,6 +2,7 @@ import {createHash} from 'node:crypto';
 import {normalize,publicTextSafe,knownInternalRecipient,SANDRA} from './config.mjs';
 import {operationalLineAllowed} from './line-scope.mjs';
 import {conversationalAiGuard,ownAiScope,ownAiScopeMatches} from './ai-settings.mjs';
+import {mariaOrdinaryIntakeReply} from './adviser-tone.mjs';
 import {mariaModelKnowledge} from './maria-knowledge.mjs';
 import {MARIA_UNDERSTANDING_GUARD,MARIA_UNDERSTANDING_VERSION,MARIA_UNDERSTANDING_INSTRUCTIONS,MARIA_INTENTS,MARIA_REVIEWED_EXAMPLES,MARIA_EVALUATION_CASES,validatedIntent} from './maria-understanding.mjs';
 import {MIGUEL_UNDERSTANDING_GUARD,MIGUEL_UNDERSTANDING_VERSION,MIGUEL_UNDERSTANDING_INSTRUCTIONS,MIGUEL_INTENTS,MIGUEL_REVIEWED_EXAMPLES,MIGUEL_EVALUATION_CASES,validatedMiguelIntent,miguelLiteralSlotAllowed,miguelModelKnowledge} from './miguel-understanding.mjs';
@@ -310,10 +311,17 @@ export async function composeOwnReply(config,store,fetcher,row,text){
   const contract=mariaReplyContract(config,store,row,text);if(!contract)return text;
   // Old factual clauses remain valid for immutable, already-reserved wording.
   // A new plan can acknowledge only information supplied by this source.
-  const plannerFacts=contract.facts.filter(f=>f.newlyProvided);
+  // A clear intake question already demonstrates which data were retained by
+  // asking only for what is missing. Do not prepend literal echoes of the pest
+  // or property; in particular they must never precede the first greeting.
+  // This applies only after the saved-wording branch above: historical wording
+  // reservations remain byte-for-byte reusable under their original contract.
+  const clearIntake=mariaOrdinaryIntakeReply(text)||/^(?:Hola|Buen día|Buenas tardes|Buenas noches), soy María Ángel\./.test(text);
+  const planningContract=clearIntake?{...contract,facts:[]}:contract;
+  const plannerFacts=planningContract.facts.filter(f=>f.newlyProvided);
   const plannerOpenings=Object.fromEntries(Object.entries(replyOpenings).filter(([id])=>id!=='helpful'));
   const plannerSteps=contract.alternatives.map((text,i)=>({id:'step:'+i,text})).filter((step,i)=>i===0||!/^Con gusto\./.test(step.text));
-  const fallback={opening:'none',acknowledgements:contract.facts.filter(f=>f.newlyProvided).slice(0,1).map(f=>f.id),nextStep:'step:0',factualAnchors:contract.anchors};
+  const fallback={opening:'none',acknowledgements:plannerFacts.slice(0,1).map(f=>f.id),nextStep:'step:0',factualAnchors:contract.anchors};
   const hash=createHash('sha256').update(JSON.stringify({guard:contract.guard,alternatives:contract.alternatives,facts:contract.facts,anchors:contract.anchors})).digest('hex');
   const save=composed=>{
    store.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO NOTHING').run(wordingKey,store.seal({guard:MARIA_CONVERSATION_GUARD,caseId:row.case_id,revision:row.revision,originalText:text,finalText:composed,contractHash:hash}));
@@ -327,12 +335,12 @@ export async function composeOwnReply(config,store,fetcher,row,text){
     {company:'FUMIGACION',customerText:minimizeAiText(source.event.text),context:contract.context,
      replyContract:{guard:contract.guard,openings:plannerOpenings,verifiedLiteralFacts:plannerFacts,mandatorySteps:plannerSteps,factualAnchors:contract.anchors},approvedKnowledge:modelKnowledge(config,store,'reply',row)},
     {name:'contextual_reply',value:{type:'object',additionalProperties:false,required:['opening','acknowledgements','nextStep','factualAnchors'],properties:{opening:{type:'string',enum:Object.keys(plannerOpenings)},acknowledgements:{type:'array',maxItems:2,items:{type:'string',enum:plannerFacts.length?plannerFacts.map(f=>f.id):['no-fact-available']}},nextStep:{type:'string',enum:plannerSteps.map(s=>s.id)},factualAnchors:{type:'array',items:{type:'string',enum:contract.anchors}}}}},220);
-   const composed=renderMariaPlan(contract,result);
+   const composed=renderMariaPlan(planningContract,result);
    if(!ownReplyTextAllowed(config,store,row,text,composed))throw Error('AI_REPLY_NOT_APPROVED');
    return save(composed);
   }catch{
    store.audit('AI_CONTEXTUAL_REPLY_FALLBACK',row.id,{guard:MARIA_CONVERSATION_GUARD,deterministicNextStepRetained:true,arbitraryClaimsAccepted:false});
-   return save(renderMariaPlan(contract,fallback));
+   return save(renderMariaPlan(planningContract,fallback));
   }
  }
  const choices=replyCandidates(text,config.company);
