@@ -4,10 +4,11 @@ import {BUSINESS_PRICE_HASH,LEGACY_BUSINESS_PRICE_HASH,BUSINESS_PRICE_CUTOVER_AT
 import {selectPrice} from './prices.mjs';
 import {operationalLineAllowed,operationalCoverage} from './line-scope.mjs';
 import {getTesaConfig} from './tesa-config.mjs';
-import {mariaIncidentalPetMention} from './after-service.mjs';
+import {mariaIncidentalPetMention,explicitNewService,afterServiceRequest} from './after-service.mjs';
 import {verifyStoredNativeIdentitySource} from './native-identity-resolution.mjs';
 import {partitionNativeAttention} from './explicit-return-attention.mjs';
 import {currentMariaLocationProjection} from './current-location-projection.mjs';
+import {MARIA_BATCH_INTAKE_GUARD} from './maria-batch-intake.mjs';
 import {CUSTOMER_DEFERRAL_GUARD,customerDeferralRequested,customerDeferralResumeEvidence,customerDeclinesAfterDeferral} from './customer-deferral.mjs';
 
 export const MARIA_PROGRAM_GUARD='own-accepted-ordinary-service-literal-fields-and-atomic-receipt-v2';
@@ -129,11 +130,49 @@ const confirms=text=>acceptsOrdinaryQuotation(text)||confirmsOrdinarySummaryData
 function legacyOrdinarySummaryText(preview){
  return 'Registraré el servicio de '+preview.service+' por $'+preview.priceCop.toLocaleString('es-CO')+' en '+preview.address+', '+preview.municipality+', a nombre de '+preview.customerName+'.'+(preview.preference?' Preferencia solicitada: '+preview.preference+'. El horario sigue pendiente de coordinación.':'')+(preview.petPresence?' Presencia de mascotas informada: '+preview.petPresence+'.':'')+' ¿Confirmas que estos datos son correctos?';
 }
-function ordinarySummaryText(preview){
+function previousOrdinarySummaryText(preview){
  return ['Revisa los datos de tu solicitud:','','• Servicio: '+preview.service,'• Valor: $'+preview.priceCop.toLocaleString('es-CO'),'• Nombre: '+preview.customerName,'• Dirección: '+preview.address,'• Municipio: '+preview.municipality,...(preview.preference?['• Preferencia solicitada: '+preview.preference]:[]),...(preview.petPresence?['• Mascotas informadas: '+preview.petPresence]:[]),'','El horario sigue pendiente de coordinación.','','¿Confirmas que estos datos son correctos?'].join('\n');
 }
+function ordinarySummaryText(preview){
+ return ['Revisa los datos de tu solicitud:','','• Servicio: '+preview.service,...(preview.site?['• Inmueble informado: '+preview.site]:[]),...(preview.mattresses?['• Colchones informados: '+preview.mattresses]:[]),...(preview.rooms?['• Habitaciones informadas: '+preview.rooms]:[]),...(preview.area?['• Área informada: '+preview.area]:[]),'• Valor: $'+preview.priceCop.toLocaleString('es-CO'),'• Nombre: '+preview.customerName,'• Dirección: '+preview.address,'• Municipio: '+preview.municipality,...(preview.preference?['• Preferencia solicitada: '+preview.preference]:[]),...(preview.petPresence?['• Mascotas informadas: '+preview.petPresence]:[]),'','El horario sigue pendiente de coordinación.','','¿Confirmas que estos datos son correctos?'].join('\n');
+}
+function ownSummarySourceProjection(s,state,e,anchor,original,ref,field,value,literalSlots){
+ const direct=source=>source?.kind==='text'&&source.fromMe===false&&!source.forwarded&&!source.quotedId&&source.phone===e.phone&&source.line===e.line&&source.at>=anchor.at&&source.at<=e.at&&!/["“”]|\b(?:dijo|dice|comento|comentaron|segun|mi vecin[oa]|su vecin[oa]|un tercero)\b/.test(normalize(source.text));
+ if(!direct(original))return false;
+ if(literalSlots(original.text,'fumigacion')?.[field]===value)return true;
+ // Reuse the existing two-source room-unit clarification literally. A unit
+ // reply alone is not a room count and cannot become a general fallback.
+ if(field!=='rooms'||ref?.guard!==MARIA_BATCH_INTAKE_GUARD||ref.context!=='own-delivered-unit-clarification-two-native-fragments'||ref.unitExpanded!==false||!Array.isArray(ref.sources)||ref.sources.length!==2||ref.sources[1].sourceId!==original.id||ref.sources[1].at!==original.at)return false;
+ const firstRef=ref.sources[0],firstRow=s.db.prepare('SELECT rowid,body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(firstRef.sourceId,e.phone,e.line),first=firstRow&&s.open(firstRow.body);
+ if(!direct(first)||first.at!==firstRef.at||firstRow.rowid<anchor.rowid||first.at>=original.at||original.at-first.at>600000)return false;
+ const prompt=s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND internal=0 AND state IN ('DELIVERED','READ') AND mid IS NOT NULL").get(first.id+':reply',e.phone,e.line,state.caseId),proof=prompt&&get(s,'first-delivery:'+prompt.id);
+ if(!prompt||s.open(prompt.body)!=='¿Te refieres a habitaciones o a metros cuadrados?'||proof?.mid!==prompt.mid||proof.line!==e.line||!['DELIVERED','READ'].includes(proof.state)||!Number.isSafeInteger(proof.verifiedAt)||proof.verifiedAt<prompt.created||original.at<Math.floor(proof.verifiedAt/1000)*1000)return false;
+ return literalSlots(first.text+' '+original.text,'fumigacion')?.rooms===value;
+}
+function ownSummaryScope(s,state,e,own,literalSlots){
+ if(typeof literalSlots!=='function')return null;
+ const anchor=s.db.prepare('SELECT rowid,at,body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(state.caseId.slice(11),e.phone,e.line),scope={};if(!anchor)return null;
+ const reference=s.priceReplyReference(own.row),snapshot=reference?.context,originalAnchor=s.open(anchor.body),scopeFields=['site','mattresses','rooms','area'];
+ if(!snapshot||reference.entryId!==own.entry.id||reference.priceCop!==own.entry.priceCop)return null;
+ // An explicit new-case anchor is already quoted from its own immutable
+ // snapshot, but the existing Engine does not persist intakeSources when
+ // that first message says "otro servicio nuevo". Recover only that complete
+ // own anchor; never fill a partially missing or invalid field reference.
+ const anchorRecovery=!scopeFields.some(field=>Object.hasOwn(state.intakeSources||{},field))&&own.q.sourceId===originalAnchor.id&&originalAnchor.id===state.caseId.slice(11)&&originalAnchor.phone===e.phone&&originalAnchor.line===e.line&&originalAnchor.kind==='text'&&originalAnchor.fromMe===false&&!originalAnchor.forwarded&&!originalAnchor.quotedId&&originalAnchor.at===own.q.issuedAt&&originalAnchor.at<=e.at&&!/["“”]|\b(?:dijo|dice|segun|mi vecin[oa]|un tercero)\b/.test(normalize(originalAnchor.text))&&explicitNewService(originalAnchor.text)&&!afterServiceRequest(originalAnchor);
+ for(const field of ['site','mattresses','rooms','area']){
+  if(state.slots[field]==null)continue;
+  const value=String(state.slots[field]),ref=state.intakeSources?.[field],row=ref?.sourceId&&s.db.prepare('SELECT rowid,body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(ref.sourceId,e.phone,e.line),original=row&&s.open(row.body);
+  // Use the Engine's existing literal projection and the exact value used by
+  // this own quotation. Never infer a missing field or transform its spelling.
+  if(!value||value.length>250||String(snapshot[field])!==value||own.q.slots&&String(own.q.slots[field])!==value)return null;
+  if(!ref&&anchorRecovery){if(!ownSummarySourceProjection(s,state,e,anchor,originalAnchor,null,field,value,literalSlots))return null;}
+  else if(!original||original.id!==ref?.sourceId||original.phone!==e.phone||original.line!==e.line||original.kind!=='text'||original.fromMe!==false||original.forwarded||original.quotedId||original.at!==ref.at||row.rowid<anchor.rowid||original.at<anchor.at||original.at>e.at||!ownSummarySourceProjection(s,state,e,anchor,original,ref,field,value,literalSlots))return null;
+  scope[field]=value;
+ }
+ return scope;
+}
 function ownSummaryDataProof(s,state,e,prompt,preview){
- if(!prompt||e.quotedId||e.forwarded||e.fromMe||e.kind!=='text'||prompt.phone!==e.phone||prompt.line!==e.line||prompt.case_id!==state.caseId||prompt.internal!==0||!['DELIVERED','READ'].includes(prompt.state)||typeof prompt.mid!=='string'||prompt.mid===state.quotedPrice?.mid||![ordinarySummaryText(preview),legacyOrdinarySummaryText(preview)].includes(s.open(prompt.body)))return null;
+ if(!prompt||e.quotedId||e.forwarded||e.fromMe||e.kind!=='text'||prompt.phone!==e.phone||prompt.line!==e.line||prompt.case_id!==state.caseId||prompt.internal!==0||!['DELIVERED','READ'].includes(prompt.state)||typeof prompt.mid!=='string'||prompt.mid===state.quotedPrice?.mid||![ordinarySummaryText(preview),previousOrdinarySummaryText(preview),legacyOrdinarySummaryText(preview)].includes(s.open(prompt.body)))return null;
  const proof=get(s,'first-delivery:'+prompt.id),promptSourceId=prompt.id?.endsWith(':reply')?prompt.id.slice(0,-6):null;
  const origin=promptSourceId&&s.db.prepare('SELECT rowid,at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(promptSourceId,e.phone,e.line),current=s.db.prepare('SELECT rowid FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(e.id,e.phone,e.line);
  if(!origin||!current||origin.rowid>=current.rowid||origin.at>e.at||proof?.mid!==prompt.mid||proof.line!==e.line||!['DELIVERED','READ'].includes(proof.state)||!Number.isSafeInteger(proof.verifiedAt)||proof.verifiedAt<prompt.created||proof.verifiedAt>Date.now()+5000||e.at<Math.floor(proof.verifiedAt/1000)*1000)return null;
@@ -465,7 +504,7 @@ export function ordinaryDataInformationTurn(s,c,state,e){
 }
 function blockedText(text){return /[?¿]|^no\b|\b(?:refuerzo|garantia|verificacion|visita anterior|ya fumig|certificado|documento|cancel|no quiero|no acepto|pague|pago|pagar|transfer|comprobante|consign|descuento|gratis|otra solicitud|nuevo servicio|otro servicio|otro inmueble)\w*/.test(normalize(text));}
 // Called only inside the engine's existing transaction; no network or business write.
-export function registrationTurn(s,c,previous,e,decision){
+export function registrationTurn(s,c,previous,e,decision,{literalSlots=null}={}){
  if(!programEnabled(c)||e.fromMe||e.forwarded||e.kind!=='text'||e.at<c.mariaProgram.startsAt)return null;
  if(!operationalLineAllowed(c,e.line)||c.operationalLineScope&&e.at<Date.parse(c.operationalLineScope.authorizedAt))return null;
  if(c.operationalLineScope&&(typeof s.hasSourcesOutsideLine!=='function'||s.hasSourcesOutsideLine(e.phone,e.line)))return null;
@@ -551,7 +590,12 @@ export function registrationTurn(s,c,previous,e,decision){
  const originalAcceptance=own.q.acceptanceSource&&s.db.prepare('SELECT rowid,at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(own.q.acceptanceSource,e.phone,e.line);
  const preprovided=!info&&acceptsOrdinaryQuotation(e.text)&&!conflicting&&!explicit.conflict&&!['confirm','correction'].includes(prior.stage)&&originalAcceptance&&sourcePosition(s,e,pi.nameSource)<=originalAcceptance.rowid&&sourcePosition(s,e,pi.addressSource)<=originalAcceptance.rowid&&Date.parse(pi.nameSource.at)<=originalAcceptance.at&&Date.parse(pi.addressSource.at)<=originalAcceptance.at&&(!petPresence||petPresence.position<=originalAcceptance.rowid&&Date.parse(petPresence.source.at)<=originalAcceptance.at);
  const preference=casePreferenceSource(s,c,state,e);
- const preview={customerName:pi.customerName,address:pi.address,municipality:state.slots.location,service:state.slots.service,priceCop:own.entry.priceCop,...(preference?{preference:preference.value}:{}),...(petPresence?{petPresence:petPresence.value,petPresenceSource:petPresence.source}:{})};
+ const basePreview={customerName:pi.customerName,address:pi.address,municipality:state.slots.location,service:state.slots.service,priceCop:own.entry.priceCop,...(preference?{preference:preference.value}:{}),...(petPresence?{petPresence:petPresence.value,petPresenceSource:petPresence.source}:{})};
+ const priorSummary=pi.promptId&&s.db.prepare('SELECT created FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND internal=0').get(pi.promptId,e.phone,e.line,state.caseId);
+ const legacyPreview=prior.stage==='confirm'&&priorSummary&&own.row.created<=priorSummary.created&&JSON.stringify(pi.preview)===JSON.stringify(basePreview);
+ const scope=legacyPreview?{}:ownSummaryScope(s,state,e,own,literalSlots);
+ if(!scope)return {state,observed:true,observedState:'PROGRAM_SUMMARY_SCOPE_SOURCE_UNVERIFIED'};
+ const preview={...basePreview,...scope};
  if(!preprovided&&(prior.stage!=='confirm'||changed||JSON.stringify(pi.preview)!==JSON.stringify(preview))){
   pi.stage='confirm';pi.promptId=e.id+':reply';pi.preview=preview;
   return {state,reply:ordinarySummaryText(preview)};
@@ -673,7 +717,7 @@ async function verifyNative(s,c,t,entry){
   if(!summary)throw Error('PROGRAM_SUMMARY_DELIVERY_UNVERIFIED');
   deliveries.push([await nativeMessage(s,t,c,summary.mid,p.phone,p.line),summary]);
   if(confirmsOrdinarySummaryData(p.sources.acceptance.text)){
-   const event=s.open(acceptanceRow.body),preview={customerName:p.customerName,address:p.address,municipality:p.municipality,service:p.slots.service,priceCop:p.quote.priceCop,...(p.slots.preference?{preference:p.slots.preference}:{}),...(p.petPresence?{petPresence:p.petPresence}:{})};
+   const event=s.open(acceptanceRow.body),preview={customerName:p.customerName,address:p.address,municipality:p.municipality,service:p.slots.service,priceCop:p.quote.priceCop,...Object.fromEntries(['site','mattresses','rooms','area'].filter(field=>p.slots[field]!=null).map(field=>[field,String(p.slots[field])])),...(p.slots.preference?{preference:p.slots.preference}:{}),...(p.petPresence?{petPresence:p.petPresence}:{})};
    if(JSON.stringify(ownSummaryDataProof(s,state,event,summary,preview))!==JSON.stringify(p.summaryConfirmation))throw Error('PROGRAM_SUMMARY_DELIVERY_UNVERIFIED');
   }
  }else if(entry.confirmationKind!=='price-accepted-with-prior-literal-facts'||!acceptsOrdinaryQuotation(p.sources.acceptance.text)||Date.parse(p.sources.customerName.at)>Date.parse(p.sources.acceptance.at)||Date.parse(p.sources.address.at)>Date.parse(p.sources.acceptance.at))throw Error('PROGRAM_CUSTOMER_CONFIRMATION_UNVERIFIED');

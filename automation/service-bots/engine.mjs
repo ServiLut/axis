@@ -29,6 +29,7 @@ import {parseChiefCommand,enqueueChiefCommand} from './chief-actions.mjs';
 import {mariaPendingReviewReply} from './maria-pending-review.mjs';
 import {literalMariaPartialLocation,literalMariaRoomCount,mariaMediaBurstContinuation,MARIA_BATCH_INTAKE_GUARD} from './maria-batch-intake.mjs';
 import {customerDeferralRequested,customerDeferralResumeEvidence,customerDeferralContinues,customerDeferralAcknowledgement,customerDeclinesAfterDeferral,CUSTOMER_DEFERRAL_GUARD} from './customer-deferral.mjs';
+import {literalTermiteFurnitureScope,termiteFurnitureMention} from './maria-furniture-scope.mjs';
 
 export const MARIA_AUTONOMOUS_INTAKE_GUARD='literal-ordinary-intake-without-staff-delegation-v1';
 export const MARIA_AFTER_SERVICE_CONTINUITY_GUARD='own-same-case-stored-or-quoted-postservice-context-and-priority-preservation-v2';
@@ -725,7 +726,17 @@ export function customerDecision(company,state,e,analysis={}) {
     if(!next.asked.includes('service'))next.asked.push('service');
     return {state:next,pestIdentityClarification:true,reply:missingPestReply(next)};
   }
+  const furnitureScope=company==='fumigacion'&&literalIntakeTurn(e)&&!contextNeedsPersonalPriority(e.text,e)&&!specialQuotation(literalText,next.slots)&&normalize(next.slots.service)==='comejen'&&literalTermiteFurnitureScope(e);
+  if(furnitureScope){
+    const mixed=furnitureScope.kind==='mixed-furniture-property';
+    next.slots.treatmentScope=furnitureScope.literalScope;
+    next.intakeSources={...next.intakeSources,treatmentScope:{sourceId:e.id,at:e.at,guard:furnitureScope.guard,context:'literal-furniture-item-not-whole-property'}};
+    const subject=mixed?(furnitureScope.plural?'los muebles':'el mueble')+' y la parte del inmueble que indicas':furnitureScope.plural?'esos muebles':'ese mueble';
+    const reply='Para tratar el comején en '+subject+', necesitamos confirmar el valor y qué incluye el tratamiento.';
+    return {state:next,specificCustomerQuestionReply:reply,reviewTopic:'special-quotation',reviewConditions:{kind:'literal-termite-furniture',guard:furnitureScope.guard,requestSource:e.id,treatmentScope:next.slots.treatmentScope,scopeKind:furnitureScope.kind},reviewSource:e.id,review:'La persona solicita tratar comején en '+next.slots.treatmentScope+'. Hace falta confirmar el valor total y el alcance para los elementos indicados.',reviewQuestion:'¿Qué valor total y alcance podemos confirmar para los elementos indicados, o qué dato concreto falta para cotizar?',reply};
+  }
   if(company==='fumigacion'&&specialQuotation(literalText,next.slots))return {state:next,reviewTopic:'special-quotation',reviewConditions:{kind:'special-property'},review:'Cotización especial de edificio, unidad, varias propiedades o zonas comunes; necesita alcance y precio propios, sin aplicar la tarifa de una vivienda.',reviewQuestion:'¿Qué alcance y cotización corresponden a esta solicitud especial?',reply:'Gracias. La cotización de este inmueble requiere confirmar su alcance y precio.'};
+  if(company==='fumigacion'&&termiteFurnitureMention(e))return {state:{...state,slots:{...state.slots},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)},literalServiceContext:true,reviewTopic:'customer-question',reviewConditions:{kind:'termite-furniture-scope-unconfirmed',directCustomerReport:!e.forwarded&&!e.quotedId},review:'El mensaje menciona comején y muebles, pero no permite afirmar un alcance actual de tratamiento. Hace falta aclarar a qué solicitud se refiere antes de cotizar.',reviewQuestion:'¿Qué solicitud y alcance actuales comprobados corresponden a este mensaje?',reply:'Para responderte bien, necesito aclarar qué deseas cotizar en este caso.'};
   if(company==='fumigacion'&&normalize(next.slots.service).includes('avispas'))return {state:next,reviewTopic:'special-quotation',reviewConditions:{kind:'wasp-inspection'},review:'La cotización de avispas depende del tamaño y la altura del panal; requiere inspección. No hay una tarifa automática aprobada.',reviewQuestion:'¿Qué inspección y cotización corresponden al tamaño y la altura de este panal?',reply:'Para las avispas, la cotización depende del tamaño y la altura del panal y requiere inspección.'};
   if(!next.slots.detail&&state.asked?.at(-1)==='detail'&&!/[?¿]/.test(literalText)&&t.length>3&&!(company==='servicio-tecnico'&&technicalIntakeLiteralCorrection(e.text)))next.slots.detail=literalText.slice(0,300);
   if(!next.slots.preference&&state.asked?.includes('preference')&&/\b(hoy|mañana|manana|lunes|martes|miercoles|jueves|viernes|sabado|domingo|\d{1,2}[/:]\d{1,2}|tarde|mañana|noche)\b/.test(t))next.slots.preference=literalText.slice(0,300);
@@ -1016,6 +1027,10 @@ export class Engine {
         decision.reviewSource=controlSource.id;decision.state.lastText=e.text;
       }else if(directedPurpose&&!pendingQuestion&&!priorFaq){
         decision=directedPurpose;
+      }else if(c.company==='fumigacion'&&termiteFurnitureMention(e)){
+        // The item is explicit even if no whole-property type was supplied.
+        // Keep the normal customer decision priorities before its review.
+        decision=customerDecision(c.company,caseState,e,analysis);
       }else if(faq?.answer){
         decision={state:{...caseState,lastText:e.text,pendingFaqQuestion:null},reply:faq.answer};
         s.audit('APPROVED_CUSTOMER_ANSWER_SELECTED',e.id,{caseId:caseState.caseId,topics:faq.topics,answers:faq.answerIds,sources:faq.sourceIds,originalQuestion:faqQuestion.id});
@@ -1085,7 +1100,7 @@ export class Engine {
       if(ordinaryInformation){selectedPrice=null;decision=ordinaryInformation;}
       if(c.company==='fumigacion'&&!decision.state.customerDeferral?.active&&!decision.registrationInformation&&!(currentQuote&&(naturalAcceptance||unverifiedAmountAttempt))&&(decision.question?.topic==='cotizacion-verificada'||decision.reviewTopic==='customer-question'&&quotationInquiry(e.text))){
         const selection=selectPrice(decision.state.slots,s.approvedPriceCatalogs(),null,{scheduleHash:businessPriceHashAt(e.at),issuedAt:e.at});
-        if(selection.entry&&!e.forwarded&&!ambiguousIntake(e.text)&&!specialQuotation(textWithoutLinks(literalIntakeTextWithoutRegistrationFields(e.text)),decision.state.slots)){
+        if(selection.entry&&!e.forwarded&&!ambiguousIntake(e.text)&&!termiteFurnitureMention(e)&&!specialQuotation(textWithoutLinks(literalIntakeTextWithoutRegistrationFields(e.text)),decision.state.slots)){
           selectedPrice=selection.entry;
           decision={state:{...decision.state,quotedPrice:{entryId:selectedPrice.id,priceCop:selectedPrice.priceCop,slots:{...decision.state.slots},sourceId:e.id,...(selectedPrice.source?.scheduleHash?{scheduleHash:selectedPrice.source.scheduleHash,issuedAt:e.at}:{})}},reply:priceText(selectedPrice)};
           s.audit('REVIEWED_PRICE_SELECTED',e.id,{entryId:selectedPrice.id,priceCop:selectedPrice.priceCop,quoteSources:selection.sourceIds,caseId:caseState.caseId,businessWritten:false});
@@ -1101,7 +1116,7 @@ export class Engine {
       // descriptions. In particular a street number before "apartamento"
       // must not become a quantity of apartments for quotation scope.
       const literalProgramStage=['name','address','details','confirm','correction'].includes(caseState.programIntake?.stage);
-      const registration=decision.quoteClarification||decision.literalServiceContext||decision.quoteEvidenceReview||decision.directedNonservice?null:registrationTurn(s,c,caseState,e,literalProgramStage?{...decision,state:{...decision.state,slots:{...caseState.slots,...(decision.state.slots.preference?{preference:decision.state.slots.preference}:{})}}}:decision);
+      const registration=decision.quoteClarification||decision.literalServiceContext||decision.quoteEvidenceReview||decision.directedNonservice?null:registrationTurn(s,c,caseState,e,literalProgramStage?{...decision,state:{...decision.state,slots:{...caseState.slots,...(decision.state.slots.preference?{preference:decision.state.slots.preference}:{})}}}:decision,{literalSlots:extractSlots});
       if(registration)decision=registration;
        if(caseState.customerDeferral?.active===true&&decision.state.customerDeferral?.active===false&&decision.state.customerDeferral.resumedBy?.sourceId===e.id)s.audit('OWN_CUSTOMER_DEFERRAL_RESUMED',e.id,{caseId:caseState.caseId,deferralSourceId:caseState.customerDeferral.sourceId,resumeSourceId:e.id,kind:decision.state.customerDeferral.resumedBy.kind,humanHoldReleased:false,acceptanceGrantedByMarker:false});
       decision.state.lastHandledSourceId=e.id;

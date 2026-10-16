@@ -35,7 +35,7 @@ test('a later address correction requires its new summary, preserving the old so
 }));
 test('legacy short confirmation keeps its DTO shape without optional summary metadata',t=>withFixture(t,async f=>{const {facts}=await f.summary();f.deliver(facts);const final=await f.turn('Confirmo');assert.ok(f.entry(final));assert.equal(Object.hasOwn(f.entry(final).payload,'summaryConfirmation'),false);}));
 test('a new summary presents one field per line and keeps scheduling pending',t=>withFixture(t,async f=>{
- const {facts}=await f.summary();assert.equal(f.reply(facts),['Revisa los datos de tu solicitud:','','• Servicio: cucarachas','• Valor: $129.000','• Nombre: Laura Gómez','• Dirección: Calle 50 # 42-18 apartamento 301','• Municipio: itagui','','El horario sigue pendiente de coordinación.','','¿Confirmas que estos datos son correctos?'].join('\n'));
+ const {facts}=await f.summary();assert.equal(f.reply(facts),['Revisa los datos de tu solicitud:','','• Servicio: cucarachas','• Inmueble informado: apartamento','• Habitaciones informadas: dos habitaciones','• Valor: $129.000','• Nombre: Laura Gómez','• Dirección: Calle 50 # 42-18 apartamento 301','• Municipio: itagui','','El horario sigue pendiente de coordinación.','','¿Confirmas que estos datos son correctos?'].join('\n'));
 }));
 test('an already delivered legacy paragraph remains exact and can support only its own later data agreement',t=>withFixture(t,async f=>{
  const {facts}=await f.summary(),row=f.row(facts),legacy='Registraré el servicio de cucarachas por $129.000 en Calle 50 # 42-18 apartamento 301, itagui, a nombre de Laura Gómez. ¿Confirmas que estos datos son correctos?';
