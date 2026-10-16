@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
 import {authorized} from './config.mjs';
+import {staffPlanningEnabled} from './maria-program.mjs';
 
 export const MARIA_SCHEDULING_ACCESS_GUARD='own-expiring-first-schedule-only-and-separate-native-proof-v1';
 export const MARIA_SCHEDULING_URL='https://tenaxis-backend-0zeuja.servilutioncrm.cloud/integrations/maria-own-order-scheduling';
@@ -17,7 +18,7 @@ export function restoreOwnSchedulingAccess(c,s){
  c.ownOrderScheduling=checked(c,s.open(row.value));
 }
 export function ownSchedulingEnabled(c,now=Date.now()){
- try{const b=checked(c,c.ownOrderScheduling);return c.enabled===true&&Number.isSafeInteger(now)&&b.startsAt<=now&&now<b.expiresAt;}catch{return false;}
+ try{const b=checked(c,c.ownOrderScheduling);return c.enabled===true&&Number.isSafeInteger(now)&&b.startsAt<=now&&now<b.expiresAt&&!staffPlanningEnabled(c,now);}catch{return false;}
 }
 export function ownSchedulingAccessStatus(c,now=Date.now()){
  const b=c.ownOrderScheduling;return {guard:MARIA_SCHEDULING_ACCESS_GUARD,configured:Boolean(b),enabled:ownSchedulingEnabled(c,now),scope:'FIRST_SCHEDULE_OF_OWN_NEW_ORDER_ONLY',actorId:b?.actorId??null,startsAt:Number.isSafeInteger(b?.startsAt)?new Date(b.startsAt).toISOString():null,expiresAt:Number.isSafeInteger(b?.expiresAt)?new Date(b.expiresAt).toISOString():null,otherOrdersEnabled:false,reprogrammingEnabled:false,paymentsEnabled:false};
