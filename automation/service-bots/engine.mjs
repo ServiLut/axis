@@ -3,6 +3,7 @@ import {selectCommonAnswer,commonQuestionTopics,faqNeedsPersonalReview,faqTopicL
 import {chiefStatusTopic,chiefStatusReply} from './chief-status.mjs';
 import {chiefReadOnlyTopic,chiefReadOnlyReply} from './chief-readonly.mjs';
 import {businessPriceHashAt} from './business-prices.mjs';
+import {directedNonserviceTurn,unscopedInitialImageReply} from './directed-nonservice.mjs';
 import {selectPrice,priceText,quotationInquiry,specialQuotation,currentPriceEntries} from './prices.mjs';
 import {adviserReply} from './adviser-tone.mjs';
 import {literalIntakeTiming} from './intake-timing.mjs';
@@ -12,7 +13,7 @@ import {ownIntent} from './maria-understanding.mjs';
 import {ownMiguelIntent,miguelLiteralSlotAllowed} from './miguel-understanding.mjs';
 import {literalPaintingRequest} from './technical-scope.mjs';
 import {afterServiceKind,afterServiceRequest,afterServiceDecision,explicitNewService,mariaLiteralServiceContext,literalOwnAfterServiceRequest,MARIA_LITERAL_SERVICE_CONTEXT_GUARD,mariaIncidentalPetMention} from './after-service.mjs';
-import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,literalIntakeTextWithoutRegistrationFields,literalProgramPreference,prepareRegisteredTesaContinuation,registeredTesaConfirmation,ownRegisteredReceiptForPresentation,ownSavedPendingOperation,queueOwnSavedServiceReview,ownQuoteOutboxId,ownDeliveredQuoteEntry} from './maria-program.mjs';
+import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,literalIntakeTextWithoutRegistrationFields,literalProgramPreference,prepareRegisteredTesaContinuation,registeredTesaConfirmation,ownRegisteredReceiptForPresentation,ownSavedPendingOperation,queueOwnSavedServiceReview,ownQuoteOutboxId,ownDeliveredQuoteEntry,ordinaryDataInformationTurn} from './maria-program.mjs';
 import {prepareMariaUnregisteredTesaPlan,mariaCaseQuoteCustomerTurn} from './maria-tesa-unregistered.mjs';
 import {prepareOwnSchedulingPlan,ownSchedulingCustomerTurn} from './maria-own-order-scheduling.mjs';
 import {createHash} from 'node:crypto';
@@ -894,7 +895,9 @@ export class Engine {
       if(schedulingTurn){schedulingTurn.state.lastHandledSourceId=e.id;schedulingTurn.state.lastText=e.text;s.saveConversation(e.phone,schedulingTurn.state);s.queue(e.id+':reply',e.phone,e.line,schedulingTurn.reply,false,conv.revision,caseState.caseId);finish('OWN_SCHEDULING_CUSTOMER_TURN');return;}
       if(c.company==='fumigacion'&&!e.forwarded&&['image','audio','document','video'].includes(e.kind)){
         const caseSource=ownCaseAnchor(s,c,caseState,e);
-        const media=mariaMediaBurstContinuation({company:c.company,event:e,state:caseState,caseSource,sources:ownCaseLiteralSources(s,c,caseState,e),priorMarker:caseState.pendingMediaBurst,humanHold:Boolean(conv.hold)});
+        let media=mariaMediaBurstContinuation({company:c.company,event:e,state:caseState,caseSource,sources:ownCaseLiteralSources(s,c,caseState,e),priorMarker:caseState.pendingMediaBurst,humanHold:Boolean(conv.hold)});
+        const neutralImageReply=unscopedInitialImageReply(s,c,caseState,e);
+        if(media&&!media.suppressed&&neutralImageReply)media={...media,reply:neutralImageReply};
         if(media){
           caseState.pendingMediaBurst=media.marker;caseState.lastHandledSourceId=e.id;caseState.lastText=e.text;
           s.saveConversation(e.phone,caseState);
@@ -951,6 +954,7 @@ export class Engine {
       const faqClassificationText=mariaIncidentalPetMention(faqQuestion)?.classificationText??faqQuestion.text;
       const faq=c.company==='fumigacion'&&!documentSource&&!controlSource&&!followupSource&&!caseState.requestedAfterServiceReview&&!caseState.requestedControlReview&&e.kind==='text'&&!e.forwarded&&!unreadLinkOnly(e.text)&&!faqNeedsPersonalReview(e.text)&&!paymentInquiry(e.text)&&!previousQuotation(e.text)&&!postServiceReturn(e.text)&&!plannedRevisit(e.text)&&faqQuestion.kind==='text'?selectCommonAnswer(textWithoutLinks(faqClassificationText),caseState.slots,s.approvedCustomerAnswers(),caseState.caseId):null;
       let decision;
+      const directedPurpose=directedNonserviceTurn(s,c,caseState,e);
       const productClarification=c.company==='fumigacion'&&caseState.requestedProductInquiry&&literalIntakeTurn(e)&&!contextNeedsPersonalPriority(e.text,e)&&(Object.keys(extractSlots(e.text,c.company)).length||/^(?:solo|solamente|unicamente) (?:el )?producto[.! ]*$/.test(normalize(e.text)));
       if(quotationValidity){
         decision=quotationValidity;
@@ -976,6 +980,8 @@ export class Engine {
       }else if(controlSource){
         decision=customerDecision(c.company,caseState,{...e,id:controlSource.id,at:controlSource.at,text:controlSource.text,forwarded:controlSource.forwarded},analysis);
         decision.reviewSource=controlSource.id;decision.state.lastText=e.text;
+      }else if(directedPurpose&&!pendingQuestion&&!priorFaq){
+        decision=directedPurpose;
       }else if(faq?.answer){
         decision={state:{...caseState,lastText:e.text,pendingFaqQuestion:null},reply:faq.answer};
         s.audit('APPROVED_CUSTOMER_ANSWER_SELECTED',e.id,{caseId:caseState.caseId,topics:faq.topics,answers:faq.answerIds,sources:faq.sourceIds,originalQuestion:faqQuestion.id});
@@ -1030,7 +1036,9 @@ export class Engine {
         const uncertain=s.db.prepare("SELECT state FROM outbox WHERE id=? AND phone=? AND line=? AND internal=0 AND case_id=? AND state IN ('READY','SENDING','ACCEPTED','UNCERTAIN')").get(ownQuoteOutboxId(s,caseState,e.phone,e.line),e.phone,e.line,caseState.caseId);
         if(uncertain){selectedPrice=null;decision={state:decision.state,observed:true,observedState:'QUOTATION_DELIVERY_REVIEW'};}
       }
-      if(c.company==='fumigacion'&&!(currentQuote&&naturalAcceptance)&&(decision.question?.topic==='cotizacion-verificada'||decision.reviewTopic==='customer-question'&&quotationInquiry(e.text))){
+      const ordinaryInformation=ordinaryDataInformationTurn(s,c,decision.state,e);
+      if(ordinaryInformation){selectedPrice=null;decision=ordinaryInformation;}
+      if(c.company==='fumigacion'&&!decision.registrationInformation&&!(currentQuote&&naturalAcceptance)&&(decision.question?.topic==='cotizacion-verificada'||decision.reviewTopic==='customer-question'&&quotationInquiry(e.text))){
         const selection=selectPrice(decision.state.slots,s.approvedPriceCatalogs(),null,{scheduleHash:businessPriceHashAt(e.at),issuedAt:e.at});
         if(selection.entry&&!e.forwarded&&!ambiguousIntake(e.text)&&!specialQuotation(textWithoutLinks(literalIntakeTextWithoutRegistrationFields(e.text)),decision.state.slots)){
           selectedPrice=selection.entry;
@@ -1048,12 +1056,12 @@ export class Engine {
       // descriptions. In particular a street number before "apartamento"
       // must not become a quantity of apartments for quotation scope.
       const literalProgramStage=['name','address','details','confirm','correction'].includes(caseState.programIntake?.stage);
-      const registration=decision.quoteClarification||decision.literalServiceContext||decision.quoteEvidenceReview?null:registrationTurn(s,c,caseState,e,literalProgramStage?{...decision,state:{...decision.state,slots:{...caseState.slots,...(decision.state.slots.preference?{preference:decision.state.slots.preference}:{})}}}:decision);
+      const registration=decision.quoteClarification||decision.literalServiceContext||decision.quoteEvidenceReview||decision.directedNonservice?null:registrationTurn(s,c,caseState,e,literalProgramStage?{...decision,state:{...decision.state,slots:{...caseState.slots,...(decision.state.slots.preference?{preference:decision.state.slots.preference}:{})}}}:decision);
       if(registration)decision=registration;
        if(caseState.customerDeferral?.active===true&&decision.state.customerDeferral?.active===false&&decision.state.customerDeferral.resumedBy?.sourceId===e.id)s.audit('OWN_CUSTOMER_DEFERRAL_RESUMED',e.id,{caseId:caseState.caseId,deferralSourceId:caseState.customerDeferral.sourceId,resumeSourceId:e.id,kind:decision.state.customerDeferral.resumedBy.kind,humanHoldReleased:false,acceptanceGrantedByMarker:false});
       decision.state.lastHandledSourceId=e.id;
       if(/^[¡! ]*(?:hola\b|buenos dias\b|buen dia\b|buenas tardes\b|buenas noches\b)/.test(normalize(e.text))&&!conv.state.introduced&&decision.reply){
-        if(c.company==='fumigacion'&&!selectedPrice&&!decision.courtesy&&!decision.review&&!decision.question&&!decision.observed){
+        if(c.company==='fumigacion'&&!decision.directedNonservice&&!selectedPrice&&!decision.courtesy&&!decision.review&&!decision.question&&!decision.observed){
           const missing=decision.state.slots,requests=[];
           const pureGreeting=literalGreetingText(e.text);
           const staged=pureGreeting&&(!missing.service||genericPestDescription(missing.service)||!missing.location);

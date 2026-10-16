@@ -268,6 +268,11 @@ export function mariaReplyContract(config,store,row,text){
  // Registration summaries and saved receipts contain personal fields. Their
  // atomic deterministic text is not sent to the model or paraphrased.
  if(!source||registrationStages.has(source.current.state.programIntake?.stage))return null;
+ const information=source.current.state.registrationInformationRequest;
+ if(information?.promptId===row.id){
+  const quote=store.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND internal=0 AND state IN ('DELIVERED','READ') AND mid IS NOT NULL").get(information.quoteOutboxId,row.phone,row.line,row.case_id);
+  if(quote&&store.priceReplyVersion(quote)?.deliveryVerified&&store.priceReplyStillValid(quote))return null;
+ }
  const alternatives=replyCandidates(text,'fumigacion');
  if(!alternatives.length||!store.priceReplyStillValid(row))return null;
  const facts=replyFacts(config,store,row,source,text),price=store.priceReplyReference(row);

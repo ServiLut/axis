@@ -328,6 +328,38 @@ function eligibleQuote(s,state,phone,line){
  return own;
 }
 export function registrationQuoteReady(s,state,phone,line){return Boolean(eligibleQuote(s,state,phone,line));}
+export function ordinaryRegistrationDataQuestion(text){
+ const t=normalize(text).replace(/^[¿?\s]+|[¿?!.\s]+$/g,'').replace(/\s+/g,' ');
+ return /^(?:por favor[, ]+)?que (?:datos|informacion) (?:necesitas|necesitan|te envio|te mando|debo enviar|tengo que enviar|te debo enviar|me pides)(?: para (?:agendar|programar|registrar|continuar)(?: (?:el servicio|la solicitud|con el servicio))?)?(?: por favor)?$/.test(t);
+}
+export function ordinaryDataInformationTurn(s,c,state,e){
+ if(!programEnabled(c)||e.at<c.mariaProgram.startsAt||!operationalLineAllowed(c,e.line)||c.operationalLineScope&&e.at<Date.parse(c.operationalLineScope.authorizedAt)||c.operationalLineScope&&(typeof s.hasSourcesOutsideLine!=='function'||s.hasSourcesOutsideLine(e.phone,e.line)))return null;
+ if(e.quotedId||e.kind!=='text'||e.fromMe||e.forwarded||state.closed||state.awaitingHumanReview||state.customerDeferral?.active||state.requestedAfterServiceReview||state.requestedControlReview||state.requestedDocumentReview||state.requestedProductInquiry||state.pendingFaqQuestion||Object.keys(state).some(k=>k.startsWith('requestedPayment')&&state[k])||['pending','review','registered','declined'].includes(state.programIntake?.stage))return null;
+ const conversation=s.conversation(e.phone);if(!conversation||conversation.hold||conversation.state.caseId!==state.caseId)return null;
+ const question=ordinaryRegistrationDataQuestion(e.text),previous=state.registrationInformationRequest;
+ if(!question&&!previous)return null;
+ const own=ownDeliveredQuoteEntry(s,state,e.phone,e.line);
+ if(!own||own.entry.source?.type!=='direct_user_approved_schedule'||own.row.created<Date.now()-86400000||own.row.created>e.at)return null;
+ if(previous&&previous.quoteOutboxId!==own.row.id)return null;
+ const latest={};for(const fact of caseLiteralFields(s,c,state,e))for(const field of ['name','address'])if(fact[field]&&!fact.conflictFields?.includes(field))latest[field]={value:fact[field],source:fact.source};
+ const pi=state.programIntake||{},data={...(previous||{}),quoteOutboxId:own.row.id,customerName:pi.customerName||previous?.customerName||latest.name?.value,nameSource:pi.nameSource||previous?.nameSource||latest.name?.source,address:pi.address||previous?.address||latest.address?.value,addressSource:pi.addressSource||previous?.addressSource||latest.address?.source};
+ if(!question){
+  // Information requests never accept a price. Keep pre-acceptance facts in a
+  // separate sourced record, not in the registration state machine.
+  if(own.q.accepted||confirms(e.text)||blockedText(e.text))return null;
+  const prompt=previous?.promptId&&s.db.prepare("SELECT id FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND state IN ('DELIVERED','READ') AND mid IS NOT NULL").get(previous.promptId,e.phone,e.line,state.caseId);
+  if(!prompt)return null;
+  const requested=[...(!data.customerName?['name']:[]),...(!data.address?['address']:[])],explicit=explicitFields(e.text),separated=promptedLiteralFields(e.text,requested);
+  if(explicit.conflict)return null;
+  const name=explicit.name||separated.name,address=explicit.address||separated.address,preference=literalProgramPreference(e.text);
+  if(!name&&!address&&!preference)return null;
+  if(name){data.customerName=name;data.nameSource=source(e);}if(address){data.address=address;data.addressSource=source(e);}
+ }
+ const missing=[...(!data.customerName?['Tu nombre completo.']:[]),...(!data.address?['La dirección completa, incluido apartamento o interior si aplica.']:[]),...(!state.slots.location?['El municipio del servicio.']:[]),...(!state.slots.preference?['Qué día y franja horaria prefieres.']:[])];
+ state.registrationInformationRequest={...data,sourceId:previous?.sourceId||e.id,at:previous?.at||e.at,promptId:e.id+':reply'};
+ const reply=missing.length?'Para preparar tu solicitud, me faltan:\n'+missing.map((item,i)=>(i+1)+'. '+item).join('\n')+'\n\nEl horario queda pendiente de confirmación.':'Ya tengo los datos necesarios. El horario queda pendiente de confirmación.';
+ return {state,registrationInformation:true,reply:reply+(!question&&!own.q.accepted?'\n\n¿Aceptas la cotización para continuar?':'')};
+}
 function blockedText(text){return /[?¿]|^no\b|\b(?:refuerzo|garantia|verificacion|visita anterior|ya fumig|certificado|documento|cancel|no quiero|no acepto|pague|pago|pagar|transfer|comprobante|consign|descuento|gratis|otra solicitud|nuevo servicio|otro servicio|otro inmueble)\w*/.test(normalize(text));}
 // Called only inside the engine's existing transaction; no network or business write.
 export function registrationTurn(s,c,previous,e,decision){
@@ -335,6 +367,7 @@ export function registrationTurn(s,c,previous,e,decision){
  if(!operationalLineAllowed(c,e.line)||c.operationalLineScope&&e.at<Date.parse(c.operationalLineScope.authorizedAt))return null;
  if(c.operationalLineScope&&(typeof s.hasSourcesOutsideLine!=='function'||s.hasSourcesOutsideLine(e.phone,e.line)))return null;
  const state=decision.state;
+ const information=ordinaryDataInformationTurn(s,c,state,e);if(information)return information;
  const priorQuote=state.programIntake&&s.db.prepare('SELECT case_id FROM outbox WHERE id=? AND phone=? AND line=?').get(ownQuoteOutboxId(s,state,e.phone,e.line),e.phone,e.line);
  if(priorQuote&&priorQuote.case_id!==state.caseId){
   state.programIntake={...state.programIntake,stage:'review',preview:null};
@@ -342,7 +375,8 @@ export function registrationTurn(s,c,previous,e,decision){
  }
  const own=eligibleQuote(s,state,e.phone,e.line);
  if(!own||state.requestedAfterServiceReview||state.requestedControlReview||state.requestedDocumentReview)return null;
- const prior=state.programIntake||{stage:'name',originalQuoteAcceptanceId:own.q.acceptanceSource};
+ const info=state.registrationInformationRequest;
+ const prior=state.programIntake||{stage:'name',originalQuoteAcceptanceId:own.q.acceptanceSource,...(info?.quoteOutboxId===own.row.id?{customerName:info.customerName,nameSource:info.nameSource,address:info.address,addressSource:info.addressSource}:{})};
  if(['pending','review','declined'].includes(prior.stage))return {state,observed:true,observedState:'PROGRAM_REGISTRATION_PENDING'};
  if(prior.stage==='registered')return null;
  const pi={...prior},prompt=pi.promptId&&s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND state IN ('DELIVERED','READ')").get(pi.promptId,e.phone,e.line),batchFields=promptedBatchFields(s,c,previous,e,pi,prompt);
@@ -403,14 +437,15 @@ export function registrationTurn(s,c,previous,e,decision){
   const missing=[...(!pi.customerName?['name']:[]),...(!pi.address?['address']:[])];
   if(pi.promptId&&!prompt&&JSON.stringify(pi.requestedFields||[])===JSON.stringify(missing))return {state,observed:true,observedState:'PROGRAM_FIELDS_DELIVERY_PENDING'};
   pi.stage=!pi.customerName?'name':'address';pi.requestedFields=missing;pi.promptId=e.id+':reply';
-  return {state,reply:missing.length===2?'Para registrar tu solicitud, compárteme tu nombre completo y la dirección completa del servicio, incluido apartamento o interior si aplica.':missing[0]==='name'?'Me falta tu nombre completo para registrar la solicitud. ¿Me lo compartes?':'¿Cuál es la dirección completa del servicio, incluido apartamento o interior si aplica?'};
+  const requests=[...(!pi.customerName?['Tu nombre completo.']:[]),...(!pi.address?['La dirección completa del servicio, incluido apartamento o interior si aplica.']:[]),...(!state.slots.preference?['Qué día y franja horaria prefieres.']:[])];
+  return {state,reply:'Para registrar tu solicitud, compárteme:\n'+requests.map((item,i)=>(i+1)+'. '+item).join('\n')+(!state.slots.preference?'\n\nEl horario queda pendiente de confirmación.':'')};
  }
  if(prior.stage==='correction'&&!changed)return {state,reply:'¿Cuál es el dato correcto que debemos cambiar?'};
  // If the customer already supplied both literal facts before accepting the
  // delivered price, the acceptance is sufficient for an unscheduled order.
  // New/corrected facts supplied after acceptance still need a delivered summary.
  const originalAcceptance=own.q.acceptanceSource&&s.db.prepare('SELECT rowid,at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(own.q.acceptanceSource,e.phone,e.line);
- const preprovided=confirms(e.text)&&!conflicting&&!explicit.conflict&&!['confirm','correction'].includes(prior.stage)&&originalAcceptance&&sourcePosition(s,e,pi.nameSource)<=originalAcceptance.rowid&&sourcePosition(s,e,pi.addressSource)<=originalAcceptance.rowid&&Date.parse(pi.nameSource.at)<=originalAcceptance.at&&Date.parse(pi.addressSource.at)<=originalAcceptance.at&&(!petPresence||petPresence.position<=originalAcceptance.rowid&&Date.parse(petPresence.source.at)<=originalAcceptance.at);
+ const preprovided=!info&&confirms(e.text)&&!conflicting&&!explicit.conflict&&!['confirm','correction'].includes(prior.stage)&&originalAcceptance&&sourcePosition(s,e,pi.nameSource)<=originalAcceptance.rowid&&sourcePosition(s,e,pi.addressSource)<=originalAcceptance.rowid&&Date.parse(pi.nameSource.at)<=originalAcceptance.at&&Date.parse(pi.addressSource.at)<=originalAcceptance.at&&(!petPresence||petPresence.position<=originalAcceptance.rowid&&Date.parse(petPresence.source.at)<=originalAcceptance.at);
  const preference=casePreferenceSource(s,c,state,e);
  const preview={customerName:pi.customerName,address:pi.address,municipality:state.slots.location,service:state.slots.service,priceCop:own.entry.priceCop,...(preference?{preference:preference.value}:{}),...(petPresence?{petPresence:petPresence.value,petPresenceSource:petPresence.source}:{})};
  if(!preprovided&&(prior.stage!=='confirm'||changed||JSON.stringify(pi.preview)!==JSON.stringify(preview))){
