@@ -32,7 +32,25 @@ export const MARIA_STAGED_GREETING_GUARD='own-pure-greeting-essential-fields-bef
 export const MARIA_SAVED_PENDING_CUSTOMER_GUARD='own-saved-pending-operation-direct-status-and-cancellation-request-v1';
 export const MARIA_PENDING_CONVERSATION_GUARD='own-pending-question-does-not-silence-current-customer-v1';
 export const MARIA_PEST_IDENTITY_GUARD='generic-plague-description-is-not-a-verified-pest-v1';
-function genericPestDescription(value){return /^(?:plagas?|(?:control|tratamiento|manejo)(?: de)?(?: la| las)? plagas?|(?:servicio de )?fumigacion)$/.test(normalize(value));}
+function genericPestDescription(value){return /^(?:plagas?|(?:control|tratamiento|manejo)(?: de)?(?: la| las)? plagas?|(?:servicio de )?(?:fumigacion|fumigar))$/.test(normalize(value));}
+// Presentation only: decide whether to ask for a neighborhood alongside the
+// missing pest. This never fills a slot, confirms a location, or gates a price.
+function ordinaryNeighborhoodAlreadyProvided(state){
+ const city=normalize(state.slots.location),parts=state.intakeLocationParts?.map(part=>part.text)||[state.slots.locationDetails];
+ return parts.some(value=>{
+  const text=normalize(value);if(!text||/[?¿]/.test(text)||/\b(?:no se|no recuerdo|desconozco|desconocid[oa]|sin confirmar|mismo barrio)\b/.test(text))return false;
+  const residual=(city?text.split(city).join(' '):text).replace(/\b(?:en|el|la|los|las|del|de|municipio|ciudad|barrio|sector|vereda|urbanizacion|corregimiento|estoy|queda|ubicado|ubicada|es)\b/g,' ').replace(/[^\p{L}]+/gu,' ').trim();
+  if(!residual)return false;
+  if(/\b(?:barrio|sector|vereda|urbanizacion|corregimiento)\s+\p{L}/u.test(text))return true;
+  // A municipality-only reply is not a neighborhood. A retained short native
+  // location fragment may supply the latter; an entire intake message may not.
+  return text.length<=120&&text.split(/\s+/).length<=8&&!/\d|\b(?:tengo|tiene|son|quiero|necesito|fumigar|fumigacion|plagas?|control|tratamiento|apartamento|casa|local|habitaciones?|metros?|cucarachas?|hormigas?|chinches?|roedores?|comejen|precio|cuesta|servicio)\b/.test(text);
+ });
+}
+function missingPestReply(state){
+ if(state.slots.location&&!ordinaryNeighborhoodAlreadyProvided(state))return 'Para cotizarte, me falta:\n1. Qué plaga deseas tratar o si buscas prevención.\n2. En qué barrio o vereda necesitas el servicio.';
+ return '¿Qué plaga deseas tratar o buscas un servicio preventivo?';
+}
 function ownCaseAnchor(store,config,state,event){
  if(config.company!=='fumigacion'||!state.caseId?.startsWith('fumigacion:'))return null;
  const row=store.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(state.caseId.slice(11),event.phone,event.line);
@@ -330,7 +348,7 @@ function literalFields(state,e,company){
   const fields=extractSlots(e.text,company);
   // A price followup naming the generic procedure does not replace the pest
   // already supplied in this case ("cuánto vale la fumigación").
-  if(company==='fumigacion'&&fields.service==='fumigacion'&&state.slots.service&&!['fumigacion','prevencion'].includes(normalize(state.slots.service))&&quotationInquiry(e.text))delete fields.service;
+  if(company==='fumigacion'&&genericPestDescription(fields.service)&&state.slots.service&&!genericPestDescription(state.slots.service)&&normalize(state.slots.service)!=='prevencion'&&quotationInquiry(e.text))delete fields.service;
   if(company==='fumigacion'&&fields.service&&state.slots.service&&/^(?:y|tambien|ademas)(?:\s+|[, :])/.test(normalize(e.text)))
     fields.service=[...new Set((state.slots.service+' y '+fields.service).split(' y '))].join(' y ');
   return fields;
@@ -631,7 +649,7 @@ export function customerDecision(company,state,e,analysis={}) {
   if(/^(?:hola[, ]+)?(?:con|esta|se encuentra)\s+\p{L}+(?:\s+\p{L}+)?[.!? ]*$/u.test(t))return {state:{...next,slots:{...state.slots}},reviewTopic:'requested-person',review:'La persona pidió hablar con alguien específico. Falta conocer el motivo; no consta una solicitud nueva de servicio.',reviewQuestion:'¿Quién puede atender esta solicitud?',reply:'Tu mensaje quedó pendiente de atención.'};
   if(company==='fumigacion'&&genericPestDescription(next.slots.service)){
     if(!next.asked.includes('service'))next.asked.push('service');
-    return {state:next,pestIdentityClarification:true,reply:'La atención depende de la plaga y del lugar. ¿Qué plaga has visto o buscas un servicio preventivo?'};
+    return {state:next,pestIdentityClarification:true,reply:missingPestReply(next)};
   }
   if(company==='fumigacion'&&specialQuotation(literalText,next.slots))return {state:next,reviewTopic:'special-quotation',reviewConditions:{kind:'special-property'},review:'Cotización especial de edificio, unidad, varias propiedades o zonas comunes; necesita alcance y precio propios, sin aplicar la tarifa de una vivienda.',reviewQuestion:'¿Qué alcance y cotización corresponden a esta solicitud especial?',reply:'Gracias. La cotización de este inmueble requiere confirmar su alcance y precio.'};
   if(company==='fumigacion'&&normalize(next.slots.service).includes('avispas'))return {state:next,reviewTopic:'special-quotation',reviewConditions:{kind:'wasp-inspection'},review:'La cotización de avispas depende del tamaño y la altura del panal; requiere inspección. No hay una tarifa automática aprobada.',reviewQuestion:'¿Qué inspección y cotización corresponden al tamaño y la altura de este panal?',reply:'Para las avispas, la cotización depende del tamaño y la altura del panal y requiere inspección.'};
@@ -646,7 +664,7 @@ export function customerDecision(company,state,e,analysis={}) {
   const nonResidentialDimensions=dimensions?.explicitMetricUnits&&!['casa','apartamento'].includes(normalize(next.slots.site));
   const fields=company==='fumigacion'?['service','site',mattressService?'mattresses':'size','location']:['service','detail','location'];
   const missing=fields.find(f=>f==='size'?!next.slots.area&&!next.slots.rooms&&!nonResidentialDimensions:!next.slots[f]||company==='fumigacion'&&f==='service'&&genericPestDescription(next.slots.service));
-  const questions={service:company==='fumigacion'?'¿Qué plaga deseas tratar o buscas un servicio preventivo?':'¿Qué equipo necesitas revisar?',site:'¿En qué tipo de inmueble necesitas el servicio?',size:'¿Cuántas habitaciones o metros cuadrados tiene el lugar?',mattresses:'¿Cuántos colchones están afectados? Cuéntame también si hay chinches en bases de cama u otros muebles.',detail:'¿Qué falla presenta el equipo?',location:'¿En qué municipio y barrio necesitas el servicio?'};
+  const questions={service:company==='fumigacion'?missingPestReply(next):'¿Qué equipo necesitas revisar?',site:'¿En qué tipo de inmueble necesitas el servicio?',size:'¿Cuántas habitaciones o metros cuadrados tiene el lugar?',mattresses:'¿Cuántos colchones están afectados? Cuéntame también si hay chinches en bases de cama u otros muebles.',detail:'¿Qué falla presenta el equipo?',location:'¿En qué municipio y barrio necesitas el servicio?'};
   if(/[?¿]/.test(literalText)&&/\b(eso|lo anterior|lo que (?:me )?(?:dij|coment|indic|explic)|me habian|me hab[ií]as|mismo (?:precio|horario|servicio)|como qued|que qued)\w*/.test(t))
     return {state:next,reviewTopic:'previous-communication',review:'El cliente pregunta por algo comunicado antes. Hay que relacionar su pregunta con el contexto guardado y el servicio correcto antes de contestar.',reply:'Gracias. Revisaremos lo que ya conversamos para responder tu pregunta con claridad.'};
   if(isCustomerQuestion(e.text)&&!(company==='fumigacion'&&(quotationInquiry(e.text)||ordinaryAvailability)&&!ambiguousIntake(e.text)))
@@ -967,8 +985,8 @@ export class Engine {
         if(c.company==='fumigacion'&&!selectedPrice&&!decision.courtesy&&!decision.review&&!decision.question&&!decision.observed){
           const missing=decision.state.slots,requests=[];
           const pureGreeting=literalGreetingText(e.text);
-          const staged=pureGreeting&&(!missing.service||normalize(missing.service)==='fumigacion'||!missing.location);
-          if(!missing.service||normalize(missing.service)==='fumigacion')requests.push('Qué plaga deseas tratar o si buscas prevención.');
+          const staged=pureGreeting&&(!missing.service||genericPestDescription(missing.service)||!missing.location);
+          if(!missing.service||genericPestDescription(missing.service))requests.push('Qué plaga deseas tratar o si buscas prevención.');
           if(!staged&&normalize(missing.service).includes('chinches')){
             if(!missing.site)requests.push('Qué tipo de inmueble es.');
             if(!missing.mattresses)requests.push('Cuántos colchones están afectados y si también hay chinches en bases de cama u otros muebles.');
@@ -977,7 +995,7 @@ export class Engine {
           if(requests.length){
             decision.reply='Para ayudarte con la cotización, cuéntame:\n'+requests.map(x=>'• '+x).join('\n');
             decision.state.initialIntakeAllRequested=!staged;
-            const requested=staged?['service','location'].filter(field=>!missing[field]||field==='service'&&normalize(missing.service)==='fumigacion'):['service','site',normalize(missing.service).includes('chinches')?'mattresses':'size','location'].filter(field=>field==='size'?!missing.area&&!missing.rooms:!missing[field]);
+            const requested=staged?['service','location'].filter(field=>!missing[field]||field==='service'&&genericPestDescription(missing.service)):['service','site',normalize(missing.service).includes('chinches')?'mattresses':'size','location'].filter(field=>field==='size'?!missing.area&&!missing.rooms:!missing[field]||field==='service'&&genericPestDescription(missing.service));
             decision.state.initialIntakeRequestedFields=requested;
             decision.state.asked=[...new Set([...decision.state.asked,...requested])];
           }
