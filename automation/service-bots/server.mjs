@@ -13,7 +13,8 @@ import {CHIEF_COMMAND_AI_GUARD} from './chief-command-ai.mjs';
 import {MARIA_DIMENSIONS_GUARD} from './intake-dimensions.mjs';
 import { Transport,drain,MARIA_HISTORY_PROTOCOL_GUARD } from './transport.mjs';
 import { pathToFileURL } from 'node:url';
-import { decodeWebhook,observePrivateIdentity,privateIdentityStatus } from './webhook.mjs';
+import { decodeWebhook,observePrivateIdentity,privateIdentityStatus,initializePrivateNativeCachePair,prospectivePrivateNativeCacheBody,recordPrivateNativeCachePairs,decodePrivateNativeCachePairs } from './webhook.mjs';
+import {resolveOwnBlueNativeIdentity} from './native-identity-resolution.mjs';
 import {validateApprovedAnswers} from './faq.mjs';
 import {customerActivity} from './chief-status.mjs';
 import {queueChiefDocument} from './chief-document.mjs';
@@ -95,6 +96,7 @@ async function verifyApprovedAnswerSource(document,config,transport){
 
 export function createBotServer(config,store,transport,engine) {
   initializeIntakeJournal(store,config);
+  const privateNativeCacheStartedAt=initializePrivateNativeCachePair(store,config);
   initializeTesaStore(store);
   store.db.prepare("UPDATE tesa_outbox SET state='UNCERTAIN',updated=? WHERE state='SENDING'").run(Date.now());
   restoreOwnAiSetup(config,store);
@@ -360,6 +362,16 @@ export function createBotServer(config,store,transport,engine) {
           for(const d of parsed.deliveries)deliveryUpdates+=store.delivery(d.mid,own.phone,d.state);
           return reply(202,{accepted:0,observed,duplicates,deliveryUpdates,unresolvedPrivateIdentity,intakeJournal,reason:'USER_AUTHORIZED_SUSPENDED_LINE',operationalCoverage:operationalCoverage(config)});
         }
+        const prospectiveIdentityBody=prospectivePrivateNativeCacheBody(store,config,journalBody,{startedAt:privateNativeCacheStartedAt,now:serverReceivedAt});
+        if(prospectiveIdentityBody){
+          try{
+            const resolution=await resolveOwnBlueNativeIdentity(config,transport,prospectiveIdentityBody,{startedAt:privateNativeCacheStartedAt,now:serverReceivedAt,authenticated:true});
+            recordPrivateNativeCachePairs(store,config,prospectiveIdentityBody,resolution,{startedAt:privateNativeCacheStartedAt});
+          }catch{store.audit('PRIVATE_NATIVE_IDENTITY_CACHE_PAIR_REVIEW','own-blue-ingress',{originalJournalPreserved:true,customerIdentityResolved:false,historicalReplayEnabled:false});}
+        }
+        // The original callback never acquires a fictional native PN field.
+        // Only separately proven future sources add a derived decoding envelope.
+        parsed.events.push(...decodePrivateNativeCachePairs(store,config,journalBody));
         const unresolvedPrivateIdentity=observePrivateIdentity(store,{...body,data:privateRows},config,parsed);
         const groupOperations=await ingestTesaWebhook(store,config,transport,body);
         for(const value of parsed.events){const e=validateEvent(value,config);if(e){const r=ingress(e);accepted++;if(r.duplicate)duplicates++;}}

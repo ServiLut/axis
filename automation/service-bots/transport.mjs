@@ -19,6 +19,39 @@ import {validateEvent} from './config.mjs';
 import {literalGreetingEligible,literalGreetingReplyStillValid} from './literal-reception.mjs';
 
 export const MARIA_HISTORY_PROTOCOL_GUARD='own-preactivation-synchronization-only-complete-history-v1';
+
+function priorAttentionRelease(store,config,outbox,attention){
+  // Store.hold(false) is the existing explicit chief-return path. Merely
+  // reading its encrypted marker must never release a held conversation or
+  // make an already-prepared response eligible again.
+  if(config.company!=='fumigacion'||store.company!==config.company||outbox.internal)return null;
+  const now=Date.now(),through=attention.through,conversation=store.conversation(outbox.phone);
+  if(!Number.isSafeInteger(through)||through>now||through<config.activatedAt||
+    !conversation||conversation.hold||conversation.line!==outbox.line||conversation.revision!==outbox.revision||
+    store.db.prepare("SELECT 1 FROM events WHERE phone=? AND from_me=1 AND state='PENDING'").get(outbox.phone))return null;
+  try{
+    const row=store.db.prepare('SELECT value FROM meta WHERE key=?').get('chief-release:'+outbox.phone);
+    if(!row)return null;
+    const release=store.open(row.value);
+    if(!release||typeof release!=='object'||Array.isArray(release)||
+      Object.keys(release).some(key=>!['source','at'].includes(key))||
+      typeof release.source!=='string'||!release.source.trim()||release.source.length>200||
+      !Number.isSafeInteger(release.at)||release.at<config.activatedAt||release.at>through||release.at>now||
+      !Number.isSafeInteger(conversation.at)||conversation.at<release.at||conversation.at>now||
+      !Number.isSafeInteger(outbox.created)||outbox.created<release.at)return null;
+    return release;
+  }catch{return null;}
+}
+
+function nativeSourceBeforeRelease(source,outbox,release,config,through){
+  // Native timestamps have second precision. A source in the release second
+  // remains ambiguous, even when its rounded timestamp looks earlier.
+  return Boolean(release&&source.line===outbox.line&&operationalLineAllowed(config,source.line)&&
+    (source.phone===undefined||source.phone===outbox.phone)&&
+    source.edited!==true&&source.kind!=='edited-body-unavailable'&&
+    typeof source.id==='string'&&source.id&&Number.isSafeInteger(source.at)&&
+    source.at>=config.activatedAt&&source.at<=through&&source.at+999<release.at);
+}
 const historyStart=Date.parse('2000-01-01T00:00:00.000Z');
 const historyObject=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 function isolatedHistorySynchronization(record){
@@ -179,7 +212,7 @@ export class Transport {
             // An authenticated outgoing edit with an unavailable body remains
             // attention evidence. Read/delivery updates alone are not authorship.
             const edited=Array.isArray(r.MessageUpdate)&&r.MessageUpdate.some(u=>u.status==='EDITED');
-            if(written||media||edited)sources.set(line.phone+':'+key.id,{id:key.id,line:line.phone,at,kind:media?'media':written?'text':'edited-body-unavailable'});
+            if(written||media||edited)sources.set(line.phone+':'+key.id,{id:key.id,line:line.phone,at,kind:media?'media':written?'text':'edited-body-unavailable',...(edited?{edited:true}:{})});
           }
           if(read===expectedTotal)break;
           if(!result.records.length||page===2||read>expectedTotal)throw new Error('ATTENTION_COVERAGE_UNVERIFIED');
@@ -397,12 +430,18 @@ export async function flushOutbox(store,config,transport){
       try{
         const attention=await transport.currentAttention(o.phone);
         if(!attention.complete)throw new Error('ATTENTION_COVERAGE_UNVERIFIED');
-        const unknown=attention.sources.find(source=>!store.db.prepare('SELECT 1 FROM outbox WHERE mid=? AND phone=? AND line=?').get(source.id,o.phone,source.line));
+        const release=priorAttentionRelease(store,config,o,attention),releasedSources=[];
+        const unknown=attention.sources.find(source=>{
+          if(store.db.prepare('SELECT 1 FROM outbox WHERE mid=? AND phone=? AND line=?').get(source.id,o.phone,source.line))return false;
+          if(nativeSourceBeforeRelease(source,o,release,config,attention.through)){releasedSources.push(source);return false;}
+          return true;
+        });
+        if(releasedSources.length)store.audit('NATIVE_PRE_RELEASE_ATTENTION_PRESERVED',o.id,{phone:o.phone,line:o.line,releaseSource:release.source,releasedAt:release.at,sources:releasedSources,authorUnverified:true,explicitReturnAlreadyStored:true,holdReleased:false,firstBotEvidencePreserved:true});
         if(unknown){
           store.hold(o.phone,unknown.id,true);
           store.audit('NATIVE_PRIOR_ATTENTION_BLOCKED_REPLY',unknown.id,{phone:o.phone,line:unknown.line,at:unknown.at,outboxId:o.id,authorUnverified:true,firstBotEvidencePreserved:true});suppressed++;continue;
         }
-        store.audit('NATIVE_ATTENTION_CHECKED',o.id,{through:attention.through,checks:attention.checks,knownOutgoing:attention.sources.length,coverage:attention.coverage??operationalCoverage(config)});
+        store.audit('NATIVE_ATTENTION_CHECKED',o.id,{through:attention.through,checks:attention.checks,knownOutgoing:attention.sources.length-releasedSources.length,releasedHistoricalOutgoing:releasedSources.length,coverage:attention.coverage??operationalCoverage(config)});
       }catch{
         store.db.prepare("UPDATE outbox SET state='ATTENTION_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id);
         store.hold(o.phone,'attention-review:'+o.id,true);store.audit('NATIVE_ATTENTION_UNVERIFIED',o.id,{attemptedSend:false});suppressed++;continue;
