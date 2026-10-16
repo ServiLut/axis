@@ -4,6 +4,7 @@ import {operationalLineAllowed} from './line-scope.mjs';
 import {conversationalAiGuard,ownAiScope,ownAiScopeMatches} from './ai-settings.mjs';
 import {mariaOrdinaryIntakeReply} from './adviser-tone.mjs';
 import {mariaModelKnowledge} from './maria-knowledge.mjs';
+import {pendingOrdinaryDataInformationTurn} from './maria-program.mjs';
 import {MARIA_UNDERSTANDING_GUARD,MARIA_UNDERSTANDING_VERSION,MARIA_UNDERSTANDING_INSTRUCTIONS,MARIA_INTENTS,MARIA_REVIEWED_EXAMPLES,MARIA_EVALUATION_CASES,validatedIntent} from './maria-understanding.mjs';
 import {MIGUEL_UNDERSTANDING_GUARD,MIGUEL_UNDERSTANDING_VERSION,MIGUEL_UNDERSTANDING_INSTRUCTIONS,MIGUEL_INTENTS,MIGUEL_REVIEWED_EXAMPLES,MIGUEL_EVALUATION_CASES,validatedMiguelIntent,miguelLiteralSlotAllowed,miguelModelKnowledge} from './miguel-understanding.mjs';
 const endpoint='https://api.openai.com/v1/responses';
@@ -268,6 +269,9 @@ export function mariaReplyContract(config,store,row,text){
  // Registration summaries and saved receipts contain personal fields. Their
  // atomic deterministic text is not sent to the model or paraphrased.
  if(!source||registrationStages.has(source.current.state.programIntake?.stage))return null;
+ // This exact informational list preserves a pending review; it is neither a
+ // quote nor permission to register. Keep its verified deterministic wording.
+ if(pendingOrdinaryDataInformationTurn(store,config,source.current.state,source.event)?.reply===text)return null;
  const information=source.current.state.registrationInformationRequest;
  if(information?.promptId===row.id){
   const quote=store.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND internal=0 AND state IN ('DELIVERED','READ') AND mid IS NOT NULL").get(information.quoteOutboxId,row.phone,row.line,row.case_id);

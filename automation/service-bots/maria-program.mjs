@@ -104,6 +104,17 @@ export function acceptsOrdinaryQuotation(text){
  }
  return literalTimedYes||/^(?:si|listo|dale|acepto|de acuerdo|confirmo|correcto|esta bien|perfecto|si esta bien|si confirmo|si acepto|todo correcto|si todo correcto|si correcto|listo esta bien|ok|okay)(?: (?:agendame|programame|reservame|agenda el servicio|programa el servicio|quiero el servicio)(?: para)?(?: (?:hoy|manana|pasado manana|el lunes|el martes|el miercoles|el jueves|el viernes|el sabado|el domingo))?(?: (?:en la manana|en la tarde|en la noche|a las? \d{1,2}(?::\d{2})?(?: am| pm)?))?)?(?: (?:por favor|gracias|muchas gracias))*$/.test(t);
 }
+// Only the engine's independently verified own delivered quotation may supply
+// the expected amount. This opens data collection, never summary confirmation.
+export function quotationAmountAffirmation(text){
+ if(typeof text!=='string')return null;
+ const t=normalize(text).trim(),amount='([1-9]\\d{0,2}(?:\\.\\d{3})+|[1-9]\\d{3,7})';
+ const match=t.match(new RegExp('^(?:(?:si[, ]+)?(?:deseo|quiero) continuar con (?:la|esta) cotizacion|(?:si[, ]+)?acepto (?:la|esta) cotizacion) de (?:\\$\\s*'+amount+'(?:\\s*cop)?|'+amount+'\\s+cop)[.!]?$'));
+ return match?Number((match[1]||match[2]).replace(/\./g,'')):null;
+}
+export function acceptsOwnQuotedAmount(text,priceCop){
+ return Number.isSafeInteger(priceCop)&&priceCop>0&&priceCop<=10000000&&quotationAmountAffirmation(text)===priceCop;
+}
 const confirms=acceptsOrdinaryQuotation;
 const fieldLabels=()=>/(?:\b(?:mi nombre(?: completo)?(?: es)?|nombre completo|nombre(?=\s*:)|me llamo|a nombre de)|\b(?:(?:mi|la) direcci[oó]n(?: completa)?(?: es)?|direcci[oó]n(?: completa)?))\s*[: ,]*\s*/giu;
 const fieldValue=(text,hits,i)=>text.slice(hits[i].index+hits[i][0].length,hits[i+1]?.index??text.length).trim().replace(/(?:\s+y)?[\s,;.!]*$/u,'').trim();
@@ -331,6 +342,32 @@ export function registrationQuoteReady(s,state,phone,line){return Boolean(eligib
 export function ordinaryRegistrationDataQuestion(text){
  const t=normalize(text).replace(/^[¿?\s]+|[¿?!.\s]+$/g,'').replace(/\s+/g,' ');
  return /^(?:por favor[, ]+)?que (?:datos|informacion) (?:necesitas|necesitan|te envio|te mando|debo enviar|tengo que enviar|te debo enviar|me pides)(?: para (?:agendar|programar|registrar|continuar)(?: (?:el servicio|la solicitud|con el servicio))?)?(?: por favor)?$/.test(t);
+}
+// A pending technical/price consultation does not prevent answering what data
+// will be needed. This path grants no acceptance, registration or schedule and
+// deliberately leaves both the review and its original consultation intact.
+export function pendingOrdinaryDataInformationTurn(s,c,state,e){
+ if(!programEnabled(c)||!state.awaitingHumanReview||state.programIntake||!state.caseId?.startsWith('fumigacion:')||!Number.isSafeInteger(e.at)||e.at<c.mariaProgram.startsAt||!operationalLineAllowed(c,e.line)||c.operationalLineScope&&(e.at<Date.parse(c.operationalLineScope.authorizedAt)||typeof s.hasSourcesOutsideLine!=='function'||s.hasSourcesOutsideLine(e.phone,e.line)))return null;
+ if(e.kind!=='text'||e.fromMe!==false||e.forwarded||e.quotedId||!ordinaryRegistrationDataQuestion(e.text)||state.closed||state.customerDeferral?.active||state.requestedAfterServiceReview||state.requestedControlReview||state.requestedDocumentReview||state.requestedProductInquiry||state.pendingFaqQuestion||Object.keys(state).some(k=>k.startsWith('requestedPayment')&&state[k]))return null;
+ const conv=s.conversation(e.phone);if(!conv||conv.hold||conv.state.caseId!==state.caseId)return null;
+ const first=s.db.prepare('SELECT rowid,body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(state.caseId.slice(11),e.phone,e.line),current=s.db.prepare('SELECT rowid,body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(e.id,e.phone,e.line);
+ if(!first||!current||first.rowid>current.rowid)return null;
+ const native=s.open(current.body),anchor=s.open(first.body);
+ if(native.id!==e.id||native.phone!==e.phone||native.line!==e.line||native.fromMe!==false||native.text!==e.text||native.at!==e.at||native.kind!=='text'||native.forwarded||native.quotedId||anchor.kind!=='text'||anchor.fromMe!==false||anchor.phone!==e.phone||anchor.line!==e.line||anchor.forwarded||anchor.quotedId||anchor.at<c.mariaProgram.startsAt||anchor.at>e.at)return null;
+ const topics=new Set(['cotizacion-verificada','special-quotation','disponibilidad-y-tecnico']);
+ const questions=[...s.db.prepare("SELECT q.* FROM questions q JOIN outbox o ON o.id=q.outbox_id WHERE q.phone=? AND q.case_id=? AND o.line=? AND q.state IN ('PENDING','ANSWER_REVIEW') ORDER BY q.rowid DESC LIMIT 100").all(e.phone,state.caseId,e.line),...s.db.prepare("SELECT * FROM tesa_questions WHERE company='fumigacion' AND customer_phone=? AND case_id=? AND source_line=? AND state IN ('PENDING','ANSWER_REVIEW') ORDER BY rowid DESC LIMIT 100").all(e.phone,state.caseId,e.line)];
+ const eligible=questions.filter(q=>topics.has(q.topic)).flatMap(q=>{
+  const body=s.open(q.body),row=s.db.prepare('SELECT rowid,body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(body.source,e.phone,e.line);if(!row||row.rowid<first.rowid||row.rowid>current.rowid)return [];
+  const source=s.open(row.body);return source.id===body.source&&source.fromMe===false&&source.phone===e.phone&&source.line===e.line&&source.kind==='text'&&!source.forwarded&&!source.quotedId&&source.at>=anchor.at&&source.at<=e.at?[q]:[];
+ });
+ const pending=eligible.find(q=>q.id===state.pendingTesaQuestionId)||eligible[0];if(!pending)return null;
+ const latest={};for(const fact of caseLiteralFields(s,c,state,e)){
+  const row=s.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(fact.source.id,e.phone,e.line),original=row&&s.open(row.body);if(!original||original.quotedId)continue;
+  for(const key of ['name','address'])if(fact[key])latest[key]=fact.conflictFields?.includes(key)?null:fact[key];
+ }
+ const missing=[...(!latest.name?['Tu nombre completo.']:[]),...(!latest.address?['La dirección completa, incluido apartamento o interior si aplica.']:[]),...(!state.slots.location?['El municipio del servicio.']:[]),...(!state.slots.preference?['Qué día y franja horaria prefieres.']:[])];
+ const reply=(missing.length?'Para preparar tu solicitud, me faltan:\n'+missing.map((item,i)=>(i+1)+'. '+item).join('\n'):'Ya tengo esos datos para preparar tu solicitud.')+'\n\n'+(pending.topic==='disponibilidad-y-tecnico'?'El horario y el técnico siguen pendientes de confirmación.':'El precio y el horario siguen pendientes de confirmación.');
+ return {state,reply,questionId:pending.id,topic:pending.topic};
 }
 export function ordinaryDataInformationTurn(s,c,state,e){
  if(!programEnabled(c)||e.at<c.mariaProgram.startsAt||!operationalLineAllowed(c,e.line)||c.operationalLineScope&&e.at<Date.parse(c.operationalLineScope.authorizedAt)||c.operationalLineScope&&(typeof s.hasSourcesOutsideLine!=='function'||s.hasSourcesOutsideLine(e.phone,e.line)))return null;

@@ -13,7 +13,7 @@ import {ownIntent} from './maria-understanding.mjs';
 import {ownMiguelIntent,miguelLiteralSlotAllowed} from './miguel-understanding.mjs';
 import {literalPaintingRequest} from './technical-scope.mjs';
 import {afterServiceKind,afterServiceRequest,afterServiceDecision,explicitNewService,mariaLiteralServiceContext,literalOwnAfterServiceRequest,MARIA_LITERAL_SERVICE_CONTEXT_GUARD,mariaIncidentalPetMention} from './after-service.mjs';
-import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,literalIntakeTextWithoutRegistrationFields,literalProgramPreference,prepareRegisteredTesaContinuation,registeredTesaConfirmation,ownRegisteredReceiptForPresentation,ownSavedPendingOperation,queueOwnSavedServiceReview,ownQuoteOutboxId,ownDeliveredQuoteEntry,ordinaryDataInformationTurn} from './maria-program.mjs';
+import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,acceptsOwnQuotedAmount,quotationAmountAffirmation,literalIntakeTextWithoutRegistrationFields,literalProgramPreference,prepareRegisteredTesaContinuation,registeredTesaConfirmation,ownRegisteredReceiptForPresentation,ownSavedPendingOperation,queueOwnSavedServiceReview,ownQuoteOutboxId,ownDeliveredQuoteEntry,ordinaryDataInformationTurn,pendingOrdinaryDataInformationTurn} from './maria-program.mjs';
 import {prepareMariaUnregisteredTesaPlan,mariaCaseQuoteCustomerTurn} from './maria-tesa-unregistered.mjs';
 import {prepareOwnSchedulingPlan,ownSchedulingCustomerTurn} from './maria-own-order-scheduling.mjs';
 import {createHash} from 'node:crypto';
@@ -255,11 +255,19 @@ function ordinaryLiteralMunicipality(text){
   // Preserve the existing literal source of the two external municipalities.
   return /sopetran|antioquia/.test(distinct[0])?String(text).match(/\b(?:(?:santa\s+fe|santaf[eé])\s+de\s+antioquia|sopetr[aá]n)\b/i)?.[0]:distinct[0];
 }
+function coordinatedFurnitureExclusion(raw){
+ if(/[?¿"“”«»]/.test(raw))return false;
+ const clause=normalize(raw).trim().replace(/[.!;,\r\n]+$/g,'').trim();
+ // A complete negative coordination only: a later positive, a question or an
+ // uncertain/reporting prefix cannot be dropped to make this pattern fit.
+ const item='(?:(?:los|las|el|la|un|una|unos|unas) )?(?:otr[oa]s? )?(?:camas?|bases?(?: de)? (?:la )?camas?|basecamas?|sofas?|muebles?)';
+ return new RegExp('^(?:no (?:hay|tengo|tenemos|veo|vemos)|sin) '+item+'(?: ni '+item+'){1,5}(?: (?:afectad[oa]s?|con chinches?))?$').test(clause);
+}
 function literalAffectedFurniture(text){
   // Keep interrogative punctuation with its own clause: a question about an
   // exclusion is not the customer's statement that no extra furniture exists.
   const clauses=normalize(text).split(/(?<=[.!?;,\r\n])|\bpero\b/);
-  for(const rawClause of clauses){const clause=rawClause.trim().replace(/[.!?;,\r\n]+$/g,'');for(const match of clause.matchAll(/\b(?:bases?(?: de)? (?:la )?camas?|basecamas?|sofas?|muebles?)\b/g)){
+  for(const rawClause of clauses){if(coordinatedFurnitureExclusion(rawClause))continue;const clause=rawClause.trim().replace(/[.!?;,\r\n]+$/g,'');for(const match of clause.matchAll(/\b(?:bases?(?: de)? (?:la )?camas?|basecamas?|sofas?|muebles?)\b/g)){
     const before=clause.slice(0,match.index),after=clause.slice(match.index+match[0].length);
     // A stated exclusion is not extra affected furniture. Uncertainty ("no sé
     // si...") and scope/price questions remain unresolved furniture scope.
@@ -274,6 +282,7 @@ const furnitureSourceHash=source=>createHash('sha256').update(JSON.stringify([so
 function explicitFurnitureExclusion(text){
  if(literalAffectedFurniture(text))return false;
  return normalize(text).split(/(?<=[.!?;,\r\n])/).some(raw=>{
+  if(coordinatedFurnitureExclusion(raw))return true;
   if(/[?¿"“”«»]/.test(raw))return false;const clause=raw.trim().replace(/[.!;,]+$/g,'').trim();
   return /^(?:no (?:hay|tengo|tenemos|tiene|tienen|veo|vemos) (?:chinches en )?(?:(?:los|las|el|la) )?(?:otr[oa]s? )?muebles(?: (?:afectados|con chinches))?|sin (?:otr[oa]s? )?muebles(?: (?:afectados|con chinches))?|(?:(?:los|las) )?(?:otr[oa]s? )?muebles no (?:tienen|presentan) chinches)$/.test(clause);
  });
@@ -914,6 +923,14 @@ export class Engine {
         }
       }
       if(caseState.awaitingHumanReview&&!caseQuoteTurn){
+        const information=pendingOrdinaryDataInformationTurn(s,c,caseState,e);
+        if(information){
+          caseState.lastHandledSourceId=e.id;caseState.lastText=e.text;s.saveConversation(e.phone,caseState);
+          if(!publicTextSafe(information.reply))throw new Error('EXTERNAL_TEXT_REJECTED');
+          s.queue(e.id+':reply',e.phone,e.line,information.reply,false,conv.revision,caseState.caseId);
+          s.audit('OWN_PENDING_REGISTRATION_INFORMATION',e.id,{caseId:caseState.caseId,questionId:information.questionId,topic:information.topic,accepted:false,businessWritten:false,humanHoldReleased:false,reviewPreserved:true});
+          finish('PENDING_REGISTRATION_INFORMATION');return;
+        }
         const pendingTurn=ownSavedPendingCustomerTurn(s,c,caseState,e);
         if(pendingTurn){
           pendingTurn.state.lastHandledSourceId=e.id;pendingTurn.state.lastText=e.text;s.saveConversation(e.phone,pendingTurn.state);
@@ -999,7 +1016,11 @@ export class Engine {
         const delivered=s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND state IN ('DELIVERED','READ')").get(ownQuoteOutboxId(s,decision.state,e.phone,e.line),e.phone,e.line,caseState.caseId);
         if(delivered&&s.priceReplyStillValid(delivered))decision={state:decision.state,incidentalPetNote:true,reply:'Anoté: '+incidentalPetNote.text+'.'};
       }
-      const naturalAcceptance=acceptsOrdinaryQuotation(e.text);
+      const amountAcceptance=e.kind==='text'&&e.fromMe===false&&!e.forwarded&&!e.quotedId&&priceNow&&acceptsOwnQuotedAmount(e.text,priceNow.priceCop);
+      const naturalAcceptance=acceptsOrdinaryQuotation(e.text)||Boolean(amountAcceptance);
+      // An affirmative amount without the quotation's delivery proof cannot
+      // grant consent or silently issue a replacement quotation either.
+      const unverifiedAmountAttempt=currentQuote&&!priceNow&&e.kind==='text'&&e.fromMe===false&&!e.forwarded&&!e.quotedId&&quotationAmountAffirmation(e.text)!==null;
       const continuingQuote=!decision.quoteClarification&&!decision.literalServiceContext&&!decision.observed&&c.company==='fumigacion'&&currentQuote&&priceNow?.id===currentQuote.entryId&&priceNow.priceCop===currentQuote.priceCop&&
         ((!decision.review&&!decision.courtesy)||(naturalAcceptance&&(decision.courtesy||decision.reviewTopic==='customer-question')))&&!specialQuotation(textWithoutLinks(literalIntakeTextWithoutRegistrationFields(e.text)),decision.state.slots)&&
         (currentQuote.accepted||naturalAcceptance);
@@ -1025,20 +1046,20 @@ export class Engine {
       }
       // A stored status without its complete original delivery proof cannot
       // grant acceptance, nor silently issue today's replacement price.
-      if(c.company==='fumigacion'&&naturalAcceptance&&currentQuote&&!priceNow&&!e.fromMe&&!e.forwarded&&!e.quotedId&&e.kind==='text'&&!caseState.customerDeferral?.active&&!caseState.awaitingHumanReview&&!decision.review&&!decision.literalServiceContext&&!decision.quoteClarification&&(!decision.question||decision.question.topic==='cotizacion-verificada')&&!contextNeedsPersonalPriority(e.text,e)){
+      if(c.company==='fumigacion'&&(naturalAcceptance||unverifiedAmountAttempt)&&currentQuote&&!priceNow&&!e.fromMe&&!e.forwarded&&!e.quotedId&&e.kind==='text'&&!caseState.customerDeferral?.active&&!caseState.awaitingHumanReview&&!decision.review&&!decision.literalServiceContext&&!decision.quoteClarification&&(!decision.question||decision.question.topic==='cotizacion-verificada')&&!contextNeedsPersonalPriority(e.text,e)){
         const original=s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND internal=0 AND case_id=? AND state IN ('DELIVERED','READ') AND mid IS NOT NULL").get(ownQuoteOutboxId(s,caseState,e.phone,e.line),e.phone,e.line,caseState.caseId);
         if(original&&currentQuote.entryId?.startsWith('approved-table-')&&s.priceReplyReference(original)){
           selectedPrice=null;decision={state:decision.state,quoteEvidenceReview:true,reply:'Antes de continuar, necesito verificar la cotización que te envié.'};
           s.audit('OWN_QUOTE_ACCEPTANCE_EVIDENCE_INCOMPLETE',e.id,{caseId:caseState.caseId,quotationOutboxId:original.id,firstDeliveryPresent:Boolean(s.db.prepare('SELECT 1 FROM meta WHERE key=?').get('first-delivery:'+original.id)),accepted:false,replacementQuoteIssued:false,businessWritten:false});
         }
       }
-      if(c.company==='fumigacion'&&naturalAcceptance&&currentQuote&&!priceNow&&!e.fromMe&&!e.forwarded&&!e.quotedId&&e.kind==='text'&&!caseState.customerDeferral?.active&&!caseState.awaitingHumanReview&&!decision.review&&!decision.literalServiceContext&&!decision.quoteClarification&&(!decision.question||decision.question.topic==='cotizacion-verificada')&&!contextNeedsPersonalPriority(e.text,e)){
+      if(c.company==='fumigacion'&&(naturalAcceptance||unverifiedAmountAttempt)&&currentQuote&&!priceNow&&!e.fromMe&&!e.forwarded&&!e.quotedId&&e.kind==='text'&&!caseState.customerDeferral?.active&&!caseState.awaitingHumanReview&&!decision.review&&!decision.literalServiceContext&&!decision.quoteClarification&&(!decision.question||decision.question.topic==='cotizacion-verificada')&&!contextNeedsPersonalPriority(e.text,e)){
         const uncertain=s.db.prepare("SELECT state FROM outbox WHERE id=? AND phone=? AND line=? AND internal=0 AND case_id=? AND state IN ('READY','SENDING','ACCEPTED','UNCERTAIN')").get(ownQuoteOutboxId(s,caseState,e.phone,e.line),e.phone,e.line,caseState.caseId);
         if(uncertain){selectedPrice=null;decision={state:decision.state,observed:true,observedState:'QUOTATION_DELIVERY_REVIEW'};}
       }
       const ordinaryInformation=ordinaryDataInformationTurn(s,c,decision.state,e);
       if(ordinaryInformation){selectedPrice=null;decision=ordinaryInformation;}
-      if(c.company==='fumigacion'&&!decision.registrationInformation&&!(currentQuote&&naturalAcceptance)&&(decision.question?.topic==='cotizacion-verificada'||decision.reviewTopic==='customer-question'&&quotationInquiry(e.text))){
+      if(c.company==='fumigacion'&&!decision.registrationInformation&&!(currentQuote&&(naturalAcceptance||unverifiedAmountAttempt))&&(decision.question?.topic==='cotizacion-verificada'||decision.reviewTopic==='customer-question'&&quotationInquiry(e.text))){
         const selection=selectPrice(decision.state.slots,s.approvedPriceCatalogs(),null,{scheduleHash:businessPriceHashAt(e.at),issuedAt:e.at});
         if(selection.entry&&!e.forwarded&&!ambiguousIntake(e.text)&&!specialQuotation(textWithoutLinks(literalIntakeTextWithoutRegistrationFields(e.text)),decision.state.slots)){
           selectedPrice=selection.entry;

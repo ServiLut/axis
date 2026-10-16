@@ -5,6 +5,15 @@ const MAX_LENGTH=1200;
 const compact=value=>typeof value==='string'?value.replace(/\s+/g,' ').trim():'';
 const short=(value,max)=>{const text=compact(value);return text.length>max?text.slice(0,max-1).trimEnd()+'…':text;};
 const normalized=value=>compact(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+// Presentation keeps the caller's minimized facts, and also closes accidental
+// raw-input leaks. These substitutions never change the stored native source.
+const minimized=value=>compact(value)
+  .replace(/https?:\/\/\S+|www\.\S+|[\w.+-]+@[\w.-]+/gi,'[referencia reservada]')
+  .replace(/\+?\b(?:57[ .()-]*)?3(?:[ .()-]*\d){9}\b/g,'[teléfono reservado]')
+  .replace(/\b(?:calle|carrera|avenida|transversal|diagonal|circular|cl|cra|cr|kr|av|trv|tv|dg)\.?\s*\d[^;\n!?]*|#\s*\d[^;\n!?]*/gi,'[dirección reservada]')
+  .replace(/\b(?:cuenta(?: bancaria)?|comprobante|transferencia|consignaci[oó]n|nequi|daviplata)\b[^;.!?]*/gi,'[dato de pago reservado]')
+  .replace(/(?:\$\s*|\bCOP\s*)\d[\d.,]*(?:\s*COP\b)?|\b\d[\d.,]*(?:\s*(?:mil|millones?))?\s*(?:pesos|COP)\b/gi,'[valor reservado]')
+  .replace(/\b\d{6,}\b/g,'[referencia reservada]');
 const quotationTopics=['cotizacion-verificada','special-quotation','existing-quotation'];
 const workflowTopics=[...quotationTopics,'disponibilidad-y-cotizacion','disponibilidad-y-tecnico'];
 const presentationStages=new Set(['quote-needed','accepted-unregistered','saved-awaiting-schedule','reported-existing-schedule']);
@@ -22,9 +31,9 @@ function readableContext(facts,contextFacts){
   const found=questionIndex<0?matches:matches.slice(0,questionIndex+1),values={};
   for(let i=0;i<found.length;i++)values[labels[found[i][1]]]=raw.slice(found[i].index+found[i][0].length,found[i+1]?.index??raw.length).trim();
   // Structured context is exclusive; arbitrary conditions are never fallback.
-  const selected=Object.keys(supplied).length?supplied:values;
+  const selected=Object.fromEntries(Object.entries(Object.keys(supplied).length?supplied:values).map(([key,value])=>[key,minimized(value)]));
   if(detailPlaceholder(selected.detail))delete selected.detail;
-  return {values:selected,raw:found.length||Object.keys(selected).length?'':raw};
+  return {values:selected,raw:found.length||Object.keys(selected).length?'':minimized(raw)};
 }
 
 function knownFacts({values,raw}){
@@ -34,7 +43,14 @@ function knownFacts({values,raw}){
     if(compact(values[key])&&!(key==='area'&&unreportedMeasure(values[key])))rows.push(label+': '+compact(values[key]));
   }
   if((compact(values.rooms)||compact(values.dimensions))&&unreportedMeasure(values.area))rows.push(values.dimensions?'Área total: no informada':'Medida: no informada');
-  return rows.join('; ');
+  return rows.join('\n• ');
+}
+
+function quoteRequest(){
+  return {purpose:'confirmar el valor total y qué incluye este caso',
+    pending:'Falta confirmar: valor total y qué incluye.',
+    question:'¿Qué valor total y alcance podemos confirmar para este caso?',
+    format:'valor total [importe]; incluye [alcance] / falta [dato concreto para cotizar].'};
 }
 
 function requestFor(topic,conditions,presentationStage){
@@ -61,11 +77,7 @@ function requestFor(topic,conditions,presentationStage){
     question:'¿Qué disponibilidad verificada pueden ofrecer para este caso? Indiquen técnico, fecha y franja, o qué falta confirmar.',
     format:'técnico [nombre en Tenaxis]; fecha [día]; inicio [hora]; fin [hora].'
   };
-  if(stage==='quote-needed'||quotationTopics.includes(topic))return {
-    purpose:'cotizar este caso',
-    question:'¿Pueden cotizar con estos datos? Indiquen valor y qué incluye, o el dato concreto que falta.',
-    format:'valor [importe]; incluye [alcance] / falta [dato para cotizar].'
-  };
+  if(stage==='quote-needed'||quotationTopics.includes(topic))return quoteRequest();
   if(topic==='disponibilidad-y-cotizacion')return {
     purpose:'preparar una propuesta para este caso',
     question:'¿Qué propuesta verificada podemos ofrecer? Indiquen valor, alcance, técnico, fecha y franja, o qué falta confirmar.',
@@ -111,8 +123,8 @@ export function formatMariaTesaQuestion({bot,name,reference,last4,lineLast4,fact
   const header='Equipo TESA, necesito '+request.purpose+'.';
   const identity=(/^\d{4}$/.test(last4||'')?'Cliente …'+last4:'Cliente sin terminación disponible')+
     (/^\d{4}$/.test(lineLast4||'')?' · línea azul …'+lineLast4:'')+'.';
-  const footer=(short(bot,24)||'María Ángel')+' · '+(short(name,32)||'Fumigación')+'. Referencia interna: '+(short(reference,32)||'[referencia]')+'.';
-  const render=(known,quote)=>[header,identity,known?'Datos: '+known:'',quote,request.question,'Ejemplo de formato (por completar): '+request.format,'Respondan citando este mensaje.',footer].filter(Boolean).join('\n');
+  const footer=(short(minimized(bot),24)||'María Ángel')+' · '+(short(minimized(name),32)||'Fumigación')+'. Referencia interna: '+(short(minimized(reference),32)||'[referencia]')+'.';
+  const render=(known,quote)=>[header,identity,known?'Datos del cliente:\n• '+known:'',quote,request.pending,request.question,'Ejemplo de formato (por completar): '+request.format,'Respondan citando este mensaje.',footer].filter(Boolean).join('\n');
   const known=knownFacts(context),literal=compact(context.values.question);
   const fullQuote=literal?'Cliente: «'+literal+'».':'';
   const room=MAX_LENGTH-render('','').length;
@@ -120,6 +132,6 @@ export function formatMariaTesaQuestion({bot,name,reference,last4,lineLast4,fact
   const quoteRoom=fullQuote?Math.max(0,Math.min(fullQuote.length,Math.floor(room*0.5))):0;
   const prefix='Fragmento del cliente: «',end='» [cita abreviada]';
   const quote=fullQuote.length<=quoteRoom?fullQuote:quoteRoom>prefix.length+end.length?prefix+fitContext(literal,quoteRoom-prefix.length-end.length,'…')+end:'';
-  const knownRoom=Math.max(0,room-quote.length-(quote?1:0)-('Datos: '.length+1));
+  const knownRoom=Math.max(0,room-quote.length-(quote?1:0)-('Datos del cliente:\n• '.length+1));
   return render(fitContext(known,knownRoom,' … [contexto abreviado]'),quote);
 }
