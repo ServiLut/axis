@@ -296,7 +296,7 @@ test('a concrete customer question is preserved and an interrogative alternative
     assert.equal(f.s.db.prepare('SELECT state FROM events WHERE id=?').get('PRICEQUERY').state,'REVIEW');
     const question=f.s.open(f.s.db.prepare('SELECT body FROM questions').get().body);
     assert.match(question.text,/Cuánto cuesta para casa o apartamento/);
-    assert.match(question.text,/Qué respuesta verificada/);
+    assert.match(question.text,/Qué valor total y alcance podemos ofrecer para esta solicitud/);
     const response=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get('PRICEQUERY:reply').body);
     assert.ok(!response.includes('Qué plaga'));assert.ok(!response.includes('tipo de inmueble'));
   }finally{f.s.close();}

@@ -20,6 +20,7 @@ import {createHash} from 'node:crypto';
 import {tesaOperationalTopic} from './tesa-config.mjs';
 import {prepareTesaQuestion,initializeTesaStore} from './tesa-operations.mjs';
 import {formatMariaTesaQuestion} from './tesa-question-wording.mjs';
+import {ownMariaChiefQuestionText,MARIA_CHIEF_QUESTION_WORDING_GUARD} from './chief-question-wording.mjs';
 import {assertOperationalLineScope,operationalLineAllowed} from './line-scope.mjs';
 import {ownQuoteClarification,OWN_QUOTE_CLARIFICATION_GUARD} from './own-quote-clarification.mjs';
 import {explicitNewTechnicalCase,technicalIntakeMetaQuestion,technicalIntakeClarificationReply,technicalIntakeLiteralCorrection} from './technical-intake-continuity.mjs';
@@ -202,7 +203,12 @@ function literalOwnNewService(source){return source.kind==='text'&&!source.fromM
 
 const groupField=value=>String(value??'').replace(/https?:\/\/\S+|www\.\S+|[\w.+-]+@[\w.-]+/g,'[referencia reservada]').replace(/\b(?:57)?3\d{9}\b/g,'[teléfono reservado]').replace(/\b(?:calle|carrera|avenida|transversal|diagonal|cl|cra|cr|kr|av|trv|tv|dg)\.?\s*\d[^;\n]*|#\s*\d[^;\n]*/gi,'[dirección reservada]').replace(/\b\d{6,}\b/g,'[referencia reservada]').slice(0,130);
 export function routeCaseQuestion(store,config,request){
-  if(!config.tesaOperations?.enabled||!tesaOperationalTopic(request.topic,request.conditions)||questionRecipients(config,request.topic,request.conditions).every(phone=>phone===SANDRA))return store.questionToRecipients(request);
+  if(!config.tesaOperations?.enabled||!tesaOperationalTopic(request.topic,request.conditions)||questionRecipients(config,request.topic,request.conditions).every(phone=>phone===SANDRA)){
+    const text=config.company==='fumigacion'?ownMariaChiefQuestionText(store,config,request,extractSlots):null;
+    const result=store.questionToRecipients(text?{...request,text}:request);
+    if(text&&result.created)store.audit('OWN_CHIEF_QUESTION_PRESENTED',request.source,{guard:MARIA_CHIEF_QUESTION_WORDING_GUARD,caseId:request.caseId,topic:request.topic,originalRequestText:request.text,sourceId:request.source,presentationOnly:true});
+    return result;
+  }
   const reference=createHash('sha256').update(config.company+':'+request.caseId).digest('hex').slice(0,12).replace(/[0-9]/g,d=>String.fromCharCode(65+Number(d)));
   const labels={service:'Servicio',location:'Municipio',locationDetails:'Ubicación indicada',site:'Inmueble',area:'Área',rooms:'Habitaciones',mattresses:'Colchones',detail:'Falla',preference:'Horario solicitado',question:'Petición literal',dimensions:'Dimensiones literales',roomScale:'Tamaño de habitaciones',siteScale:'Tamaño del inmueble',floors:'Pisos informados',patio:'Patio informado',treatmentScope:'Alcance informado'};
   const ownCase=store.conversation(request.phone)?.state,source=store.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND from_me=0').get(request.source,request.phone);

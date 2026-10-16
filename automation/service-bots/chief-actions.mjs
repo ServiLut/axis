@@ -5,7 +5,7 @@ import {intakeAudit} from './intake-journal.mjs';
 import {whatsAppCallActivity} from './chief-readonly.mjs';
 import {chiefStatusTopic} from './chief-status.mjs';
 import {dailyProgramCross,programSupervisionStatus} from './program-supervision.mjs';
-import {bogotaDayWindow,dailyOperationalReportText} from './daily-operational-audit.mjs';
+import {bogotaDayWindow,dailyManagementReportText} from './daily-operational-audit.mjs';
 import {MARIA_PROGRAM_URL,MARIA_TENANT,MARIA_COMPANY,programEnabled,registrationStatus} from './maria-program.mjs';
 import {planChiefCommand,CHIEF_COMMAND_AI_GUARD} from './chief-command-ai.mjs';
 
@@ -141,7 +141,7 @@ async function execute(s,c,t,source,plan,now){
  }
  if(action==='program-day'){
   const fetcher=async(...args)=>{const response=await t.fetcher(...args);if(!response.ok)return response;const raw=await response.json(),data=raw?.success===true?raw.data:raw;if(!programSupervisionStatus(c).enabled||data?.readOnly!==true||data.businessWritesEnabled===true||data.customerNotesWritesEnabled===true)throw Error('PROGRAM_READ_SCOPE_UNVERIFIED');return {ok:true,status:response.status,json:async()=>raw};};
-  const a=await dailyProgramCross(c,s,fetcher,{company:'fumigacion',day:params.day},now);return {state:a.programReviewReason?'NEEDS_CONTEXT':'DONE',text:dailyOperationalReportText(a),data:a,scope:'own-day-journal-and-authorized-readonly-Tenaxis'};
+  const a=await dailyProgramCross(c,s,fetcher,{company:'fumigacion',day:params.day},now);return {state:a.programReviewReason?'NEEDS_CONTEXT':'DONE',text:dailyManagementReportText(a),data:a,scope:'own-day-journal-and-authorized-readonly-Tenaxis'};
  }
  if(action==='program-contacts'){
   const phones=params.phones;if(!Array.isArray(phones)||!phones.length||phones.length>10||phones.some(p=>!/^57\d{10}$/.test(p)))throw Error('PROGRAM_PHONE_SCOPE_UNVERIFIED');

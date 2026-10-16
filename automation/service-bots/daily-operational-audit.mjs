@@ -2,6 +2,7 @@ import {BUSINESSES,SANDRA,knownInternalRecipient} from './config.mjs';
 import {MARIA_COMPANY,MARIA_TENANT} from './maria-program.mjs';
 
 export const DAILY_OPERATIONAL_AUDIT_GUARD='own-daily-received-contact-program-snapshot-and-observed-deletion-v1';
+export const DAILY_TECHNICIAN_VALUES_GUARD='own-visit-day-deduplicated-recorded-cop-values-without-revenue-inference-v1';
 export const FUMIGACION_DAILY_TARGET=Object.freeze({minimumTechnicians:6,servicesPerTechnician:5,totalServices:30,
   authorizationSource:'direct-user-20261010-daily-fumigacion-contact-and-technician-audit'});
 const pn=/^57\d{10}$/,sourceId=/^[A-Za-z0-9_-]{1,128}$/;
@@ -112,10 +113,69 @@ function technicianProgress(program,window,dayComplete,target,now){
     technicians.push({id:row.id,name:safeLabel(row.displayName)||'Técnico sin nombre verificado',scheduledInProgram:scheduledCount,completedInProgram:completedCount,scheduledOrderIds:unique(scheduled.map(o=>o.id)),completedOrderIds:unique(completed.map(o=>o.id)),remainingScheduledToTarget:Math.max(0,target.servicesPerTechnician-scheduledCount),remainingCompletedToTarget:Math.max(0,target.servicesPerTechnician-completedCount),actualExecutionIndependentlyVerified:false});
   }
   const snapshotAt=millis(program.checkedAt),snapshotThroughDayEnd=Number.isFinite(snapshotAt)&&snapshotAt>=window.toMs&&snapshotAt<=now;
-  const unknownCompletion=program.orders.some(o=>o.classification?.completionDateUnknown===true),historicalRosterUnverified=program.coverage.historicalTechnicianRosterVerified!==true&&new Date(now).toLocaleDateString('sv-SE',{timeZone:'America/Bogota'})!==window.day,complete=program.available&&program.coverage.ordersComplete&&program.coverage.techniciansComplete&&dayComplete&&snapshotThroughDayEnd&&!inconsistent&&!historicalRosterUnverified;
+  const unknownCompletion=program.orders.some(o=>o.classification?.completionDateUnknown===true),historicalRosterUnverified=program.coverage.historicalTechnicianRosterVerified!==true&&new Date(now).toLocaleDateString('sv-SE',{timeZone:'America/Bogota'})!==window.day,complete=program.available&&program.coverage.ordersComplete&&program.coverage.techniciansComplete&&program.coverage.integrityConflicts!==true&&dayComplete&&snapshotThroughDayEnd&&!inconsistent&&!historicalRosterUnverified;
   const scheduledMet=technicians.filter(t=>t.scheduledInProgram>=target.servicesPerTechnician).length,completedMet=technicians.filter(t=>t.completedInProgram>=target.servicesPerTechnician).length;
   const status=(n,complete)=>complete?(n>=target.minimumTechnicians?'MET_IN_PROGRAM_RECORDS':'BELOW_TARGET_IN_PROGRAM_RECORDS'):'UNKNOWN';
   return {target,technicians,technicianCoverageComplete:complete,snapshotThroughDayEnd,countsInconsistent:inconsistent,historicalRosterUnverified,completionDateUnknown:unknownCompletion,scheduledTechniciansMeetingTarget:scheduledMet,completedTechniciansMeetingTarget:completedMet,scheduledStatus:status(scheduledMet,complete),completedStatus:status(completedMet,complete&&!unknownCompletion),scheduledOrders:unique(technicians.flatMap(t=>t.scheduledOrderIds)).length,completedOrders:unique(technicians.flatMap(t=>t.completedOrderIds)).length,paymentOrBankVerified:false,actualExecutionIndependentlyVerified:false};
+}
+
+// The read contract carries Prisma decimals as strings. Calculate in cents so
+// that a missing value stays unknown and decimal subtotals do not drift.
+function recordedCopCents(value){
+  if(typeof value!=='string'&&typeof value!=='number')return null;
+  if(typeof value==='number'&&(!Number.isFinite(value)||value<0))return null;
+  const text=String(value),match=/^(0|[1-9]\d*)(?:\.(\d{1,2}))?$/.exec(text);
+  if(!match||text.length>24)return null;
+  const cents=BigInt(match[1])*100n+BigInt((match[2]??'').padEnd(2,'0'));
+  return cents<=BigInt(Number.MAX_SAFE_INTEGER)?cents:null;
+}
+function workloadBucket(id,name,catalogVerified){return {id,name,catalogVerified,visitOrders:0,activeOrders:0,cancelledOrders:0,deletedOrders:0,states:{},activeStateCounts:{programmed:0,finalized:0,new:0,other:0},knownValueCount:0,unknownValueCount:0,cancelledKnownValueCount:0,cancelledUnknownValueCount:0,cents:0n,cancelledCents:0n,orderIds:[]};}
+function workloadRecord(bucket,order){
+  bucket.visitOrders++;bucket.orderIds.push(order.id);
+  if(order.deletedAt!==null&&order.deletedAt!==undefined){bucket.deletedOrders++;return;}
+  const state=safeLabel(order.state)||'SIN_ESTADO';bucket.states[state]=(bucket.states[state]??0)+1;
+  const cents=recordedCopCents(order.quoteValueCop),cancelled=order.classification?.cancelled===true||['CANCELADO','SIN_CONCRETAR'].includes(order.state);
+  if(cancelled){bucket.cancelledOrders++;if(cents===null)bucket.cancelledUnknownValueCount++;else {bucket.cancelledKnownValueCount++;bucket.cancelledCents+=cents;}return;}
+  bucket.activeOrders++;
+  const group=order.state==='PROGRAMADO'?'programmed':['TECNICO_FINALIZO','LIQUIDADO'].includes(order.state)?'finalized':order.state==='NUEVO'?'new':'other';bucket.activeStateCounts[group]++;
+  if(cents===null)bucket.unknownValueCount++;else {bucket.knownValueCount++;bucket.cents+=cents;}
+}
+function finishWorkloadBucket(bucket){
+  const {cents,cancelledCents,...out}=bucket,overflow=cents>BigInt(Number.MAX_SAFE_INTEGER),cancelledOverflow=cancelledCents>BigInt(Number.MAX_SAFE_INTEGER);
+  return {...out,knownValueCop:overflow||bucket.activeOrders>0&&!bucket.knownValueCount?null:Number(cents)/100,cancelledKnownValueCop:cancelledOverflow||bucket.cancelledOrders>0&&!bucket.cancelledKnownValueCount?null:Number(cancelledCents)/100,amountOverflow:overflow,cancelledAmountOverflow:cancelledOverflow,valueComplete:bucket.unknownValueCount===0&&!overflow,cancelledValueComplete:bucket.cancelledUnknownValueCount===0&&!cancelledOverflow};
+}
+function visitDay(order,window){
+  const schedule=order.schedule;
+  if(schedule){
+    if(schedule.guard!=='explicit-calendar-and-bogota-time-preserving-raw-fields-v1'||!['DATE_ONLY','DATETIME'].includes(schedule.granularity)||schedule.conflict||!dateText(schedule.calendarDay))return null;
+    const at=millis(schedule.scheduledAt),top=millis(order.scheduledAt);
+    if(!Number.isFinite(at)||new Date(at-5*3600000).toISOString().slice(0,10)!==schedule.calendarDay||order.scheduledAt!=null&&(!Number.isFinite(top)||top!==at))return null;
+    return schedule.calendarDay;
+  }
+  // Older snapshots can carry only the unambiguous UTC visit timestamp.
+  const at=millis(order.scheduledAt);return Number.isFinite(at)?new Date(at-5*3600000).toISOString().slice(0,10):null;
+}
+function dailyTechnicianValues(program,window,now){
+  const byId=new Map(),conflicts=new Set(),catalog=new Map(),catalogConflicts=new Set();let invalidOrderIds=0;
+  for(const row of program.technicians){if(!safeId(row.id))continue;const old=catalog.get(row.id);if(old&&JSON.stringify(old)!==JSON.stringify(row))catalogConflicts.add(row.id);else catalog.set(row.id,row);}
+  for(const order of program.orders){if(!safeId(order.id)){invalidOrderIds++;continue;}const old=byId.get(order.id);if(old&&JSON.stringify(old)!==JSON.stringify(order))conflicts.add(order.id);else byId.set(order.id,order);}
+  const total=workloadBucket(null,'TOTAL',false),unassigned=workloadBucket(null,'Sin técnico asignado',false),invalidAssignment=workloadBucket(null,'Asignación con identificador inválido',false),technicians=new Map();let outsideVisitDay=0,unknownVisitDay=0,dateOnlyVisitOrders=0;
+  for(const order of byId.values()){
+    if(conflicts.has(order.id))continue;
+    const day=visitDay(order,window);if(!day){unknownVisitDay++;continue;}if(day!==window.day){outsideVisitDay++;continue;}
+    if(order.schedule?.granularity==='DATE_ONLY')dateOnlyVisitOrders++;
+    workloadRecord(total,order);
+    if(order.technicianId==null){workloadRecord(unassigned,order);continue;}
+    const id=safeId(order.technicianId);if(!id){workloadRecord(invalidAssignment,order);continue;}
+    const member=catalog.get(id),name=safeLabel(member?.displayName),verified=order.technicianCatalogVerified===true&&!!member&&!catalogConflicts.has(id)&&member.displayNameSource==='current-active-company-technician-user'&&!!name;
+    if(!technicians.has(id))technicians.set(id,workloadBucket(id,verified?name:'Asignación de técnico por verificar',verified));
+    const bucket=technicians.get(id);if(!verified){bucket.catalogVerified=false;bucket.name='Asignación de técnico por verificar';}workloadRecord(bucket,order);
+  }
+  const rows=[...technicians.values()].map(finishWorkloadBucket).sort((a,b)=>a.name.localeCompare(b.name,'es')||a.id.localeCompare(b.id)),totals=finishWorkloadBucket(total),snapshotAt=millis(program.checkedAt),snapshotTimeVerified=Number.isFinite(snapshotAt)&&snapshotAt<=now;
+  return {guard:DAILY_TECHNICIAN_VALUES_GUARD,available:program.available,day:window.day,checkedAt:program.checkedAt??null,currency:'COP',amountMeaning:'registered-quoted-order-value; not invoice, collection or profit',visitDaySource:'verified-calendar-or-explicit-UTC-visit; never-createdAt',technicians:rows,unassigned:finishWorkloadBucket(unassigned),invalidAssignment:finishWorkloadBucket(invalidAssignment),totals,
+    assignedTechnicianCount:rows.filter(r=>r.visitOrders-r.deletedOrders>0).length,verifiedAssignedTechnicianCount:rows.filter(r=>r.catalogVerified&&r.visitOrders-r.deletedOrders>0).length,activeCatalogTechnicianCount:catalog.size,
+    coverage:{ordersComplete:program.coverage.ordersComplete===true,sourceIntegrityConflicts:program.coverage.integrityConflicts===true,snapshotTimeVerified,complete:program.available&&program.coverage.ordersComplete===true&&program.coverage.integrityConflicts!==true&&snapshotTimeVerified&&!conflicts.size&&!invalidOrderIds&&!unknownVisitDay&&!invalidAssignment.visitOrders&&rows.every(row=>row.catalogVerified||row.visitOrders===row.deletedOrders)&&totals.valueComplete&&totals.cancelledValueComplete,conflictingOrderIds:[...conflicts].sort(),invalidOrderIds,unknownVisitDayOrders:unknownVisitDay,outsideVisitDayOrders:outsideVisitDay,dateOnlyVisitOrders,catalogConflictingIds:[...catalogConflicts].sort()},
+    cancelledValuesIncludedInActiveTotal:false,deletedValuesIncludedInActiveTotal:false,technicianAttendanceVerified:false,physicalExecutionVerified:false,invoiceIssuedVerified:false,bankReceiptsVerified:false,businessWrites:0};
 }
 
 /** Pure comparison only. Journal entries retain their native identity and receipt
@@ -146,10 +206,36 @@ export function evaluateDailyOperationalAudit({company='fumigacion',day,journalP
   const result={guard:DAILY_OPERATIONAL_AUDIT_GUARD,company:'FUMIGACION',day,timeZone:'America/Bogota',from:window.from,to:window.to,checkedAt:new Date(now).toISOString(),dayComplete,recipient:SANDRA,
     dedupKey:'daily-endday-fumigacion-'+day.replace(/-/g,'')+'-sandra-v1',contacts,contactsCount:contacts.length,
     incomingMessages:contacts.reduce((n,c)=>n+c.incomingMessages,0),lines:BUSINESSES.fumigacion.phones.map(line=>({line,incomingContactCount:contacts.filter(c=>c.lines.includes(line)).length,incomingMessageCount:contacts.reduce((n,c)=>n+(c.perLine.find(p=>p.line===line)?.incomingMessages??0),0),suspended:journal.coverage.suspendedLines.includes(line)})),
-    pendingIdentitySources:journal.pending,pendingIdentityCount:journal.pending.length,unlinkedWhatsAppDeletions:journal.unlinkedDeletions,priorDayWhatsAppDeletions:journal.priorDayDeletions,excluded:journal.excluded,coverage:{...journal.coverage,programAvailable:program.available,program:program.coverage,dayComplete},technicianProgress:progress,
+    pendingIdentitySources:journal.pending,pendingIdentityCount:journal.pending.length,unlinkedWhatsAppDeletions:journal.unlinkedDeletions,priorDayWhatsAppDeletions:journal.priorDayDeletions,excluded:journal.excluded,coverage:{...journal.coverage,programAvailable:program.available,program:program.coverage,dayComplete},technicianProgress:progress,technicianValues:dailyTechnicianValues(program,window,now),
     unlinkedProgramDeletions:unlinkedProgramDeletions.map(d=>({orderId:safeId(d.orderId),deletedAt:Number.isFinite(millis(d.deletedAt))?new Date(millis(d.deletedAt)).toISOString():null,source:safeLabel(d.source)})),
     readOnly:true,businessWrites:0,sends:0,paymentsInferred:false,unmatchedContactsAreMissingServices:false};
   result.reportText=dailyOperationalReportText(result);return result;
+}
+
+export function dailyManagementReportText(audit){
+  if(audit?.guard!==DAILY_OPERATIONAL_AUDIT_GUARD||audit.company!=='FUMIGACION'||audit.recipient!==SANDRA||audit.technicianValues?.guard!==DAILY_TECHNICIAN_VALUES_GUARD)throw Error('OWN_DAILY_AUDIT_REPORT_REQUIRED');
+  const values=audit.technicianValues,parts=['Sandra, *Fumigación · '+audit.day+'*'+(audit.dayComplete?'':' · corte provisional'), 'Órdenes con visita registrada para este día.',''];
+  if(!values.available)return parts.concat('No pude comprobar los datos de Tenaxis. La consulta sigue pendiente.','María Ángel').join('\n');
+  const money=n=>n===null?'valor pendiente':'$'+n.toLocaleString('es-CO',{maximumFractionDigits:2})+' COP';
+  const quantity=(n,singular,plural)=>n+' '+(n===1?singular:plural);
+  const amount=row=>(row.knownValueCop===null&&row.unknownValueCount?'pendiente ('+quantity(row.unknownValueCount,'importe sin confirmar','importes sin confirmar')+')':money(row.knownValueCop)+(row.unknownValueCount?'; '+quantity(row.unknownValueCount,'importe pendiente','importes pendientes'):''))+(row.amountOverflow?' · suma fuera del límite verificable':'');
+  const excludedStates=row=>{const cancelled=row.states.CANCELADO??0,notConcreted=row.states.SIN_CONCRETAR??0,other=Math.max(0,row.cancelledOrders-cancelled-notConcreted);return [quantity(cancelled,'cancelado','cancelados'),notConcreted+' sin concretar',...(other?[quantity(other,'con clasificación por verificar','con clasificación por verificar')]:[])].join('; ');};
+  const totalLine='*'+(values.coverage.complete?'TOTAL ACTIVO':'SUBTOTAL ACTIVO OBSERVADO')+' — '+quantity(values.totals.activeOrders,'servicio','servicios')+' — '+amount(values.totals)+'*';
+  parts.push(totalLine,'','Técnicos con órdenes asignadas: '+values.assignedTechnicianCount+'; identidad de catálogo comprobada: '+values.verifiedAssignedTechnicianCount+'.','');
+  for(const row of values.technicians.filter(r=>r.visitOrders-r.deletedOrders>0)){
+    const states=row.activeStateCounts;parts.push('*'+row.name+'*','• Servicios activos: '+row.activeOrders+' · Valor registrado: '+amount(row));
+    parts.push('• Estados: '+quantity(states.programmed,'programado','programados')+'; '+quantity(states.finalized,'finalizado en el sistema','finalizados en el sistema')+'; '+quantity(states.new,'nuevo','nuevos')+(states.other?'; '+quantity(states.other,'otro','otros'):'')+'.'+(row.cancelledOrders?' Fuera del total: '+excludedStates(row)+'.':''),'');
+  }
+  if(values.unassigned.visitOrders-values.unassigned.deletedOrders>0)parts.push('*Sin técnico asignado*','• Servicios activos: '+values.unassigned.activeOrders+' · Valor registrado: '+amount(values.unassigned)+(values.unassigned.cancelledOrders?' · fuera del total: '+excludedStates(values.unassigned):''),'');
+  if(values.invalidAssignment.visitOrders-values.invalidAssignment.deletedOrders>0)parts.push('*Asignación con identificador inválido*','• Servicios activos: '+values.invalidAssignment.activeOrders+' · Valor registrado: '+amount(values.invalidAssignment), 'Pendiente identificar el técnico; estas órdenes conservan su valor en el subtotal.','');
+  parts.push(totalLine,'');
+  if(values.totals.cancelledOrders)parts.push('Fuera del total activo: '+excludedStates(values.totals)+'. Valor registrado conjunto: '+money(values.totals.cancelledKnownValueCop)+(values.totals.cancelledUnknownValueCount?' y '+quantity(values.totals.cancelledUnknownValueCount,'importe pendiente','importes pendientes'):'')+(values.totals.cancelledAmountOverflow?' · suma fuera del límite verificable':'')+'.');
+  if(values.totals.deletedOrders)parts.push('Órdenes eliminadas lógicamente excluidas del total: '+values.totals.deletedOrders+'.');
+  const limits=[];if(!values.coverage.ordersComplete)limits.push('faltan filas del programa');if(values.coverage.sourceIntegrityConflicts)limits.push('el programa señala inconsistencias en las fuentes');if(!values.coverage.snapshotTimeVerified)limits.push('fecha del corte por verificar');if(values.coverage.conflictingOrderIds.length)limits.push(quantity(values.coverage.conflictingOrderIds.length,'identificador contradictorio excluido','identificadores contradictorios excluidos'));if(values.coverage.invalidOrderIds)limits.push(quantity(values.coverage.invalidOrderIds,'fila sin identificador válido','filas sin identificador válido'));if(values.coverage.unknownVisitDayOrders)limits.push(quantity(values.coverage.unknownVisitDayOrders,'orden sin fecha de visita inequívoca, fuera de la suma','órdenes sin fecha de visita inequívoca, fuera de la suma'));if(values.verifiedAssignedTechnicianCount!==values.assignedTechnicianCount)limits.push('hay asignaciones cuya identidad de catálogo falta confirmar');if(limits.length)parts.push('Cobertura pendiente: '+limits.join('; ')+'.');
+  if(values.coverage.dateOnlyVisitOrders)parts.push('Con fecha de visita sin hora confirmada: '+values.coverage.dateOnlyVisitOrders+'.');
+  parts.push('Los valores son cotizaciones guardadas en órdenes; no son facturas emitidas, recaudo bancario ni utilidad. Las asignaciones y estados no prueban asistencia ni ejecución física.');
+  const progress=audit.technicianProgress;parts.push('Meta 6 técnicos × 5 servicios: '+(progress.scheduledStatus==='UNKNOWN'?'programación con cobertura pendiente':progress.scheduledStatus==='MET_IN_PROGRAM_RECORDS'?'alcanzada en registros de programación':'aún no alcanzada en registros de programación')+'; '+(progress.completedStatus==='UNKNOWN'?'realización con cobertura o fechas pendientes':progress.completedStatus==='MET_IN_PROGRAM_RECORDS'?'alcanzada en registros fechados de finalización':'aún no alcanzada en registros fechados de finalización')+'.','María Ángel');
+  return parts.join('\n');
 }
 
 export function dailyOperationalReportText(audit){
