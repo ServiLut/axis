@@ -1,5 +1,43 @@
 # Registro propio de servicios nuevos de María
 
+## Claridad final comprobada; alta y retirada PRUEBA aún pendientes — 16/10/2026 22:41Z
+
+Runtime **301bce6** instalado y efectivo, **2358/2358 pruebas**, 63 módulos exactos; Backend **aaa21de**, 415/415. Sólo cambió la presentación de preguntas frente al recorrido nativo 252c9f5: cuatro viñetas verificadas de servicio, municipio, inmueble y alcance, mensaje original separado y una sola pregunta. Nuevo ensayo de comején/mueble y ambas salidas internas READ exactas, sesión cerrada; fuentes e imagen al inicio de `BOTS_MARIA_MIGUEL.md`.
+
+Se conserva el recorrido anterior de dos→un colchón/$100.000, nombre y dirección naturales, resumen entregado, confirmación posterior y DTO validado contra Backend sin transformar los datos. **No se ha creado una nueva orden ni primera agenda real**, ni se ha ejecutado el alta/lectura/retirada de PRUEBA. La simulación de cliente usa Engine aislado sin Luna o PostgreSQL. El permiso nuevo de dos horas y la pregunta única de ensayo a TESA permanecen OFF, sin token generado, a la espera de la confirmación de acción ya solicitada. Exigir fuentes nuevas posteriores a ese permiso y el fixture cerrado; no reutilizar el borrador de chinches para escribir.
+
+Pausa propia comprobada **22:37:19.583Z**: sólo Sandra, clientes/registro/agenda/continuación TESA/preventivo OFF, **SAVED=1 histórico BF23DF14**, demás colas ordinarias sin nuevos guardados. Conservar lecturas separadas, autoría, precios originales, resultados inciertos, holds, roja suspendida y accesos sin renovación. No declarar terminado el recorrido de escritura por el DTO, las pruebas aisladas o un acuse de simulación.
+
+## Resumen con alcance y borrador nativo contrastados — 16/10/2026 22:32Z
+
+Runtime **252c9f5** efectivo, **2345/2345 pruebas**, 63 módulos exactos; Backend **aaa21de** validado. Nuevo ensayo desde Sandra: corrección dos→un colchón/$100.000, nombre y dirección en frase natural, resumen propio entregado con alcance, confirmación posterior y DTO preparado. Contrato con Backend concordante, hash conservado y precio contradictorio rechazado. El detalle proyectado retira sólo el conteo obsoleto con fuentes/offsets/hashes; originales intactos. Referencias a «Sí» sin valor no respaldan campos. Evidencias al inicio de `BOTS_MARIA_MIGUEL.md`.
+
+Es un borrador de Engine aislado con WhatsApp interno real; **no un alta en PostgreSQL ni servicio comercial**. Registro/agenda ordinarios OFF, SAVED=1 histórico. El acceso de dos horas y excepción TESA aún requieren la confirmación de acción pendiente; credencial nueva/órdenes PRUEBA/envío TESA=0. No recuperar borradores previos al permiso ni usar un caso de chinches fuera del fixture cerrado.
+
+## Backend del resumen actualizado — 16/10/2026 22:13Z
+
+Backend **aaa21de** efectivo, 415/415 pruebas y diez archivos compilados exactos. Valida alcance literal en el tercer formato de resumen conservando los dos históricos y sus hashes; no cambia DTO, precios, permisos ni negocio. Ruta PRUEBA OFF/404; registro/agenda ordinarios pausados. Runtime efectivo **dcc6aae**; resumen ampliado y variante sintética de ubicación con cantidad corregida siguen en preparación, según inicio de `BOTS_MARIA_MIGUEL.md`. No acreditar nuevo servicio por ese trabajo.
+
+## Continuidad del borrador verificada — 16/10/2026 22:01Z
+
+Runtime **dcc6aae** instalado y efectivo; 2242/2242 pruebas propias, sin omisiones, más revisión independiente. El nuevo ensayo nativo conserva corrección a un colchón/$100.000 y exclusión de muebles al aplazar; un «Sí.» aislado no acepta ni abre revisión de precio. La aceptación explícita del importe propio entregado retoma sólo los datos faltantes. Nombre/dirección recibidos juntos y confirmación natural tras resumen propio entregado preparan un borrador en memoria; **cero nuevas órdenes o agenda**. Pruebas exactas y alcance al inicio de `BOTS_MARIA_MIGUEL.md`.
+
+Registro y agenda ordinarios permanecen pausados, SAVED=1 histórico BF23DF14. Backend **bd32e82** sin cambios y módulo PRUEBA inerte; nuevo permiso concreto de dos horas y pregunta TESA de ensayo siguen pendientes de la confirmación de acción ya solicitada. No reutilizar los borradores previos al permiso ni certificar prueba PostgreSQL real por las suites aisladas.
+
+## Ensayo separado preparado; registro ordinario pausado — 16/10/2026 21:46Z
+
+Prevalece el control actual de `BOTS_MARIA_MIGUEL.md`. Runtime **1422b7d** y Backend **bd32e82** instalados y efectivos: 2211/2211 y 395/395 pruebas respectivamente. La atención general, registro y agenda ordinarios permanecen **OFF**, SAVED=1 histórico BF23DF14; ningún nuevo servicio comercial comprobado. El resumen nuevo usa lista; confirmaciones naturales de datos requieren su resumen propio exacto entregado y una nueva fuente posterior. No se amplió el consentimiento inicial de precio ni se cambiaron hashes de solicitudes históricas.
+
+En WhatsApp de Sandra se comprobó cotización, solicitud proactiva de faltantes, recepción conjunta de nombre/dirección y confirmación natural, con fuentes y acuses exactos. El Engine de ensayo está en memoria separada, sin modelo, proveedor ni escritura de negocio; acuses comerciales son sólo simulados y los internos sí se contrastan nativamente. No contar ese borrador como orden o servicio real.
+
+Módulo PRUEBA instalado **inerte/404**, sin nuevo token ni alta al corte. Su activación concreta de dos horas espera confirmación de acción de computer-use: sólo fixture sintético cerrado, actor propio, registro durable e importe simulado $129.000; no agenda, técnico, pagos, factura ni órdenes ajenas. Requiere nueva conversación y fuentes posteriores al permiso. Tras lectura de todos los campos expuestos se retira exclusivamente la prueba creada: borrado lógico de orden/cliente, desactivación/bloqueo de dirección y auditoría conservada. Puede afectar temporalmente informes genéricos mientras exista; no equivale a venta o ingreso. Ante incertidumbre, consultar el mismo run/hash sin re-POST ni otra clave.
+
+## Pausa humana vigente — 16/10/2026 20:50Z
+
+La usuaria pidió pausar las respuestas abiertas y continuar pruebas sólo con Sandra 573016803926. API propia 20:50:23Z: `enabled=false`, primera programación y continuación TESA deshabilitadas; SAVED=1 histórico BF23DF14, demás colas 0. El permiso limitado y sus credenciales permanecen conservados, sin regeneración o ampliación. Una futura instalación no autoriza reactivar clientes, registrar ni programar durante esta pausa.
+
+Runtime `7462325007daa0b1b0b9feaf245d4f361c117dad` instalado, DONE 3 s, 57 módulos exactos; 1985/1985 pruebas aisladas del commit. El aplazamiento durante toma de nombre/dirección/resumen conserva los datos y detiene la insistencia. No se recuperan turnos anteriores ni se fabrica una visita de prueba. La cuenta personal 3109 está cerrada; las pruebas actuales son únicamente desde la cuenta de Sandra verificada. Estado, fuentes y límites al inicio de `BOTS_MARIA_MIGUEL.md`.
+
 ## Toma proactiva de datos instalada — 16/10/2026 19:55Z
 
 Estado vigente al inicio de `BOTS_MARIA_MIGUEL.md`: runtime `69c4e13e`, **1970/1970 pruebas**, 57 módulos exactos instalados. Tras aceptación propia inequívoca pide en lista únicamente nombre, dirección y preferencia faltantes. Los datos anteriores a la aceptación se conservan con sus fuentes y se presentan en un nuevo resumen entregado, que requiere confirmación posterior real; preguntar «qué datos» no acepta ni registra. No se recotiza ni cambia `quotedPrice.sourceId` por recibir nombre/dirección. Modelo, atención humana y estado de entrega no pueden saltar esos controles.
