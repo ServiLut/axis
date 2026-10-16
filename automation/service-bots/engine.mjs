@@ -64,6 +64,7 @@ function ownDeliveredClarification(store,state,event,id,text){
 }
 function rememberAdditionalLiteralFields(store,config,state,event){
  const caseSource=ownCaseAnchor(store,config,state,event);if(!caseSource)return;
+  rememberFurnitureExclusion(store,config,state,event,caseSource);
  const pest=state.pendingPestClarification;
  if(pest?.guard===MARIA_BATCH_INTAKE_GUARD&&pest.caseId===state.caseId&&pest.phone===event.phone&&pest.line===event.line&&state.pendingMediaBurst?.sourceIds?.includes(state.lastHandledSourceId)&&event.kind==='text'&&!event.forwarded&&!event.quotedId&&event.at>pest.at&&event.at-pest.at<=600000&&/^(?:s[ií]|correcto|exacto|as[ií] es)[.! ]*$/iu.test(event.text.trim())&&(!state.slots.service||genericPestDescription(state.slots.service))){
   const raw=store.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(pest.literalSourceId,event.phone,event.line);
@@ -265,6 +266,39 @@ function literalAffectedFurniture(text){
     const uncertain=/[?¿"“”«»]/.test(rawClause)||/\b(?:si|cuando|en caso|quizas|tal vez|no se|segun|dijo|dice|dijeron|supongamos|podria|puede ser|no es cierto que|no dije que)\b/.test(clause)||excludedBefore&&/^\s+(?:sin|no|libres? de|que\s+(?:(?:aun|todavia)\s+)?no)\b/.test(after);
     if(uncertain||!excludedBefore&&!excludedAfter)return 'muebles mencionados; alcance por verificar';
   }}
+}
+const furnitureExclusionGuard='own-same-case-native-furniture-exclusion-for-question-wording-v1';
+const furnitureSourceHash=source=>createHash('sha256').update(JSON.stringify([source.id,source.phone,source.line,source.at,source.kind,source.text,source.fromMe,Boolean(source.forwarded),source.quotedId??null])).digest('hex');
+function explicitFurnitureExclusion(text){
+ if(literalAffectedFurniture(text))return false;
+ return normalize(text).split(/(?<=[.!?;,\r\n])/).some(raw=>{
+  if(/[?¿"“”«»]/.test(raw))return false;const clause=raw.trim().replace(/[.!;,]+$/g,'').trim();
+  return /^(?:no (?:hay|tengo|tenemos|tiene|tienen|veo|vemos) (?:chinches en )?(?:(?:los|las|el|la) )?(?:otr[oa]s? )?muebles(?: (?:afectados|con chinches))?|sin (?:otr[oa]s? )?muebles(?: (?:afectados|con chinches))?|(?:(?:los|las) )?(?:otr[oa]s? )?muebles no (?:tienen|presentan) chinches)$/.test(clause);
+ });
+}
+function rememberFurnitureExclusion(store,config,state,event,anchor){
+ // This marker controls a repeated question only. It never clears furniture
+ // scope, fills a pricing/DTO slot, or authorizes a quotation or registration.
+ if(config.company!=='fumigacion'||event.fromMe!==false||!Number.isSafeInteger(event.at)||anchor.phone!==event.phone||anchor.line!==event.line||event.at<anchor.at)return;
+ const marker=state.mattressFurnitureExclusion,service=extractSlots(event.text||'',config.company).service||state.slots.service;
+ const relevant=/\b(?:bases?(?: de)? (?:la )?camas?|basecamas?|sofas?|muebles?)\b/.test(normalize(event.text));
+ if(marker){
+  if(marker.active!==true)return;
+  const row=store.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(marker.sourceId,event.phone,event.line),original=row&&store.open(row.body);
+  const bound=marker.guard===furnitureExclusionGuard&&marker.caseId===state.caseId&&marker.phone===event.phone&&marker.line===event.line&&marker.service==='chinches'&&original?.kind==='text'&&!original.fromMe&&!original.forwarded&&!original.quotedId&&original.at===marker.at&&original.at>=anchor.at&&original.at<=event.at&&furnitureSourceHash(original)===marker.sourceHash&&explicitFurnitureExclusion(original.text);
+  const contradicted=normalize(service)!=='chinches'||event.kind!=='text'||relevant&&(Boolean(event.forwarded||event.quotedId)||Boolean(literalAffectedFurniture(event.text)));
+  if(!bound||contradicted){state.mattressFurnitureExclusion={...marker,active:false,invalidatedBy:{sourceId:event.id,at:event.at,reason:!bound?'source-binding-unverified':'later-furniture-scope-unverified'}};return;}
+  if(event.forwarded||event.quotedId)return;
+  state.mattressFurnitureExclusion={...marker,checkedSourceId:event.id,checkedAt:event.at};return;
+ }
+ if(event.kind!=='text'||event.forwarded||event.quotedId||normalize(service)!=='chinches'||!explicitFurnitureExclusion(event.text))return;
+ const row=store.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(event.id,event.phone,event.line),original=row&&store.open(row.body);
+ if(!original||furnitureSourceHash(original)!==furnitureSourceHash(event))return;
+ state.mattressFurnitureExclusion={guard:furnitureExclusionGuard,caseId:state.caseId,phone:event.phone,line:event.line,service:'chinches',sourceId:event.id,at:event.at,sourceHash:furnitureSourceHash(original),active:true,checkedSourceId:event.id,checkedAt:event.at};
+}
+function furnitureExclusionForPresentation(state,event){
+ const marker=state.mattressFurnitureExclusion;
+ return !event.forwarded&&!event.quotedId&&marker?.guard===furnitureExclusionGuard&&marker.active===true&&marker.caseId===state.caseId&&marker.phone===event.phone&&marker.line===event.line&&marker.checkedSourceId===event.id&&marker.checkedAt===event.at&&normalize(state.slots.service)==='chinches'&&!state.slots.affectedFurniture;
 }
 const ordinaryPestPatterns={cucarachas:/\bcucarachas?\b/,hormigas:/\bhormigas?\b/,ratones:/\b(?:raton|ratones)\b/,ratas:/\bratas?\b/,chinches:/\bchinches?\b/,comején:/\bcomejen(?:es)?\b/,avispas:/\bavispas?\b/,roedores:/\broedores?\b/,mosquitos:/\bmosquitos?\b/,pulgas:/\bpulgas?\b/,zancudos:/\b(?:zancudos?|sancudos?)\b/,'arañas':/\baranas?\b/,moscas:/\bmoscas?\b/,chiripas:/\bchiripas?\b/,prevencion:/\bprevencion\b/,fumigacion:/\bfumigacion\b/};
 const ordinaryPropertyPatterns={'casa finca':/\bcasas?\s+fincas?\b/,finca:/\bfincas?\b/,apartamento:/\b(?:apartamentos?|aptos?)\b/,casa:/\bcasas?\b/,restaurante:/\brestaurantes?\b/,local:/\blocal(?:es)?\b/,oficina:/\boficinas?\b/,bodega:/\bbodegas?\b/,'cafetería':/\bcafeterias?\b/,'café':/^(?:(?:es|seria)\s+)?en\s+(?:(?:el|un|nuestro|mi)\s+)?cafe\b/};
@@ -689,7 +723,7 @@ export function customerDecision(company,state,e,analysis={}) {
   const nonResidentialDimensions=dimensions?.explicitMetricUnits&&!['casa','apartamento'].includes(normalize(next.slots.site));
   const fields=company==='fumigacion'?['service','site',mattressService?'mattresses':'size','location']:['service','detail','location'];
   const missing=fields.find(f=>f==='size'?!next.slots.area&&!next.slots.rooms&&!nonResidentialDimensions:!next.slots[f]||company==='fumigacion'&&f==='service'&&genericPestDescription(next.slots.service));
-  const questions={service:company==='fumigacion'?missingPestReply(next):'¿Qué equipo necesitas revisar?',site:'¿En qué tipo de inmueble necesitas el servicio?',size:'¿Cuántas habitaciones o metros cuadrados tiene el lugar?',mattresses:'¿Cuántos colchones están afectados? Cuéntame también si hay chinches en bases de cama u otros muebles.',detail:'¿Qué falla presenta el equipo?',location:'¿En qué municipio y barrio necesitas el servicio?'};
+  const questions={service:company==='fumigacion'?missingPestReply(next):'¿Qué equipo necesitas revisar?',site:'¿En qué tipo de inmueble necesitas el servicio?',size:'¿Cuántas habitaciones o metros cuadrados tiene el lugar?',mattresses:furnitureExclusionForPresentation(next,e)?'¿Cuántos colchones están afectados?':'¿Cuántos colchones están afectados? Cuéntame también si hay chinches en bases de cama u otros muebles.',detail:'¿Qué falla presenta el equipo?',location:'¿En qué municipio y barrio necesitas el servicio?'};
   if(/[?¿]/.test(literalText)&&/\b(eso|lo anterior|lo que (?:me )?(?:dij|coment|indic|explic)|me habian|me hab[ií]as|mismo (?:precio|horario|servicio)|como qued|que qued)\w*/.test(t))
     return {state:next,reviewTopic:'previous-communication',review:'El cliente pregunta por algo comunicado antes. Hay que relacionar su pregunta con el contexto guardado y el servicio correcto antes de contestar.',reply:'Gracias. Revisaremos lo que ya conversamos para responder tu pregunta con claridad.'};
   if(isCustomerQuestion(e.text)&&!(company==='fumigacion'&&(quotationInquiry(e.text)||ordinaryAvailability)&&!ambiguousIntake(e.text)))
@@ -698,7 +732,7 @@ export function customerDecision(company,state,e,analysis={}) {
   if(!missing&&nonResidentialDimensions)return {state:next,reviewTopic:'special-quotation',reviewConditions:{kind:'literal-special-property-dimensions',guard:MARIA_DIMENSIONS_GUARD},review:'La persona indicó un inmueble no residencial y sus dimensiones literales. No se calculó superficie ni hay precio aprobado; necesita alcance y cotización propios del mismo caso.',reviewQuestion:'¿Qué alcance y cotización propios corresponden a este inmueble y las medidas indicadas?',reply:'Conservé las medidas '+dimensions.literal+'. La cotización de este inmueble necesita verificar su alcance.'};
   if(missing&&!next.asked.includes(missing)){next.asked.push(missing);return {state:next,reply:company==='fumigacion'&&missing==='location'&&next.slots.locationDetails?'¿En qué municipio necesitas el servicio? Ya conservé la ubicación que me indicaste.':questions[missing]};}
   if(missing){
-    if(company==='fumigacion')return {state:next,reply:missing==='location'&&next.slots.locationDetails?'Me falta confirmar el municipio para cotizarte; ya conservé la ubicación que me indicaste.':missing==='mattresses'?'Para cotizar esa cama, confirma cuántos colchones están afectados y si también hay chinches en la base u otros muebles.':questions[missing]};
+    if(company==='fumigacion')return {state:next,reply:missing==='location'&&next.slots.locationDetails?'Me falta confirmar el municipio para cotizarte; ya conservé la ubicación que me indicaste.':missing==='mattresses'&&!furnitureExclusionForPresentation(next,e)?'Para cotizar esa cama, confirma cuántos colchones están afectados y si también hay chinches en la base u otros muebles.':questions[missing]};
     const names={service:'la plaga o el servicio solicitado',site:'el tipo de inmueble',size:'las habitaciones o metros cuadrados del lugar',mattresses:'los colchones y muebles afectados',detail:'la falla del equipo',location:'el municipio y barrio'};
     return {state:next,reviewTopic:'missing-intake:'+missing,reviewConditions:{missing},review:'Ya preguntamos por '+names[missing]+', pero la respuesta no permite confirmarlo.',reviewQuestion:'¿Qué dato podemos confirmar sobre '+names[missing]+' para esta solicitud?',reply:'Gracias. Revisaremos los detalles que nos compartiste para continuar.'};
   }
@@ -1015,7 +1049,7 @@ export class Engine {
           if(!missing.service||genericPestDescription(missing.service))requests.push('Qué plaga deseas tratar o si buscas prevención.');
           if(!staged&&normalize(missing.service).includes('chinches')){
             if(!missing.site)requests.push('Qué tipo de inmueble es.');
-            if(!missing.mattresses)requests.push('Cuántos colchones están afectados y si también hay chinches en bases de cama u otros muebles.');
+            if(!missing.mattresses)requests.push(furnitureExclusionForPresentation(decision.state,e)?'Cuántos colchones están afectados.':'Cuántos colchones están afectados y si también hay chinches en bases de cama u otros muebles.');
           }else if(!staged&&(!missing.site||!missing.area&&!missing.rooms))requests.push(!missing.site&&!missing.area&&!missing.rooms?'Qué tipo de inmueble es y cuántas habitaciones o metros cuadrados tiene.':!missing.site?'Qué tipo de inmueble es.':'Cuántas habitaciones o metros cuadrados tiene.');
           if(!missing.location)requests.push(missing.locationDetails?'El municipio donde necesitas el servicio; ya conservé la ubicación indicada.':'El municipio y barrio o vereda donde necesitas el servicio.');
           if(requests.length){
