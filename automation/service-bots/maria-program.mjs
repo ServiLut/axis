@@ -159,6 +159,7 @@ function literalAddress(text,prompted){
 const registrationPreface=/^(?:(?:aqui|ahi) (?:te |se )?lo (?:mande|envie|mando|envio|comparti)|ya (?:te |se )?lo (?:mande|envie|comparti)|(?:te |se )?lo (?:mande|envie|comparti) (?:arriba|antes)|estos son mis datos)\b/;
 function registrationSourcePreface(text){const t=normalize(text),match=t.match(registrationPreface);return Boolean(match&&/^[.!¡, ]*$/.test(t.slice(match[0].length)));}
 const correctionFieldReference=text=>/^(?:(?:mi|el) nombre(?: completo)?|(?:mi|la) direccion(?: completa)?|(?:mi|el) apellido|(?:mis|los) datos|(?:ese|este|el) dato|(?:esta|estan|es|son) (?:mal|incorrect[oa]s?|equivocad[oa]s?))[.! ]*$/.test(normalize(text));
+const directNameCorrection=text=>/^(?:corrijo|rectifico)\s+(?:(?:mi|el)\s+)?nombre(?: completo)?\s*:\s*[\p{L}'’ -]{1,160}[.! ]*$/iu.test(text.trim());
 function promptedLiteralFields(text,requested,correction=false){
  const lines=text.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
  if(lines.length<2)return {};
@@ -214,6 +215,9 @@ function incompatiblePetContinuation(event,mention,facts){
  if(/\b(?:las|los|les|ellas|ellos)\s+(?:(?:las|los|les)\s+)?(?:pued\w*|deb\w*|dej\w*|qued\w*|sac\w*|llev\w*|manten\w*|retir\w*)\b|\b(?:pued\w*|deb\w*|dej\w*|retir\w*)(?:las|los)\b/.test(raw))return true;
  if(exactLiteralFieldSource(event,facts))return false;
  const text=normalize(literalIntakeTextWithoutRegistrationFields(event.text)),fields=explicitFields(event.text);
+ // A bounded name correction without an animal reference does not correct a
+ // prior pet observation. An invalid name still needs its own clarification.
+ if(directNameCorrection(event.text)&&!/\b(?:mascotas?|perros?|gatos?|animales?|ellas|ellos)\b/.test(raw))return false;
  const correction=/\b(?:me equivoque|corrijo|correccion|rectifico|en realidad|no (?:son|eran?))\b/.test(text)&&!fields.name&&!fields.address;
  const petReference=/\b(?:mascotas?|perros?|gatos?|animales?)\b|\b(?:las|los|les|ellas|ellos)\s+(?:(?:las|los|les)\s+)?(?:pued\w*|deb\w*|dej\w*|qued\w*|sac\w*|llev\w*|manten\w*|retir\w*)\b|\b(?:pued\w*|deb\w*|dej\w*|retir\w*)(?:las|los)\b/.test(text);
  // A later denied, corrected or safety-related observation is not permission
@@ -333,6 +337,10 @@ export function registrationTurn(s,c,previous,e,decision){
  const candidateRequested=pi.requestedFields||(['name','address'].includes(pi.stage)?[pi.stage]:['name','address']),candidateExplicit=explicitFields(e.text),candidateSeparated=prompt&&!confirms(e.text)?promptedLiteralFields(e.text,candidateRequested,pi.stage==='correction'):{};
  const candidateName=candidateExplicit.name||candidateSeparated.name||(!confirms(e.text)&&!mariaIncidentalPetMention(e)&&literalName(e.text,(pi.stage==='name'||pi.stage==='correction'&&!correctionFieldReference(e.text))&&Boolean(prompt)));
  const candidateAddress=candidateExplicit.address||candidateSeparated.address||literalAddress(e.text,(['address','confirm','correction'].includes(pi.stage)||pi.requestedFields?.includes('address'))&&Boolean(prompt));
+ if(directNameCorrection(e.text)&&!candidateName&&!blockedText(e.text)){
+  pi.stage='correction';pi.requestedFields=['name'];pi.preview=null;pi.promptId=e.id+':reply';pi.pendingNameCorrectionSource=source(e);
+  return {state,reply:'Necesito tu nombre completo correcto para actualizar la solicitud. ¿Me lo compartes?'};
+ }
  const petFieldFacts=[...batchFields.flatMap(fact=>['name','address'].filter(kind=>fact[kind]&&!fact.conflictFields?.includes(kind)).map(kind=>({kind,value:fact[kind],source:fact.source}))),...(!candidateExplicit.conflict?[{kind:'name',value:candidateName,source:source(e)},{kind:'address',value:candidateAddress,source:source(e)}]:[])];
  let petPresence;
  try{petPresence=casePetPresence(s,c,state,e,petFieldFacts);}catch{
@@ -368,6 +376,15 @@ export function registrationTurn(s,c,previous,e,decision){
  let changed=Boolean(conflicting||explicit.conflict||pi.customerName!==prior.customerName||pi.address!==prior.address);
  if(name&&name!==pi.customerName){pi.customerName=name;pi.nameSource=source(e);changed=true;}
  if(address&&address!==pi.address){pi.address=address;pi.addressSource=source(e);changed=true;}
+ if(pi.pendingNameCorrectionSource){
+  const correctionPosition=sourcePosition(s,e,pi.pendingNameCorrectionSource);
+  if(name||sourcePosition(s,e,pi.nameSource)>correctionPosition){
+   if(name){pi.customerName=name;pi.nameSource=source(e);}delete pi.pendingNameCorrectionSource;changed=true;
+  }else{
+   pi.stage='correction';pi.requestedFields=['name'];pi.preview=null;pi.promptId=e.id+':reply';
+   return {state,reply:'Necesito tu nombre completo correcto para actualizar la solicitud. ¿Me lo compartes?'};
+  }
+ }
  if(!pi.customerName||!pi.address){
   const missing=[...(!pi.customerName?['name']:[]),...(!pi.address?['address']:[])];
   if(pi.promptId&&!prompt&&JSON.stringify(pi.requestedFields||[])===JSON.stringify(missing))return {state,observed:true,observedState:'PROGRAM_FIELDS_DELIVERY_PENDING'};

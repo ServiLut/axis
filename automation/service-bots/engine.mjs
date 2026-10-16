@@ -221,9 +221,9 @@ function shortNameStatus(text,name){
 function ordinaryLiteralMunicipality(text){
   const t=normalize(text),found=[];
   for(const clause of t.split(/[.!?;,]|\b(?:pero|sino)\b/)){
-    if(/\b(?:si|quizas|tal vez|posiblemente|en caso de|mi vecin[oa]|su vecin[oa]|un tercero)\b/.test(clause))continue;
     for(const match of clause.matchAll(/\b(?:medellin|bello|envigado|itagui|sabaneta|la estrella|copacabana|girardota|rionegro|(?:santa fe|santafe) de antioquia|sopetran)\b/g)){
       const prefix=clause.slice(0,match.index),suffix=clause.slice(match.index+match[0].length);
+      if(/\b(?:si|quizas|tal vez|posiblemente|en caso de|mi vecin[oa]|su vecin[oa]|un tercero|no se)\b(?:\s+\p{L}+){0,7}\s*$/u.test(prefix))continue;
       if(/\b(?:no|nunca|sin)\b(?:\s+\p{L}+){0,6}\s*$/u.test(prefix)||/^\s+no\b/.test(suffix))continue;
       found.push(match[0]);
     }
@@ -245,12 +245,55 @@ function literalAffectedFurniture(text){
     if(uncertain||!excludedBefore&&!excludedAfter)return 'muebles mencionados; alcance por verificar';
   }
 }
+const ordinaryPestPatterns={cucarachas:/\bcucarachas?\b/,hormigas:/\bhormigas?\b/,ratones:/\b(?:raton|ratones)\b/,ratas:/\bratas?\b/,chinches:/\bchinches?\b/,comején:/\bcomejen(?:es)?\b/,avispas:/\bavispas?\b/,roedores:/\broedores?\b/,mosquitos:/\bmosquitos?\b/,pulgas:/\bpulgas?\b/,zancudos:/\b(?:zancudos?|sancudos?)\b/,'arañas':/\baranas?\b/,moscas:/\bmoscas?\b/,chiripas:/\bchiripas?\b/,prevencion:/\bprevencion\b/,fumigacion:/\bfumigacion\b/};
+const ordinaryPropertyPatterns={'casa finca':/\bcasas?\s+fincas?\b/,finca:/\bfincas?\b/,apartamento:/\b(?:apartamentos?|aptos?)\b/,casa:/\bcasas?\b/,restaurante:/\brestaurantes?\b/,local:/\blocal(?:es)?\b/,oficina:/\boficinas?\b/,bodega:/\bbodegas?\b/,'cafetería':/\bcafeterias?\b/,'café':/^(?:(?:es|seria)\s+)?en\s+(?:(?:el|un|nuestro|mi)\s+)?cafe\b/};
+const literalAreaPattern=/\b\d{1,5}(?:[.,]\d{1,2})?\s*(?:m(?:ts?)?\s*[2²]|m(?:ts?)?\.?\s*cuadrados?|metros?\s*cuadrados?)(?=$|[\s.,;:)])/iu;
+const literalMattressPattern=/\b(?:\d{1,3}|un|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+colch[oó](?:n|nes)\b/iu;
+const literalRoomPattern=/\b(?:\d{1,3}|un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s*(?:habitaci[oó]n(?:es)?|cuartos?)\b/iu;
+function affirmedIntakeMatches(text,pattern){
+  const matches=[];
+  // A decimal separator and the period in "mts. cuadrados" belong to the
+  // literal measure, rather than ending a sentence or changing its value.
+  const protectedText=String(text).replace(/\b(?:mts?|m)\.(?=\s*cuadrados?)/giu,match=>match.replace('.','\uE000'));
+  for(const part of protectedText.split(/(?<!\d)[.,]|[.,](?!\d)|[!?;\r\n]|\b(?:pero|sino)\b/iu)){
+    const clause=part.replace(/\uE000/g,'.');
+    const flags=pattern.flags.replace('g','');
+    for(const match of clause.matchAll(new RegExp(pattern.source,flags+(flags.includes('i')?'':'i')+'g'))){
+      const before=normalize(clause.slice(0,match.index))+' ',after=normalize(clause.slice(match.index+match[0].length));
+      const negated=/\b(?:no|nunca|sin|ni)\s+(?:(?:son?|es|hay|tengo|tenemos|tienen?|veo|vemos|presentan?|quiero(?: tratar)?|necesito(?: tratar)?)\s+)?(?:(?:ni|un|una|unos|unas|el|la|los|las|en|de|del|muchos?|muchas?|ningunos?|ningunas?)\s+)*$/.test(before)||/^no$/.test(after);
+      const uncertain=/\b(?:si|quizas|tal vez|posiblemente|puede ser|podria ser|no se)\b(?:\s+\p{L}+){0,6}\s*$/u.test(before);
+      if(negated||uncertain)continue;
+      matches.push(match[0]);
+    }
+  }
+  return matches;
+}
+function literalPropertyKinds(text){
+  const t=normalize(text),sites=Object.keys(ordinaryPropertyPatterns).filter(site=>affirmedIntakeMatches(t,ordinaryPropertyPatterns[site]).length);
+  return sites.includes('casa finca')?['casa finca']:sites;
+}
+function literalQuoteFieldConflicts(text){
+  const t=normalize(text),conflicts=[];
+  // A range or alternative describes an unresolved quantity. Selecting its
+  // first/last endpoint would invent the customer's billable scope.
+  const number='(?:\\d{1,5}(?:[.,]\\d{1,2})?|un|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)';
+  const ranged=new RegExp('\\b'+number+'\\s*(?:(?:m(?:ts?)?\\s*[2²]|metros?\\s*cuadrados?)\\s*)?(?:o|a|y|[-–/])\\s*'+number+'\\s*(?:m(?:ts?)?\\s*[2²]|m(?:ts?)?\\.?\\s*cuadrados?|metros?\\s*cuadrados?|habitaciones?|cuartos?|colchones?)(?=$|[\\s.,;:)])','u');
+  if(ranged.test(t)||/\bno se\b[^.!?;]{0,40}\b(?:cuant[oa]s?|miden?|medida|area|tamano)\b/.test(t))conflicts.push('area','rooms','mattresses','dimensions');
+  const areas=affirmedIntakeMatches(text,literalAreaPattern);
+  if(new Set(areas.map(normalize)).size>1)conflicts.push('area','rooms','dimensions');
+  for(const [field,pattern]of [['area',literalAreaPattern],['rooms',literalRoomPattern],['mattresses',literalMattressPattern]])if(pattern.test(text)&&!affirmedIntakeMatches(text,pattern).length)conflicts.push(field,...(field==='area'||field==='rooms'?['area','rooms','dimensions']:[]));
+  const sites=literalPropertyKinds(text);
+  if(sites.length>1||!sites.length&&Object.values(ordinaryPropertyPatterns).some(pattern=>pattern.test(t)))conflicts.push('site');
+  const services=Object.keys(ordinaryPestPatterns).filter(service=>affirmedIntakeMatches(t,ordinaryPestPatterns[service]).length);
+  if(!services.length&&Object.values(ordinaryPestPatterns).some(pattern=>pattern.test(t)))conflicts.push('service');
+  return [...new Set(conflicts)];
+}
 export function extractSlots(text,company) {
   if(company==='servicio-tecnico'&&technicalIntakeMetaQuestion(text))return {};
   text=textWithoutLinks(company==='fumigacion'?literalIntakeTextWithoutRegistrationFields(text):text);
   const t=normalize(text), slots={};
-  const pests={cucarachas:/\bcucarachas?\b/,hormigas:/\bhormigas?\b/,ratones:/\b(?:raton|ratones)\b/,ratas:/\bratas?\b/,chinches:/\bchinches?\b/,comején:/\bcomejen(?:es)?\b/,avispas:/\bavispas?\b/,roedores:/\broedores?\b/,mosquitos:/\bmosquitos?\b/,pulgas:/\bpulgas?\b/,zancudos:/\b(?:zancudos?|sancudos?)\b/,'arañas':/\baranas?\b/,moscas:/\bmoscas?\b/,chiripas:/\bchiripas?\b/,prevencion:/\bprevencion\b/,fumigacion:/\bfumigacion\b/};
-  const found=company==='fumigacion'?Object.keys(pests).filter(s=>pests[s].test(t)):['nevera','lavadora','secadora','estufa','horno','calentador','aire acondicionado'].filter(s=>t.includes(s)&&miguelLiteralSlotAllowed('service',s,text));
+  const pests=ordinaryPestPatterns;
+  const found=company==='fumigacion'?Object.keys(pests).filter(s=>affirmedIntakeMatches(t,pests[s]).length):['nevera','lavadora','secadora','estufa','horno','calentador','aire acondicionado'].filter(s=>t.includes(s)&&miguelLiteralSlotAllowed('service',s,text));
   const specific=company==='fumigacion'?found.filter(s=>!['prevencion','fumigacion'].includes(s)):found;
   slots.service=(specific.length?specific:found).join(' y ')||undefined;
   const city=company==='fumigacion'?ordinaryLiteralMunicipality(text):['medellin','bello','envigado','itagui','sabaneta','la estrella','copacabana','girardota','rionegro'].find(s=>new RegExp('\\b'+s+'\\b').test(t)&&miguelLiteralSlotAllowed('location',s,text));
@@ -258,33 +301,29 @@ export function extractSlots(text,company) {
   if(company==='fumigacion'){
     // A locative answer names a café as the place. Coffee drinks or colors
     // alone do not identify an inmueble, and no restaurant type is inferred.
-    const properties={'casa finca':/\bcasas?\s+fincas?\b/,finca:/\bfincas?\b/,apartamento:/\b(?:apartamentos?|aptos?)\b/,casa:/\bcasas?\b/,restaurante:/\brestaurantes?\b/,local:/\blocal(?:es)?\b/,oficina:/\boficinas?\b/,bodega:/\bbodegas?\b/,'cafetería':/\bcafeterias?\b/,'café':/^(?:(?:es|seria)\s+)?en\s+(?:(?:el|un|nuestro|mi)\s+)?cafe\b/};
-    slots.site=Object.keys(properties).find(site=>properties[site].test(t));
+    const distinct=literalPropertyKinds(text);
+    slots.site=distinct.length===1?distinct[0]:undefined;
   }
   if(company==='fumigacion'){
     // An explicit square exponent is required for mt/mts abbreviations. Keep
     // the literal source; bare metres remain ambiguous for automatic pricing.
-    slots.area=text.match(/\b\d{1,5}(?:[.,]\d{1,2})?\s*(?:m(?:ts?)?\s*(?:²|2)|m(?:ts?)?\.?\s*cuadrados?|metros?\s*cuadrados?)(?=$|[\s.,;:)])/i)?.[0];
+    slots.area=affirmedIntakeMatches(text,literalAreaPattern)[0];
     slots.dimensions=literalIntakeDimensions(text)?.literal;
-    slots.mattresses=text.match(/\b(?:\d{1,3}|un|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+colch[oó](?:n|nes)\b/i)?.[0];
+    slots.mattresses=affirmedIntakeMatches(text,literalMattressPattern)[0];
     slots.affectedFurniture=literalAffectedFurniture(text);
     slots.roomScale=/\b(?:habitaciones?|cuartos?|piezas?)\s*\(?\s*pequen[oa]s?\b/.test(t)?'pequeños':/\b(?:habitaciones?|cuartos?|piezas?)\s*\(?\s*grandes?\b/.test(t)?'grandes':undefined;
     slots.siteScale=/\b(?:apartamento|apto|casa|local)\s+pequen[oa]\b/.test(t)?'pequeño':/\b(?:apartamento|apto|casa|local)\s+grande\b/.test(t)?'grande':undefined;
     slots.floors=text.match(/\b\d{1,2}(?:er|ro|do|to)?\s+(?:pisos?|niveles?)\b/i)?.[0];
     slots.patio=/\b(?:no (?:tiene|hay|tenemos)|sin) patio\b/.test(t)?'sin patio':/\bpatio\b/.test(t)?'patio':undefined;
     slots.treatmentScope=/\b(?:solo|solamente)\s+(?:el )?interior\b/.test(t)?'solo interior':/\b(?:solo|solamente)\s+(?:en )?(?:la )?cocina\b/.test(t)?'solo cocina':undefined;
-    slots.rooms=text.match(/\b\d{1,3}\s*(?:habitaci[oó]n(?:es)?|cuartos?)\b/i)?.[0];
+    slots.rooms=affirmedIntakeMatches(text,literalRoomPattern)[0];
     // Keep an explicit written count as the source said it. Do not normalize it
     // into a digit, choose a count from a range, or adopt a negated description.
-    if(!slots.rooms){
-      const room=text.match(/\b(?:una?|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+(?:habitaci[oó]n(?:es)?|cuartos?)\b/i);
-      const prefix=room?normalize(text.slice(0,room.index)).trim():'';
-      if(room&&!/\b(?:no|sin|entre|o|y)(?:\s+(?:tiene|tenemos|son|hay|cuenta|con|una?|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)){0,4}$/.test(prefix))slots.rooms=room[0];
-    }
     // "Piezas" describes rooms only with an explicit property in this text;
     // an equipment part or an unrelated count must not become the home's size.
     if(!slots.rooms&&slots.site)slots.rooms=text.match(/\b\d{1,3}\s*piezas?\b(?!\s+(?:de|del|para|repuestos?|motor|maquina)\b)/i)?.[0];
   }
+  if(company==='fumigacion')for(const field of literalQuoteFieldConflicts(text))delete slots[field];
   return Object.fromEntries(Object.entries(slots).filter(([,v])=>v));
 }
 function literalFields(state,e,company){
@@ -298,8 +337,16 @@ function literalFields(state,e,company){
 }
 function rememberFields(state,e,company,fields=literalFields(state,e,company)){
   state.intakeSources={...state.intakeSources};
+  if(company==='fumigacion'){
+    const conflicts=literalQuoteFieldConflicts(e.text);
+    // A new contradictory quantity invalidates the old ordinary quote. Keep
+    // all raw events; never turn the rejected endpoint into a field source.
+    for(const field of conflicts){delete state.slots[field];delete state.intakeSources[field];}
+    if(conflicts.length&&!state.programIntake)delete state.quotedPrice;
+  }
   for(const [field,value]of Object.entries(fields)){
     const prior=state.intakeSources[field];
+    if(company==='fumigacion'&&!state.programIntake&&['service','site','location','area','rooms','mattresses','affectedFurniture','floors','patio','treatmentScope'].includes(field)&&state.slots[field]&&state.slots[field]!==value)delete state.quotedPrice;
     const additive=company==='fumigacion'&&field==='service'&&/^(?:y|tambien|ademas)(?:\s+|[, :])/.test(normalize(e.text));
     const sources=additive?(prior?.sources|| (prior?.sourceId?[{sourceId:prior.sourceId,at:prior.at}]:[])):[];
     const all=[...sources,{sourceId:e.id,at:e.at}];

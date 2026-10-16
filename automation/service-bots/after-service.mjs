@@ -15,11 +15,13 @@ function onlyCommercialPetContext(raw){
     const asks=/[¿?]/.test(clause)||/\b(?:(?:quisiera|quiero|necesito|me gustaria) saber|me preocupa|puedo|podria|debo|debemos|es posible|tengo que|tenemos que|explic\w*|orient\w*|recomiend\w*|aconsej\w*)\b/.test(t)||/^(?:\s*(?:y|pero)\s+)?\s*(?:como|cuando|donde|por que|cuanto|que (?:hago|debemos|cuesta|precio|datos|valor|costo))\b/.test(t)||/\b(?:y|pero|ademas)\s+(?:que|como|cuando|donde|cual|cuanto|por que)\b/.test(t)||reference;
     if(!asks)continue;
     const question=t.replace(/^[¿\s]+/u,'');
-    // One identifiable commercial inquiry must lead the whole question. The
-    // remainder may describe its scope, never introduce another request.
-    const commercial=question.match(/^(?:(?:por favor|hola)[, ]+)?(?:(?:cuanto|que) (?:(?:me|nos) )?(?:cuesta|cuestan|vale|valen|costaria|valdria)|cual (?:es|seria) (?:el )?(?:precio|valor|costo)|que (?:precio|valor|costo) (?:tiene|tendria|manejan)|(?:me |nos )?(?:pueden|podrian|puedes|podrias) (?:cotizar(?:me|nos)?|(?:informar|decir)(?:me|nos)? (?:el )?(?:precio|valor|costo))|que (?:datos|informacion) (?:necesitan|requieren))\b/);
+    // Literal scope may precede the commercial question in the same clause.
+    // Inspect both sides so this never hides a separate request about pets.
+    const commercial=question.match(/\b(?:(?:cuanto|que) (?:(?:me|nos) )?(?:cuesta|cuestan|vale|valen|costaria|valdria)|cual (?:es|seria) (?:el )?(?:precio|valor|costo)|que (?:precio|valor|costo) (?:tiene|tendria|manejan)|(?:me |nos )?(?:pueden|podrian|puedes|podrias) (?:cotizar(?:me|nos)?|(?:informar|decir)(?:me|nos)? (?:el )?(?:precio|valor|costo))|que (?:datos|informacion) (?:necesitan|requieren))\b/);
     if(!commercial||reference)return false;
-    const rest=question.slice(commercial[0].length);
+    const prefix=question.slice(0,commercial.index).replace(/[¿\s]+$/u,'');
+    if(/[¿?]/.test(prefix)||/\b(?:que|como|cuando|donde|cual|cuanto|quien|por que|pued\w*|podri\w*|deb\w*|quier\w*|quisier\w*|necesit\w*|saber|explic\w*|orient\w*|recomiend\w*|aconsej\w*|solicit\w*|pid\w*|pregunt\w*|dime|dig\w*|indic\w*|inform\w*|ayud\w*|dese\w*|dentro|adentro|afuera|dej\w*|ellas|ellos|descuento|rebaja)\b/.test(prefix))return false;
+    const rest=question.slice(commercial.index+commercial[0].length);
     if(/\b(?:que|como|cuando|donde|cual|cuanto|por que|pued\w*|podri\w*|deb\w*|quier\w*|quisier\w*|necesit\w*|saber|explic\w*|orient\w*|recomiend\w*|aconsej\w*|dentro|adentro|afuera|dej\w*|ellas|ellos|descuento|rebaja)\b/.test(rest))return false;
   }
   return true;
