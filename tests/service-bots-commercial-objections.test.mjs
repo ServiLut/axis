@@ -37,6 +37,20 @@ test('discount request routes exactly one clear question to Sandra and never app
  assert.match(f.reply(second),/aún no hay un descuento aprobado/);assert.equal(f.state(second).quotedPrice.priceCop,129000);assert.notEqual(f.state(second).quotedPrice.accepted,true);assert.equal(prepared(f),0);
 }));
 
+for(const budget of ['Tengo cien mil pesos. ¿Qué me recomiendas?','Mi presupuesto es $100.000.','Puedo gastar 100000 pesos.'])test('price conversation follows the supplied budget without a generic fallback or invented discount: '+budget,async t=>fixture(t,async f=>{
+ await quote(f);const objection=await f.turn('Se me hace caro, tenía pensado gastar menos.');f.deliver(objection);
+ const e=await f.turn(budget);assert.match(f.reply(e),/Gracias por contarme tu presupuesto/);assert.match(f.reply(e),/129\.000/);
+ assert.doesNotMatch(f.reply(e),/Recibí tu pregunta|Qué presupuesto|¿Deseas continuar|descuento aprobado|nombre completo/);
+ assert.equal(f.state(e).commercialPriceObjection.budgetLiteral,budget);assert.equal(f.state(e).commercialPriceObjection.budgetSourceId,e.id);
+ assert.equal(f.state(e).quotedPrice.priceCop,129000);assert.notEqual(f.state(e).quotedPrice.accepted,true);assert.equal(prepared(f),0);
+ const questions=discountQuestions(f);assert.equal(questions.length,1);assert.match(f.store.open(questions[0].body).text,/129\.000/);assert.ok(f.store.open(questions[0].body).text.includes(budget));
+ f.deliver(e);const again=await f.turn(budget);assert.equal(discountQuestions(f).length,1);assert.match(f.reply(again),/Gracias por contarme tu presupuesto/);
+}));
+
+test('budget words without a delivered current objection do not create a discount request',async t=>fixture(t,async f=>{
+ await quote(f);await f.turn('Tengo cien mil pesos. ¿Qué me recomiendas?');assert.equal(discountQuestions(f).length,0);
+}));
+
 for(const text of ['No gracias, no quiero el servicio. No me escriban más.','Usted es una hijueputa. No quiero el servicio. No me vuelvan a escribir.'])test('direct refusal and opt-out close intake, stay respectful, and persist without followups: '+text,async t=>fixture(t,async f=>{
  await quote(f);const e=await f.turn(text),state=f.state(e);
  assert.equal(state.closed,true);assert.equal(state.doNotContact,true);assert.equal(state.contactDeclined,true);assert.equal(state.commercialRefusal.guard,COMMERCIAL_OBJECTION_GUARD);assert.equal(state.quotedPrice.accepted,false);
