@@ -1,5 +1,17 @@
 # María Ángel y Miguel Ángel
 
+## Estado vigente — 17/10/2026 20:23Z: azul reabierta, PRUEBA retirada
+
+**La atención de azul 573126944997 quedó reabierta prospectivamente desde 20:20:36.716Z**, bajo la autorización humana previa y después del ensayo y retiro. La lectura autenticada de 20:21:05Z aprobó **21 comprobaciones**: recepción/respuestas/registro ordinario activos, restricción a Sandra desactivada y ruta interna de jefatura conservada. El corte público propio no cambia `BOT_ACTIVATED_AT`, credenciales ni vencimiento **07/11/2026 16:56:52.680Z**; no recupera entradas o colas antiguas. Este estado sustituye las pausas históricas siguientes.
+
+Runtime **9783dde instalado, 2844/2844 pruebas**; Backend **44ec59aa** y Web **97b8de9** comprobados. La agenda por horario del cliente está activa: exige datos y fuentes propios, resumen entregado y confirmación nueva; guarda el horario exacto sin técnico ni hora final inventados. El plan anterior de asignación automática de técnico permanece OFF, al igual que pagos y reprogramaciones por esa integración.
+
+Una PRUEBA nueva autorizada se creó y retiró: **18/oct a las 10 a. m. Bogotá**, PROGRAMADO, técnico/hora final nulos, pago cero, autor propio y comercial PENDIENTE. No es venta ni ejecución; campos y límites del recibo están al inicio de `MARIA_REGISTRO_SERVICIOS.md`. El acceso PRUEBA se desactivó tras el retiro: runtime expone ambos flags OFF y Backend devolvió **404, ruta de estado ausente**, compatible con el módulo desactivado; no expone directamente el flag remoto. Se conservó el fallo inicial del verificador que esperaba 403 y su revisión posterior, sin otra llamada ni reintento de alta/retiro.
+
+**SAVED ordinario sigue en 1 histórico**; aún no se acredita una segunda alta comercial ni primera agenda de un cliente real tras la reapertura. La observación única 20:23:21–20:23:34Z recorrió 55 páginas/5.500 eventos almacenados hasta FIN, sin entradas azules nuevas observadas en ese snapshot ni respuesta real nueva para evaluar calidad; no prueba tráfico global cero ni vigilancia continua. Holds agregados **397**, sin nuevos comandos completados de devolución: no certifica individualmente todos los holds. Roja inactiva, sin consulta al proveedor; reactivación/notas preventivas OFF. Otros bots y los dos informes 13h del 17/oct ya entregados exactos se conservan, sin reenvío.
+
+Fuentes: `.tmp/maria-confirmation-check-20261017/public-reopen-verify-2026-10-17T20-21-05-023Z/receipt-private.json`, `calendar-test-access/disabled-verification-2026-10-17T20-21-06-771Z/receipt-reviewed-private.json` y `post-reopen-observation-2026-10-17T20-23-21-480Z/checkpoint-private.json`, estas dos últimas bajo la misma carpeta de comprobación.
+
 ## Estado comprobado 17/10/2026 19:45Z — recepción pública aún pausada
 
 **Runtime 9783dde DONE 3 s; 2844/2844 pruebas, cero omisiones.** El fallo literal de no-contacto quedó corregido e instalado. Nueva secuencia nativa: cotización→posposición→«No quiero que me vuelvan a escribir»→agradecimiento→otro caso. Cinco fuentes y cinco salidas internas READ exactas, run-2026-10-17T19-45-11-158Z; los dos turnos posteriores conservaron OWN_COMMERCIAL_REFUSAL, cero salidas simuladas al cliente, cero pregunta de precio/altas. La cortesía de simulación enviada a Sandra no equivale a mensaje a un cliente real.
