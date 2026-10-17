@@ -13,7 +13,7 @@ import {ownIntent} from './maria-understanding.mjs';
 import {ownMiguelIntent,miguelLiteralSlotAllowed} from './miguel-understanding.mjs';
 import {literalPaintingRequest} from './technical-scope.mjs';
 import {afterServiceKind,afterServiceRequest,afterServiceDecision,explicitNewService,mariaLiteralServiceContext,literalOwnAfterServiceRequest,MARIA_LITERAL_SERVICE_CONTEXT_GUARD,mariaIncidentalPetMention} from './after-service.mjs';
-import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,acceptsOwnQuotedAmount,quotationAmountAffirmation,literalIntakeTextWithoutRegistrationFields,literalProgramPreference,prepareRegisteredTesaContinuation,registeredTesaConfirmation,ownRegisteredReceiptForPresentation,ownSavedPendingOperation,queueOwnSavedServiceReview,ownQuoteOutboxId,ownDeliveredQuoteEntry,ordinaryDataInformationTurn,pendingOrdinaryDataInformationTurn,ordinaryProgramDeferralTurn,ownStaffPlanningReceipt,staffPlanningCustomerTurn} from './maria-program.mjs';
+import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,acceptsExplicitOrdinaryQuotation,acceptsOwnQuotedAmount,quotationAmountAffirmation,literalIntakeTextWithoutRegistrationFields,literalProgramPreference,calendarProgramPreferenceIssue,prepareRegisteredTesaContinuation,registeredTesaConfirmation,ownRegisteredReceiptForPresentation,ownSavedPendingOperation,queueOwnSavedServiceReview,ownQuoteOutboxId,ownDeliveredQuoteEntry,ordinaryDataInformationTurn,pendingOrdinaryDataInformationTurn,ordinaryProgramDeferralTurn,ownStaffPlanningReceipt,staffPlanningCustomerTurn} from './maria-program.mjs';
 import {prepareMariaUnregisteredTesaPlan,mariaCaseQuoteCustomerTurn} from './maria-tesa-unregistered.mjs';
 import {prepareOwnSchedulingPlan,ownSchedulingCustomerTurn} from './maria-own-order-scheduling.mjs';
 import {createHash} from 'node:crypto';
@@ -1050,7 +1050,7 @@ export class Engine {
         const delivered=s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND state IN ('DELIVERED','READ')").get(ownQuoteOutboxId(s,decision.state,e.phone,e.line),e.phone,e.line,caseState.caseId);
         if(delivered&&s.priceReplyStillValid(delivered))decision={state:decision.state,incidentalPetNote:true,reply:'Anoté: '+incidentalPetNote.text+'.'};
       }
-      const amountAcceptance=e.kind==='text'&&e.fromMe===false&&!e.forwarded&&!e.quotedId&&priceNow&&acceptsOwnQuotedAmount(e.text,priceNow.priceCop);
+      const amountAcceptance=e.kind==='text'&&e.fromMe===false&&!e.forwarded&&!e.quotedId&&priceNow&&acceptsOwnQuotedAmount(e.text,priceNow.priceCop,e.at);
       const deferral=caseState.customerDeferral;
       if(amountAcceptance&&deferral?.guard===CUSTOMER_DEFERRAL_GUARD&&deferral.active===true&&deferral.caseId===caseState.caseId&&deferral.line===e.line&&e.at>deferral.at&&!caseState.awaitingHumanReview&&!decision.literalServiceContext&&!decision.quoteClarification&&(!decision.review||decision.reviewTopic==='customer-question')&&!contextNeedsPersonalPriority(e.text,e)){
         // The current own delivered quote, not a bare affirmative or a marker,
@@ -1058,18 +1058,25 @@ export class Engine {
         // intake path; it does not confirm a summary or authorize a reminder.
         decision={state:{...decision.state,customerDeferral:{...deferral,active:false,resumedBy:{kind:'verified-own-quotation-acceptance',sourceId:e.id,at:e.at,line:e.line,textHash:createHash('sha256').update(e.text).digest('hex'),quotationSourceId:currentQuote.sourceId,entryId:priceNow.id,priceCop:priceNow.priceCop}}}};
       }
-      const naturalAcceptance=acceptsOrdinaryQuotation(e.text)||Boolean(amountAcceptance);
+      const explicitQuotationAcceptance=e.kind==='text'&&e.fromMe===false&&!e.forwarded&&!e.quotedId&&!caseState.programIntake&&!currentQuote?.accepted&&acceptsExplicitOrdinaryQuotation(e.text);
+      const naturalAcceptance=acceptsOrdinaryQuotation(e.text)||Boolean(amountAcceptance)||explicitQuotationAcceptance;
+      const timingIssue=c.company==='fumigacion'&&e.kind==='text'&&!e.fromMe&&!e.forwarded&&!e.quotedId&&currentQuote?.accepted&&caseState.programIntake?.customerName&&caseState.programIntake?.address&&['name','address','details','confirm','correction'].includes(caseState.programIntake.stage)&&!caseState.awaitingHumanReview&&!contextNeedsPersonalPriority(e.text,e)&&calendarProgramPreferenceIssue(e.text,e.at);
+      if(timingIssue){
+        const slots={...caseState.slots},intakeSources={...caseState.intakeSources};delete slots.preference;delete intakeSources.preference;
+        const explanation=timingIssue==='weekday-mismatch'?'El día de la semana no coincide con esa fecha.':timingIssue==='past-date'?'La fecha u hora que indicas ya pasó.':timingIssue==='invalid-time'?'La hora indicada no es válida.':'Esa fecha no existe en el calendario.';
+        decision={state:{...caseState,lastText:e.text,slots,intakeSources,programIntake:{...caseState.programIntake,stage:'details',requestedFields:['preference'],preview:null,promptId:e.id+':reply'}},invalidRequestedTiming:true,reply:explanation+' ¿Qué fecha y hora válidas prefieres?'};
+      }
       // An affirmative amount without the quotation's delivery proof cannot
       // grant consent or silently issue a replacement quotation either.
-      const unverifiedAmountAttempt=currentQuote&&!priceNow&&e.kind==='text'&&e.fromMe===false&&!e.forwarded&&!e.quotedId&&quotationAmountAffirmation(e.text)!==null;
-      const continuingQuote=!decision.state.customerDeferral?.active&&!decision.quoteClarification&&!decision.literalServiceContext&&!decision.observed&&c.company==='fumigacion'&&currentQuote&&priceNow?.id===currentQuote.entryId&&priceNow.priceCop===currentQuote.priceCop&&
+      const unverifiedAmountAttempt=currentQuote&&!priceNow&&e.kind==='text'&&e.fromMe===false&&!e.forwarded&&!e.quotedId&&quotationAmountAffirmation(e.text,e.at)!==null;
+      const continuingQuote=!decision.invalidRequestedTiming&&!decision.state.customerDeferral?.active&&!decision.quoteClarification&&!decision.literalServiceContext&&!decision.observed&&c.company==='fumigacion'&&currentQuote&&priceNow?.id===currentQuote.entryId&&priceNow.priceCop===currentQuote.priceCop&&
         ((!decision.review&&!decision.courtesy)||(naturalAcceptance&&(decision.courtesy||decision.reviewTopic==='customer-question')))&&!specialQuotation(textWithoutLinks(literalIntakeTextWithoutRegistrationFields(e.text)),decision.state.slots)&&
         (currentQuote.accepted||naturalAcceptance);
       if(continuingQuote){
         const delivered=s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND state IN ('DELIVERED','READ')").get(ownQuoteOutboxId(s,decision.state,e.phone,e.line),e.phone,e.line,caseState.caseId);
         if(delivered&&s.priceReplyStillValid(delivered)){
           decision.state.quotedPrice={...currentQuote,accepted:true,acceptanceSource:currentQuote.acceptanceSource||e.id,acceptedAt:currentQuote.acceptedAt||e.at};
-          const literalPreference=literalProgramPreference(e.text);
+          const literalPreference=!e.forwarded&&!e.quotedId&&literalProgramPreference(e.text,e.at);
           const preference=literalPreference||decision.state.slots.preference;
           const operationalConfirmation=registeredTesaConfirmation(s,c,decision.state,e);
           if(literalPreference)decision.state.intakeSources={...decision.state.intakeSources,preference:{sourceId:e.id,at:e.at,context:'literal-customer-preference-pending-coordination'}};
@@ -1120,7 +1127,7 @@ export class Engine {
       // descriptions. In particular a street number before "apartamento"
       // must not become a quantity of apartments for quotation scope.
       const literalProgramStage=['name','address','details','confirm','correction'].includes(caseState.programIntake?.stage);
-      const registration=decision.quoteClarification||decision.literalServiceContext||decision.quoteEvidenceReview||decision.directedNonservice?null:registrationTurn(s,c,caseState,e,literalProgramStage?{...decision,state:{...decision.state,slots:{...caseState.slots,...(decision.state.slots.preference?{preference:decision.state.slots.preference}:{})}}}:decision,{literalSlots:extractSlots});
+      const registration=decision.invalidRequestedTiming||decision.quoteClarification||decision.literalServiceContext||decision.quoteEvidenceReview||decision.directedNonservice?null:registrationTurn(s,c,caseState,e,literalProgramStage?{...decision,state:{...decision.state,slots:{...caseState.slots,...(decision.state.slots.preference?{preference:decision.state.slots.preference}:{})}}}:decision,{literalSlots:extractSlots});
       if(registration)decision=registration;
        if(caseState.customerDeferral?.active===true&&decision.state.customerDeferral?.active===false&&decision.state.customerDeferral.resumedBy?.sourceId===e.id)s.audit('OWN_CUSTOMER_DEFERRAL_RESUMED',e.id,{caseId:caseState.caseId,deferralSourceId:caseState.customerDeferral.sourceId,resumeSourceId:e.id,kind:decision.state.customerDeferral.resumedBy.kind,humanHoldReleased:false,acceptanceGrantedByMarker:false});
       decision.state.lastHandledSourceId=e.id;

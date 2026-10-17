@@ -1,5 +1,13 @@
 # María Ángel y Miguel Ángel
 
+## Recuperación de acceso y correcciones de recepción — 17/10/2026 17:33Z
+
+El mantenimiento referido por la usuaria queda preservado como antecedente de la interrupción, no como prueba de un fallo exacto dentro de la VM. A las **17:32Z** volvieron HTTP 200 de Tenaxis/proveedor y autenticación del runtime. A las **17:33:14Z**, lecturas autenticadas comprobaron azul **OPEN/propietario exacto** y runtime FUMIGACIÓN; el lector propio Tenaxis respondió **201/alcance exacto** a las **17:33:23Z**. Fuentes cifradas y recibos bajo `.tmp/maria-blue-audit-20261017/whatsapp-readonly/availability-2026-10-17T17-33-12-697Z` y `backend-contract-review/read-2026-10-17T17-33-22-039Z`. No se reinició ni alteró el VPS. La recuperación de acceso no acredita recepción completa durante el hueco, ausencia de pérdidas ni ejecución automática de pendientes.
+
+Pausa revalidada **17:33:22Z**: sólo Sandra, clientes/registro ordinario/agenda/TESA/preventivo **OFF**, lectura propia ON, **SAVED=1** histórico. No liberar holds, repetir informes ni adoptar fuentes históricas como entradas nuevas al recuperarse la conexión. La orden comercial azul por caso permanece autorizada con el contraste actual y las restricciones anteriores.
+
+Correcciones locales verificadas para aceptación natural de cotización, fechas explícitas, etiqueta `Horario:` y nombre `Soy…`, con originales y confirmación posterior conservados. Fechas imposibles, pasadas o con día contradictorio piden aclaración; no reservan cupo. Gate de **2.185/2.185 pruebas de service-bots**, cero omisiones, en `.tmp/maria-chief-tests-20261017/diagnostic/full-runtime-corrective-gate.txt`. En este corte aún **sin instalación acreditada** de estas correcciones. En Tenaxis se está preparando confirmación comercial independiente y horario solicitado separado de agenda; no describirlos como activos hasta migración, instalación y readback propios.
+
 ## Orden de revisión y ejecución azul; mantenimiento del nodo — 17/10/2026
 
 **Nueva autorización humana resuelta:** revisar todas las conversaciones de **4997**, contrastar altas y actualizaciones con Tenaxis y efectuar las que estén respaldadas; analizar por qué no se concretó cada consulta y retomar con un mensaje empático específico, sin asumir desagrado, rechazo, consentimiento o contratación por silencio. No se solicitaron informes individuales. Esta orden autoriza acciones de esta auditoría por caso; **no reabre automáticamente la recepción general ni permite liberar tomas humanas**, activar roja, reutilizar precios de otros casos o duplicar servicios. No volver a pedir permiso comercial genérico para lo ya autorizado.

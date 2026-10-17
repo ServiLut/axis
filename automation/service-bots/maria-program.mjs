@@ -95,6 +95,7 @@ export function acceptsOrdinaryQuotation(text){
  if(typeof text!=='string'||text.length>500||/[?¿]|https?:/i.test(text))return false;
  const t=normalize(text).replace(/\bporfavor\b/g,'por favor').replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim();
  const labels=[...text.matchAll(fieldLabels())];
+ if(labels.some(hit=>/^\s*(?:(?:yo\s+)?soy\b|horario\s*:)/iu.test(hit[0])))return false;
  const prefix=(labels.length?text.slice(0,labels[0].index):text).trim().replace(/[.!¡,;]+$/g,'').trim();
  const temporalPrefix=normalize(prefix).replace(/\bporfavor\b/g,'por favor').replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim();
  // A date alone is a preference, not consent. Only an accented or punctuated
@@ -114,6 +115,16 @@ export function acceptsOrdinaryQuotation(text){
  }
  return literalTimedYes||/^(?:si|listo|dale|acepto|de acuerdo|confirmo|correcto|esta bien|perfecto|si esta bien|si confirmo|si acepto|todo correcto|si todo correcto|si correcto|listo esta bien|ok|okay)(?: (?:agendame|programame|reservame|agenda el servicio|programa el servicio|quiero el servicio)(?: para)?(?: (?:hoy|manana|pasado manana|el lunes|el martes|el miercoles|el jueves|el viernes|el sabado|el domingo))?(?: (?:en la manana|en la tarde|en la noche|a las? \d{1,2}(?::\d{2})?(?: am| pm)?))?)?(?: (?:por favor|gracias|muchas gracias))*$/.test(t);
 }
+// Price-stage only. These whole-message statements accept the exact current
+// own quote; they do not confirm later names, addresses or requested times.
+// Keep them separate from the backend's ordinary/final acceptance grammar.
+export function acceptsExplicitOrdinaryQuotation(text){
+ if(typeof text!=='string'||text.length>200||/[?¿"“”«»<>]|https?:|www\./i.test(text))return false;
+ const raw=text.trim();
+ if(/^si\b/iu.test(raw)&&!/^(?:sí(?=[\s,.!;])|si\s*[,.;!])/iu.test(raw))return false;
+ const t=normalize(raw).replace(/\bporfavor\b/g,'por favor').replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim();
+ return /^(?:si )?acepto (?:(?:esa|esta|la) cotizacion|el servicio)(?: (?:por favor|gracias|muchas gracias))*$/.test(t);
+}
 // Only the engine's independently verified own delivered quotation may supply
 // the expected amount. This opens data collection, never summary confirmation.
 function ownQuotationAmountHeader(text){
@@ -122,7 +133,7 @@ function ownQuotationAmountHeader(text){
  return match?{amount:Number((match[1]||match[2]).replace(/\./g,'')),tail:match[3]}:null;
 }
 const withoutFieldJoiners=text=>text.replace(/^(?:[\s.!;,]+|y\b)+/iu,'').trim();
-export function quotationAmountAffirmation(text){
+export function quotationAmountAffirmation(text,at=Date.now()){
  if(typeof text!=='string'||text.length>1200||/[?¿"“”]|https?:/i.test(text))return null;
  const t=normalize(text).trim(),amount='([1-9]\\d{0,2}(?:\\.\\d{3})+|[1-9]\\d{3,7})';
  const match=t.match(new RegExp('^(?:(?:si[, ]+)?(?:deseo|quiero) continuar con (?:la|esta) cotizacion|(?:si[, ]+)?acepto (?:la|esta) cotizacion) de (?:\\$\\s*'+amount+'(?:\\s*cop)?|'+amount+'\\s+cop)[.!]?$'));
@@ -139,10 +150,10 @@ export function quotationAmountAffirmation(text){
  const fields=explicitFields(header.tail);if(fields.conflict)return null;
  const remainder=withoutFieldJoiners(literalIntakeTextWithoutRegistrationFields(header.tail));
  if(!remainder)return fields.name||fields.address?header.amount:null;
- return literalProgramPreference(remainder)!==null?header.amount:null;
+ return literalProgramPreference(remainder,at)!==null?header.amount:null;
 }
-export function acceptsOwnQuotedAmount(text,priceCop){
- return Number.isSafeInteger(priceCop)&&priceCop>0&&priceCop<=10000000&&quotationAmountAffirmation(text)===priceCop;
+export function acceptsOwnQuotedAmount(text,priceCop,at=Date.now()){
+ return Number.isSafeInteger(priceCop)&&priceCop>0&&priceCop<=10000000&&quotationAmountAffirmation(text,at)===priceCop;
 }
 export const MARIA_SUMMARY_DATA_CONFIRMATION_GUARD='own-delivered-summary-data-confirmation-v1';
 // Data agreement is scoped to a delivered current summary. It is deliberately
@@ -206,16 +217,18 @@ function ownSummaryDataProof(s,state,e,prompt,preview){
  const text=s.open(prompt.body);
  return {guard:MARIA_SUMMARY_DATA_CONFIRMATION_GUARD,caseId:state.caseId,phone:e.phone,line:e.line,mid:prompt.mid,text,textSha256:createHash('sha256').update(text).digest('hex'),deliveredAt:iso(proof.verifiedAt),state:proof.state};
 }
-const fieldLabels=()=>/(?:\b(?:mi nombre(?: completo)?(?: es)?|nombre completo|nombre(?=\s*:)|me llamo|a nombre de)|\b(?:(?:mi|la) direcci[oó]n(?: completa)?(?: es)?|direcci[oó]n(?: completa)?))\s*[: ,]*\s*/giu;
+const fieldLabels=()=>/(?:^|(?<=[.;\n]))\s*(?:yo\s+)?soy(?=\s+\p{L})\s+|\bhorario\s*:\s*|(?:\b(?:mi nombre(?: completo)?(?: es)?|nombre completo|nombre(?=\s*:)|me llamo|a nombre de)|\b(?:(?:mi|la) direcci[oó]n(?: completa)?(?: es)?|direcci[oó]n(?: completa)?))\s*[: ,]*\s*/giu;
 const fieldValue=(text,hits,i)=>text.slice(hits[i].index+hits[i][0].length,hits[i+1]?.index??text.length).trim().replace(/(?:\s+y)?[\s,;.!]*$/u,'').trim();
 function explicitFields(text){
  const hits=[...text.matchAll(fieldLabels())],fields={};
  for(let i=0;i<hits.length;i++){
+  if(/^\s*horario\s*:/iu.test(hits[i][0]))continue;
   const hit=hits[i],key=/direcci[oó]n/i.test(hit[0])?'address':'name';
   if(key==='name'&&relayedNameSource(text.slice(0,hit.index)))continue;
   let value=fieldValue(text,hits,i);
   // A sentence after an explicitly labelled fact is not part of that fact.
   value=value.split(/[;\n]|\.\s+(?=[¿¡\p{L}])/u)[0].trim();
+  if(/^\s*(?:yo\s+)?soy\b/iu.test(hit[0])&&/^(?:de|del|el|la|un|una)\b|\b(?:segun|tercero|vecin[oa])\b/.test(normalize(value)))continue;
   const parsed=key==='name'?literalName(value,true):literalAddress(value,true);
   if(parsed){if(fields[key]&&fields[key]!==parsed){fields.conflict=true;fields.conflictFields=[...new Set([...(fields.conflictFields||[]),key])];}fields[key]=parsed;}
  }
@@ -226,21 +239,58 @@ export function literalIntakeTextWithoutRegistrationFields(text){
  const hits=[...text.matchAll(fieldLabels())],spans=[];
  for(let i=0;i<hits.length;i++){
   const hit=hits[i],start=hit.index+hit[0].length,end=hits[i+1]?.index??text.length,key=/direcci[oó]n/i.test(hit[0])?'address':'name';
+  if(/^\s*horario\s*:/iu.test(hit[0]))continue;
   const segment=text.slice(start,end),folded=segment.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
   const sentence=segment.search(/[;\n]|\.\s+(?=[¿¡\p{L}])/u);
   const semantic=key==='address'?folded.search(/\b(?:pero|ademas|tambien|para|quiero|necesito|fumigar|tratar|refuerzo|garantia|verificacion|inspeccion|todo|toda|entero|entera|zonas? comunes?|sigue|siguen|continua|ya fumig|otra|otro)\b|\ben\s+(?!(?:(?:el|la|un|una)\s+)?(?:barrio|sector|edificio|unidad|conjunto|urbanizacion|apartamento|apto|interior|porteria|torre)\b)/):-1;
   const boundaries=[sentence,semantic].filter(x=>x>=0),boundary=boundaries.length?Math.min(...boundaries):segment.length;
   const value=segment.slice(0,boundary).trim().replace(/(?:\s+y)?[\s,;.!]*$/u,'').trim();
+  if(/^\s*(?:yo\s+)?soy\b/iu.test(hit[0])&&/^(?:de|del|el|la|un|una)\b|\b(?:segun|tercero|vecin[oa])\b/.test(normalize(value)))continue;
   if(!(key==='name'?literalName(value,true):literalAddress(value,true)))continue;
   const valueAt=segment.indexOf(value);spans.push([hit.index,start+valueAt+value.length]);
  }
  let result=text;for(const [start,end] of spans.reverse())result=result.slice(0,start)+' '+result.slice(end);
  return result.replace(/\s+/g,' ').trim();
 }
-export function literalProgramPreference(text){
- if(typeof text!=='string')return null;
+const calendarWeekdays=['domingo','lunes','martes','miercoles','jueves','viernes','sabado'];
+const calendarMonths=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const calendarDay='(?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)';
+const calendarDate='(?:el\\s+)?(?:'+calendarDay+'\\s+)?(?:\\d{1,2}\\s+de\\s+[\\p{L}]+(?:\\s+(?:de|del)\\s+\\d{4})?|\\d{1,2}/\\d{1,2}(?:/\\d{4})?)';
+const calendarTime='(?:\\s+(?:a las?\\s+\\d{1,2}(?::\\d{2})?(?:\\s*[ap]\\.?\\s*m\\.?)?|(?:en|por) la (?:mañana|manana|tarde|noche)))?';
+const calendarWhole=new RegExp('^(?:(?:me equivoqu[eé]|corrijo)[, ]+)?(?:(?:para|prefiero|preferir[ií]a|quiero|quisiera|lo necesito|lo quiero|ser[ií]a|puede ser|me queda bien|me sirve)\\s+)?('+calendarDate+calendarTime+')(?:[,;.!]?\\s+(?:por favor|gracias|muchas gracias))*[.!]?$','iu');
+function timingProjection(text){
  const projected=literalIntakeTextWithoutRegistrationFields(text).trim(),header=ownQuotationAmountHeader(projected);
- const raw=withoutFieldJoiners(header?header.tail:projected);
+ return withoutFieldJoiners(header?header.tail:projected).replace(/^horario\s*:\s*/iu,'');
+}
+function calendarPreference(raw,at){
+ const match=raw.match(calendarWhole);if(!match)return null;
+ const value=match[1].trim().replace(/(?<![ap]\.\s?m)[.!]+$/i,'');
+ const folded=normalize(value).replace(/\b([ap])\.\s*m\.?/g,'$1m');
+ const parts=folded.match(/^(?:el )?(?:(domingo|lunes|martes|miercoles|jueves|viernes|sabado) )?(?:(\d{1,2}) de ([a-z]+)(?: (?:de|del) (\d{4}))?|(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?)(.*)$/);
+ if(!parts||!Number.isSafeInteger(at)||at<=0)return {issue:'invalid-date'};
+ const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Bogota',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(at));
+ const year=Number(parts[4]||parts[7]||today.slice(0,4)),month=parts[3]?calendarMonths.indexOf(parts[3])+1:Number(parts[6]),day=Number(parts[2]||parts[5]);
+ const date=new Date(Date.UTC(year,month-1,day));
+ if(year<2000||year>2099||month<1||month>12||date.getUTCFullYear()!==year||date.getUTCMonth()!==month-1||date.getUTCDate()!==day)return {issue:'invalid-date'};
+ if(parts[1]&&calendarWeekdays[date.getUTCDay()]!==parts[1])return {issue:'weekday-mismatch'};
+ const requested=date.toISOString().slice(0,10);if(requested<today)return {issue:'past-date'};
+ const clock=parts[8]?.trim().match(/^a las? (\d{1,2})(?::(\d{2}))?(?:\s*([ap])m\.?)?$/);
+ if(clock){
+  const hour=Number(clock[1]),minute=Number(clock[2]||0),meridiem=clock[3];
+  if(minute>59||meridiem&&(hour<1||hour>12)||!meridiem&&hour>23)return {issue:'invalid-time'};
+  const localHour=meridiem?(hour%12+(meridiem==='p'?12:0)):hour;
+  if(requested===today&&Date.UTC(year,month-1,day,localHour+5,minute)<at)return {issue:'past-date'};
+ }
+ return {value};
+}
+export function calendarProgramPreferenceIssue(text,at=Date.now()){
+ if(typeof text!=='string'||text.length>8000||/[?¿"“”«»<>]|https?:|www\./i.test(text))return null;
+ return calendarPreference(timingProjection(text),at)?.issue??null;
+}
+export function literalProgramPreference(text,at=Date.now()){
+ if(typeof text!=='string')return null;
+ const raw=timingProjection(text),calendar=calendarPreference(raw,at);
+ if(calendar)return calendar.issue?null:calendar.value;
  if(/^(?:en|por) la (?:mañana|manana|tarde|noche)[.! ]*$/i.test(raw))return raw.replace(/[.! ]+$/g,'');
  const folded=normalize(raw).replace(/\bporfavor\b/g,'por favor').replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim();
  const standalone=/^(?:(?:me equivoque|corrijo) )?(?:(?:para|el|prefiero|preferiria|quiero|quisiera|lo necesito|lo quiero|seria|puede ser|me queda bien|me sirve) )?(?:hoy|manana|pasado manana|(?:el )?(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo))(?: (?:(?:en|por) la (?:manana|tarde|noche)|a las? \d{1,2}(?::\d{2})?(?: a ?m| p ?m)?))?(?: (?:por favor|gracias|muchas gracias))*$/.test(folded);
@@ -251,10 +301,10 @@ export function literalProgramPreference(text){
  return value&&value.length<=300?value:null;
 }
 function literalName(text,prompted){
- const explicit=text.match(/^(?:mi nombre (?:es|completo es)|me llamo|a nombre de|nombre completo)\s*[: ,]*\s+(.+)$/i);
+ const explicit=text.match(/^(?:mi nombre (?:es|completo es)|me llamo|a nombre de|nombre completo|(?:yo )?soy)\s*[: ,]*\s+(.+)$/i);
  const name=(explicit?.[1]||(prompted?text:'' )).trim().replace(/[.!]+$/,'').trim();
  if(/^(?:en|por) la (?:manana|tarde|noche)$/.test(normalize(name)))return null;
- if(/[\r\n]/.test(name)||registrationPreface.test(normalize(name))||relayedNameSource(name)||! /^[\p{L}][\p{L}'’-]*(?:[^\S\r\n]+[\p{L}][\p{L}'’-]*){1,9}$/u.test(name)||/\b(?:quiero|necesito|gracias|servicio|manana|hoy|cucarachas|refuerzo|garantia|no|si|nombre|descuento|gratis|dijo|dice|anonimo|cliente|empresa)\b/.test(normalize(name)))return null;return name;
+ if(/[\r\n]/.test(name)||/^(?:yo )?soy\b/i.test(text)&&/^(?:de|del|el|la|un|una)\b/.test(normalize(name))||registrationPreface.test(normalize(name))||relayedNameSource(name)||! /^[\p{L}][\p{L}'’-]*(?:[^\S\r\n]+[\p{L}][\p{L}'’-]*){1,9}$/u.test(name)||/\b(?:quiero|necesito|gracias|servicio|manana|hoy|cucarachas|refuerzo|garantia|no|si|nombre|descuento|gratis|dijo|dice|anonimo|cliente|empresa)\b/.test(normalize(name)))return null;return name;
 }
 const relayedNameSource=text=>/(?:\b(?:el|la|mi|su)\s+(?:tecnic[oa]|asesor[ae]?|vecin[oa])\b|\b(?:un tercero|otra persona|me dijo|me dice)\b)/.test(normalize(text));
 function literalAddress(text,prompted){
@@ -375,6 +425,7 @@ function casePreferenceSource(s,c,state,e){
  if(!first||!current||!row||row.rowid<first.rowid||row.rowid>current.rowid)return null;
  const native=s.open(row.body);
  if(native.id!==reference.sourceId||native.phone!==e.phone||native.line!==e.line||native.fromMe||native.forwarded||native.kind!=='text'||native.at!==reference.at||native.at<c.mariaProgram.startsAt||native.at<first.at||native.at>e.at||typeof native.text!=='string'||native.text.length>8000||!normalize(native.text).includes(normalize(value)))return null;
+ if(calendarProgramPreferenceIssue(value,native.at)||calendarPreference(value,native.at)&&native.quotedId)return null;
  return {value,source:source(native)};
 }
 function staffPlanningForCase(s,c,state,e){
@@ -401,7 +452,7 @@ export function staffPlanningCustomerTurn(s,c,state,e,{status=false}={}){
  if(state.awaitingHumanReview||state.closed||state.requestedAfterServiceReview||state.requestedControlReview||state.requestedDocumentReview||state.requestedProductInquiry||state.requestedProgramCancellationReview||e.kind!=='text'||e.fromMe||e.forwarded||e.quotedId)return null;
  const entry=ownStaffPlanningReceipt(s,c,{phone:e.phone,line:e.line,caseId:state.caseId});if(!entry)return null;
  const nativeRow=s.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(e.id,e.phone,e.line),native=nativeRow&&s.open(nativeRow.body);if(!native||native.text!==e.text||native.at!==e.at||native.forwarded||native.quotedId||native.kind!=='text')return null;
- const preference=literalProgramPreference(e.text);
+ const preference=literalProgramPreference(e.text,e.at);
  if(!status&&!preference&&!acceptsOrdinaryQuotation(e.text))return null;
  if(preference&&normalize(preference)!==normalize(entry.payload.slots.preference)){
   const alert=queueOwnSavedServiceReview(s,c,entry,{motive:'scheduling-unconfirmed',sourceId:e.id,text:'María Ángel · cambio de horario solicitado. El contacto terminado en '+e.phone.slice(-4)+' indicó una preferencia distinta para su solicitud registrada. Preferencia original: '+entry.payload.slots.preference+'. Nueva petición literal: '+e.text+'. No modifiqué la orden ni confirmé disponibilidad. ¿Cómo debemos atender este cambio?'});
@@ -428,7 +479,7 @@ function promptedBatchFields(s,c,previous,e,pi,prompt){
   const position=s.db.prepare('SELECT rowid FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(turn.id,e.phone,e.line)?.rowid;
   if(!position||position<=promptSource.rowid)continue;
   if(turn.phone!==e.phone||turn.line!==e.line||turn.fromMe||turn.forwarded||turn.kind!=='text'||turn.at<c.mariaProgram.startsAt)return [];
-  if(confirms(turn.text)||mariaIncidentalPetMention(turn)||neutralCourtesy(turn.text)||/^(?:hola|hola buenas noches|buenos dias|buen dia|buenas tardes|buenas noches)[.!¡, ]*$/.test(normalize(turn.text))||/^[¡ ]*(?:hola[,!. ]+)?(?:(?:buenos dias|buen dia|buenas tardes|buenas noches)[,!. ]+)?[¿¡ ]*como esta(?:s|n)?[?!.,! ]*$/.test(normalize(turn.text))||registrationSourcePreface(turn.text)||literalProgramPreference(turn.text)||pi.stage==='correction'&&correctionFieldReference(turn.text))continue;
+  if(confirms(turn.text)||mariaIncidentalPetMention(turn)||neutralCourtesy(turn.text)||/^(?:hola|hola buenas noches|buenos dias|buen dia|buenas tardes|buenas noches)[.!¡, ]*$/.test(normalize(turn.text))||/^[¡ ]*(?:hola[,!. ]+)?(?:(?:buenos dias|buen dia|buenas tardes|buenas noches)[,!. ]+)?[¿¡ ]*como esta(?:s|n)?[?!.,! ]*$/.test(normalize(turn.text))||registrationSourcePreface(turn.text)||literalProgramPreference(turn.text,turn.at)||pi.stage==='correction'&&correctionFieldReference(turn.text))continue;
   if(blockedText(turn.text))return [];
   const explicit=explicitFields(turn.text),separated=promptedLiteralFields(turn.text,requested,pi.stage==='correction');
   const name=explicit.name||separated.name||(requested.includes('name')&&literalName(turn.text,true)),address=explicit.address||separated.address||(requested.includes('address')&&literalAddress(turn.text,true));
@@ -556,7 +607,7 @@ export function ordinaryDataInformationTurn(s,c,state,e){
   if(!prompt)return null;
   const requested=[...(!data.customerName?['name']:[]),...(!data.address?['address']:[])],explicit=explicitFields(e.text),separated=promptedLiteralFields(e.text,requested);
   if(explicit.conflict)return null;
-  const name=explicit.name||separated.name,address=explicit.address||separated.address,preference=literalProgramPreference(e.text);
+  const name=explicit.name||separated.name,address=explicit.address||separated.address,preference=literalProgramPreference(e.text,e.at);
   if(!name&&!address&&!preference)return null;
   if(name){data.customerName=name;data.nameSource=source(e);}if(address){data.address=address;data.addressSource=source(e);}
  }

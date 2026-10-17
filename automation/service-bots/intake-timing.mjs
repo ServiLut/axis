@@ -1,5 +1,5 @@
 import {normalize} from './config.mjs';
-import {literalProgramPreference} from './maria-program.mjs';
+import {literalProgramPreference,calendarProgramPreferenceIssue} from './maria-program.mjs';
 
 export const MARIA_INTAKE_TIMING_GUARD='own-current-literal-requested-timing-before-quotation-v1';
 const day='(?:pasado mañana|pasado manana|mañana|manana|hoy|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)';
@@ -22,7 +22,9 @@ export function literalIntakeTiming(company,e){
  if(/\b(?:ayer|anteayer|anterior|antes|ya|fumigaron|hicieron|realizaron|aplicaron|agendaron|programaron|agendad[oa]|programad[oa]|esperando|llegada|refuerz\w*|garantia|reclam\w*|queja|seguimiento|revisit\w*|reprogram\w*|cancel\w*|posservicio|pague|pago|comprobante|transfer\w*|consign\w*|abono|comprar|adquirir|vend\w*|ofrezco|ofrecemos)\b/.test(context)||/\b(?:hace|despues|(?:semana|mes|año|ano|lunes|martes|miercoles|jueves|viernes|sabado|domingo) pasad[oa])\b/.test(context))return null;
  // Reuse the accepted standalone timing grammar, correcting only recognition
  // of a common spelling. The stored value always comes from the native text.
- const recognized=literalProgramPreference(raw.replace(/\bporfavor\b/gi,'por favor'));
+ const recognized=literalProgramPreference(raw,e.at);
+ if(calendarProgramPreferenceIssue(raw,e.at))return null;
+ if(recognized&&(/\bhorario\s*:/iu.test(raw)||/\b\d{1,2}(?:\/\d{1,2}|\s+de\s+\p{L})/iu.test(recognized)))return {preference:recognized,source:{sourceId:e.id,at:e.at,guard:MARIA_INTAKE_TIMING_GUARD,context:'literal-customer-preference-not-confirmed-availability'}};
  const match=raw.match(temporal);
  const urgency=raw.match(/\b(?:urgente|urgencia|lo antes posible)\b/iu);
  if(!match&&!urgency)return null;
