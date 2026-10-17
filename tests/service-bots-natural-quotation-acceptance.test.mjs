@@ -13,11 +13,30 @@ const NEGATIVE=[
   'Acepto otra cotización.','Acepto el servicio anterior.','Acepto el servicio por $119.000.','Sí, acepto esa cotización de $119.000.','Acepto el servicio sólo si no cobran más.','Acepto el servicio cuando tenga dinero.','Tal vez acepto el servicio.',
   'Gracias, la voy a pensar.','Sí, acepto la cotización o la otra.','Sí, acepto el servicio y registra el pago.','Sí, acepto esa cotización. https://example.invalid/',
 ];
+const naturalFacts='Sí, acepto esa cotización. Me llamo Persona Sintética y la dirección es Calle de Prueba 0 # 0.';
 async function using(t,fn){t.mock.timers.enable({apis:['Date'],now:START});const f=createSummaryDataFixture(at=>t.mock.timers.setTime(at));f.config.staffPlanning={enabled:true,mode:'internal-staff-assignment',startsAt:START-5000};try{await fn(f);}finally{f.store.close();}}
 const quote=async f=>{const e=await f.turn('Cucarachas en apartamento de dos habitaciones en Itagüí, barrio Santa María.');assert.match(f.deliver(e),/129\.000/);return e;};
 const registrations=f=>f.store.db.prepare("SELECT COUNT(*) n FROM meta WHERE key LIKE 'maria-registration:%'").get().n;
 for(const text of POSITIVE)test('whole-message price acceptance stays separate from final data confirmation: '+text,()=>{assert.equal(acceptsExplicitOrdinaryQuotation(text),true);assert.equal(acceptsOrdinaryQuotation(text),false);assert.equal(confirmsOrdinarySummaryData(text),false);});
 for(const text of NEGATIVE)test('no quotation consent from a condition, refusal, different price, third party or question: '+text,()=>{assert.equal(acceptsExplicitOrdinaryQuotation(text),false);assert.equal(acceptsOrdinaryQuotation(text),false);});
+test('explicit price consent can carry literal self-introduction and address without becoming final data consent',()=>{
+ assert.equal(acceptsExplicitOrdinaryQuotation(naturalFacts),true);assert.equal(acceptsOrdinaryQuotation(naturalFacts),false);assert.equal(confirmsOrdinarySummaryData(naturalFacts),false);
+});
+for(const tail of [
+ 'pero no quiero el servicio','si hay disponibilidad','la asesora dijo que vale $119.000','según mi vecina',
+ 'el precio es $119.000','quiero registrar el pago','no acepto el precio','y dame un descuento',
+])test('a labelled address cannot hide a condition, different price, third party or refusal: '+tail,()=>{
+ assert.equal(acceptsExplicitOrdinaryQuotation(naturalFacts.replace(/\.$/,', '+tail+'.')),false);
+});
+test('Engine uses an accepted quote plus Me llamo/la dirección es and asks only the missing timing',t=>using(t,async f=>{
+ const q=await quote(f),facts=await f.turn(naturalFacts),reply=f.reply(facts),state=f.state(facts);
+ assert.equal(state.quotedPrice.accepted,true);assert.equal(state.quotedPrice.sourceId,q.id);assert.equal(state.quotedPrice.acceptanceSource,facts.id);assert.equal(state.quotedPrice.priceCop,129000);
+ assert.equal(state.programIntake.customerName,'Persona Sintética');assert.equal(state.programIntake.address,'Calle de Prueba 0 # 0');
+ assert.equal(state.programIntake.nameSource.id,facts.id);assert.equal(state.programIntake.addressSource.id,facts.id);
+ assert.match(reply,/Qué día y franja/);assert.doesNotMatch(reply,/nombre completo|dirección completa|Deseas continuar|129\.000/);assert.equal(f.entry(facts),undefined);f.deliver(facts);
+ const timing=await f.turn('Lo necesito mañana a las 9 am.');assert.match(f.reply(timing),/• Nombre: Persona Sintética/);assert.match(f.reply(timing),/• Dirección: Calle de Prueba 0 # 0/);assert.match(f.reply(timing),/¿Confirmas que estos datos son correctos/);assert.equal(f.entry(timing),undefined);f.deliver(timing);
+ const final=await f.turn('Sí, confirmo que los datos son correctos.'),entry=f.entry(final);assert.ok(entry);assert.equal(entry.payload.sources.customerName.id,facts.id);assert.equal(entry.payload.sources.address.id,facts.id);assert.equal(entry.payload.sources.acceptance.id,final.id);assert.equal(entry.payload.quote.sourceId,q.id);assert.equal(entry.payload.quote.priceCop,129000);
+}));
 for(const text of POSITIVE.slice(0,3))test('Engine continues its delivered own 129K quotation and asks only missing data: '+text,t=>using(t,async f=>{
   const q=await quote(f),before=structuredClone(f.state(q)),questions=f.store.db.prepare('SELECT COUNT(*) n FROM questions').get().n;
   const acceptance=await f.turn(text),state=f.state(acceptance),reply=f.reply(acceptance);

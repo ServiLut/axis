@@ -3,6 +3,7 @@ import {normalize,chiefReplyRestrictionActive} from './config.mjs';
 import {FUMIGACION_BLUE,assertOperationalLineScope,operationalLineAllowed} from './line-scope.mjs';
 import {TESA_GROUP_JID,TESA_GROUP_SUBJECT,getTesaConfig} from './tesa-config.mjs';
 import {refreshTesaMembership} from './tesa-transport.mjs';
+import {publicOperationAllowed,publicResponseSqlCutoff} from './public-response-window.mjs';
 
 export const TESA_GUIDANCE_LIST_GUARD='own-fum-blue-general-guidance-list-exact-delivery-without-case-adoption-v1';
 const table='tesa_guidance_lists',running=new WeakSet(),sha=value=>createHash('sha256').update(value).digest('hex');
@@ -160,7 +161,8 @@ export async function drainTesaGuidanceLists(store,config,transport){
     // An abandoned reservation is never retried after a restart or interruption.
     uncertain+=store.db.prepare('UPDATE '+table+' SET state=\'UNCERTAIN\',updated=? WHERE state=\'SENDING\'').run(Date.now()).changes;
     const checks=store.db.prepare('SELECT * FROM '+table+' WHERE state IN (\'ACCEPTED\',\'DELIVERED\') AND checked_at<=? ORDER BY checked_at,created LIMIT 3').all(Date.now()-60000);
-    const ready=store.db.prepare('SELECT * FROM '+table+' WHERE state=\'READY\' AND checked_at<=? ORDER BY created LIMIT 1').all(Date.now()-60000);
+    const publicCut=publicResponseSqlCutoff(config);
+    const ready=store.db.prepare('SELECT * FROM '+table+' WHERE state=\'READY\' AND checked_at<=? AND (?<0 OR created>=?) ORDER BY created LIMIT 1').all(Date.now()-60000,publicCut,publicCut);
     const rows=[...checks,...ready];
     for(const row of rows){
       try{exactStored(store,row);await preflight(store,config,transport,binding);}catch{
@@ -172,6 +174,7 @@ export async function drainTesaGuidanceLists(store,config,transport){
         finally{store.db.prepare('UPDATE '+table+' SET checked_at=? WHERE id=?').run(Date.now(),row.id);}
         continue;
       }
+      if(!publicOperationAllowed(config,{sourceAt:row.created,createdAt:row.created}))continue;
       unchanged(store,config,binding);
       if(!store.db.prepare('UPDATE '+table+' SET state=\'SENDING\',updated=? WHERE id=? AND state=\'READY\'').run(Date.now(),row.id).changes)continue;
       try{

@@ -133,6 +133,28 @@ test('false or absent proof validation prevents every backend prepare or commit'
 
 test('a receipt with a different committed time cannot become a successful schedule',async()=>{const f=fixture();try{await f.save();await f.offer();await f.confirm();f.setMode('altered-slot');await drainOwnScheduling(f.s,f.c,f.t,{verifyProof:f.verifyProof});assert.notEqual(f.entries()[0].status,'SAVED');assert.equal(f.s.db.prepare("SELECT COUNT(*) n FROM outbox WHERE id LIKE 'maria-schedule-saved:%'").get().n,0);}finally{f.s.close();}});
 
+test('public reopening preserves historical PENDING scheduling byte-for-byte without native reads or backend calls',async()=>{const f=fixture();try{
+ await f.save();await f.offer();await f.confirm();f.c.publicResponseStartsAt=Date.now()+1;const before=f.s.db.prepare("SELECT * FROM meta WHERE key LIKE 'maria-own-scheduling:%'").all(),out=f.s.db.prepare('SELECT * FROM outbox ORDER BY rowid').all();let proofs=0;
+ const result=await drainOwnScheduling(f.s,f.c,f.t,{verifyProof:async()=>{proofs++;throw Error('NO_HISTORICAL_PROOF');}});assert.equal(result.processed,0);assert.equal(proofs,0);assert.equal(f.schedulingCalls.length,0);assert.deepEqual(f.s.db.prepare("SELECT * FROM meta WHERE key LIKE 'maria-own-scheduling:%'").all(),before);assert.deepEqual(f.s.db.prepare('SELECT * FROM outbox ORDER BY rowid').all(),out);
+}finally{f.s.close();}});
+test('public reopening never resumes a historical uncertain scheduling receipt or changes its original key',async()=>{const f=fixture();try{
+ await f.save();await f.offer();await f.confirm();f.setMode('uncertain');await drainOwnScheduling(f.s,f.c,f.t,{verifyProof:f.verifyProof});assert.equal(f.entries()[0].status,'UNCERTAIN');f.updateEntry({nextReceiptAt:0});f.c.publicResponseStartsAt=Date.now()+1;const before=f.s.db.prepare("SELECT * FROM meta WHERE key LIKE 'maria-own-scheduling:%'").all(),calls=f.schedulingCalls.length;f.setMode('success');
+ await drainOwnScheduling(f.s,f.c,f.t,{verifyProof:f.verifyProof});assert.equal(f.schedulingCalls.length,calls);assert.deepEqual(f.s.db.prepare("SELECT * FROM meta WHERE key LIKE 'maria-own-scheduling:%'").all(),before);
+}finally{f.s.close();}});
+test('a wholly prospective native case retains its exact first-schedule prepare and commit flow',async()=>{const f=fixture();try{
+ f.c.publicResponseStartsAt=f.c.activatedAt+1000;await f.save();await f.offer();await f.confirm();await drainOwnScheduling(f.s,f.c,f.t,{verifyProof:f.verifyProof});assert.equal(f.entries()[0].status,'SAVED');assert.deepEqual(f.schedulingCalls.map(c=>c.route),['/prepare','/commit']);assert.equal(f.registrationWrites(),1);
+}finally{f.s.close();}});
+test('a cut changed during the first scheduling proof stops before lock, prepare or commit and leaves PENDING intact',async()=>{const f=fixture();try{
+ f.c.publicResponseStartsAt=f.c.activatedAt+1000;await f.save();await f.offer();await f.confirm();const key=f.entries()[0].key,before=f.s.db.prepare('SELECT * FROM meta WHERE key=?').get(key);
+ // Native proof may preserve its original delivery timestamp. The operation
+ // ledger itself must not lock, reserve, change status or call the backend.
+ await drainOwnScheduling(f.s,f.c,f.t,{verifyProof:async entry=>{const proof=await f.verifyProof(entry);f.c.publicResponseStartsAt=Date.now()+1000;return proof;}});assert.equal(f.schedulingCalls.length,0);assert.deepEqual(f.s.db.prepare('SELECT * FROM meta WHERE key=?').get(key),before);
+}finally{f.s.close();}});
+test('a cut changed after preparation cannot reserve or commit a schedule or fabricate a review reply',async()=>{const f=fixture();try{
+ f.c.publicResponseStartsAt=f.c.activatedAt+1000;await f.save();await f.offer();await f.confirm();let proofs=0;
+ await drainOwnScheduling(f.s,f.c,f.t,{verifyProof:async entry=>{const proof=await f.verifyProof(entry);if(++proofs===2)f.c.publicResponseStartsAt=Date.now()+1000;return proof;}});assert.deepEqual(f.schedulingCalls.map(c=>c.route),['/prepare']);assert.equal(f.entries()[0].status,'PENDING');assert.equal(f.s.db.prepare("SELECT COUNT(*) n FROM outbox WHERE id LIKE 'maria-schedule-review:%' OR id LIKE 'chief-report:maria-scheduling:%'").get().n,0);
+}finally{f.s.close();}});
+
 const replyValid=(f,out)=>ownSchedulingReplyStillValid(f.s,f.c,f.t,out,{verifyRegistered:f.verifyRegistered});
 const proofHash=p=>{const {checkedAt,expiresAt,...stable}=p;return registrationHash(stable);};
 

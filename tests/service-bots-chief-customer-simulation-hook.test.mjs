@@ -9,6 +9,7 @@ import {BUSINESSES,SANDRA} from '../automation/service-bots/config.mjs';
 import {parseChiefCommand,enqueueChiefCommand,drainChiefActions,reviewChiefActions} from '../automation/service-bots/chief-actions.mjs';
 import {chiefCustomerSimulationStatus,finishChiefCustomerSimulation,CHIEF_CUSTOMER_SIMULATION_SOURCE_GUARD} from '../automation/service-bots/chief-customer-simulation.mjs';
 import {executeChiefCustomerSimulation} from '../automation/service-bots/chief-customer-simulation-hook.mjs';
+import {MARIA_CLIENT_SCHEDULE_GUARD} from '../automation/service-bots/client-requested-schedule.mjs';
 const BLUE='573126944997',RED='573126938721',OTHER='573000001234',now=Date.parse('2026-10-16T22:30:00Z');
 const sha=text=>createHash('sha256').update(text).digest('hex');
 let sequence=0;
@@ -111,4 +112,31 @@ for(const afterAck of [true,false])test('same-second native customer time requir
     assert.equal(result.command.status,afterAck?'DONE':'NEEDS_CONTEXT');assert.equal(chiefCustomerSimulationStatus().turns,afterAck?2:1);
     const event=f.s.db.prepare('SELECT at FROM events WHERE id=?').get(result.source.id);assert.equal(event.at,nativeAt);
   }finally{f.close();}
+});
+
+for(const order of ['day-first','hour-first'])test('separate native timing remains a sourced conversational draft and never advertises or submits the unsupported closed PRUEBA: '+order,async t=>{
+ const f=fixture(t);try{
+  f.c.staffPlanning={enabled:true,mode:'internal-staff-assignment',startsAt:now-1000};
+  f.c.clientRequestedSchedule={enabled:true,startsAt:now-1000,guard:MARIA_CLIENT_SCHEDULE_GUARD};
+  await f.dispatch('María Ángel, inicia prueba cliente');f.deliver();
+  const times=order==='day-first'?['El sábado 24 de octubre','A las diez de la mañana']:['A las diez de la mañana','El sábado 24 de octubre'];
+  const sources=new Map();let final;
+  for(const text of [first,'Sí, acepto esa cotización','Mi nombre es Persona Sintética y mi dirección es Calle de Prueba 0 # 0',...times,'Sí']){
+   final=await f.dispatch(prefix+text);assert.equal(final.command.status,'DONE');sources.set(text,final.source);f.deliver();
+  }
+  const d=final.command.result.data.testOrderDraft,p=d.envelope.syntheticPayload;
+  assert.equal(d.initialTestFixtureEligible,false);assert.equal(d.fixtureLimitation.code,'TEST_FIXTURE_SEPARATE_TIMING_SOURCES_UNSUPPORTED');
+  assert.match(final.command.result.text,/día y la hora.*por separado/);assert.match(final.command.result.text,/permiso de PRUEBA.*no admite/);assert.match(final.command.result.text,/No se ha creado una orden/);
+  assert.ok(p.preferenceParts);assert.equal(p.sources.preference,undefined);
+  for(const [part,text]of [['date','El sábado 24 de octubre'],['time','A las diez de la mañana']]){
+   assert.equal(p.preferenceParts[part].text,text);assert.equal(d.fieldSourceMap.preferenceParts[part],sources.get(text).id);
+   const mapping=d.envelope.sourceMap.find(row=>row.syntheticSourceId===p.preferenceParts[part].id);assert.equal(mapping.chiefSourceId,sources.get(text).id);assert.equal(mapping.customerTextHash,sha(text));
+  }
+  const before=f.requests.length,attempt=await f.dispatch('María Ángel, sube la prueba cliente');
+  assert.equal(attempt.command.status,'NEEDS_CONTEXT');assert.equal(attempt.command.result.data.status,'NOT_ELIGIBLE_FOR_CLOSED_TEST_FIXTURE');
+  assert.match(attempt.command.result.text,/permiso de PRUEBA.*no admite/);assert.equal(attempt.command.result.data.testBusinessWrites,0);
+  assert.ok(f.requests.slice(before).every(request=>request.url.includes('/chat/findMessages/')||request.url.includes('/instance/fetchInstances')));
+  assert.equal(f.s.db.prepare("SELECT COUNT(*) n FROM meta WHERE key LIKE 'maria-test-order:%'").get().n,0);
+  assert.equal(f.c.enabled,false);assert.equal(f.c.replyOnlyToChief,true);
+ }finally{f.close();}
 });

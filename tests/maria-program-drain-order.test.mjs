@@ -33,6 +33,34 @@ test('real fast drain resolves a queued native courtesy before consuming a prepa
  await drain(f.store,f.config,f.transport,f.engine);
  assert.equal(f.stats().writes,1,'a queued unprocessed courtesy must not permanently review the accepted case');assert.equal(registrationStatus(f.config,f.store).saved,1);assert.equal(registrationStatus(f.config,f.store).review,0);assert.equal(f.stats().payload.quote.acceptanceId,acceptance.id);assert.equal(f.stats().payload.sources.acceptance.text,'Perfecto');assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM audit WHERE action=?').get('OWN_SERVICE_REGISTRATION_REVIEW').n,0);
 }finally{f.store.close();}});
+
+test('prospective reopening preserves old prepared registration without reads, writes or state migration',async()=>{const f=fixture();try{
+ const {acceptance}=await f.ready();f.config.publicResponseStartsAt=acceptance.at+1;
+ const before=f.store.db.prepare("SELECT * FROM meta WHERE key LIKE 'maria-registration:%'").all();
+ f.transport.currentAttention=async()=>{throw Error('OLD_SOURCE_MUST_NOT_BE_READ');};
+ const result=await drainProgramRegistrations(f.store,f.config,f.transport);
+ assert.equal(result.deferred,1);assert.equal(result.reviewed,0);assert.equal(f.stats().writes,0);
+ assert.deepEqual(f.store.db.prepare("SELECT * FROM meta WHERE key LIKE 'maria-registration:%'").all(),before);
+}finally{f.store.close();}});
+
+test('prospective reopening permits a complete fresh registration and rechecks after native reads',async()=>{
+ for(const moveCut of [false,true]){const f=fixture();try{
+  const {first,acceptance}=await f.ready();f.config.publicResponseStartsAt=first.at-1;
+  if(moveCut){const read=f.transport.currentCustomerActivity;f.transport.currentCustomerActivity=async(...args)=>{const result=await read(...args);f.config.publicResponseStartsAt=acceptance.at+1;return result;};}
+  const before=f.store.db.prepare("SELECT * FROM meta WHERE key LIKE 'maria-registration:%'").all();
+  const result=await drainProgramRegistrations(f.store,f.config,f.transport);
+  assert.equal(f.stats().writes,moveCut?0:1);assert.equal(result.deferred,moveCut?1:0);
+  if(moveCut)assert.deepEqual(f.store.db.prepare("SELECT * FROM meta WHERE key LIKE 'maria-registration:%'").all(),before);
+ }finally{f.store.close();}}
+});
+
+test('fresh acceptance cannot reuse case data or a quote predating the public reopening',async()=>{const f=fixture();try{
+ const {first,acceptance}=await f.ready();f.config.publicResponseStartsAt=acceptance.at;
+ f.store.db.prepare('UPDATE events SET received_at=? WHERE id=?').run(acceptance.at,acceptance.id);
+ const result=await drainProgramRegistrations(f.store,f.config,f.transport);
+ assert.ok(first.at< f.config.publicResponseStartsAt);assert.equal(result.deferred,1);assert.equal(f.stats().writes,0);
+ assert.equal(registrationStatus(f.config,f.store).prepared,1);assert.equal(registrationStatus(f.config,f.store).review,0);
+}finally{f.store.close();}});
 test('the real fast drain can register a complete prepared case with no newer customer input',async()=>{const f=fixture();try{
  await f.ready();await drain(f.store,f.config,f.transport,f.engine);assert.equal(f.stats().writes,1);assert.equal(registrationStatus(f.config,f.store).saved,1);assert.equal(f.store.conversation('573001112233').state.programServiceId,ORDER);
 }finally{f.store.close();}});

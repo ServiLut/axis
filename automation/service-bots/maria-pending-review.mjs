@@ -63,6 +63,17 @@ function pendingText(topic,kind){
  return label?'Tu solicitud de '+label+' sigue pendiente de revisión. Aún no tengo confirmadas las condiciones ni el horario de la visita.':null;
 }
 
+function pendingCostVisitQuestion(event){
+ if(event.quotedId)return null;
+ const t=norm(event.text);
+ if(!/[?¿]/.test(event.text)&&!/^(?:y )?entonces\b|^(?:quisiera|necesito|quiero) saber\b|^me confirm(?:as|an)\b/.test(t))return null;
+ const cost=/\b(?:gratis|gratuit[oa]|sin costo|sin cobro|sin pagar|costos?|costaria|cuesta|cobran|cobrarian|debo pagar|tengo que pagar|hay que pagar)\b/.test(t);
+ const timing=t.match(/\b(?:pasado manana|manana|hoy|lunes|martes|miercoles|jueves|viernes|sabado|domingo|\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?|\d{1,2} de [a-z]+(?: de \d{4})?)\b(?:\s+a las?\s+\d{1,2}(?::\d{2})?(?:\s*(?:am|pm))?)?/)?.[0];
+ const visitMention=/\b(?:vendria|vendrian|vendra|vendran|viene|vienen|venir|visita|visitarnos|fecha|horario|cuando)\b/.test(t);
+ const visit=Boolean(visitMention&&(cost||timing)||cost&&timing);
+ return cost||visit?{cost,visit,...(visit&&timing?{timing}:{})}:null;
+}
+
 /**
  * Explain a known pending request on a NEW direct customer turn. The engine
  * supplies native sources selected inside this exact current case; this helper
@@ -82,6 +93,9 @@ export function mariaPendingReviewReply({company,state,event,hold=false,sources=
  const kind=kindFor(state,pending),factualPending=pending.caseKind==='wasp-inspection'?'Para las avispas, la cotización depende del tamaño y la altura del panal y requiere inspección. Aún no tengo un precio confirmado.':pendingText(pending.topic,kind);
  if(!factualPending)return null;
  const facts=literalFacts(event.text),isStatus=explicitStatus(event.text)||greeting(event.text);
+ if(['service-followup','warranty-review'].includes(pending.topic)&&['reinforcement','warranty','verification','requested-control','post-service'].includes(kind)){
+  const question=pendingCostVisitQuestion(event);if(question)facts.pendingQuestions=question;
+ }
  const labels={service:'plaga indicada',site:'tipo de inmueble',location:'municipio',locationDetails:'ubicación',rooms:'tamaño del inmueble',area:'tamaño del inmueble',dimensions:'medidas',preference:'preferencia de horario'};
  if(!/\b(?:no|nunca|sin|si|quizas|tal vez|en caso de)\b/.test(norm(event.text))){
   const supplied=Object.entries(labels).filter(([key])=>state.intakeSources?.[key]?.sourceId===event.id&&state.intakeSources[key].at===event.at&&typeof state.slots?.[key]==='string'&&norm(event.text).includes(norm(state.slots[key]))).map(([,label])=>label);
@@ -90,6 +104,14 @@ export function mariaPendingReviewReply({company,state,event,hold=false,sources=
  if(!isStatus&&!Object.keys(facts).length)return null;
  const prior=lastReply||state.pendingReviewReply;
  if(prior?.guard===MARIA_PENDING_REVIEW_GUARD&&prior.caseId===state.caseId&&prior.phone===event.phone&&prior.line===event.line&&prior.sourceId===event.id)return null;
+ const aspectScope=hash({topic:pending.topic,pendingSourceId:pending.sourceId,pendingState:pending.state,kind});
+ const previousAspects=prior?.guard===MARIA_PENDING_REVIEW_GUARD&&prior.caseId===state.caseId&&prior.phone===event.phone&&prior.line===event.line&&prior.questionAspectScope===aspectScope&&Number.isSafeInteger(prior.questionAspectAt)&&event.at>=prior.questionAspectAt&&event.at-prior.questionAspectAt<60000&&Array.isArray(prior.questionAspectKeys)?prior.questionAspectKeys.filter(key=>typeof key==='string').slice(-16):[];
+ const question=facts.pendingQuestions;
+ const currentAspects=question?[...(question.cost?['cost']:[]),...(question.visit?[question.timing?'visit:'+question.timing:'visit']:[])]:[];
+ const aspectSeen=key=>previousAspects.includes(key)||key==='visit'&&previousAspects.some(value=>value.startsWith('visit:'));
+ // Within the same short conversation burst, a rephrasing does not create a
+ // new aspect. New dates or a newly raised cost doubt still receive an answer.
+ if(currentAspects.length&&currentAspects.every(aspectSeen)&&Object.keys(facts).length===1&&!isStatus)return null;
  const fingerprint=hash({topic:pending.topic,pendingSourceId:pending.sourceId,pendingState:pending.state,kind,facts});
  if(prior?.guard===MARIA_PENDING_REVIEW_GUARD&&prior.caseId===state.caseId&&prior.phone===event.phone&&prior.line===event.line&&prior.factsHash===fingerprint&&Number.isSafeInteger(prior.at)&&event.at>=prior.at&&event.at-prior.at<60000&&(!isStatus||prior.reason==='pending-status'))return null;
  const parts=[];
@@ -108,11 +130,15 @@ export function mariaPendingReviewReply({company,state,event,hold=false,sources=
  if(facts.todayRequested&&facts.discountRequested)parts.push('Recibí tu solicitud de una visita para hoy y de un descuento. Aún no están confirmados ni la visita para hoy ni el descuento.');
  else if(facts.todayRequested)parts.push('Recibí tu solicitud de una visita para hoy. Aún no tengo confirmada la disponibilidad para hoy.');
  else if(facts.discountRequested)parts.push('Recibí tu solicitud de descuento. Aún no tengo un descuento autorizado para este caso.');
+ if(question?.cost&&question.visit)parts.push('Aún no están confirmados el costo ni la visita; la fecha también sigue pendiente de revisión.');
+ else if(question?.cost)parts.push('Aún no tengo un costo confirmado para esta revisión.');
+ else if(question?.visit)parts.push('Aún no tengo confirmadas la visita ni su fecha.');
  // The unresolved fact is explicit even when the internal question is reused.
  // A customer's follow-up never creates another internal question here.
  parts.push(factualPending);
- const reply=parts.join(' '),reason=isStatus?'pending-status':facts.persistingCockroaches?'pending-postservice-concern':facts.todayRequested||facts.discountRequested?'pending-additional-request':'pending-new-literal-information';
+ const reply=parts.join(' '),reason=isStatus?'pending-status':question?'pending-cost-visit-question':facts.persistingCockroaches?'pending-postservice-concern':facts.todayRequested||facts.discountRequested?'pending-additional-request':'pending-new-literal-information';
  const sourceReferences=[...new Map([original,current].map(source=>[source.id,{sourceId:source.id,at:source.at,phone:source.phone,line:source.line,caseId:state.caseId}])).values()];
- const marker={guard:MARIA_PENDING_REVIEW_GUARD,caseId:state.caseId,phone:event.phone,line:event.line,sourceId:event.id,at:event.at,reason,factsHash:fingerprint,replyHash:hash(reply)};
+ const questionAspectKeys=[...new Set([...previousAspects,...currentAspects])].slice(-16);
+ const marker={guard:MARIA_PENDING_REVIEW_GUARD,caseId:state.caseId,phone:event.phone,line:event.line,sourceId:event.id,at:event.at,reason,factsHash:fingerprint,replyHash:hash(reply),...(questionAspectKeys.length?{questionAspectScope:aspectScope,questionAspectAt:previousAspects.length?prior.questionAspectAt:event.at,questionAspectKeys}:{})};
  return {guard:MARIA_PENDING_REVIEW_GUARD,reply,reason,sourceReferences,marker,newInternalQuestion:false,businessWritten:false,humanHoldReleased:false};
 }

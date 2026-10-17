@@ -20,7 +20,12 @@ export function nativePreferenceTime(text,sourceAt){
  value=value.replace(/^(?:(?:la )?hora(?: correcta| solicitada)?|horario)\s*(?::|=|es\b)\s*/,'');
  value=value.replace(/^(?:mejor|mas bien|lo necesito|lo quiero|me sirve|prefiero|que sea)\s+/,'');
  value=value.replace(/^(?:a las?|las?)\s+/,'');
- let match=/^(\d{1,2})(?::(\d{2}))?\s*([ap])\.?\s*m\.?$/.exec(value);
+ // A whole direct phrase with an explicit meridian, never a narrated clock.
+ // "12 de la mañana/tarde" needs clarification; retain exact 12 am/pm below.
+ const wordHours={un:1,una:1,uno:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,diez:10,once:11,doce:12};
+ let match=/^(\d{1,2}|un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce)(?::(\d{2}))?\s+de la (manana|tarde)$/.exec(value);
+ if(match){const h=wordHours[match[1]]??+match[1],m=+(match[2]??0);if(h<1||h>11||m>59||match[2]&&!/^\d/.test(match[1]))return null;return String(h+(match[3]==='tarde'?12:0)).padStart(2,'0')+':'+String(m).padStart(2,'0');}
+ match=/^(\d{1,2})(?::(\d{2}))?\s*([ap])\.?\s*m\.?$/.exec(value);
  if(match){const h=+match[1],m=+(match[2]??0);if(h<1||h>12||m>59)return null;return String(h%12+(match[3]==='p'?12:0)).padStart(2,'0')+':'+String(m).padStart(2,'0');}
  match=/^(\d{1,2}):(\d{2})(?:\s*(?:h|horas|hrs))?$/.exec(value);
  if(match){if(+match[1]>23||+match[2]>59)return null;return match[1].padStart(2,'0')+':'+match[2];}

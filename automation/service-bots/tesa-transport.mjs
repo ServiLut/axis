@@ -10,11 +10,17 @@ import {continueOwnSchedulingOffer,ownSchedulingPlan,ownSchedulingProof,ownSched
 import {routeCaseQuestion} from './engine.mjs';
 import {verifyStoredNativeIdentitySource} from './native-identity-resolution.mjs';
 import {partitionNativeAttention} from './explicit-return-attention.mjs';
+import {publicResponseWindow,publicResponseSqlCutoff,publicTesaOutboxAllowed} from './public-response-window.mjs';
 
 const nativeText=r=>{const m=r.message?.ephemeralMessage?.message??r.message??{};return m.conversation??m.extendedTextMessage?.text??null;};
 const phoneJid=j=>/^57\d{10}@s\.whatsapp\.net$/.test(j??'')?j.split('@')[0]:null;
 const getMeta=(s,key)=>{const row=s.db.prepare('SELECT value FROM meta WHERE key=?').get(key);return row?s.open(row.value):null;};
 const putMeta=(s,key,value)=>s.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key,s.seal(value));
+function publicQuestionAllowed(s,c,id){
+ if(!publicResponseWindow(c).active)return true;
+ const row=s.db.prepare('SELECT * FROM tesa_outbox WHERE question_id=?').get(id);
+ return Boolean(row&&publicTesaOutboxAllowed(s,c,row));
+}
 const continuationPrefix='tesa-continuation:';
 const bogotaDay=at=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Bogota',year:'numeric',month:'2-digit',day:'2-digit'}).format(at);
 const neutralCourtesy=text=>/^(?:gracias|muchas gracias|mil gracias|muy amable|gracias muy amable)$/.test(normalize(text).replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim());
@@ -33,6 +39,7 @@ function continuationCourtesies(s,plan,conv){
 
 function currentContinuation(s,c,plan,questionId){
  if(c.company!=='fumigacion'||!c.enabled||plan?.guard!==MARIA_PROGRAM_OPERATIONAL_CONTINUATION_GUARD||plan.questionId!==questionId)return null;
+ if(!publicQuestionAllowed(s,c,questionId))return null;
  const q=s.db.prepare('SELECT q.*,o.state delivery,o.mid,o.native_proof,o.created outbox_created FROM tesa_questions q JOIN tesa_outbox o ON o.id=q.outbox_id WHERE q.id=? AND q.company=?').get(questionId,c.company),conv=s.conversation(plan.phone),entry=getMeta(s,'maria-registration:'+plan.caseId);
  if(!q||q.state!=='ANSWERED'||q.valid_until<=Date.now()||!['DELIVERED','READ'].includes(q.delivery)||q.topic!=='disponibilidad-y-tecnico'||q.customer_phone!==plan.phone||q.case_id!==plan.caseId||q.source_line!==plan.line||!conv||conv.hold||conv.state.caseId!==plan.caseId||conv.state.closed||conv.state.programIntake?.stage!=='registered'||conv.state.programServiceId!==plan.orderId||registrationHash(conv.state.slots)!==plan.slotsHash||conv.state.requestedAfterServiceReview||conv.state.requestedControlReview||conv.state.requestedDocumentReview||!entry||entry.status!=='SAVED'||entry.requestHash!==plan.receiptHash||entry.receipt?.orderId!==plan.orderId||entry.receipt?.scheduled!==false||entry.receipt?.state!=='NUEVO'||!tesaOutboxScopeSafe(s,c,{question_id:q.id,source_line:q.source_line,sender_line:q.sender_line,customer_phone:q.customer_phone,case_id:q.case_id,created:q.outbox_created}))return null;
  const courtesies=continuationCourtesies(s,plan,conv);if(!courtesies)return null;
@@ -119,6 +126,7 @@ export async function tesaCustomerReplyStillValid(s,c,t,outbox){
 }
 
 async function continueRegisteredCustomer(s,c,t,accepted){
+ if(!publicQuestionAllowed(s,c,accepted.questionId))return {prepared:false,queued:false,prospectiveWindowBlocked:true};
  const plan=getMeta(s,'tesa-continuation-plan:'+accepted.questionId);if(!plan)return {prepared:false,queued:false};
  if(ownSchedulingPlan(s,c,accepted.questionId)){
   let outcome;try{outcome=await continueOwnSchedulingOffer(s,c,t,accepted,{verifyRegistered:()=>verifiedContinuation(s,c,t,plan,accepted.questionId)});}catch{outcome={prepared:true,queued:false,nativeReadPending:true};}
@@ -220,6 +228,9 @@ export async function ingestTesaWebhook(store,config,transport,body){
     const answer=acceptTesaQuotedAnswer(store,config,event);
     if(answer?.accepted){
       caseAnswers++;
+      // Preserve the native historical answer without turning reopening into
+      // a continuation, a scheduling offer or a release of an older wait.
+      if(!publicQuestionAllowed(store,config,answer.questionId))continue;
       const unregistered=await continueMariaUnregisteredTesaCustomer(store,config,transport,answer,unregisteredVerifiers);
       if(unregistered.prepared){
         if(unregistered.nativeReadPending)putMeta(store,'maria-unregistered-read:'+answer.questionId,{...answer,nextAt:Date.now()+60000});
@@ -265,8 +276,10 @@ export async function drainTesaGroup(store,config,transport){
     store.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key,store.seal({at:Date.now()}));
     try{await verifyTesaNativeDelivery(store,config,transport,o);}catch{store.audit('TESA_NATIVE_DELIVERY_REVIEW',o.id,{attemptedSend:false});}
   }
-  const ready=store.db.prepare("SELECT * FROM tesa_outbox WHERE state='READY' ORDER BY created LIMIT 5").all();
+  const publicCut=publicResponseSqlCutoff(config);
+  const ready=store.db.prepare("SELECT * FROM tesa_outbox WHERE state='READY' AND (?<0 OR created>=?) ORDER BY created LIMIT 5").all(publicCut,publicCut);
   for(const o of ready){
+    if(!publicTesaOutboxAllowed(store,config,o))continue;
     if(!scopedReady(o))continue;
     const conv=store.conversation(o.customer_phone);
     // A takeover between preparing the question and sending it also stops group questions.
@@ -280,6 +293,7 @@ export async function drainTesaGroup(store,config,transport){
       t=getTesaConfig(config);if(!t)continue;
     }catch{store.audit('TESA_MEMBERSHIP_BEFORE_SEND_REVIEW',o.id,{attemptedSend:false});continue;}
     if(chiefReplyRestrictionActive(config))continue;
+    if(!publicTesaOutboxAllowed(store,config,o))continue;
     if(!scopedReady(o))continue;
     if(o.company!==config.company||o.group_jid!==t.groupJid||o.sender_line!==t.senderLine||!config.lines.some(l=>l.phone===o.source_line))throw Error('TESA_OUTBOX_SCOPE_MISMATCH');
     if(!store.db.prepare("UPDATE tesa_outbox SET state='SENDING',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id).changes)continue;
@@ -297,9 +311,9 @@ export async function drainTesaGroup(store,config,transport){
       store.audit('TESA_GROUP_SEND_UNCERTAIN',o.id,{cause:/^[A-Z_0-9]+$/.test(error.message??'')?error.message:'SEND_RESULT_UNCERTAIN',resend:false});uncertain++;
     }
   }
-  const pendingContinuity=store.db.prepare("SELECT key,value FROM meta WHERE key LIKE 'tesa-continuation-read:%' ORDER BY key LIMIT 3").all();
+  const pendingContinuity=store.db.prepare("SELECT key,value FROM meta WHERE key LIKE 'tesa-continuation-read:%' ORDER BY key").all().filter(row=>publicQuestionAllowed(store,config,store.open(row.value).questionId)).slice(0,3);
   for(const row of pendingContinuity){const pending=store.open(row.value);if(pending.state==='PENDING_NATIVE_READ'&&pending.nextAt<=Date.now())await continueRegisteredCustomer(store,config,transport,pending);}
-  for(const row of store.db.prepare("SELECT key,value FROM meta WHERE key LIKE 'maria-unregistered-read:%' ORDER BY key LIMIT 3").all()){
+  for(const row of store.db.prepare("SELECT key,value FROM meta WHERE key LIKE 'maria-unregistered-read:%' ORDER BY key").all().filter(row=>publicQuestionAllowed(store,config,store.open(row.value).questionId)).slice(0,3)){
     const pending=store.open(row.value);if(pending.nextAt>Date.now())continue;
     const result=await continueMariaUnregisteredTesaCustomer(store,config,transport,pending,unregisteredVerifiers);
     if(result.nativeReadPending)putMeta(store,row.key,{...pending,nextAt:Date.now()+60000});else store.db.prepare('DELETE FROM meta WHERE key=?').run(row.key);

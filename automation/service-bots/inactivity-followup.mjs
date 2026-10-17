@@ -3,6 +3,7 @@ import {knownInternalRecipient,normalize,publicTextSafe} from './config.mjs';
 import {programEnabled,programFollowupEligible} from './maria-program.mjs';
 import {assertOperationalLineScope,operationalLineAllowed} from './line-scope.mjs';
 import {customerDeferralStillBlocks,CUSTOMER_DEFERRAL_GUARD} from './customer-deferral.mjs';
+import {publicEventAllowed,publicOperationAllowed,publicResponseSqlCutoff} from './public-response-window.mjs';
 
 export const INACTIVITY_GUARD='own-delivered-open-case-once-after-20-minutes-and-native-recheck-v1';
 const WAIT=20*60000,WINDOW=86400000;
@@ -57,12 +58,13 @@ export function inactivityCandidate(config,store,phone,now=Date.now()){
  if(retry&&store.open(retry.value).at>now-60000)return null;
  const latest=store.db.prepare('SELECT * FROM events WHERE phone=? AND from_me=0 ORDER BY at DESC,rowid DESC LIMIT 1').get(phone);
  if(!latest||latest.at<installation.eligibleSince||latest.at<now-WINDOW||latest.at>now-WAIT||latest.state!=='DONE')return null;
+ if(!publicEventAllowed(config,latest,now))return null;
  const event=store.open(latest.body);
  if(!lineScopeEligible(config,store,phone,event.line,event.at))return null;
  if(event.kind!=='text'||event.forwarded||event.id!==state.lastHandledSourceId||excluded.test(normalize(event.text)))return null;
  const firstId=state.caseId.startsWith('fumigacion:')?state.caseId.slice('fumigacion:'.length):null;
- const first=firstId&&store.db.prepare('SELECT at FROM events WHERE id=? AND phone=? AND from_me=0').get(firstId,phone);
- if(!first)return null;
+ const first=firstId&&store.db.prepare('SELECT at,received_at FROM events WHERE id=? AND phone=? AND from_me=0').get(firstId,phone);
+ if(!first||!publicEventAllowed(config,first,now))return null;
  const total=store.db.prepare('SELECT COUNT(*) n FROM events WHERE phone=? AND from_me=0 AND at BETWEEN ? AND ?').get(phone,first.at,latest.at).n;
  if(total>40)return null;
  const caseTurns=store.db.prepare('SELECT body FROM events WHERE phone=? AND from_me=0 AND at BETWEEN ? AND ? ORDER BY at,rowid LIMIT 40').all(phone,first.at,latest.at).map(r=>store.open(r.body));
@@ -74,6 +76,7 @@ export function inactivityCandidate(config,store,phone,now=Date.now()){
     store.db.prepare("SELECT 1 FROM outbox WHERE phone=? AND internal=0 AND state IN ('READY','SENDING','UNCERTAIN','ACCEPTED')").get(phone))return null;
  const source=store.db.prepare("SELECT * FROM outbox WHERE phone=? AND case_id=? AND internal=0 AND state IN ('DELIVERED','READ') ORDER BY created DESC,rowid DESC LIMIT 1").get(phone,state.caseId);
  if(!source||source.line!==event.line||!source.mid||source.created<latest.received_at||source.updated>now-WAIT||!store.approvedReplyStillValid(source)||!store.priceReplyStillValid(source))return null;
+ if(!publicOperationAllowed(config,{sourceAt:latest.at,createdAt:source.created},now))return null;
  if(!quoteCurrent(state.quotedPrice,now))return null;
  const text=followupText(state);if(!text||!publicTextSafe(text))return null;
  const id='inactivity:fumigacion:'+createHash('sha256').update(state.caseId).digest('hex')+':v1';
@@ -98,7 +101,8 @@ export async function queueInactivityFollowups(store,config,transport,now=Date.n
  initializeInactivityFollowup(config,store,now);
  if(config.company!=='fumigacion'||!config.enabled||!config.inactivityFollowupEnabled||!programEnabled(config,now))return {enabled:false,queued:0,prepared:config.company==='fumigacion'};
  let queued=0,review=0,attempts=0;
- for(const row of store.db.prepare('SELECT phone FROM conversations WHERE hold=0 AND at BETWEEN ? AND ? ORDER BY at LIMIT 20').all(now-WINDOW,now-WAIT)){
+ const publicCut=publicResponseSqlCutoff(config);
+ for(const row of store.db.prepare('SELECT phone FROM conversations WHERE hold=0 AND at BETWEEN ? AND ? AND (?<0 OR at>=?) ORDER BY at LIMIT 20').all(now-WINDOW,now-WAIT,publicCut,publicCut)){
   const candidate=inactivityCandidate(config,store,row.phone,now);if(!candidate)continue;
   // Only one candidate performs network reads per idle worker cycle. A new
   // authenticated source wakes active reception rather than waiting behind
@@ -120,6 +124,10 @@ export async function inactivityDeliveryValid(store,config,transport,row){
  if(!row.id.startsWith('inactivity:'))return true;
  const record=store.db.prepare('SELECT body FROM inactivity_followups WHERE outbox_id=?').get(row.id);if(!record)return false;
  const candidate=store.open(record.body),conv=store.conversation(row.phone),now=Date.now();
+ const firstId=candidate.caseId?.startsWith('fumigacion:')?candidate.caseId.slice('fumigacion:'.length):null;
+ const first=firstId&&store.db.prepare('SELECT at,received_at FROM events WHERE id=? AND phone=? AND from_me=0').get(firstId,row.phone);
+ const source=store.db.prepare('SELECT at,received_at FROM events WHERE id=? AND phone=? AND from_me=0').get(candidate.sourceId,row.phone);
+ if(!first||!source||!publicEventAllowed(config,first,now)||!publicEventAllowed(config,source,now)||!publicOperationAllowed(config,{sourceAt:candidate.lastSourceAt,createdAt:row.created},now))return false;
  if(!lineScopeEligible(config,store,row.phone,candidate.line,candidate.lastSourceAt))return false;
  if(!config.inactivityFollowupEnabled||conv?.hold||blockedState(conv?.state||{})||conv?.state.caseId!==candidate.caseId||conv?.revision!==candidate.revision||candidate.lastSourceAt<now-WINDOW)return false;
  const quote=conv.state.quotedPrice,prior=store.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND case_id=? AND state IN ('DELIVERED','READ')").get(candidate.lastReplyId,row.phone,candidate.caseId);

@@ -1,5 +1,15 @@
 # María Ángel y Miguel Ángel
 
+## Correcciones naturales y reapertura prospectiva preparada — 17/10/2026 18:49Z
+
+La atención pública continúa pausada, sólo Sandra. La reapertura sigue autorizada después de los gates: no libera holds, roja ni campañas. Candidato local verificado **2710/2710**, cero omisiones, en `.tmp/maria-confirmation-check-20261017/full-runtime-prospective-final-gate.txt`. Corrige aceptación de precio acompañada de nombre/dirección, hora coloquial y corrección ambigua que invalida el horario anterior; aclara costo/visita pendientes en garantías sin prometer gratuidad. Las pruebas nativas de esas últimas correcciones quedan pendientes de la instalación de este candidato.
+
+Nuevo corte opcional `BOT_PUBLIC_RESPONSE_STARTS_AT`, independiente de `BOT_ACTIVATED_AT`: sólo trabajo creado y fuentes recibidas posteriores puede responder, registrar, programar o ejecutar comandos al reabrir. Filtra antes de LIMIT; preserva colas antiguas sin migrar ni reenviar. Los recibos de escritura incierta siguen siendo consulta, nunca nuevo intento. La atención humana anterior conserva prioridad por ingestión o comprobación nativa; cobertura incompleta bloquea. Este corte aún no está activado en producción.
+
+Tenaxis fuente **97b8de9be242aa729019824cf92a582c66f73127**, publicada conservando los cambios ajenos de móvil/evidencias. Backend/Web estaban en construcción al corte; no equivale a instalación terminada. Estructura exacta de confirmación/horario sí instalada y comprobada post-COMMIT, sin DML de negocio, grants ni reescritura de historial Prisma. No ejecutar otra vez esas DDL mediante migrate deploy sin conciliación explícita del recibo. Detalles en `.tmp/maria-confirmation-check-20261017/production-schema-prep/v3` y documentación del repositorio Tenaxis.
+
+La simulación comparte Engine, reglas, respuestas rápidas, resumen y borrador; excluye Luna y la escritura ordinaria. Una preferencia repartida en dos mensajes conserva ambas fuentes, pero el fixture PRUEBA cerrado no la admite: ahora se informa ese límite y no se presenta como alta elegible. Permiso PRUEBA previo vencido **18:10:49Z**, sin renovación. SAVED comercial histórico=1; no sumar pruebas a ventas ni certificar primera agenda comercial real.
+
 ## Pruebas amplias y agenda del cliente sin técnico — 17/10/2026
 
 La usuaria autorizó reabrir la atención normal **después** de verificar la toma del servicio, objeciones, garantías/refuerzos, trato grosero y demás escenarios críticos. La recepción general continúa pausada hasta cerrar esa verificación; no pedir de nuevo un permiso genérico de reapertura. Esa orden no libera holds humanos ni reabre la roja.

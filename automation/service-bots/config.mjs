@@ -6,6 +6,7 @@ import {tesaConfiguration} from './tesa-config.mjs';
 import {assertOperationalLineScope,operationalLineAllowed} from './line-scope.mjs';
 import {mariaTestOrderAccessConfig} from './maria-test-order-access.mjs';
 import {CHIEF_TESA_TEST_CYCLE} from './chief-tesa-test.mjs';
+import {publicResponseWindowConfig} from './public-response-window.mjs';
 
 export const BUSINESSES = Object.freeze({
   fumigacion: { name: 'FUMIGACION', bot: 'María Ángel', phones: ['573126944997','573126938721'] },
@@ -77,6 +78,7 @@ export function configFromEnv(env = process.env) {
   return { operatorRouting:env.BOT_OPERATIONAL_ROUTING||'sandra',company, ...business, lines, operationalLineScope, database, encryptionKey: Buffer.from(env.BOT_DATA_KEY,'hex'),
     authHash: env.BOT_AUTH_TOKEN_HASH, webhookHash:env.BOT_WEBHOOK_TOKEN_HASH, provider: provider.href.replace(/\/$/,''),
     enabled: env.BOT_ENABLED === 'true', chiefOnly:env.BOT_CHIEF_ONLY==='true', replyOnlyToChief:company==='fumigacion'&&env.BOT_REPLY_ONLY_TO_CHIEF==='true', activatedAt: Date.parse(env.BOT_ACTIVATED_AT || ''),
+    publicResponseStartsAt:publicResponseWindowConfig(env,company,Date.parse(env.BOT_ACTIVATED_AT||'')),
     historyCheckRequired:env.BOT_PRIOR_HISTORY_CHECK==='true',
     port: Number(env.PORT || 8080), programContextUrl: env.BOT_PROGRAM_CONTEXT_URL || null,
     programToken: env.BOT_PROGRAM_READ_TOKEN || null, expectedProgramCompanyId: env.BOT_PROGRAM_COMPANY_ID || null,

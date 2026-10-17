@@ -4,6 +4,7 @@ import {registrationHash,ownRegisteredReceiptForPresentation,MARIA_COMPANY,MARIA
 import {ownSchedulingEnabled,ownSchedulingAccessStatus} from './maria-scheduling-access.mjs';
 import {verifyStoredNativeIdentitySource} from './native-identity-resolution.mjs';
 import {partitionNativeAttention} from './explicit-return-attention.mjs';
+import {publicResponseWindow,publicOperationAllowed,publicEventAllowed,publicTesaOutboxAllowed} from './public-response-window.mjs';
 
 export const MARIA_OWN_SCHEDULING_GUARD='own-new-receipt-native-tesa-explicit-slot-customer-confirmed-first-schedule-v1';
 export const MARIA_SCHEDULING_PROOF_GUARD='maria-own-order-scheduling-proof-v1';
@@ -17,6 +18,17 @@ const pureCourtesy=text=>typeof text==='string'&&text.length<=80&&/^(?:gracias|m
 const sameTechnicianName=(left,right)=>typeof left==='string'&&typeof right==='string'&&normalize(left).replace(/\s+/g,' ')===normalize(right).replace(/\s+/g,' ');
 const pendingClassification=(s,phone)=>Boolean(s.db.prepare("SELECT 1 FROM events WHERE phone=? AND state IN ('PENDING','PROCESSING')").get(phone));
 const stableProofHash=proof=>{const {checkedAt,expiresAt,...stable}=proof;return registrationHash(stable);};
+function schedulingWindowAllowed(s,c,entry,now=Date.now()){
+ if(!publicResponseWindow(c).active)return true;
+ const p=entry?.plan;if(!p||!publicOperationAllowed(c,{sourceAt:Date.parse(p.registrationCreatedAt),createdAt:p.createdAt},now)||
+  !publicOperationAllowed(c,{sourceAt:entry.customerAt??p.createdAt,createdAt:entry.createdAt??p.createdAt},now))return false;
+ const anchorId=p.caseId?.startsWith('fumigacion:')?p.caseId.slice('fumigacion:'.length):null;
+ const anchor=anchorId&&s.db.prepare('SELECT at,received_at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(anchorId,p.phone,p.line);
+ const question=s.db.prepare('SELECT * FROM tesa_outbox WHERE question_id=?').get(p.questionId);
+ if(!anchor||!publicEventAllowed(c,anchor,now)||!question||!publicTesaOutboxAllowed(s,c,question,now))return false;
+ if(entry.confirmation){const source=s.db.prepare('SELECT at,received_at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(entry.confirmation.id,p.phone,p.line);if(!source||source.at!==entry.confirmation.at||!publicEventAllowed(c,source,now))return false;}
+ return true;
+}
 
 /** A technical interval is always literal and explicit. Never invent a duration. */
 export function parseOwnTesaSchedulingSlot(text,{now=Date.now(),expiresAt=Infinity}={}){
@@ -35,11 +47,13 @@ export function prepareOwnSchedulingPlan(s,c,request,result){
  const entry=ownRegisteredReceiptForPresentation(s,c,request),conv=s.conversation(request.phone),q=s.db.prepare('SELECT * FROM tesa_questions WHERE id=? AND company=?').get(result.id,c.company);
  if(!entry||!q||q.state!=='PENDING'||q.source_line!==request.line||!Number.isFinite(Date.parse(entry.receipt.createdAt))||Date.parse(entry.receipt.createdAt)<c.ownOrderScheduling.startsAt||get(s,planPrefix+q.id))return false;
  const plan={guard:MARIA_OWN_SCHEDULING_GUARD,questionId:q.id,caseId:request.caseId,phone:request.phone,line:request.line,actorId:c.mariaProgram.actorId,registrationAcceptanceId:entry.payload.quote.acceptanceId,registrationRequestHash:entry.requestHash,orderId:entry.receipt.orderId,slotsHash:registrationHash(conv.state.slots),createdAt:Date.now(),registrationCreatedAt:entry.receipt.createdAt};
+ if(!schedulingWindowAllowed(s,c,{plan}))return false;
  put(s,planPrefix+q.id,plan);return true;
 }
-export function ownSchedulingPlan(s,c,qid){return ownSchedulingEnabled(c)?get(s,planPrefix+qid):null;}
+export function ownSchedulingPlan(s,c,qid){const plan=ownSchedulingEnabled(c)?get(s,planPrefix+qid):null;return plan&&schedulingWindowAllowed(s,c,{plan})?plan:null;}
 function caseCurrent(s,c,entry){
  const p=entry?.plan;if(!ownSchedulingEnabled(c)||p?.guard!==MARIA_OWN_SCHEDULING_GUARD)return null;
+ if(!schedulingWindowAllowed(s,c,entry))return null;
  const conv=s.conversation(p.phone),own=ownRegisteredReceiptForPresentation(s,c,{phone:p.phone,line:p.line,caseId:p.caseId});
  if(!conv||conv.hold||conv.state.closed||!own||own.receipt.orderId!==p.orderId||own.requestHash!==p.registrationRequestHash||registrationHash(conv.state.slots)!==p.slotsHash||conv.state.requestedProgramCancellationReview||conv.state.requestedAfterServiceReview||conv.state.requestedControlReview||conv.state.requestedDocumentReview)return null;
  return {conv,own};
@@ -97,6 +111,7 @@ async function currentOrderFields(c,t,p){
 }
 export function ownSchedulingCustomerTurn(s,c,state,event){
  const key=state.pendingOwnScheduling?.schedulingKey,entry=key&&get(s,prefix+key);if(!entry||entry.status!=='OFFERED'||!ownSchedulingEnabled(c))return null;
+ if(!schedulingWindowAllowed(s,c,entry))return null;
  const p=entry.plan,conv=s.conversation(event.phone);if(!conv||conv.hold||state.caseId!==p.caseId||event.phone!==p.phone||event.line!==p.line||event.fromMe||event.forwarded||event.kind!=='text')return null;
  const nativeRow=s.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(event.id,p.phone,p.line),native=nativeRow&&s.open(nativeRow.body);
  if(!native||native.text!==event.text||native.at!==event.at||event.quotedId&&event.quotedId!==s.db.prepare('SELECT mid FROM outbox WHERE id=?').get(entry.proposalId)?.mid)return null;
@@ -186,7 +201,7 @@ async function schedulingReplyCurrent(s,c,t,outbox,{verifyRegistered}={}){
   return true;
  });
 }
-async function backend(c,t,route,body){const r=await t.fetcher(c.ownOrderScheduling.url+route,{method:'POST',headers:{authorization:'Bearer '+c.ownOrderScheduling.token,'content-type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(20000),redirect:'error'});const result=await r.json();if(!r.ok)throw Error('OWN_SCHEDULING_BACKEND_REVIEW');return result?.success===true&&result.data?result.data:result;}
+async function backend(c,t,route,body,windowCheck=null){if(windowCheck&&!windowCheck())throw Error('OWN_SCHEDULING_PUBLIC_WINDOW_REQUIRED');const r=await t.fetcher(c.ownOrderScheduling.url+route,{method:'POST',headers:{authorization:'Bearer '+c.ownOrderScheduling.token,'content-type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(20000),redirect:'error'});const result=await r.json();if(!r.ok)throw Error('OWN_SCHEDULING_BACKEND_REVIEW');return result?.success===true&&result.data?result.data:result;}
 function receiptMatches(entry,r){return r?.persisted===true&&r.schedulingKey===entry.schedulingKey&&r.caseId===entry.plan.caseId&&r.orderId===entry.plan.orderId&&r.registrationRequestHash===entry.plan.registrationRequestHash&&r.proposalHash===entry.prepared?.proposalHash&&r.tenantId===MARIA_TENANT&&r.companyId===MARIA_COMPANY&&r.actorId===entry.plan.actorId&&r.committed?.state==='PROGRAMADO'&&r.currentMatchesCommitted===true&&r.committed.technicianMembershipId===entry.prepared?.technicianMembershipId&&sameTechnicianName(r.committed.technicianName,entry.slot.technicianName)&&r.committed.dateBogota===entry.slot.dateBogota&&r.committed.startsAtUtc===entry.slot.startsAtUtc&&r.committed.endsAtUtc===entry.slot.endsAtUtc;}
 function validProof(entry,p,revision=entry.confirmationRevision){return p?.guard===MARIA_SCHEDULING_PROOF_GUARD&&p.company==='FUMIGACION'&&p.schedulingKey===entry.schedulingKey&&p.caseId===entry.plan.caseId&&p.orderId===entry.plan.orderId&&p.registrationRequestHash===entry.plan.registrationRequestHash&&p.proposal?.orderUpdatedAt===entry.orderUpdatedAt&&p.context?.revision===revision&&p.context.hold===false&&p.expiresAt>Date.now();}
 function savedText(entry){return 'Tu visita quedó programada para el '+entry.slot.dateBogota.split('-').reverse().join('/')+', de '+entry.slot.startLocal+' a '+entry.slot.endLocal+' (hora de Colombia), con '+(entry.receipt?.committed?.technicianName||entry.slot.technicianName)+'.';}
@@ -197,31 +212,37 @@ export async function drainOwnScheduling(s,c,t,{verifyProof}={}){
  if(!ownSchedulingEnabled(c))return {enabled:false,processed:0};let processed=0;
  for(const row of s.db.prepare('SELECT key,value FROM meta WHERE key LIKE ? ORDER BY key').all(prefix+'%')){
   let entry=s.open(row.value);if(!['PENDING','SENDING','UNCERTAIN'].includes(entry.status))continue;if(entry.nextReceiptAt>Date.now())continue;
+  if(!schedulingWindowAllowed(s,c,entry))continue;
   if(entry.status!=='PENDING'){try{const r=await backend(c,t,'/receipt',{schedulingKey:entry.schedulingKey});if(receiptMatches(entry,r))saved(s,c,entry,r);else review(s,c,entry,'RECEIPT_REVIEW');}catch{entry.nextReceiptAt=Date.now()+60000;entry.receiptFailures=(entry.receiptFailures||0)+1;put(s,row.key,entry);if(entry.receiptFailures>=3)review(s,c,entry,'UNCERTAIN_RECEIPT');}processed++;continue;}
   if(!entry.proofLocked&&caseCurrent(s,c,entry)&&pendingClassification(s,entry.plan.phone))continue;
   if(!localCurrent(s,c,entry)){review(s,c,entry,'CASE_CHANGED');continue;}
   try{
    if(typeof verifyProof!=='function')throw Error('PROOF_REQUIRED');
    const proof=await verifyProof(entry),current=confirmationCourtesyContext(s,c,entry);
+   if(!schedulingWindowAllowed(s,c,entry))continue;
    if(!current||entry.proofLocked&&current.revision!==entry.confirmationRevision||!validProof(entry,proof,current.revision))throw Error('PROOF_REQUIRED');
    if(entry.proofLocked&&entry.proofHash!==stableProofHash(proof))throw Error('CASE_CHANGED');
    // Freeze the exact native context before the first prepare attempt. A later
    // courtesy cannot rewrite the proof or be silently adopted before commit.
    entry.confirmationRevision=current.revision;entry.proofLocked=true;entry.proofHash=stableProofHash(proof);put(s,row.key,entry);
-   const p=entry.plan,prepared=await backend(c,t,'/prepare',{caseId:p.caseId,acceptanceId:p.registrationAcceptanceId,schedulingKey:entry.schedulingKey});
+   const p=entry.plan,prepared=await backend(c,t,'/prepare',{caseId:p.caseId,acceptanceId:p.registrationAcceptanceId,schedulingKey:entry.schedulingKey},()=>schedulingWindowAllowed(s,c,entry));
+   if(!schedulingWindowAllowed(s,c,entry))continue;
    if(!prepared?.prepared||prepared.scheduled!==false||! /^[a-f0-9]{64}$/.test(prepared.proposalHash??'')||prepared.expectedOrderUpdatedAt!==entry.orderUpdatedAt||!sameTechnicianName(prepared.technicianName,entry.slot.technicianName)||prepared.startsAtUtc!==entry.slot.startsAtUtc||prepared.endsAtUtc!==entry.slot.endsAtUtc||typeof prepared.technicianMembershipId!=='string')throw Error('PREPARE_REQUIRED');
    entry.prepared=prepared;
    if(!localCurrent(s,c,entry)||s.conversation(p.phone).revision!==entry.confirmationRevision)throw Error('CASE_CHANGED');
    const last=await verifyProof(entry);
+   if(!schedulingWindowAllowed(s,c,entry))continue;
    if(!validProof(entry,last)||stableProofHash(last)!==entry.proofHash||!localCurrent(s,c,entry)||s.conversation(p.phone).revision!==entry.confirmationRevision)throw Error('CASE_CHANGED');
   }
   catch(error){
+   if(!schedulingWindowAllowed(s,c,entry))continue;
    const still=caseCurrent(s,c,entry),courtesy=still&&!entry.proofLocked&&confirmationCourtesyContext(s,c,entry);
    if(still&&!entry.proofLocked&&(pendingClassification(s,entry.plan.phone)||error.message==='OWN_SCHEDULING_PROOF_CHANGED'&&courtesy&&courtesy.revision!==entry.confirmationRevision))continue;
    review(s,c,entry,'PREPARE_REVIEW');continue;
   }
+  if(!schedulingWindowAllowed(s,c,entry))continue;
   entry.status='SENDING';entry.attemptedAt=Date.now();put(s,row.key,entry);
-  try{const r=await backend(c,t,'/commit',{caseId:entry.plan.caseId,acceptanceId:entry.plan.registrationAcceptanceId,schedulingKey:entry.schedulingKey,proposalHash:entry.prepared.proposalHash,expectedOrderUpdatedAt:entry.prepared.expectedOrderUpdatedAt});if(!receiptMatches(entry,r))throw Error('RECEIPT_REQUIRED');saved(s,c,entry,r);}
+  try{const r=await backend(c,t,'/commit',{caseId:entry.plan.caseId,acceptanceId:entry.plan.registrationAcceptanceId,schedulingKey:entry.schedulingKey,proposalHash:entry.prepared.proposalHash,expectedOrderUpdatedAt:entry.prepared.expectedOrderUpdatedAt},()=>schedulingWindowAllowed(s,c,entry));if(!receiptMatches(entry,r))throw Error('RECEIPT_REQUIRED');saved(s,c,entry,r);}
   catch{entry.status='UNCERTAIN';entry.nextReceiptAt=Date.now()+60000;put(s,row.key,entry);s.audit('OWN_SCHEDULING_COMMIT_UNCERTAIN',entry.confirmation.id,{schedulingKey:entry.schedulingKey,writeRetried:false});}processed++;
  }
  return {enabled:true,processed};

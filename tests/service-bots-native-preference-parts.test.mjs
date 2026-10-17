@@ -23,6 +23,9 @@ for(const [name,first,second,date,time] of [
  ['hour then date','A las 10 am','El sábado 24 de octubre','2026-10-24','10:00'],
  ['date then colon hour','El sábado 24 de octubre','10:00 am','2026-10-24','10:00'],
  ['relative date then hour','Mañana','A las 10 am','2026-10-17','10:00'],
+ ['numeric morning phrase','El sábado 24 de octubre','Me sirve a las 10 de la mañana','2026-10-24','10:00'],
+ ['word morning phrase','El sábado 24 de octubre','a las diez de la mañana','2026-10-24','10:00'],
+ ['word afternoon phrase','El sábado 24 de octubre','a las dos de la tarde','2026-10-24','14:00'],
 ])test('fragmented native timing prepares and saves without repeating supplied fields: '+name,t=>using(t,async f=>{
  await facts(f);const a=await f.say(first),b=await f.say(second);
  assert.match(f.reply(b),/• Horario solicitado:/);assert.match(f.reply(b),/¿Confirmas que estos datos son correctos/);
@@ -34,7 +37,7 @@ for(const [name,first,second,date,time] of [
  assert.equal(projection.requestedDate,date);assert.equal(projection.requestedTime,time);assert.equal(entry.requestHash,registrationHash(p));
  let writes=0;const result=await drainProgramRegistrations(f.store,f.config,f.transport(async(_url,options)=>{writes++;const body=JSON.parse(options.body);return {ok:true,json:async()=>receipt(f,body)};}),()=>{throw Error('NO_TECHNICIAN_ROUTING');});
  assert.equal(result.persisted,1);assert.equal(writes,1);assert.equal(f.entry(final).status,'SAVED');
- assert.equal(f.entry(final).receipt.schedule.startAt,date+'T15:00:00.000Z');assert.equal(f.entry(final).receipt.schedule.technicianId,null);assert.equal(f.entry(final).receipt.schedule.endAt,null);
+ assert.equal(f.entry(final).receipt.schedule.startAt,new Date(date+'T'+time+':00.000-05:00').toISOString());assert.equal(f.entry(final).receipt.schedule.technicianId,null);assert.equal(f.entry(final).receipt.schedule.endAt,null);
 }));
 for(const [change,wanted] of [['A las 11 am','11:00'],['El domingo 25 de octubre','10:00']])test('changed fragment invalidates delivered summary and retains the other original: '+change,t=>using(t,async f=>{
  const prior=await parts(f),oldSummary=f.row(prior.time).mid,correction=await f.say(change);
@@ -51,7 +54,7 @@ for(const change of ['A las 11 am','El domingo 25 de octubre'])test('single-sour
  assert.ok(p.preferenceParts);assert.equal(p.sources.preference,undefined);assert.equal([p.preferenceParts.date.id,p.preferenceParts.time.id].includes(complete.id),true);
  assert.equal([p.preferenceParts.date.id,p.preferenceParts.time.id].includes(correction.id),true);
 }));
-for(const invalid of ['A las 10','A las 25:00','A las 9:65 am'])test('an ambiguous or invalid later hour cannot retain an older confirmed summary: '+invalid,t=>using(t,async f=>{
+for(const invalid of ['A las 10','A las 25:00','A las 9:65 am','A las dos','Me sirve a las dos','A las doce de la mañana','Mejor a las 13 de la mañana','Entre las diez y las once de la mañana','No puedo a las diez de la mañana','Si puedo a las dos de la tarde'])test('an ambiguous or invalid later hour cannot retain an older confirmed summary: '+invalid,t=>using(t,async f=>{
  await parts(f);const bad=await f.say(invalid);assert.match(f.reply(bad),/hora exacta/);assert.equal(f.entry(bad),undefined);
  const yes=await f.say('Sí');assert.equal(f.entry(yes),undefined);assert.match(f.reply(yes),/hora exacta/);
  const corrected=await f.say('A las 11 am');assert.match(f.reply(corrected),/11:00 a\. m\./);const final=await f.say('Sí');assert.equal(f.entry(final).payload.preferenceParts.time.id,corrected.id);
@@ -78,3 +81,15 @@ test('a full single native preference keeps its original v1 contract',t=>using(t
  assert.equal(p.preferenceParts,undefined);assert.equal(p.sources.preference.id,full.id);assert.equal(p.slots.preference,'El sábado 24 de octubre a las 10 am');
 }));
 for(const value of ['10','13 pm','25:00','9:65 am','de 9 a 11 am','antes de las 10 am','no a las 10 am'])test('time-only grammar never invents a meridian, range or impossible clock: '+value,()=>assert.equal(nativePreferenceTime(value),null));
+for(const [text,clock] of [
+ ['Me sirve a las 10 de la mañana','10:00'],['a las diez de la mañana','10:00'],['a las dos de la tarde','14:00'],
+ ['A la una de la tarde','13:00'],['La hora correcta es 10:30 de la mañana','10:30'],['mejor a las 2:45 de la tarde','14:45'],
+ ['12 am','00:00'],['12 pm','12:00'],
+])test('natural exact clock keeps its explicit meridian: '+text,()=>assert.equal(nativePreferenceTime(text),clock));
+for(const text of [
+ 'a las diez','a las 10','a las trece de la tarde','a las 13 de la mañana','a las 0 de la mañana','a las 10:65 de la mañana',
+ 'a las doce de la mañana','a las 12 de la tarde','a las doce de la noche','a las diez:30 de la mañana',
+ 'el asesor dijo a las diez de la mañana','me contaron a las dos de la tarde','si puedo a las dos de la tarde',
+ 'no puedo a las diez de la mañana','entre las diez y once de la mañana','a las diez o a las dos de la tarde',
+ 'a las diez de la mañana hasta las once','"a las dos de la tarde"',
+])test('natural clock does not infer an ambiguous, impossible or relayed hour: '+text,()=>assert.equal(nativePreferenceTime(text),null));

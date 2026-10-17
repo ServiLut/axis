@@ -3,7 +3,7 @@ import {SANDRA} from './config.mjs';
 import {FUMIGACION_BLUE,operationalLineAllowed} from './line-scope.mjs';
 import {canonical,staffPlanningEnabled} from './maria-program.mjs';
 import {clientRequestedScheduleEnabled} from './client-requested-schedule.mjs';
-import {parseChiefCustomerSimulationCommand,startChiefCustomerSimulation,runChiefCustomerSimulationTurn,finishChiefCustomerSimulation,chiefCustomerSimulationStatus,chiefCustomerSimulationDraft,acknowledgeChiefCustomerSimulationOutput,CHIEF_CUSTOMER_SIMULATION_SOURCE_GUARD} from './chief-customer-simulation.mjs';
+import {parseChiefCustomerSimulationCommand,startChiefCustomerSimulation,runChiefCustomerSimulationTurn,finishChiefCustomerSimulation,chiefCustomerSimulationStatus,chiefCustomerSimulationDraft,acknowledgeChiefCustomerSimulationOutput,CHIEF_CUSTOMER_SIMULATION_SOURCE_GUARD,CHIEF_CUSTOMER_PARTS_FIXTURE_LIMITATION} from './chief-customer-simulation.mjs';
 import {parseMariaTestOrderCommand,executeMariaTestOrderAccess} from './maria-test-order-access.mjs';
 
 export const CHIEF_CUSTOMER_SIMULATION_HOOK_GUARD='own-literal-native-chief-sandbox-with-verified-internal-delivery-v1';
@@ -37,6 +37,7 @@ export async function executeChiefCustomerSimulation(s,c,t,source,plan,native){
   try{
     if(['create','lookup','cleanup'].includes(parsed.action)){
       const mature=parsed.action==='create'?chiefCustomerSimulationDraft({simulationId:status.simulationId}):null;
+      if(mature?.testOrderDraft?.initialTestFixtureEligible===false&&mature.testOrderDraft.fixtureLimitation?.code===CHIEF_CUSTOMER_PARTS_FIXTURE_LIMITATION.code)return response('NEEDS_CONTEXT','SIMULACIÓN · '+CHIEF_CUSTOMER_PARTS_FIXTURE_LIMITATION.text,{status:'NOT_ELIGIBLE_FOR_CLOSED_TEST_FIXTURE',fixtureLimitation:CHIEF_CUSTOMER_PARTS_FIXTURE_LIMITATION,businessWritten:false,testBusinessWrites:0});
       const result=await executeMariaTestOrderAccess(s,c,t.fetcher,{action:parsed.action,source,sourceProof:proof,mature,simulationId:status.simulationId??null});
       const text=result.status==='CLEANED'?'PRUEBA retirada.\n\nLa orden y el cliente quedaron eliminados de forma lógica; la dirección quedó deshabilitada y bloqueada. Se conservó el historial auditable.':result.status==='CREATED'?'PRUEBA registrada y comprobada en Tenaxis.\n\n• Nombre: '+result.receipt.orderSnapshot.customerName+'\n• Dirección: '+result.receipt.orderSnapshot.address+'\n• Municipio: '+result.receipt.orderSnapshot.municipality+'\n• Valor simulado: $'+result.receipt.orderSnapshot.priceCop.toLocaleString('es-CO')+(result.receipt.requestedTiming?'\n• Horario solicitado: '+result.receipt.requestedTiming+'\n• Horario pendiente de coordinación; sin reserva.':'')+'\n• Estado: NUEVO.\n• Sin técnico, agenda ni pagos.\n\nEs un ensayo; no representa una venta ni un ingreso.':'El resultado de la PRUEBA está pendiente de comprobación.\n\nNo repetí la creación ni el retiro. La siguiente consulta usará el mismo ensayo y su recibo.';
       return {...response(['CREATED','CLEANED'].includes(result.status)?'DONE':'NEEDS_CONTEXT',text,result),scope:'chief-only-closed-PRUEBA-order; ordinary-orders-payments-and-scheduling-disabled',ordinaryBusinessWrites:0,testBusinessWrites:result.testBusinessWrites};
@@ -51,7 +52,7 @@ export async function executeChiefCustomerSimulation(s,c,t,source,plan,native){
     }
     await acknowledgePrevious(s,t,status,source);
     const result=await runChiefCustomerSimulationTurn({simulationId:status.simulationId,source,sourceProof:proof,customerText:parsed.customerText});
-    const text=result.outputs.length?result.outputs.map(output=>output.text).join('\n\n'):result.testOrderDraft?'SIMULACIÓN · Datos y confirmación del ensayo recibidos.\n\nEl borrador PRUEBA está preparado. Todavía no se ha creado una orden PRUEBA en Tenaxis.':'SIMULACIÓN · El turno quedó observado. No se produjo una respuesta ni se creó una orden; este punto del ensayo requiere revisión.';
+    const text=result.outputs.length?result.outputs.map(output=>output.text).join('\n\n'):result.testOrderDraft?.fixtureLimitation?'SIMULACIÓN · '+result.testOrderDraft.fixtureLimitation.text:result.testOrderDraft?'SIMULACIÓN · Datos y confirmación del ensayo recibidos.\n\nEl borrador PRUEBA está preparado. Todavía no se ha creado una orden PRUEBA en Tenaxis.':'SIMULACIÓN · El turno quedó observado. No se produjo una respuesta ni se creó una orden; este punto del ensayo requiere revisión.';
     return response('DONE',text,result,result.outputs);
   }catch(error){
     const previous=error.message==='SIMULATION_PREVIOUS_INTERNAL_DELIVERY_UNVERIFIED';

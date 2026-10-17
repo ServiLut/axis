@@ -12,6 +12,7 @@ import {parseChiefCustomerSimulationCommand} from './chief-customer-simulation.m
 import {executeChiefCustomerSimulation,CHIEF_CUSTOMER_SIMULATION_HOOK_GUARD} from './chief-customer-simulation-hook.mjs';
 import {parseMariaTestOrderCommand,mariaTestOrderAccessStatus} from './maria-test-order-access.mjs';
 import {parseChiefTesaTestCommand,executeChiefTesaTest,chiefTesaTestStatus} from './chief-tesa-test.mjs';
+import {publicResponseWindow,publicResponseSqlCutoff,publicOperationAllowed,publicEventAllowed} from './public-response-window.mjs';
 
 export const CHIEF_ACTIONS_GUARD='own-native-directed-chief-durable-command-and-verified-result-v1';
 export const CHIEF_CONVERSATION_RULE_GUARD='own-native-chief-versioned-conversation-rules-only-v1';
@@ -21,6 +22,11 @@ const actions=new Set(['whatsapp-counts','whatsapp-list','whatsapp-calls','progr
 const tableExists=s=>Boolean(s.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='chief_commands'").get());
 const sourceKey=e=>'chief-command:'+e.id;
 const forbiddenReference=text=>/["“”«»]|\b(?:dijo|dice|escribio|comento|segun|me dijeron|un tercero|que harias|si te digo|supongamos|hipotetic\w*|no ejecutes|no hagas|no retomes|no liberes)\b/.test(normalize(text));
+function commandWindowAllowed(s,c,row,now=Date.now()){
+ if(!publicResponseWindow(c).active)return true;
+ const event=s.db.prepare('SELECT at,received_at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(row.source_id,SANDRA,row.line);
+ return Boolean(event&&event.at===row.source_at&&publicEventAllowed(c,event,now)&&publicOperationAllowed(c,{sourceAt:row.source_at,createdAt:row.created},now));
+}
 function resolvedDay(body,at){
  const match=body.match(/\b\d{4}-\d{2}-\d{2}\b/),today=dayAt(at);
  if(/\b(?:manana|proxim\w*|semana|semanas|mes|meses|desde|hasta|entre|lunes|martes|miercoles|jueves|viernes|sabado|domingo|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/.test(normalize(body))||[...body.matchAll(/\b\d{4}-\d{2}-\d{2}\b/g)].length>1||/\bhoy\b/.test(normalize(body))&&/\bayer\b/.test(normalize(body)))return null;
@@ -197,18 +203,36 @@ async function execute(s,c,t,source,plan,now,native){
 export async function drainChiefActions(s,c,t,{now=Date.now()}={}){
  if(c.company!=='fumigacion'||s.company!==c.company||!tableExists(s))return {processed:0,completed:0,blocked:0,uncertain:0};
  const result={processed:0,completed:0,blocked:0,uncertain:0};
- const running=s.db.prepare("SELECT id,source_id FROM chief_commands WHERE state='RUNNING'").all();for(const old of running){s.db.prepare("UPDATE chief_commands SET state='UNCERTAIN',updated=? WHERE id=? AND state='RUNNING'").run(now,old.id);s.audit('CHIEF_COMMAND_INTERRUPTED_UNCERTAIN',old.source_id,{id:old.id,automaticallyRetried:false});result.uncertain++;}
- for(const row of s.db.prepare("SELECT * FROM chief_commands WHERE state='PENDING' ORDER BY rowid LIMIT 2").all()){
-  const reserved=s.db.prepare("UPDATE chief_commands SET state='RUNNING',updated=? WHERE id=? AND state='PENDING'").run(now,row.id);if(!reserved.changes)continue;result.processed++;
+ const publicCut=publicResponseSqlCutoff(c);
+ const running=s.db.prepare("SELECT * FROM chief_commands WHERE state='RUNNING' AND (?<0 OR (source_at>=? AND created>=?))").all(publicCut,publicCut,publicCut);for(const old of running){if(!commandWindowAllowed(s,c,old,Math.max(now,Date.now())))continue;s.db.prepare("UPDATE chief_commands SET state='UNCERTAIN',updated=? WHERE id=? AND state='RUNNING'").run(now,old.id);s.audit('CHIEF_COMMAND_INTERRUPTED_UNCERTAIN',old.source_id,{id:old.id,automaticallyRetried:false});result.uncertain++;}
+ for(const row of s.db.prepare("SELECT * FROM chief_commands WHERE state='PENDING' AND (?<0 OR (source_at>=? AND created>=? AND EXISTS(SELECT 1 FROM events e WHERE e.id=chief_commands.source_id AND e.phone=? AND e.line=chief_commands.line AND e.from_me=0 AND e.at=chief_commands.source_at AND e.received_at>=?))) ORDER BY rowid LIMIT 2").all(publicCut,publicCut,publicCut,SANDRA,publicCut)){
+  if(!commandWindowAllowed(s,c,row,Math.max(now,Date.now())))continue;
+  let reserved=false;
+  const currentWindow=()=>commandWindowAllowed(s,c,row,Math.max(now,Date.now()));
+  const assertWindow=()=>{if(!currentWindow())throw Error('CHIEF_PUBLIC_RESPONSE_WINDOW_REQUIRED');};
+  const reserve=()=>{if(reserved)return true;if(!currentWindow())return false;reserved=Boolean(s.db.prepare("UPDATE chief_commands SET state='RUNNING',updated=? WHERE id=? AND state='PENDING'").run(now,row.id).changes);if(reserved)result.processed++;return reserved;};
   const body=s.open(row.body),source=body.source;
   try{
    const native=typeof t.verifyChiefCommandSource==='function'?await t.verifyChiefCommandSource(source):null;
+   assertWindow();
    const current=s.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(source.id,SANDRA,source.line),stored=current&&s.open(current.body);
    if(!ownSource(source,c)||!stored||hash(stored)!==hash(source)||!native||native.verified!==true||native.sourceId!==source.id||native.phone!==SANDRA||native.line!==source.line||native.at!==source.at||now-source.at>86400000)throw Error('CHIEF_NATIVE_SOURCE_UNVERIFIED');
    let plan=body.plan;
    if(plan.action==='unsupported'&&plan.params.reason==='NO_SUPPORTED_COMMAND'&&plan.params.modelEligible){const candidate=await planChiefCommand(c,s,t.fetcher,source,{body:plan.body,sourceVerified:true});if(candidate?.sourceId===source.id&&candidate.guard===CHIEF_COMMAND_AI_GUARD&&actions.has(candidate.action)&&!['release-one','learn-conversation','customer-simulation','chief-tesa-test'].includes(candidate.action))plan=candidate;}
-   const response=await execute(s,c,t,source,plan,now,native);finishCommand(s,row,response.state,{...response,executedAction:plan.action,validatedPlan:plan!==body.plan?plan:null,checkedAt:new Date(now).toISOString()});if(response.state==='DONE')result.completed++;else result.blocked++;
+   assertWindow();if(!reserve())continue;
+   // Test execution may await native proof before issuing its own limited
+   // write/send. Recheck the original command at every transport boundary.
+   const scopedTransport=Object.create(t);
+   for(const name of ['fetcher','request'])if(typeof t[name]==='function')scopedTransport[name]=async(...args)=>{assertWindow();const response=await t[name](...args);assertWindow();return response;};
+   const response=await execute(s,c,scopedTransport,source,plan,now,native);assertWindow();finishCommand(s,row,response.state,{...response,executedAction:plan.action,validatedPlan:plan!==body.plan?plan:null,checkedAt:new Date(now).toISOString()});if(response.state==='DONE')result.completed++;else result.blocked++;
   }catch(error){const reason=['PROGRAM_ACCESS_UNAVAILABLE','PROGRAM_READ_FAILED','PROGRAM_READ_SCOPE_UNVERIFIED','PROGRAM_PHONE_SCOPE_UNVERIFIED','PROGRAM_RECEIPT_SCOPE_UNVERIFIED','CHIEF_NATIVE_SOURCE_UNVERIFIED'].includes(error.message)?error.message:'ACTION_RESULT_UNVERIFIED';
+   if(!currentWindow()){
+    // A new operation interrupted after reservation has an unknown outcome;
+    // never reset it to PENDING or manufacture a result/retry across the cut.
+    if(reserved){s.db.prepare("UPDATE chief_commands SET state='UNCERTAIN',updated=? WHERE id=? AND state='RUNNING'").run(Date.now(),row.id);s.audit('CHIEF_COMMAND_WINDOW_INTERRUPTED',row.source_id,{id:row.id,automaticallyRetried:false});result.uncertain++;}
+    continue;
+   }
+   if(!reserve())continue;
    finishCommand(s,row,'BLOCKED',{text:reason==='CHIEF_NATIVE_SOURCE_UNVERIFIED'?'Sandra, no pude verificar la fuente original de esa orden; no ejecuté la acción.':'Sandra, no pude comprobar el resultado con mi acceso actual. La consulta o fuente necesaria sigue pendiente; no afirmo que la acción se completó.',error:reason,data:{businessWritten:false},checkedAt:new Date(now).toISOString(),scope:'own-current-access-only'});result.blocked++;}
  }
  return result;

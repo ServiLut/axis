@@ -20,6 +20,7 @@ import {validateEvent} from './config.mjs';
 import {literalGreetingEligible,literalGreetingReplyStillValid} from './literal-reception.mjs';
 import {priorAttentionRelease,nativeSourceBeforeRelease} from './explicit-return-attention.mjs';
 import {listStoredNativeIdentitySources,verifyStoredNativeIdentitySource} from './native-identity-resolution.mjs';
+import {publicEventAllowed,publicOutboxAllowed,publicOperationAllowed,publicResponseSqlCutoff} from './public-response-window.mjs';
 
 export const MARIA_HISTORY_PROTOCOL_GUARD='own-preactivation-synchronization-only-complete-history-v1';
 
@@ -229,6 +230,7 @@ export class Transport {
   }
   async send(row,text) {
     if(!outboundRecipientAllowed(this.config,row?.phone))throw Error('CHIEF_ONLY_DELIVERY_RESTRICTION');
+    if(!publicOperationAllowed(this.config,{sourceAt:row?.created,createdAt:row?.created}))throw Error('PUBLIC_RESPONSE_WINDOW_REQUIRED');
     if(!row.internal&&!this.config.enabled)throw new Error('CUSTOMER_GATE_CLOSED');
     if(row.internal&&!internalRecipients(this.config).includes(row.phone))throw new Error('INTERNAL_RECIPIENT_MISMATCH');
     if(!row.internal&&knownInternalRecipient(row.phone))throw new Error('INTERNAL_ROLE_REQUIRED');
@@ -355,8 +357,10 @@ export async function drain(store,config,transport,engine) {
   initializeInactivityFollowup(config,store);
   const fastMaria=config.company==='fumigacion'&&config.responseTargetMs===3000;
   const before=fastMaria?await flushOutbox(store,config,transport):{accepted:0,suppressed:0,uncertain:0};
-  const pending=store.db.prepare("SELECT body,revision FROM events WHERE state='PENDING' AND (?=1 OR phone IN (?,?,?)) AND (?=0 OR phone=?) ORDER BY from_me DESC,at,rowid LIMIT ?").all(Number(config.enabled),SANDRA,DIEGO,HILARY,Number(chiefReplyRestrictionActive(config)),SANDRA,fastMaria?1:30);
+  const publicCut=publicResponseSqlCutoff(config);
+  const pending=store.db.prepare("SELECT body,revision,at,received_at FROM events WHERE state='PENDING' AND (?=1 OR phone IN (?,?,?)) AND (?=0 OR phone=?) AND (?<0 OR (at>=? AND received_at>=?)) ORDER BY from_me DESC,at,rowid LIMIT ?").all(Number(config.enabled),SANDRA,DIEGO,HILARY,Number(chiefReplyRestrictionActive(config)),SANDRA,publicCut,publicCut,publicCut,fastMaria?1:30);
   for(const row of pending) {
+    if(!publicEventAllowed(config,row))continue;
     const e=store.open(row.body); let analysis={};
     const lineScope=assertOperationalLineScope(config);
     if(lineScope&&!e.fromMe&&!knownInternalRecipient(e.phone)&&
@@ -441,11 +445,13 @@ export async function flushOutbox(store,config,transport){
     store.db.prepare("UPDATE outbox SET state='TESA_ANSWER_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),outbox.id);
     store.audit('TESA_CONTINUATION_BEFORE_SEND_REVIEW',outbox.id,{attemptedSend:false,humanAttentionPreserved:true});suppressed++;return false;
   };
-  const out=store.db.prepare("SELECT * FROM outbox WHERE state='READY' AND (?=1 OR (internal=1 AND phone IN (?,?,?))) AND (?=0 OR phone=?) ORDER BY created,rowid LIMIT 20").all(Number(config.enabled),SANDRA,DIEGO,HILARY,Number(chiefReplyRestrictionActive(config)),SANDRA);
+  const publicCut=publicResponseSqlCutoff(config);
+  const out=store.db.prepare("SELECT * FROM outbox WHERE state='READY' AND (?=1 OR (internal=1 AND phone IN (?,?,?))) AND (?=0 OR phone=?) AND (?<0 OR (created>=? AND (internal=1 OR EXISTS(SELECT 1 FROM events e WHERE e.phone=outbox.phone AND e.line=outbox.line AND e.from_me=0 AND e.revision=outbox.revision AND e.at>=? AND e.received_at>=? AND e.at<=outbox.created)))) ORDER BY created,rowid LIMIT 20").all(Number(config.enabled),SANDRA,DIEGO,HILARY,Number(chiefReplyRestrictionActive(config)),SANDRA,publicCut,publicCut,publicCut,publicCut);
   for(const o of out) {
     // Keep blocked rows exactly as recorded; this restriction is not a send
     // failure, a recipient migration, a hold or permission to replay later.
     if(!outboundRecipientAllowed(config,o.phone))continue;
+    if(!publicOutboxAllowed(store,config,o))continue;
     const lineScope=assertOperationalLineScope(config);
     if(lineScope&&(o.created<Date.parse(lineScope.authorizedAt)||
       (!o.internal&&(typeof store.hasSourcesOutsideLine!=='function'||store.hasSourcesOutsideLine(o.phone,o.line))))){
@@ -568,6 +574,7 @@ export async function flushOutbox(store,config,transport){
     if(!await checkTesaContinuation(o))continue;
     if(!checkOwnSavedReview(o,text))continue;
     if(!outboundRecipientAllowed(config,o.phone))continue;
+    if(!publicOutboxAllowed(store,config,o))continue;
     if(!store.db.prepare("UPDATE outbox SET state='SENDING',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id).changes)continue;
     try {
       const mid=await transport.send(o,text);

@@ -96,3 +96,33 @@ test('conversation memory is versioned, own-source traceable and actually consum
 test('historical generic REVIEW rows are not migrated, executed or claimed as learned by the new command drain',async()=>{
  const f=fixture();try{f.s.db.exec('CREATE TABLE chief_requests(id TEXT PRIMARY KEY,phone TEXT,line TEXT,body TEXT,at INTEGER,state TEXT)');f.s.db.prepare('INSERT INTO chief_requests VALUES(?,?,?,?,?,?)').run('SYNTHETIC_HISTORICAL_REVIEW',SANDRA,f.c.lines[0].phone,f.s.seal('María Ángel, retoma el chat de '+customer),f.now-3600000,'REVIEW');const before=f.s.db.prepare('SELECT * FROM chief_requests').get();await drainChiefActions(f.s,f.c,f.t);assert.deepEqual(f.s.db.prepare('SELECT * FROM chief_requests').get(),before);assert.equal(f.s.conversation(customer).hold,1);assert.equal(f.replies().length,0);assert.equal(f.proofs.length,0);assert.equal(f.reads.length,0);}finally{f.s.close();}
 });
+
+test('reopening skips forty historical chief commands before LIMIT while one new native command executes',async()=>{
+ const f=fixture();try{
+  f.c.publicResponseStartsAt=f.now-1000;
+  for(let i=0;i<40;i++){const e={id:'HISTORICAL_CHIEF_PENDING_'+i,phone:SANDRA,line:f.c.lines[0].phone,at:f.now-2000-i,kind:'text',fromMe:false,forwarded:false,text:'María, dime cuántos WhatsApp recibimos hoy en las dos líneas.',quotedId:null};f.s.enqueue(e);f.s.db.prepare('UPDATE events SET received_at=? WHERE id=?').run(f.now-1500,e.id);enqueueChiefCommand(f.s,f.c,e,parseChiefCommand(e,f.c));}
+  const before=f.s.db.prepare('SELECT * FROM chief_commands ORDER BY rowid').all(),fresh=enqueue(f,'María, dime cuántos WhatsApp recibimos hoy en las dos líneas.');
+  const result=await drainChiefActions(f.s,f.c,f.t);assert.equal(result.processed,1);assert.equal(result.completed,1);assert.deepEqual(f.proofs,[fresh.e.id]);assert.equal(f.replies().length,1);assert.deepEqual(f.s.db.prepare('SELECT * FROM chief_commands WHERE id<>? ORDER BY rowid').all(fresh.result.id),before);assert.equal(f.s.conversation(customer).hold,1);
+ }finally{f.s.close();}
+});
+test('a cutoff changed during native chief verification leaves the original command PENDING without reservation or release',async()=>{
+ const f=fixture();try{
+  f.c.publicResponseStartsAt=f.now-1000;enqueue(f,'María Ángel, retoma el chat de '+customer);const before=f.s.db.prepare('SELECT * FROM chief_commands').get(),native=f.t.verifyChiefCommandSource;
+  const result=await drainChiefActions(f.s,f.c,{...f.t,verifyChiefCommandSource:async source=>{const proof=await native(source);f.c.publicResponseStartsAt=Date.now()+1000;return proof;}});
+  assert.equal(result.processed,0);assert.deepEqual(f.s.db.prepare('SELECT * FROM chief_commands').get(),before);assert.equal(f.s.conversation(customer).hold,1);assert.equal(f.replies().length,0);assert.equal(f.reads.length,0);
+ }finally{f.s.close();}
+});
+test('a reserved chief read interrupted by a newer cut becomes uncertain once and cannot manufacture or resend a result',async()=>{
+ const f=fixture();try{
+  f.c.publicResponseStartsAt=f.now-1000;enqueue(f,'María Ángel, revisa los servicios de hoy en Tenaxis.');const fetcher=f.t.fetcher;
+  const transport={...f.t,fetcher:async(...args)=>{const response=await fetcher(...args);f.c.publicResponseStartsAt=Date.now()+1000;return response;}};
+  const result=await drainChiefActions(f.s,f.c,transport);assert.equal(result.processed,1);assert.equal(result.uncertain,1);assert.equal(f.replies().length,0);assert.equal(f.s.conversation(customer).hold,1);
+  const before=f.s.db.prepare('SELECT * FROM chief_commands').get(),reads=f.reads.length,proofs=f.proofs.length;assert.equal(before.state,'UNCERTAIN');await drainChiefActions(f.s,f.c,transport);assert.deepEqual(f.s.db.prepare('SELECT * FROM chief_commands').get(),before);assert.equal(f.reads.length,reads);assert.equal(f.proofs.length,proofs);
+ }finally{f.s.close();}
+});
+test('a malformed reopening clock cannot execute a durable chief command or mutate an earlier uncertain outcome',async()=>{
+ const f=fixture();try{
+  const first=enqueue(f,'María Ángel, revisa los servicios de hoy en Tenaxis.');f.s.db.prepare("UPDATE chief_commands SET state='UNCERTAIN' WHERE id=?").run(first.result.id);enqueue(f,'María, dime cuántos WhatsApp recibimos hoy en las dos líneas.');f.c.publicResponseStartsAt=NaN;const before=f.s.db.prepare('SELECT * FROM chief_commands ORDER BY rowid').all();
+  const result=await drainChiefActions(f.s,f.c,f.t);assert.equal(result.processed,0);assert.equal(f.proofs.length,0);assert.equal(f.reads.length,0);assert.equal(f.replies().length,0);assert.deepEqual(f.s.db.prepare('SELECT * FROM chief_commands ORDER BY rowid').all(),before);
+ }finally{f.s.close();}
+});
