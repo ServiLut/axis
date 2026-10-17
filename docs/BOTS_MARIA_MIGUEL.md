@@ -1,5 +1,15 @@
 # María Ángel y Miguel Ángel
 
+## Estado comprobado 17/10/2026 19:45Z — recepción pública aún pausada
+
+**Runtime 9783dde DONE 3 s; 2844/2844 pruebas, cero omisiones.** El fallo literal de no-contacto quedó corregido e instalado. Nueva secuencia nativa: cotización→posposición→«No quiero que me vuelvan a escribir»→agradecimiento→otro caso. Cinco fuentes y cinco salidas internas READ exactas, run-2026-10-17T19-45-11-158Z; los dos turnos posteriores conservaron OWN_COMMERCIAL_REFUSAL, cero salidas simuladas al cliente, cero pregunta de precio/altas. La cortesía de simulación enviada a Sandra no equivale a mensaje a un cliente real.
+
+La empatía, recepción de datos y respuesta corta de costo/fecha pendientes también quedaron comprobadas en 63775de, sin derechos o visitas inventados. La toma/resumen natural quedó comprobada en 4077779. Fuentes y fallos originales se conservan en .tmp/maria-confirmation-check-20261017; cada repetición es nueva, sin replay.
+
+**Sólo resta la comprobación en DB y la apertura posterior autorizada.** Nuevo permiso PRUEBA de hasta dos horas solicitado a la usuaria y aún sin respuesta: anterior venció 18:10:49Z; no hay token/grant nuevo ni ensayo de DB nuevo. Alcance propuesto: una orden sintética PROGRAMADO 18/oct a las 10 a. m., técnico/hora final nulos, sin pagos/despacho, lectura y retiro lógico auditado. Puede figurar transitoriamente en listados; comercial PENDIENTE, no venta.
+
+Pausa autenticada19:44:03Z: enabled/customerResponses/ordinaryRegistration=false, sólo Sandra, SAVED1 histórico; lectura ON, calendario configured=true pero enabled=false por pausa, preventiva/TESAcontinuation OFF. No abrir antes del ensayo/limpieza pendientes ni repetir la autorización comercial genérica ya resuelta. Reapertura futura usará corte propio BOT_PUBLIC_RESPONSE_STARTS_AT sin cambiar BOT_ACTIVATED_AT, liberar holds, recuperar colas antiguas o activar roja. La observación real posterior aún no está acreditada.
+
 ## Último bloqueo de no-contacto y corrección — 17/10/2026
 
 Runtime **63775de DONE 4 s**, Backend **44ec59a DONE 3 m 7 s**, conservando Web/cambios de otras tareas. La repetición nativa de garantía, datos, costo/fecha y queja pasó: cuatro fuentes y cinco salidas **READ exactas**, chief-readonly/run-2026-10-17T19-39-34-928Z; sin consulta real a TESA, Luna o negocio.
