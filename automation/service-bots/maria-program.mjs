@@ -116,11 +116,30 @@ export function acceptsOrdinaryQuotation(text){
 }
 // Only the engine's independently verified own delivered quotation may supply
 // the expected amount. This opens data collection, never summary confirmation.
+function ownQuotationAmountHeader(text){
+ const amount='([1-9]\\d{0,2}(?:\\.\\d{3})+|[1-9]\\d{3,7})';
+ const match=text.trim().match(new RegExp('^(?:(?:sí|si)[, ]+)?acepto (?:(?:la|esta) cotizaci[oó]n de |el (?:valor|precio)(?: de)? |los? )?(?:\\$\\s*'+amount+'(?:\\s*cop)?|'+amount+'\\s+cop)(?:[.!](?:\\s+|$)|$)([\\s\\S]*)$','iu'));
+ return match?{amount:Number((match[1]||match[2]).replace(/\./g,'')),tail:match[3]}:null;
+}
+const withoutFieldJoiners=text=>text.replace(/^(?:[\s.!;,]+|y\b)+/iu,'').trim();
 export function quotationAmountAffirmation(text){
- if(typeof text!=='string')return null;
+ if(typeof text!=='string'||text.length>1200||/[?¿"“”]|https?:/i.test(text))return null;
  const t=normalize(text).trim(),amount='([1-9]\\d{0,2}(?:\\.\\d{3})+|[1-9]\\d{3,7})';
  const match=t.match(new RegExp('^(?:(?:si[, ]+)?(?:deseo|quiero) continuar con (?:la|esta) cotizacion|(?:si[, ]+)?acepto (?:la|esta) cotizacion) de (?:\\$\\s*'+amount+'(?:\\s*cop)?|'+amount+'\\s+cop)[.!]?$'));
- return match?Number((match[1]||match[2]).replace(/\./g,'')):null;
+ if(match)return Number((match[1]||match[2]).replace(/\./g,''));
+ // A closed own-price affirmation may carry literal facts in the same turn.
+ // It opens intake only: the delivered current quote still supplies the amount,
+ // and a new delivered summary and later confirmation remain mandatory.
+ const header=ownQuotationAmountHeader(text);if(!header)return null;
+ if(!header.tail.trim())return header.amount;
+ // Inspect the original tail before projecting address/name spans. An address
+ // parser can retain a comma suffix; it must not hide a later refusal, condition,
+ // third-party claim or changed price inside an otherwise valid street address.
+ if(/\b(?:no|pero|si|solo|solamente|siempre|depende|cuando|quizas|tal vez|podria|puede|gratis|garantia|refuerzo|descuento|pago|pagar|transferencia|comprobante|cancelar|cancela|dijo|dice|segun|tercero|vecin[oa]|asesor[ae]?|otro|otra|precio|valor|cuesta|costaria|cobren|cobrar|cobro|pesos|cop|usd)\b|\$\s*\d/.test(normalize(header.tail)))return null;
+ const fields=explicitFields(header.tail);if(fields.conflict)return null;
+ const remainder=withoutFieldJoiners(literalIntakeTextWithoutRegistrationFields(header.tail));
+ if(!remainder)return fields.name||fields.address?header.amount:null;
+ return literalProgramPreference(remainder)!==null?header.amount:null;
 }
 export function acceptsOwnQuotedAmount(text,priceCop){
  return Number.isSafeInteger(priceCop)&&priceCop>0&&priceCop<=10000000&&quotationAmountAffirmation(text)===priceCop;
@@ -220,12 +239,15 @@ export function literalIntakeTextWithoutRegistrationFields(text){
 }
 export function literalProgramPreference(text){
  if(typeof text!=='string')return null;
- const raw=literalIntakeTextWithoutRegistrationFields(text).trim();
+ const projected=literalIntakeTextWithoutRegistrationFields(text).trim(),header=ownQuotationAmountHeader(projected);
+ const raw=withoutFieldJoiners(header?header.tail:projected);
  if(/^(?:en|por) la (?:mañana|manana|tarde|noche)[.! ]*$/i.test(raw))return raw.replace(/[.! ]+$/g,'');
  const folded=normalize(raw).replace(/\bporfavor\b/g,'por favor').replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim();
- const standalone=/^(?:(?:para|el|prefiero|preferiria|quiero|quisiera|seria|puede ser|me queda bien|me sirve) )?(?:hoy|manana|pasado manana|(?:el )?(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo))(?: (?:(?:en|por) la (?:manana|tarde|noche)|a las? \d{1,2}(?::\d{2})?(?: am| pm)?))?(?: (?:por favor|gracias|muchas gracias))*$/.test(folded);
+ const standalone=/^(?:(?:me equivoque|corrijo) )?(?:(?:para|el|prefiero|preferiria|quiero|quisiera|lo necesito|lo quiero|seria|puede ser|me queda bien|me sirve) )?(?:hoy|manana|pasado manana|(?:el )?(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo))(?: (?:(?:en|por) la (?:manana|tarde|noche)|a las? \d{1,2}(?::\d{2})?(?: a ?m| p ?m)?))?(?: (?:por favor|gracias|muchas gracias))*$/.test(folded);
  if(!standalone&&!acceptsOrdinaryQuotation(raw))return null;
- const value=raw.match(/\b(?:hoy|pasado mañana|pasado manana|mañana|manana|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\b[^.!?;\r\n]*/i)?.[0]?.trim().replace(/[, ]+$/g,'');
+ // Keep punctuation in a. m./p. m. as literal source text, rather than cutting
+ // a time at the first abbreviation dot. Full grammar above rejects extra prose.
+ const value=raw.match(/\b(?:hoy|pasado mañana|pasado manana|mañana|manana|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\b[\s\S]*/i)?.[0]?.trim().replace(/[, ]+$/g,'').replace(/(?<![ap]\.\s?m)[.!]+$/i,'');
  return value&&value.length<=300?value:null;
 }
 function literalName(text,prompted){

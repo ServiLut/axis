@@ -1,16 +1,8 @@
 // Direct user approval, 05/10/2026: warm, useful advice for María only.
 // This changes reviewed reception wording, never the price, scope or authority.
 import {currentIntakeTimingAcknowledgement} from './intake-timing.mjs';
+import {officeReceptionRequestValues,formatOfficeReceptionRequests,officeReceptionDeclineText} from './office-reception-snippets.mjs';
 export const ADVISER_TONE_GUARD='identified-maria-reception-and-current-requested-timing-v3';
-const initialRequests=new Map([
- ['Qué plaga deseas tratar o si buscas prevención.','qué plaga deseas tratar o si buscas prevención'],
- ['Qué tipo de inmueble es y cuántas habitaciones o metros cuadrados tiene.','qué tipo de inmueble es y cuántas habitaciones o metros cuadrados tiene'],
- ['Qué tipo de inmueble es.','qué tipo de inmueble es'],
- ['Cuántas habitaciones o metros cuadrados tiene.','cuántas habitaciones o metros cuadrados tiene'],
- ['Cuántos colchones están afectados y si también hay chinches en bases de cama u otros muebles.','cuántos colchones están afectados y si también hay chinches en bases de cama u otros muebles'],
- ['El municipio y barrio o vereda donde necesitas el servicio.','el municipio y barrio o vereda donde necesitas el servicio'],
- ['El municipio donde necesitas el servicio; ya conservé la ubicación indicada.','el municipio donde necesitas el servicio']
-]);
 const ordinaryIntakeQuestions=new Set([
  'Para cotizarte, me falta:\n1. Qué plaga deseas tratar o si buscas prevención.\n2. En qué barrio o vereda necesitas el servicio.',
  '¿Qué plaga deseas tratar o buscas un servicio preventivo?',
@@ -37,9 +29,9 @@ export function mariaOrdinaryIntakeReply(text){
  const rest=body.slice(title.length);
  if(rest.startsWith(':\n')){
   const items=rest.slice(2).split('\n');
-  return items.length>1&&items.every((line,i)=>line.startsWith((i+1)+'. ')&&[...initialRequests.values()].some(value=>line.slice(String(i+1).length+2)===value[0].toUpperCase()+value.slice(1)+'.'));
+  return items.length>1&&items.every((line,i)=>line.startsWith((i+1)+'. ')&&officeReceptionRequestValues().some(value=>line.slice(String(i+1).length+2)===value[0].toUpperCase()+value.slice(1)+'.'));
  }
- return [...initialRequests.values()].some(value=>rest===' '+value+'.');
+ return officeReceptionRequestValues().some(value=>rest===' '+value+'.');
 }
 const reviewedWording=new Map([
  ['Gracias. Una asesora continuará contigo para preparar la cotización de este inmueble.','La cotización de este inmueble aún necesita confirmación.'],
@@ -68,6 +60,8 @@ export function adviserReply(company,decision,{firstReply=false,approvedAnswer=f
  // Personal summaries and persisted receipt confirmations retain their exact
  // deterministic facts. Tone does not change a registration contract.
  if(decision.state?.programIntake||/^(?:Registraré el servicio|Tu solicitud quedó registrada|Registré tu solicitud|Tu servicio quedó registrado)\b/.test(text))return text;
+ const decline=officeReceptionDeclineText(decision);
+ if(decline)return decline;
  const timing=!decision.review&&!decision.question&&!decision.courtesy&&!decision.observed?currentIntakeTimingAcknowledgement(decision.state):null;
  const render=reply=>{
   if(!timing||reply.includes(timing))return reply;
@@ -83,10 +77,10 @@ export function adviserReply(company,decision,{firstReply=false,approvedAnswer=f
  const reviewed=reviewedWording.get(body);
  if(reviewed)return render(prefix+reviewed);
  if((firstReply||greeting)&&!decision.review&&!decision.question&&!decision.courtesy&&!decision.observed&&body.startsWith('Para ayudarte con la cotización, cuéntame:\n')){
-  const requests=body.slice('Para ayudarte con la cotización, cuéntame:\n'.length).split('\n').map(line=>line.startsWith('• ')?initialRequests.get(line.slice(2)):null);
-  if(requests.length&&requests.every(Boolean)){
+  const lines=body.slice('Para ayudarte con la cotización, cuéntame:\n'.length).split('\n');
+  const requestText=lines.every(line=>line.startsWith('• '))?formatOfficeReceptionRequests(lines.map(line=>line.slice(2))):null;
+  if(requestText){
    const greetingPrefix=prefix?prefix.trimEnd()+'\n\n':'';
-   const requestText=requests.length===1?'Para cotizarte, cuéntame '+requests[0]+'.':'Para cotizarte, cuéntame:\n'+requests.map((value,i)=>(i+1)+'. '+value[0].toUpperCase()+value.slice(1)+'.').join('\n');
    return render(greetingPrefix+requestText);
   }
  }

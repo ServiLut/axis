@@ -11,6 +11,7 @@ export const CHIEF_CUSTOMER_SIMULATION_SOURCE_GUARD='own-exact-native-chief-sour
 export const CHIEF_CUSTOMER_SIMULATION_DELIVERY_GUARD='own-exact-internal-chief-simulation-output-delivery-v1';
 export const CHIEF_CUSTOMER_SIMULATION_PHONE='570000000000';
 const TEST_ORDER_GUARD='own-chief-authorized-test-order-v1';
+export const CHIEF_CUSTOMER_TIMING_TEST_SCENARIO='cucarachas-2-rooms-requested-timing-v2';
 const LIFETIME=2*3600000,MAX_TURNS=100;
 const idPattern=/^[A-Za-z0-9_-]{8,100}$/,hashPattern=/^[a-f0-9]{64}$/;
 const hash=value=>createHash('sha256').update(typeof value==='string'?value:JSON.stringify(canonical(value))).digest('hex');
@@ -103,8 +104,12 @@ function registrationDraft(session){
   for(const id of [payload.sourceId,payload.quote.acceptanceId,...Object.values(payload.sources).map(ref=>ref.id).filter(Boolean)])nativeId(id);
   const sourceMap=[...session.syntheticSources].map(([syntheticSourceId,source])=>({syntheticSourceId,chiefSourceId:source.value.id,nativeTextHash:hash(source.value.text),customerTextHash:source.customerTextHash,customerTextOffset:source.customerTextOffset})),chiefSources=[...session.nativeSources.values()].map(sourceReceipt);
   const simulatedDeliveries=[...session.outputs.values()].filter(output=>output.proof).map(output=>({synthetic:true,mid:output.syntheticMid,at:new Date(Math.floor(output.proof.verifiedAt/1000)*1000).toISOString(),state:'DELIVERED'}));
-  const eligible=!Object.hasOwn(payload.sources,'preference')&&normalize(payload.slots.service)==='cucarachas'&&normalize(payload.slots.site)==='apartamento'&&/^2\b/.test(normalize(payload.slots.rooms))&&normalize(payload.municipality)==='itagui'&&payload.quote.priceCop===129000&&payload.quote.scheduleHash===BUSINESS_PRICE_HASH&&chiefSources.length<=20&&sourceMap.length<=20&&simulatedDeliveries.length<=10;
-  const draft={guard:TEST_ORDER_GUARD,testRunId:session.testRunId,source:'chief-authorized-test',simulationId:session.id,synthetic:true,scenario:'cucarachas-2-rooms',syntheticPayload:copy(payload),syntheticRequestHash:registrationHash(payload),chiefSources,sourceMap,simulatedDeliveries};
+  // Only the prospective staff-assignment sandbox can exercise the new test
+  // fixture. This does not turn a timing preference into an appointment.
+  const timingFixture=session.workflowMode==='internal-staff-assignment'&&Object.hasOwn(payload.sources,'preference');
+  const exactTiming=timingFixture&&typeof payload.slots.preference==='string'&&payload.slots.preference.trim()===payload.slots.preference&&!/[\r\n]/.test(payload.slots.preference)&&normalize(payload.sources.preference.text).includes(normalize(payload.slots.preference))&&Boolean(payload.summaryConfirmation)&&payload.customerName==='Persona Sintética'&&payload.address==='Calle de Prueba 0 # 0'&&payload.locationDetails==='Esto es una PRUEBA. Tengo cucarachas en un apartamento de Itagüí de 2 habitaciones.';
+  const eligible=(!Object.hasOwn(payload.sources,'preference')||exactTiming)&&normalize(payload.slots.service)==='cucarachas'&&normalize(payload.slots.site)==='apartamento'&&/^2\b/.test(normalize(payload.slots.rooms))&&normalize(payload.municipality)==='itagui'&&payload.quote.priceCop===129000&&payload.quote.scheduleHash===BUSINESS_PRICE_HASH&&chiefSources.length<=20&&sourceMap.length<=20&&simulatedDeliveries.length<=10;
+  const draft={guard:TEST_ORDER_GUARD,testRunId:session.testRunId,source:'chief-authorized-test',simulationId:session.id,synthetic:true,scenario:timingFixture?CHIEF_CUSTOMER_TIMING_TEST_SCENARIO:'cucarachas-2-rooms',syntheticPayload:copy(payload),syntheticRequestHash:registrationHash(payload),chiefSources,sourceMap,simulatedDeliveries};
   session.preparedDraft={initialTestFixtureEligible:eligible,envelope:{...draft,payloadHash:hash(draft)},fieldSourceMap,realInternalReceipts:[...session.outputs.values()].filter(output=>output.proof).map(output=>({outputId:output.id,realInternalReceipt:copy(output.proof),commercialDeliveryVerified:false}))};
   return copy(session.preparedDraft);
 }

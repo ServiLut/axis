@@ -37,14 +37,28 @@ test('explicit staff planning remains isolated and captures requested timing bef
     const initial=f.start({workflowMode:mode});assert.equal(initial.workflowMode,mode);const fields=await beforeTiming(f);assert.match(outputText(fields.result),/día y franja horaria prefieres/);assert.equal(fields.result.phase,'details');assert.equal(fields.result.testOrderDraft,null);
     const timing=await f.turn('Prefiero mañana en la tarde.',{acknowledge:false});assert.match(outputText(timing.result),/^• Preferencia solicitada: mañana en la tarde$/m);assert.match(outputText(timing.result),/Persona Sintética/);assert.match(outputText(timing.result),/Calle de Prueba 0 # 0/);assert.doesNotMatch(outputText(timing.result),/visita programada|técnico confirmado/);
     const premature=await f.turn('Sí, confirmo que los datos son correctos.');assert.equal(premature.result.testOrderDraft,null);for(const output of timing.result.outputs)f.ack(output);
-    const final=await f.turn('Sí, confirmo que los datos son correctos.'),draft=final.result.testOrderDraft;assert.ok(draft);assert.equal(draft.initialTestFixtureEligible,false);const p=draft.envelope.syntheticPayload;
+    const final=await f.turn('Sí, confirmo que los datos son correctos.'),draft=final.result.testOrderDraft;assert.ok(draft);assert.equal(draft.initialTestFixtureEligible,true);const p=draft.envelope.syntheticPayload;
     assert.equal(p.slots.preference,'mañana en la tarde');assert.equal(p.sources.preference.text,'Prefiero mañana en la tarde.');assert.equal(p.customerName,'Persona Sintética');assert.equal(p.address,'Calle de Prueba 0 # 0');assert.equal(draft.fieldSourceMap.customerName,fields.source.id);assert.equal(draft.fieldSourceMap.address,fields.source.id);assert.equal(draft.fieldSourceMap.preference,timing.source.id);assert.notEqual(p.sources.preference.id,p.sources.customerName.id);assert.equal(draft.envelope.syntheticRequestHash,registrationHash(p));assert.match(p.summaryConfirmation.text,/• Preferencia solicitada: mañana en la tarde/);
-    assert.equal(final.result.businessWrites,0);assert.equal(final.result.providerCalls,0);assert.equal(final.result.modelCalls,0);assert.equal(final.result.commercialDeliveryVerified,false);assert.equal(fetched,0);assert.doesNotMatch(JSON.stringify(final.result),/LIVE_CONFIG|apiKey|Bearer |readToken/);assert.equal(chiefCustomerSimulationDraft({simulationId:f.id}).testOrderDraft.initialTestFixtureEligible,false);
+    assert.equal(final.result.businessWrites,0);assert.equal(final.result.providerCalls,0);assert.equal(final.result.modelCalls,0);assert.equal(final.result.commercialDeliveryVerified,false);assert.equal(fetched,0);assert.doesNotMatch(JSON.stringify(final.result),/LIVE_CONFIG|apiKey|Bearer |readToken/);assert.equal(chiefCustomerSimulationDraft({simulationId:f.id}).testOrderDraft.initialTestFixtureEligible,true);
   }finally{globalThis.fetch=previous;f.close();}
 });
 
 test('the unchanged default sandbox still prepares the original fixture without a timing field',async t=>{
   const f=fixture(t);try{assert.equal(Object.hasOwn(f.start(),'workflowMode'),false);const fields=await beforeTiming(f);assert.match(outputText(fields.result),/¿Confirmas que estos datos/);assert.doesNotMatch(outputText(fields.result),/día y franja horaria prefieres/);const final=await f.turn('Confirmo');assert.equal(final.result.testOrderDraft.initialTestFixtureEligible,true);assert.equal(Object.hasOwn(final.result.testOrderDraft.envelope.syntheticPayload.sources,'preference'),false);}finally{f.close();}
+});
+
+test('a corrected requested time needs its own delivered revised summary and a new final confirmation',async t=>{
+ const f=fixture(t);try{
+  f.start({workflowMode:mode});await beforeTiming(f);await f.turn('Prefiero mañana a las 9 a. m.');
+  const correction=await f.turn('Me equivoqué, prefiero mañana a las 10 a. m.',{acknowledge:false});
+  assert.match(outputText(correction.result),/• Preferencia solicitada: mañana a las 10 a\. m/);assert.equal(correction.result.testOrderDraft,null);
+  const premature=await f.turn('Sí, confirmo que los datos son correctos.');assert.equal(premature.result.testOrderDraft,null);
+  for(const output of correction.result.outputs)f.ack(output);
+  const completed=await f.turn('Sí, confirmo que los datos son correctos.'),p=completed.result.testOrderDraft.envelope.syntheticPayload;
+  assert.match(p.slots.preference,/mañana a las 10 a\. m/);assert.equal(p.sources.preference.text,'Me equivoqué, prefiero mañana a las 10 a. m.');
+  assert.equal(completed.result.testOrderDraft.fieldSourceMap.preference,correction.source.id);assert.equal(completed.result.testOrderDraft.initialTestFixtureEligible,true);
+  assert.match(p.summaryConfirmation.text,/• Preferencia solicitada: mañana a las 10 a\. m/);assert.equal(completed.result.businessWrites,0);
+ }finally{f.close();}
 });
 
 for(const value of [null,false,true,'other-mode',{enabled:true,mode,apiKey:'NOT_ALLOWED'}])test('a sandbox mode accepts only the literal whitelist, not configuration or authority: '+JSON.stringify(value),t=>{
