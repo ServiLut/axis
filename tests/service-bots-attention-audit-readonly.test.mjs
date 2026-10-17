@@ -57,6 +57,41 @@ test('an edited/deleted native source or failed binding is not accepted as curre
     assert.equal(reviewContactAttention(f.s,f.c,body()).results[0].hold,null,mode);
   });
 });
+test('native READ and delivery acknowledgements preserve the exact stored source without changing holds or coverage',()=>{
+  for(const status of ['READ','DELIVERY_ACK',3,4,'3','4'])for(const minimal of [false,true])withFixture(f=>{
+    const {native}=seed(f);f.s.hold(PHONE,'STAFF_SYNTHETIC_001',true);
+    const data=minimal?{key:{id:native.data.key.id},update:{status}}:{key:native.data.key,messageTimestamp:native.data.messageTimestamp,update:{status}};
+    recordIntakeWebhook(f.s,f.c,{event:'messages.update',instance:'cucaracha-azul',data},{authenticated:true,verifiedBinding:{ownerVerified:true,phone:BLUE,instance:'cucaracha-azul'},receivedAt:NOW+200});
+    const before=snapshot(f.s),value=reviewContactAttention(f.s,f.c,body());assert.equal(value.results[0].hold,true,JSON.stringify({status,minimal}));assert.equal(value.results[0].revision,2);assert.equal(value.results[0].lastSourceId,'SOURCE_INCOMING_001');assert.equal(value.coverageComplete,false);assert.deepEqual(snapshot(f.s),before);
+  });
+});
+test('a status acknowledgement carrying the exact unchanged text is metadata only',()=>withFixture(f=>{
+  const {native}=seed(f);recordIntakeWebhook(f.s,f.c,{...native,event:'messages.update',data:{...native.data,update:{status:'READ'}}},{authenticated:true,verifiedBinding:{ownerVerified:true,phone:BLUE,instance:'cucaracha-azul'},receivedAt:NOW+200});
+  const before=snapshot(f.s);assert.equal(reviewContactAttention(f.s,f.c,body()).results[0].hold,false);assert.deepEqual(snapshot(f.s),before);
+}));
+test('READ cannot disguise edits, deleted sources, different text, media, native identity or source time',()=>{
+  const patches=[
+    {update:{status:'EDITED'}},{update:{status:'DELETED'}},{update:{status:'UNKNOWN_STATUS'}},
+    {message:{conversation:'Changed customer text'}},{message:{conversation:''}},
+    {message:{audioMessage:{mimetype:'audio/ogg'}}},{message:{protocolMessage:{type:'MESSAGE_EDIT'}}},
+    {key:{remoteJid:'573000002222@s.whatsapp.net'}},{key:{remoteJidAlt:'573000002222@s.whatsapp.net'}},{key:{remoteJid:'999999999999999@lid'}},{key:{fromMe:true}},
+    {messageTimestamp:(NOW+1000)/1000},
+  ];
+  for(const patch of patches)withFixture(f=>{
+    const {native}=seed(f),data={key:{...native.data.key,...patch.key},update:{status:'READ',...patch.update},...(patch.message?{message:patch.message}:{}),...(patch.messageTimestamp?{messageTimestamp:patch.messageTimestamp}:{})};
+    recordIntakeWebhook(f.s,f.c,{event:'messages.update',instance:'cucaracha-azul',data},{authenticated:true,verifiedBinding:{ownerVerified:true,phone:BLUE,instance:'cucaracha-azul'},receivedAt:NOW+200});
+    const before=snapshot(f.s);assert.equal(reviewContactAttention(f.s,f.c,body()).results[0].hold,null,JSON.stringify(patch));assert.deepEqual(snapshot(f.s),before);
+  });
+});
+test('a later innocent READ never repairs a preceding edit, delete or failed binding',()=>{
+  for(const mode of ['edit','delete','failed'])withFixture(f=>{
+    const {native}=seed(f);
+    if(mode==='failed')recordIntakeBinding(f.s,f.c,native,{authenticated:true,error:new Error('NATIVE_BINDING_FAILED'),receivedAt:NOW+100});
+    else recordIntakeWebhook(f.s,f.c,{...native,event:mode==='edit'?'messages.update':'messages.delete',data:{...native.data,update:{status:mode==='edit'?'EDITED':'DELETED'}}},{authenticated:true,verifiedBinding:{ownerVerified:true,phone:BLUE,instance:'cucaracha-azul'},receivedAt:NOW+200});
+    recordIntakeWebhook(f.s,f.c,{event:'messages.update',instance:'cucaracha-azul',data:{key:{id:native.data.key.id},update:{status:'READ'}}},{authenticated:true,verifiedBinding:{ownerVerified:true,phone:BLUE,instance:'cucaracha-azul'},receivedAt:NOW+300});
+    assert.equal(reviewContactAttention(f.s,f.c,body()).results[0].hold,null,mode);
+  });
+});
 test('source must be the exact own incoming text and encrypted row metadata must agree',()=>{
   for(const patch of [{phone:'573000002222'},{line:RED},{fromMe:true},{kind:'audio'},{text:'Changed text'},{at:NOW+1},{id:'DIFFERENT_SOURCE_ID'}])withFixture(f=>{
     const {e}=seed(f);f.s.db.prepare('UPDATE events SET body=? WHERE id=?').run(f.s.seal({...e,...patch}),e.id);

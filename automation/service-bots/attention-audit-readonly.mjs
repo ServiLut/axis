@@ -10,6 +10,20 @@ const keys=(value,expected)=>object(value)&&Object.keys(value).sort().join(',')=
 const unknown=found=>({found,hold:null,revision:null,currentLine:null,caseId:null,lastSourceId:null,at:null});
 const sourceKey=sourceId=>createHash('sha256').update(JSON.stringify(['fumigacion',FUMIGACION_BLUE,'cucaracha-azul',sourceId])).digest('hex');
 
+function deliveryMetadataOnly(original,value,originalRow){
+  if(!original||!['DELIVERY_ACK','READ',3,4,'3','4'].includes(value.status)||value.originalRow!==originalRow||
+    value.phone!==original.phone||value.identity!=='PN'||value.fromMe!==false||
+    value.providerAt!==null&&value.providerAt!==original.providerAt||value.media!==null||
+    !['PENDING','VERIFIED'].includes(value.bindingState))return false;
+  const absentContent=value.kind==='unknown'&&value.literalText===null;
+  const unchangedText=value.kind==='text'&&value.literalText===original.literalText;
+  if(!absentContent&&!unchangedText)return false;
+  const native=value.nativeKey;
+  if(!object(native)||native.id!==original.sourceId||native.fromMe!==null&&native.fromMe!==false)return false;
+  const originalAddresses=[original.nativeKey?.remoteJid,original.nativeKey?.remoteJidAlt].filter(address=>typeof address==='string'&&address);
+  return [native.remoteJid,native.remoteJidAlt].every(address=>address===null||originalAddresses.includes(address));
+}
+
 function validateScope(store,config,body){
   if(config?.company!=='fumigacion'||store?.company!=='fumigacion'||!Array.isArray(config.lines)||
     !config.lines.some(line=>line.phone===FUMIGACION_BLUE&&line.instance==='cucaracha-azul')||
@@ -26,16 +40,17 @@ function validateScope(store,config,body){
 // Missing identity, edits, deletion or an unavailable journal remain unknown.
 function storedNativeSourceMatches(store,event){
   if(!store.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='intake_journal'").get())return false;
-  const rows=store.db.prepare('SELECT original,operation,line,instance,body FROM intake_journal WHERE source_key=? ORDER BY row_id LIMIT 101').all(sourceKey(event.id));
+  const rows=store.db.prepare('SELECT row_id,original,operation,line,instance,body FROM intake_journal WHERE source_key=? ORDER BY row_id LIMIT 101').all(sourceKey(event.id));
   if(!rows.length||rows.length>100)return false;
-  let original=null,bound=false;
+  let original=null,originalRow=null,bound=false;
   for(const row of rows){
     const value=store.open(row.body);
     if(row.line!==FUMIGACION_BLUE||row.instance!=='cucaracha-azul'||value.company!=='fumigacion'||value.sourceId!==event.id||value.line!==row.line||value.instance!==row.instance||value.operation!==row.operation)return false;
     if(row.original===1){
       if(original||row.operation!=='upsert')return false;
-      original=value;bound=value.bindingState==='VERIFIED';
+      original=value;originalRow=row.row_id;bound=value.bindingState==='VERIFIED';
     }else if(row.operation==='binding-verified')bound=value.bindingState==='VERIFIED';
+    else if(row.operation==='update'&&deliveryMetadataOnly(original,value,originalRow))continue;
     else return false;
   }
   if(!original||!bound||original.identity!=='PN'||original.phone!==event.phone||original.fromMe!==false||original.kind!=='text'||original.literalText!==event.text||original.providerAt!==event.at)return false;
