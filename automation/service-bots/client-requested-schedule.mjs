@@ -1,4 +1,5 @@
 import {mariaRequestedTiming} from './maria-requested-timing.mjs';
+import {projectNativePreferenceParts} from './native-preference-parts.mjs';
 
 export const MARIA_CLIENT_SCHEDULE_GUARD='own-confirmed-client-time-without-technician-v1';
 export function clientRequestedScheduleConfig(env,company,activatedAt){
@@ -22,7 +23,8 @@ export function projectClientRequestedSchedule(preference,sourceAt,acceptedAt=so
 }
 export function clientRequestedScheduleReceiptMatches(payload,receipt){
  if(payload.clientSchedule?.guard!==MARIA_CLIENT_SCHEDULE_GUARD)return false;
- const ref=payload.sources?.preference,projection=ref&&projectClientRequestedSchedule(payload.slots?.preference,ref.at,payload.sources?.acceptance?.at),schedule=receipt?.schedule;
+ const ref=payload.sources?.preference,projection=payload.preferenceParts?projectNativePreferenceParts(payload.preferenceParts,payload.sources?.acceptance?.at):ref&&projectClientRequestedSchedule(payload.slots?.preference,ref.at,payload.sources?.acceptance?.at),schedule=receipt?.schedule;
  if(!projection?.complete||receipt.state!=='PROGRAMADO'||receipt.scheduled!==true||receipt.schedulingKind!=='client-requested-without-technician'||!schedule||schedule.verifiedCurrentFields!==true)return false;
- return ['guard','requestedDate','requestedTime','visitAt','startAt','endAt','technicianId','preferenceLiteral'].every(key=>schedule[key]===projection[key])&&schedule.preferenceSourceId===ref.id&&schedule.preferenceSourceAt===ref.at&&schedule.acceptanceId===payload.quote.acceptanceId&&schedule.summaryMid===payload.summaryConfirmation?.mid;
+ const sourcesMatch=payload.preferenceParts?ref===undefined&&schedule.preferenceSourceId===undefined&&schedule.preferenceSourceAt===undefined&&JSON.stringify(schedule.preferenceParts)===JSON.stringify(projection.preferenceParts):schedule.preferenceSourceId===ref.id&&schedule.preferenceSourceAt===ref.at&&schedule.preferenceParts===undefined;
+ return ['guard','requestedDate','requestedTime','visitAt','startAt','endAt','technicianId','preferenceLiteral'].every(key=>schedule[key]===projection[key])&&projection.preferenceLiteral===payload.slots?.preference&&sourcesMatch&&schedule.acceptanceId===payload.quote.acceptanceId&&schedule.summaryMid===payload.summaryConfirmation?.mid;
 }
