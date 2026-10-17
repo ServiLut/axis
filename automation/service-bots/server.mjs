@@ -47,6 +47,7 @@ import {restoreRetentionProofAccess,installRetentionProofAccess,retentionProofAc
 import {createRetentionDeliveryRuntime} from './retention-delivery.mjs';
 import {createRetentionEligibilityAdapter} from './retention-eligibility.mjs';
 import {createRetentionDispatchRuntime,restoreRetentionNoteAccess,installRetentionNoteAccess} from './retention-dispatch.mjs';
+import {reviewContactAttention} from './attention-audit-readonly.mjs';
 
 export const HTTP_BODY_DECODING_GUARD='authenticated-byte-bounded-complete-utf8-json-v1';
 export const FUMIGACION_WEBHOOK_BODY_LIMIT=2*1024*1024;
@@ -317,6 +318,10 @@ export function createBotServer(config,store,transport,engine) {
           humanChats:store.db.prepare('SELECT COUNT(*) n FROM conversations WHERE hold=1').get().n,
           questions:store.db.prepare('SELECT state,COUNT(*) n FROM questions GROUP BY state').all(),
           caseAuthorship:store.db.prepare('SELECT state,COUNT(*) n FROM case_authorship GROUP BY state').all()});
+      }
+      if(req.url==='/review-contact-attention'){
+        try{return reply(200,reviewContactAttention(store,config,body));}
+        catch(error){return reply(error.message==='CONTACT_ATTENTION_OWN_FUMIGACION_REQUIRED'?403:400,{error:error.message==='CONTACT_ATTENTION_OWN_FUMIGACION_REQUIRED'?'CONTACT_ATTENTION_OWN_FUMIGACION_REQUIRED':'CONTACT_ATTENTION_CLOSED_SOURCE_SCOPE_REQUIRED'});}
       }
       if(req.url==='/review-events'){
         if(body.company!==config.company||!Array.isArray(body.eventIds)||body.eventIds.length<1||body.eventIds.length>50||new Set(body.eventIds).size!==body.eventIds.length||body.eventIds.some(id=>typeof id!=='string'||!/^[A-Za-z0-9_-]{8,100}$/.test(id)))return reply(400,{error:'SCOPED_SOURCE_IDS_REQUIRED'});
