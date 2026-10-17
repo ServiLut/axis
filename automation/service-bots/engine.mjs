@@ -30,6 +30,7 @@ import {mariaPendingReviewReply} from './maria-pending-review.mjs';
 import {literalMariaPartialLocation,literalMariaRoomCount,mariaMediaBurstContinuation,MARIA_BATCH_INTAKE_GUARD} from './maria-batch-intake.mjs';
 import {customerDeferralRequested,customerDeferralResumeEvidence,customerDeferralContinues,customerDeferralAcknowledgement,customerDeclinesAfterDeferral,CUSTOMER_DEFERRAL_GUARD} from './customer-deferral.mjs';
 import {literalTermiteFurnitureScope,termiteFurnitureMention} from './maria-furniture-scope.mjs';
+import {ownCommercialCustomerTurn,COMMERCIAL_OBJECTION_GUARD} from './commercial-objections.mjs';
 
 export const MARIA_AUTONOMOUS_INTAKE_GUARD='literal-ordinary-intake-without-staff-delegation-v1';
 export const MARIA_AFTER_SERVICE_CONTINUITY_GUARD='own-same-case-stored-or-quoted-postservice-context-and-priority-preservation-v2';
@@ -858,6 +859,19 @@ export class Engine {
       const lineScope=assertOperationalLineScope(c);
       if(lineScope&&(!operationalLineAllowed(c,e.line)||e.at<Date.parse(lineScope.authorizedAt)||s.hasSourcesOutsideLine(e.phone,e.line))){
         finish('OBSERVED_TEMPORARY_LINE_SCOPE');return;
+      }
+      const commercialTurn=ownCommercialCustomerTurn(s,c,conv.state,e,{newCase:literalOwnNewService(e),personalPriority:contextNeedsPersonalPriority(e.text,e)||Boolean(afterServiceRequest(e,analysis))});
+      if(commercialTurn){
+        commercialTurn.state.lastHandledSourceId=e.id;commercialTurn.state.lastText=e.text;
+        s.saveConversation(e.phone,commercialTurn.state);
+        if(commercialTurn.question)s.questionToRecipients({phone:e.phone,line:e.line,caseId:commercialTurn.state.caseId,topic:commercialTurn.question.topic,conditions:commercialTurn.question.conditions,recipients:[SANDRA],source:e.id,text:commercialTurn.question.text});
+        if(commercialTurn.reply){
+          if(!publicTextSafe(commercialTurn.reply))throw new Error('EXTERNAL_TEXT_REJECTED');
+          s.queue(e.id+':reply',e.phone,e.line,commercialTurn.reply,false,conv.revision,commercialTurn.state.caseId);
+          if(commercialTurn.quotationReference)s.savePriceReplyReference(e.id+':reply',commercialTurn.quotationReference);
+        }
+        s.audit('OWN_COMMERCIAL_CUSTOMER_TURN',e.id,{guard:COMMERCIAL_OBJECTION_GUARD,kind:commercialTurn.kind,caseId:commercialTurn.state.caseId,quotationSourceId:commercialTurn.state.commercialPriceObjection?.quotationSourceId||null,discountApproved:false,businessWritten:false,humanHoldReleased:false});
+        finish(commercialTurn.kind==='price-objection'?'OWN_PRICE_OBJECTION':'OWN_COMMERCIAL_REFUSAL');return;
       }
       const reportedOrder=/\borden\s*(?:n[ºo°.]?\s*)?([a-f0-9]{8})\b/i.exec(e.text)?.[1]?.toUpperCase();
       const productInquiry=c.company==='fumigacion'&&(conv.state.requestedProductInquiry||ownCaseProductInquiry(s,c,conv.state,e));

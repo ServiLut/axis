@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import {aiConfiguration} from './ai-settings.mjs';
 import {registrationConfig,staffPlanningConfig} from './maria-program.mjs';
+import {clientRequestedScheduleConfig} from './client-requested-schedule.mjs';
 import {tesaConfiguration} from './tesa-config.mjs';
 import {assertOperationalLineScope,operationalLineAllowed} from './line-scope.mjs';
 import {mariaTestOrderAccessConfig} from './maria-test-order-access.mjs';
@@ -85,6 +86,7 @@ export function configFromEnv(env = process.env) {
     tesaOperations:tesaConfiguration(env,company,lines,Date.parse(env.BOT_ACTIVATED_AT || '')),
     mariaProgram:registrationConfig(env,company),
     staffPlanning:staffPlanningConfig(env,company,Date.parse(env.BOT_ACTIVATED_AT||'')),
+    clientRequestedSchedule:clientRequestedScheduleConfig(env,company,Date.parse(env.BOT_ACTIVATED_AT||'')),
     mariaTestOrder:mariaTestOrderAccessConfig(env,company,registrationConfig(env,company)),
     chiefTesaTest:chiefTesaTestConfiguration(env,company,mariaTestOrderAccessConfig(env,company,registrationConfig(env,company)),Date.parse(env.BOT_ACTIVATED_AT||'')),
     conversationalAi:aiConfiguration(env,company) };

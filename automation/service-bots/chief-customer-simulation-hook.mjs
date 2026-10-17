@@ -2,6 +2,7 @@ import {createHash} from 'node:crypto';
 import {SANDRA} from './config.mjs';
 import {FUMIGACION_BLUE,operationalLineAllowed} from './line-scope.mjs';
 import {canonical,staffPlanningEnabled} from './maria-program.mjs';
+import {clientRequestedScheduleEnabled} from './client-requested-schedule.mjs';
 import {parseChiefCustomerSimulationCommand,startChiefCustomerSimulation,runChiefCustomerSimulationTurn,finishChiefCustomerSimulation,chiefCustomerSimulationStatus,chiefCustomerSimulationDraft,acknowledgeChiefCustomerSimulationOutput,CHIEF_CUSTOMER_SIMULATION_SOURCE_GUARD} from './chief-customer-simulation.mjs';
 import {parseMariaTestOrderCommand,executeMariaTestOrderAccess} from './maria-test-order-access.mjs';
 
@@ -41,7 +42,7 @@ export async function executeChiefCustomerSimulation(s,c,t,source,plan,native){
       return {...response(['CREATED','CLEANED'].includes(result.status)?'DONE':'NEEDS_CONTEXT',text,result),scope:'chief-only-closed-PRUEBA-order; ordinary-orders-payments-and-scheduling-disabled',ordinaryBusinessWrites:0,testBusinessWrites:result.testBusinessWrites};
     }
     if(parsed.action==='start'){
-      const result=startChiefCustomerSimulation({source,sourceProof:proof,authorizationId:'native-chief-simulation:'+source.id,...(staffPlanningEnabled(c,source.at)?{workflowMode:'internal-staff-assignment'}:{})});
+      const result=startChiefCustomerSimulation({source,sourceProof:proof,authorizationId:'native-chief-simulation:'+source.id,...(staffPlanningEnabled(c,source.at)?{workflowMode:'internal-staff-assignment'}:{}),...(clientRequestedScheduleEnabled(c,source.at)?{clientRequestedSchedule:true}:{})});
       return response('DONE',result.text+'\n\nPara participar, escribe: María Ángel, prueba cliente: seguido de tu mensaje como cliente.\nPara terminar: María Ángel, termina prueba cliente.',result);
     }
     if(!['ACTIVE','REVIEW'].includes(status.status))return response('NEEDS_CONTEXT','Sandra, no hay una prueba activa en la memoria de este proceso. Para empezar un ensayo nuevo, escribe: María Ángel, inicia prueba cliente.',{reason:'SIMULATION_NOT_ACTIVE_OR_LOST_AFTER_RESTART',memoryOnly:true,lostOnRestart:true,businessWritten:false});

@@ -1,5 +1,15 @@
 # María Ángel y Miguel Ángel
 
+## Pruebas amplias y agenda del cliente sin técnico — 17/10/2026
+
+La usuaria autorizó reabrir la atención normal **después** de verificar la toma del servicio, objeciones, garantías/refuerzos, trato grosero y demás escenarios críticos. La recepción general continúa pausada hasta cerrar esa verificación; no pedir de nuevo un permiso genérico de reapertura. Esa orden no libera holds humanos ni reabre la roja.
+
+Runtime **e2849383b8983c92b4b44fd164fae8c54b22be9b** instalado, Dokploy DONE 8 s. Prueba nativa nueva en Sandra: aceptación natural pasa a datos sin recotizar; nombre/dirección/fecha juntos producen resumen en lista. Cuatro entradas y cuatro respuestas READ con identidad/texto exactos en `chief-readonly/run-2026-10-17T17-51-36-280Z`, bajo `.tmp/maria-chief-tests-20261017`. No hubo confirmación final ni alta de negocio en ese recorrido; no atribuirlo a Luna, que está excluida de la simulación.
+
+Correcciones posteriores preparadas: objeción al precio contextual, descuento sólo como consulta deduplicada a Sandra, rechazo sin recotización y no-contacto durable por teléfono/línea. El cierre de rechazo reutiliza la respuesta rápida aprobada de la oficina. Matriz sintética 12/12; gate final **2231/2231**, cero omisiones, en `.tmp/maria-confirmation-check-20261017/full-runtime-release-gate-final.txt`. No representan 2231 conversaciones reales ni cobertura de todo lenguaje posible.
+
+Nueva agenda prospectiva `own-confirmed-client-time-without-technician-v1`, inicialmente OFF: requiere hora/fecha exactas, resumen propio v4 entregado y nueva confirmación; guarda PROGRAMADO en el horario del cliente, técnico y hora final nulos. Conserva fecha/hora/literal solicitados y confirmación comercial separada. No inventa duración ni ejecuta el antiguo plan TESA. Backend/Web y dos migraciones aditivas están preparados localmente; aún no declarar instalación, migración o primera agenda real hasta recibos correspondientes. Puente Engine→API compilada: Sí/Correcto/Listo, 3/3 positivos y 16/16 adulteraciones rechazadas, cero DB/red. El acceso PRUEBA existente vence 17/oct 18:10:49Z y no se renueva automáticamente.
+
 ## Recuperación de acceso y correcciones de recepción — 17/10/2026 17:33Z
 
 El mantenimiento referido por la usuaria queda preservado como antecedente de la interrupción, no como prueba de un fallo exacto dentro de la VM. A las **17:32Z** volvieron HTTP 200 de Tenaxis/proveedor y autenticación del runtime. A las **17:33:14Z**, lecturas autenticadas comprobaron azul **OPEN/propietario exacto** y runtime FUMIGACIÓN; el lector propio Tenaxis respondió **201/alcance exacto** a las **17:33:23Z**. Fuentes cifradas y recibos bajo `.tmp/maria-blue-audit-20261017/whatsapp-readonly/availability-2026-10-17T17-33-12-697Z` y `backend-contract-review/read-2026-10-17T17-33-22-039Z`. No se reinició ni alteró el VPS. La recuperación de acceso no acredita recepción completa durante el hueco, ausencia de pérdidas ni ejecución automática de pendientes.

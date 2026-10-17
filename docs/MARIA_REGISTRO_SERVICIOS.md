@@ -1,5 +1,11 @@
 # Registro propio de servicios nuevos de María
 
+## Agenda exacta del cliente en preparación — 17/10/2026
+
+La directriz humana exige guardar el servicio en la fecha/hora que pide el cliente, sin depender de asignar técnico. Se preparó `own-confirmed-client-time-without-technician-v1`: fuente nativa posterior al corte, precio propio aceptado, datos completos, resumen v4 entregado y nueva confirmación. El registro nuevo será PROGRAMADO, técnico/hora final nulos, sin inventar duración; confirmación comercial y horario solicitado conservan evidencia propia. Por defecto OFF, sin modificar credenciales, vencimiento, recibos históricos ni órdenes ajenas. No declarar activación hasta migración/instalación y readback.
+
+Gate local 2231/2231 y puente Engine/API compilada 3/3+16/16 negativos; fuentes en `.tmp/maria-confirmation-check-20261017`. El recorrido WhatsApp e284 del 17/oct verifica aceptación/datos/resumen, no otra alta. SAVED comercial histórico sigue 1 hasta nueva prueba propia del estado. La reapertura general está autorizada después de pruebas satisfactorias, aún no ejecutada. Los ensayos se identifican como PRUEBA y se retiran auditadamente; permiso existente vence 18:10:49Z sin renovación automática.
+
 ## Alta con horario literal, lectura y retiro PRUEBA — 17/10/2026 16:41Z
 
 Prevalece el apartado vigente de `BOTS_MARIA_MIGUEL.md`. Runtime **f79509f** y Backend **7cb1b03** instalados; pausa pública y registro ordinario conservados, sólo Sandra. **SAVED=1 histórico BF23DF14** al 16:41:29Z, sin nuevo servicio comercial. El perfil ordinario sigue `internal-staff-assignment`, NUEVO con preferencia literal y equipo interno para técnico/ruta; no programa o reserva por una preferencia.
