@@ -73,6 +73,15 @@ function pendingCostVisitQuestion(event){
  const visit=Boolean(visitMention&&(cost||timing)||cost&&timing);
  return cost||visit?{cost,visit,...(visit&&timing?{timing}:{})}:null;
 }
+function ownPendingExperienceConcern(event){
+ if(event.quotedId||event.text.length>600)return false;
+ const t=norm(event.text);
+ if(/\b(?:matar|golpear|agredir|disparar|quemar|romper|destruir|lastimar|hacer(?:les)? dano|hacer dano|si|cuando)\b/.test(t))return false;
+ const feeling=/\b(?:estoy|estamos|me siento|nos sentimos)\s+(?:muy\s+)?(?:molest[oa]s?|decepcionad[oa]s?|frustrad[oa]s?|desesperad[oa]s?|inconforme[s]?)\b/.test(t);
+ const help=/\b(?:necesito|necesitamos|quiero|queremos|quisiera|solicito|requiero)\b[^.!?;]{0,45}\b(?:ayud\w*|solucion\w*|atiend\w*|atencion)\b/.test(t);
+ const experience=/\b(?:esto|este servicio|la experiencia|mi experiencia)\b[^.!?;]{0,35}\b(?:porqueria|pesim[oa]|mal[oa]|terrible|decepcionante|desastre)\b|\bcomo quedo (?:el|mi) servicio\b/.test(t);
+ return feeling&&(help||experience);
+}
 
 /**
  * Explain a known pending request on a NEW direct customer turn. The engine
@@ -96,6 +105,7 @@ export function mariaPendingReviewReply({company,state,event,hold=false,sources=
  if(['service-followup','warranty-review'].includes(pending.topic)&&['reinforcement','warranty','verification','requested-control','post-service'].includes(kind)){
   const question=pendingCostVisitQuestion(event);if(question)facts.pendingQuestions=question;
  }
+ if(['service-followup','warranty-review'].includes(pending.topic)&&followupKinds.has(kind)&&ownPendingExperienceConcern(event))facts.customerConcern=true;
  const labels={service:'plaga indicada',site:'tipo de inmueble',location:'municipio',locationDetails:'ubicación',rooms:'tamaño del inmueble',area:'tamaño del inmueble',dimensions:'medidas',preference:'preferencia de horario'};
  if(!/\b(?:no|nunca|sin|si|quizas|tal vez|en caso de)\b/.test(norm(event.text))){
   const supplied=Object.entries(labels).filter(([key])=>state.intakeSources?.[key]?.sourceId===event.id&&state.intakeSources[key].at===event.at&&typeof state.slots?.[key]==='string'&&norm(event.text).includes(norm(state.slots[key]))).map(([,label])=>label);
@@ -107,7 +117,7 @@ export function mariaPendingReviewReply({company,state,event,hold=false,sources=
  const aspectScope=hash({topic:pending.topic,pendingSourceId:pending.sourceId,pendingState:pending.state,kind});
  const previousAspects=prior?.guard===MARIA_PENDING_REVIEW_GUARD&&prior.caseId===state.caseId&&prior.phone===event.phone&&prior.line===event.line&&prior.questionAspectScope===aspectScope&&Number.isSafeInteger(prior.questionAspectAt)&&event.at>=prior.questionAspectAt&&event.at-prior.questionAspectAt<60000&&Array.isArray(prior.questionAspectKeys)?prior.questionAspectKeys.filter(key=>typeof key==='string').slice(-16):[];
  const question=facts.pendingQuestions;
- const currentAspects=question?[...(question.cost?['cost']:[]),...(question.visit?[question.timing?'visit:'+question.timing:'visit']:[])]:[];
+ const currentAspects=[...(question?[...(question.cost?['cost']:[]),...(question.visit?[question.timing?'visit:'+question.timing:'visit']:[])]:[]),...(facts.customerConcern?['customer-concern']:[])];
  const aspectSeen=key=>previousAspects.includes(key)||key==='visit'&&previousAspects.some(value=>value.startsWith('visit:'));
  // Within the same short conversation burst, a rephrasing does not create a
  // new aspect. New dates or a newly raised cost doubt still receive an answer.
@@ -117,26 +127,24 @@ export function mariaPendingReviewReply({company,state,event,hold=false,sources=
  const parts=[];
  if(greeting(event.text)||/^hola\b/.test(norm(event.text)))parts.push('Hola.');
  if(facts.persistingCockroaches)parts.push('Lamento que el problema con las cucarachas continúe.');
+ else if(facts.customerConcern)parts.push('Lamento la experiencia que nos cuentas.');
  if(facts.fumigations||facts.reinforcements){
   const reports=[];
   if(facts.fumigations)reports.push(countLabel(facts.fumigations)+' fumigaci'+(facts.fumigations===1?'ón':'ones'));
   if(facts.reinforcements)reports.push((facts.reinforcements===1?'un':countLabel(facts.reinforcements))+' refuerzo'+(facts.reinforcements===1?'':'s'));
   parts.push('Me indicas que ya llevas '+reports.join(' y ')+'.');
  }
- if(facts.receivedData){
-  const fields=facts.receivedData;
-  parts.push(fields.length===1&&fields[0]==='plaga indicada'?'Gracias por la información.':'Recibí '+(fields.length===1?'el dato de '+fields[0]:'los datos de '+fields.slice(0,-1).join(', ')+' y '+fields.at(-1))+'.');
- }
+ if(facts.receivedData?.length)parts.push('Gracias por la información.');
  if(facts.todayRequested&&facts.discountRequested)parts.push('Recibí tu solicitud de una visita para hoy y de un descuento. Aún no están confirmados ni la visita para hoy ni el descuento.');
  else if(facts.todayRequested)parts.push('Recibí tu solicitud de una visita para hoy. Aún no tengo confirmada la disponibilidad para hoy.');
  else if(facts.discountRequested)parts.push('Recibí tu solicitud de descuento. Aún no tengo un descuento autorizado para este caso.');
- if(question?.cost&&question.visit)parts.push('Aún no están confirmados el costo ni la visita; la fecha también sigue pendiente de revisión.');
+ if(question?.cost&&question.visit)parts.push('Aún no están confirmados el costo ni la visita'+(question.timing?' para esa fecha':'')+'.');
  else if(question?.cost)parts.push('Aún no tengo un costo confirmado para esta revisión.');
  else if(question?.visit)parts.push('Aún no tengo confirmadas la visita ni su fecha.');
  // The unresolved fact is explicit even when the internal question is reused.
  // A customer's follow-up never creates another internal question here.
- parts.push(factualPending);
- const reply=parts.join(' '),reason=isStatus?'pending-status':question?'pending-cost-visit-question':facts.persistingCockroaches?'pending-postservice-concern':facts.todayRequested||facts.discountRequested?'pending-additional-request':'pending-new-literal-information';
+ parts.push(question?factualPending.split('. ')[0].replace(/\.$/,'')+'.':factualPending);
+ const reply=parts.join(' '),reason=isStatus?'pending-status':question?'pending-cost-visit-question':facts.customerConcern?'pending-customer-concern':facts.persistingCockroaches?'pending-postservice-concern':facts.todayRequested||facts.discountRequested?'pending-additional-request':'pending-new-literal-information';
  const sourceReferences=[...new Map([original,current].map(source=>[source.id,{sourceId:source.id,at:source.at,phone:source.phone,line:source.line,caseId:state.caseId}])).values()];
  const questionAspectKeys=[...new Set([...previousAspects,...currentAspects])].slice(-16);
  const marker={guard:MARIA_PENDING_REVIEW_GUARD,caseId:state.caseId,phone:event.phone,line:event.line,sourceId:event.id,at:event.at,reason,factsHash:fingerprint,replyHash:hash(reply),...(questionAspectKeys.length?{questionAspectScope:aspectScope,questionAspectAt:previousAspects.length?prior.questionAspectAt:event.at,questionAspectKeys}:{})};

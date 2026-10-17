@@ -1,5 +1,13 @@
 # Registro propio de servicios nuevos de María
 
+## Comprobación nativa y cierre del candidato — 17/10/2026
+
+Runtime **4077779 DONE 2 s** y Backend **a608cb0 DONE 3 m 38 s** comprobados. En WhatsApp de Sandra, cuatro entradas nuevas comprobaron cotización, aceptación con nombre/dirección, petición únicamente del horario faltante, resumen a las 10 a. m. y «Sí, esos datos están correctos» sin recotizar; las cuatro respuestas fueron READ exactas (chief-readonly/run-2026-10-17T19-17-48-545Z). Es simulación Engine, no nueva venta ni escritura ordinaria; Luna está excluida de ese chat de ensayo.
+
+Otro ensayo nativo encontró lenguaje redundante al recibir datos de garantía y ausencia de respuesta empática ante una queja. Este candidato cambia el reconocimiento a «Gracias por la información», acorta la respuesta de costo/fecha pendientes y reconoce la frustración del mismo caso sin prometer gratuidad, garantía o visita. Conserva pregunta/fuentes/hold; las amenazas y casos ajenos mantienen revisión. **2813/2813 pruebas locales**, cero omisiones, en full-runtime-calendar-test-and-empathy-release.txt. Su instalación y repetición nativa de empatía aún pendientes al preparar el commit.
+
+Se preparó el espejo PRUEBA PROGRAMADO, horario exacto, técnico/hora final nulos y recibo comercial PENDIENTE con cuatro campos nulos. Backend **44ec59a** publicado, instalación pendiente de comprobar. El permiso temporal anterior venció 18:10:49Z: no se generó ni activó otro. Hace falta comprobación nativa de creación/lectura/retiro con autorización temporal nueva. La recepción pública sigue OFF, sólo Sandra; reapertura azul ya autorizada después de gates, con corte prospectivo propio y sin liberar atención humana, roja o preventivo. SAVED comercial histórico=1.
+
 ## Agenda exacta del cliente en preparación — 17/10/2026
 
 La directriz humana exige guardar el servicio en la fecha/hora que pide el cliente, sin depender de asignar técnico. Se preparó `own-confirmed-client-time-without-technician-v1`: fuente nativa posterior al corte, precio propio aceptado, datos completos, resumen v4 entregado y nueva confirmación. El registro nuevo será PROGRAMADO, técnico/hora final nulos, sin inventar duración; confirmación comercial y horario solicitado conservan evidencia propia. Por defecto OFF, sin modificar credenciales, vencimiento, recibos históricos ni órdenes ajenas. No declarar activación hasta migración/instalación y readback.

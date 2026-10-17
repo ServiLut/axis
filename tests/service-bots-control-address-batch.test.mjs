@@ -38,7 +38,7 @@ test('control continuation saves literal facts with one question, without restar
     assert.equal(state.slots.service,'cucarachas y hormigas');assert.equal(state.slots.site,'apartamento');
     assert.equal(state.requestedControlReview.sourceId,first.id);
     const reply=f.store.db.prepare('SELECT * FROM outbox WHERE id=?').get(data.id+':reply'),text=f.store.open(reply.body);
-    assert.equal(reply.internal,0);assert.match(text,/Recibí .*dirección/);assert.match(text,/Tu solicitud de control sigue pendiente de revisión/);assert.match(text,/Aún no tengo confirmadas las condiciones ni el horario/);assert.doesNotMatch(text,/\$|gratis|sin costo|ya (?:quedó|está).*confirmad|nueva cotización/i);
+    assert.equal(reply.internal,0);assert.match(text,/Gracias por la información/);assert.match(text,/Tu solicitud de control sigue pendiente de revisión/);assert.match(text,/Aún no tengo confirmadas las condiciones ni el horario/);assert.doesNotMatch(text,/\$|gratis|sin costo|ya (?:quedó|está).*confirmad|nueva cotización/i);
     assert.equal(state.pendingReviewReply.sourceId,data.id);assert.equal(f.store.open(f.store.db.prepare('SELECT body FROM questions').get().body).source,first.id);assert.equal(f.store.open(f.store.db.prepare('SELECT body FROM events WHERE id=?').get(data.id).body).text,address+' Hora 10.30 am');
     assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM outbox WHERE internal=0').get().n,2);
     assert.equal(f.store.db.prepare("SELECT COUNT(*) n FROM audit WHERE action='REVIEWED_PRICE_SELECTED'").get().n,0);

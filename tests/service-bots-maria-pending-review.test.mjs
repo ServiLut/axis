@@ -89,7 +89,7 @@ test('pending quotation, documents, arrival, guarantee and schedule have precise
 
 test('literal supplied form information is recognized without echoing customer names, address or number',()=>{
  const result=reply(fixture('Nombre: Persona Ejemplo\nDirección: Calle 30 # 40-50\nTeléfono: 3000000000'));
- assert.ok(result);assert.match(result.reply,/Recibí los datos de nombre, dirección y contacto/);assert.match(result.reply,/sigue pendiente/);
+ assert.ok(result);assert.match(result.reply,/Gracias por la información/);assert.match(result.reply,/sigue pendiente/);
  assert.doesNotMatch(result.reply,/Persona Ejemplo|Calle 30|3000000000/);
 });
 

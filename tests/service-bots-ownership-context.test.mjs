@@ -478,7 +478,7 @@ test('neighborhood quotation facts request the municipality before a single quot
     assert.equal(f.s.conversation(answer.phone).state.intakeSources.location.sourceId,municipality.id);
     await f.process({id:'SAMEQUOTEFACTS',at:Date.now()+3,text:'Un apartamento de 66 m²'});
     assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,1);
-    const acknowledged=f.s.db.prepare('SELECT * FROM outbox WHERE id=?').get('SAMEQUOTEFACTS:reply');assert.ok(acknowledged);assert.equal(acknowledged.internal,0);assert.match(f.s.open(acknowledged.body),/Recibí .*tamaño del inmueble/);assert.match(f.s.open(acknowledged.body),/Aún no tengo un precio confirmado/);assert.doesNotMatch(f.s.open(acknowledged.body),/\$|agendad|reservad|garantiz/i);
+    const acknowledged=f.s.db.prepare('SELECT * FROM outbox WHERE id=?').get('SAMEQUOTEFACTS:reply');assert.ok(acknowledged);assert.equal(acknowledged.internal,0);assert.match(f.s.open(acknowledged.body),/Gracias por la información/);assert.match(f.s.open(acknowledged.body),/Aún no tengo un precio confirmado/);assert.doesNotMatch(f.s.open(acknowledged.body),/\$|agendad|reservad|garantiz/i);
   }finally{f.s.close();}
 });
 
