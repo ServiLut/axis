@@ -23,15 +23,27 @@ function fixture(){
 }
 const isolated=fn=>async()=>{const f=fixture();try{await fn(f);}finally{f.s.close();}};
 
-test('size correction removes only the obsolete exact same-source AI detail copy and preserves original history',isolated(async f=>{
+test('new size-only AI detail is rejected while correction still removes a proven historical same-source duplicate without changing history',isolated(async f=>{
  await f.turn('Hola, quiero cotizar para un apartamento.');
  const old=await f.turn('Tiene dos habitaciones y queda en Itagüí.',{detail:'dos habitaciones'});
- assert.equal(old.state.slots.detail,'dos habitaciones');assert.equal(old.state.intakeSources.detail.sourceId,old.e.id);assert.equal(old.state.intakeSources.rooms.sourceId,old.e.id);
- await f.turn('Barrio Santa María.');await f.turn('Cucarachas');
+ assert.equal(old.state.slots.detail,undefined);assert.equal(old.state.intakeSources.detail,undefined);assert.equal(old.state.intakeSources.rooms.sourceId,old.e.id);
+ const originalBody=f.s.db.prepare('SELECT body FROM events WHERE id=?').get(old.e.id).body;
+ // Explicitly model state persisted by the earlier runtime. The current AI
+ // admission must not be forced to recreate the defect merely to test cleanup.
+ const historical=structuredClone(old.state);historical.slots.detail='dos habitaciones';historical.intakeSources.detail={...historical.intakeSources.rooms,context:'own-ai-literal-fragment',guard:CONVERSATIONAL_AI_GUARD};f.s.saveConversation(f.phone,historical);
+ const continuation=await f.turn('Barrio Santa María.');assert.equal(continuation.state.slots.detail,'dos habitaciones');assert.equal(continuation.state.intakeSources.detail.sourceId,old.e.id);await f.turn('Cucarachas');
  const before=f.s.conversation(f.phone).state.slots.locationDetails,corrected=await f.turn('Me equivoqué: es una habitación, no dos.');
  assert.equal(corrected.state.slots.rooms,'una habitación');assert.equal(corrected.state.slots.detail,undefined);assert.equal(corrected.state.intakeSources.detail,undefined);assert.equal(corrected.state.quotedPrice.priceCop,99000);assert.equal(corrected.state.quotedPrice.slots.detail,undefined);
- assert.equal(corrected.state.slots.locationDetails,before);assert.equal(f.s.open(f.s.db.prepare('SELECT body FROM events WHERE id=?').get(old.e.id).body).text,old.e.text);
+ assert.equal(corrected.state.slots.locationDetails,before);assert.equal(f.s.db.prepare('SELECT body FROM events WHERE id=?').get(old.e.id).body,originalBody);assert.equal(f.s.open(originalBody).text,old.e.text);
  const projection=currentMariaLocationProjection(f.s,corrected.state,corrected.e);assert.equal(projection.review,false);assert.equal(projection.applied,true);assert.doesNotMatch(projection.locationDetails,/dos habitaciones/);assert.match(projection.locationDetails,/Barrio Santa María/);assert.equal(corrected.state.slots.locationDetails,before);
+}));
+
+test('a new genuine pest detail with additional meaning keeps its exact native source across a room correction',isolated(async f=>{
+ const detail='dos habitaciones con focos en la cocina',first=await f.turn('Tengo cucarachas en un apartamento de dos habitaciones con focos en la cocina en Itagüí.',{detail});
+ assert.equal(first.state.slots.detail,detail);assert.equal(first.state.intakeSources.detail.sourceId,first.e.id);
+ const originalBody=f.s.db.prepare('SELECT body FROM events WHERE id=?').get(first.e.id).body,correction=await f.turn('Corrijo: una habitación.');
+ assert.equal(correction.state.slots.rooms,'una habitación');assert.equal(correction.state.slots.detail,detail);assert.equal(correction.state.intakeSources.detail.sourceId,first.e.id);assert.equal(correction.state.intakeSources.detail.at,first.e.at);
+ assert.equal(f.s.db.prepare('SELECT body FROM events WHERE id=?').get(first.e.id).body,originalBody);assert.equal(f.s.open(originalBody).text,first.e.text);
 }));
 
 for(const [detail,sameSource] of [['dos habitaciones con focos en la cocina',true],['dos habitaciones',false]])test('correction preserves additional or differently sourced details: '+detail+' / '+sameSource,isolated(async f=>{

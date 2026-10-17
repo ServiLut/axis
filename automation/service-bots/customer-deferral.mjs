@@ -7,9 +7,18 @@ function direct(event){return event?.kind==='text'&&event.fromMe===false&&!event
 
 /** A direct deferral supplies neither acceptance nor a request to be nudged. */
 export function customerDeferralRequested(event){
- if(event?.kind!=='text'||event.fromMe!==false||event.forwarded||event.quotedId||typeof event.text!=='string'||event.text.length>240||/[?¿"“”«»<>]|https?:|www\./i.test(event.text))return false;
+ if(!direct(event)||event.text.length>240)return false;
  const text=normalize(event.text).replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim();
- return /^(?:(?:muchas gracias|mil gracias|gracias) )?(?:(?:por ahora|por el momento|de momento) )?(?:lo voy a pensar|voy a pensarlo|lo pensare|dejame pensarlo|prefiero pensarlo|quiero pensarlo)(?: (?:y )?(?:te aviso|luego te aviso|despues te aviso|muchas gracias|gracias)){0,2}$/.test(text);
+ const courtesy='(?:(?:muchas gracias|mil gracias|gracias) )?';
+ // Interest is not acceptance. Keep this finite first-person grammar separate
+ // from no-contact, cancellation, reported speech and personal-priority turns.
+ const interest='(?:(?:(?:si )?me interesa|me sigue interesando|estoy interesad[oa])(?: pero)? )?';
+ const pause='(?:(?:por ahora|por el momento|de momento) )?';
+ const consider='(?:lo voy a pensar|voy a pensarlo|lo pensare|dejame pensarlo|prefiero pensarlo|quiero pensarlo|necesito pensarlo|lo voy a consultar|voy a consultarlo|lo consultare|dejame consultarlo|prefiero consultarlo|quiero consultarlo|necesito consultarlo)';
+ const modifier='(?: (?:con calma|un poco|bien|primero|antes|con mi (?:pareja|espos[oa]|familia))){0,2}';
+ const notice='(?:(?:luego|despues|mas tarde) (?:te|les|le|los) aviso|(?:te|les|le|los) aviso(?: (?:luego|despues|mas tarde))?)';
+ const ending='(?: (?:y )?(?:'+notice+'|muchas gracias|gracias)){0,2}';
+ return new RegExp('^'+courtesy+interest+pause+'(?:'+consider+modifier+ending+'|'+notice+')$').test(text);
 }
 
 /** Literal facts are supplied by the existing source-scoped intake parser. */
@@ -24,7 +33,7 @@ export function customerDeferralResumeEvidence(event,literal={}){
  return fields.length?{kind:'literal-intake',sourceId:event.id,at:event.at,line:event.line,textHash:textHash(event.text),fields:Object.fromEntries(fields)}:null;
 }
 
-export function customerDeferralContinues(event){return direct(event)&&/\b(?:(?:todavia|aun) no se si (?:quiero|voy a|debo)|lo voy a pensar|voy a pensarlo|prefiero pensarlo|lo pensare)\b/.test(normalize(event.text));}
+export function customerDeferralContinues(event){return customerDeferralRequested(event)||direct(event)&&/\b(?:(?:todavia|aun) no se si (?:quiero|voy a|debo)|lo voy a pensar|voy a pensarlo|prefiero pensarlo|lo pensare)\b/.test(normalize(event.text));}
 /** A short acknowledgement after postponement is not a request to resume. */
 export function customerDeferralAcknowledgement(event){
  if(!direct(event))return false;

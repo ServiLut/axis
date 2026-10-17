@@ -1,0 +1,190 @@
+{
+  "kind": "CAPTURED_OWN_LUNA_SYNTHETIC_DEFERRAL_REGRESSION",
+  "batchId": "047fb0a1-6b46-49dd-9a9c-8fb5793e1b42",
+  "capturedAt": "2026-10-17T18:49:47.547Z",
+  "model": "gpt-6-luna",
+  "sourceSha256": "02d1387bb2671c826a45f8f28e888f26465cf50a4c81e5343150408ce217d339",
+  "realCallsWhenReplayed": 0,
+  "answers": [
+    {
+      "schema": "maria_literal_slots",
+      "customerText": "Buenas tardes, quiero cotizar cucarachas en un apartamento de dos habitaciones en Itagüí, barrio Santa María.",
+      "structuredOutput": {
+        "slots": {
+          "service": "cucarachas",
+          "location": "Itagüí",
+          "site": "apartamento",
+          "detail": "dos habitaciones",
+          "preference": "barrio Santa María"
+        },
+        "intent": {
+          "kind": "new-service",
+          "evidence": "quiero cotizar"
+        }
+      },
+      "http": 200,
+      "status": "completed",
+      "responseId": "resp_02a23b0aefacb827016ad3c3391cc487d2a31d9ed0e53c5749",
+      "usage": {
+        "input_tokens": 1242,
+        "input_tokens_details": {
+          "cache_write_tokens": 1239,
+          "cached_tokens": 0
+        },
+        "output_tokens": 61,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 1303
+      }
+    },
+    {
+      "schema": "maria_contextual_reply",
+      "customerText": "Buenas tardes, quiero cotizar cucarachas en un apartamento de dos habitaciones en Itagüí, barrio Santa María.",
+      "structuredOutput": {
+        "opening": "none",
+        "acknowledgements": [],
+        "nextStep": "step:0",
+        "factualAnchors": [
+          "runtime-next-step",
+          "runtime-quotation-price-and-scope"
+        ]
+      },
+      "http": 200,
+      "status": "completed",
+      "responseId": "resp_0b7e5c6bd3eae763016ad3c33afd3c87d2836cd99e732fb23e",
+      "usage": {
+        "input_tokens": 1457,
+        "input_tokens_details": {
+          "cache_write_tokens": 1454,
+          "cached_tokens": 0
+        },
+        "output_tokens": 47,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 1504
+      }
+    },
+    {
+      "schema": "maria_literal_slots",
+      "customerText": "Me parece costoso. ¿Hay alguna alternativa para mi presupuesto?",
+      "structuredOutput": {
+        "slots": {
+          "service": null,
+          "location": null,
+          "site": null,
+          "detail": null,
+          "preference": null
+        },
+        "intent": {
+          "kind": "general-question",
+          "evidence": "¿Hay alguna alternativa para mi presupuesto?"
+        }
+      },
+      "http": 200,
+      "status": "completed",
+      "responseId": "resp_0001a2496848c6ea016ad3c33ca32c87d28f2fdfaedf3d1d18",
+      "usage": {
+        "input_tokens": 1473,
+        "input_tokens_details": {
+          "cache_write_tokens": 1470,
+          "cached_tokens": 0
+        },
+        "output_tokens": 53,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 1526
+      }
+    },
+    {
+      "schema": "maria_contextual_reply",
+      "customerText": "Me parece costoso. ¿Hay alguna alternativa para mi presupuesto?",
+      "structuredOutput": {
+        "opening": "none",
+        "acknowledgements": [],
+        "nextStep": "step:0",
+        "factualAnchors": [
+          "runtime-next-step",
+          "runtime-quotation-price-and-scope"
+        ]
+      },
+      "http": 200,
+      "status": "completed",
+      "responseId": "resp_025b73d0265ee83a016ad3c33e208087d2835cc9b38b84060b",
+      "usage": {
+        "input_tokens": 1567,
+        "input_tokens_details": {
+          "cache_write_tokens": 1564,
+          "cached_tokens": 0
+        },
+        "output_tokens": 47,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 1614
+      }
+    },
+    {
+      "schema": "maria_literal_slots",
+      "customerText": "Me interesa, pero prefiero pensarlo con calma y después les aviso.",
+      "structuredOutput": {
+        "slots": {
+          "service": null,
+          "location": null,
+          "site": null,
+          "detail": null,
+          "preference": "prefiero pensarlo con calma y después les aviso"
+        },
+        "intent": {
+          "kind": "ambiguous",
+          "evidence": "prefiero pensarlo con calma y después les aviso"
+        }
+      },
+      "http": 200,
+      "status": "completed",
+      "responseId": "resp_043422a19ae382d6016ad3c33f740487d2ba997de9e7da1e37",
+      "usage": {
+        "input_tokens": 1599,
+        "input_tokens_details": {
+          "cache_write_tokens": 1596,
+          "cached_tokens": 0
+        },
+        "output_tokens": 66,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 1665
+      }
+    },
+    {
+      "schema": "maria_contextual_reply",
+      "customerText": "Me interesa, pero prefiero pensarlo con calma y después les aviso.",
+      "structuredOutput": {
+        "opening": "none",
+        "acknowledgements": [],
+        "nextStep": "step:0",
+        "factualAnchors": [
+          "runtime-next-step",
+          "runtime-quotation-price-and-scope"
+        ]
+      },
+      "http": 200,
+      "status": "completed",
+      "responseId": "resp_0d4fb2a43a9efe68016ad3c341486487d29da01342c84550bd",
+      "usage": {
+        "input_tokens": 1694,
+        "input_tokens_details": {
+          "cache_write_tokens": 1691,
+          "cached_tokens": 0
+        },
+        "output_tokens": 47,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 1741
+      }
+    }
+  ]
+}

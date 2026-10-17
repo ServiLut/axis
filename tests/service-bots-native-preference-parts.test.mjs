@@ -47,6 +47,11 @@ for(const [change,wanted] of [['A las 11 am','11:00'],['El domingo 25 de octubre
  assert.equal(change.startsWith('A las')?p.preferenceParts.time.id:p.preferenceParts.date.id,correction.id);
  assert.equal(change.startsWith('A las')?p.preferenceParts.date.id:p.preferenceParts.time.id,change.startsWith('A las')?prior.date.id:prior.time.id);
 }));
+for(const phrase of ['Sí, esos datos están correctos.','Sí, todos los datos están correctos','Confirmo que esos datos son correctos'])test('natural data agreement confirms only the revised delivered v4 summary with separate native day and corrected 2pm: '+phrase,t=>using(t,async f=>{
+ const prior=await parts(f),oldMid=f.row(prior.time).mid,corrected=await f.say('A las dos de la tarde');assert.match(f.reply(corrected),/2:00 p\. m\./);assert.equal(f.entry(corrected),undefined);
+ const final=await f.say(phrase),entry=f.entry(final);assert.ok(entry);const p=entry.payload;assert.equal(p.summaryConfirmation.mid,f.row(corrected).mid);assert.notEqual(p.summaryConfirmation.mid,oldMid);assert.equal(p.sources.acceptance.text,phrase);assert.equal(p.preferenceParts.date.id,prior.date.id);assert.equal(p.preferenceParts.time.id,corrected.id);assert.equal(p.slots.preference,'24/10/2026 a las 2:00 p. m.');
+ let writes=0;await drainProgramRegistrations(f.store,f.config,f.transport(async(_url,opts)=>{writes++;return {ok:true,json:async()=>receipt(f,JSON.parse(opts.body))};}));assert.equal(writes,1);assert.equal(f.entry(final).status,'SAVED');assert.equal(f.entry(final).receipt.schedule.startAt,'2026-10-24T19:00:00.000Z');assert.equal(f.entry(final).receipt.schedule.technicianId,null);
+}));
 for(const change of ['A las 11 am','El domingo 25 de octubre'])test('single-source v1 can receive an explicit one-field correction with both originals retained: '+change,t=>using(t,async f=>{
  await facts(f);const complete=await f.say('El sábado 24 de octubre a las 10 am');assert.match(f.reply(complete),/¿Confirmas/);
  const correction=await f.say(change);assert.match(f.reply(correction),/¿Confirmas/);

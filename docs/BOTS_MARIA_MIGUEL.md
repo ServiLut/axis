@@ -1,6 +1,14 @@
 # María Ángel y Miguel Ángel
 
-## Correcciones naturales y reapertura prospectiva preparada — 17/10/2026 18:49Z
+## Correcciones de Luna y confirmación natural preparadas — 17/10/2026
+
+La evaluación real aislada usó **12 llamadas Luna completed/200**, 17.421 tokens de entrada/632 de salida, sin WhatsApp ni escrituras reales. Conservó el fallo de posposición: «prefiero pensarlo con calma y después les aviso» recotizaba; otra extracción confundió barrio con horario. Se corrigieron guardias locales y se reprodujeron las salidas exactas guardadas sin nuevas llamadas. Barrio/tamaño conservan sus fuentes y no se vuelven horario/falla. La posposición conserva cotización, no registra ni crea exclusión global. No afirmar entrenamiento de pesos o que el lote original aprobó todos los checks.
+
+Ensayo nativo con **b0a85f6 DONE 2 s**: aceptación con Me llamo/dirección pide sólo horario; día y hora separados se resumen; «mejor a las dos» invalida 10 a. m. y exige aclaración; 2 p. m. genera resumen nuevo. Ocho fuentes y respuestas exactas, una READ y siete DELIVERED, en `chief-readonly/run-2026-10-17T19-00-18-711Z`. La frase «Sí, esos datos están correctos» quedó observada sin respuesta y se corrigió después como confirmación **sólo del resumen propio entregado**, con espejo Backend; no concede aceptación inicial de precio. Nuevas correcciones locales: **2787/2787**, cero omisiones, `full-runtime-luna-native-confirmation-final.txt`; su instalación/ensayo nativo siguen pendientes al preparar este commit.
+
+Backend/Web **97b8de9 DONE 2 m 52 s / 1 m 12 s**, respectivamente. Perfil propio de horario sin técnico activado con corte **18:24:30Z** y vencimiento original 07/nov; setup/estado autenticado **201 19:02:40Z**, actor/empresa/tenant exactos, un recibo ordinario histórico. Se cerró el flag PRUEBA vencido sin renovar token/tiempos. La recepción pública del runtime continúa **OFF**, sólo Sandra, y la nueva evaluación no prueba tráfico de clientes ni una nueva alta comercial. Fuentes de estructura, lectura y lote bajo `.tmp/maria-confirmation-check-20261017`.
+
+## Correcciones naturales y reapertura prospectiva preparada — 17/10/2026
 
 La atención pública continúa pausada, sólo Sandra. La reapertura sigue autorizada después de los gates: no libera holds, roja ni campañas. Candidato local verificado **2710/2710**, cero omisiones, en `.tmp/maria-confirmation-check-20261017/full-runtime-prospective-final-gate.txt`. Corrige aceptación de precio acompañada de nombre/dirección, hora coloquial y corrección ambigua que invalida el horario anterior; aclara costo/visita pendientes en garantías sin prometer gratuidad. Las pruebas nativas de esas últimas correcciones quedan pendientes de la instalación de este candidato.
 

@@ -177,7 +177,7 @@ export function confirmsOrdinarySummaryData(text){
  if(typeof text!=='string'||text.length>200||/[?¿]|https?:/i.test(text))return false;
  const raw=text.trim(),affirmative=raw.match(/^(?:sí(?=[\s,.!;])|si\s*[,.;!])[\s,.!;]*/iu);
  const t=normalize(affirmative?raw.slice(affirmative[0].length):raw).replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim();
- return /^(?:confirmo que )?(?:(?:todos )?(?:los|mis)) datos (?:son correctos|estan correctos|estan bien)(?: (?:gracias|muchas gracias|por favor))*$/.test(t);
+ return /^(?:confirmo que )?(?:(?:todos )?(?:los|mis|esos|estos)) datos (?:son correctos|estan correctos|estan bien)(?: (?:gracias|muchas gracias|por favor))*$/.test(t);
 }
 const confirms=text=>acceptsOrdinaryQuotation(text)||confirmsOrdinarySummaryData(text);
 function legacyOrdinarySummaryText(preview){

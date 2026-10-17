@@ -9,7 +9,7 @@ import {adviserReply} from './adviser-tone.mjs';
 import {literalIntakeTiming} from './intake-timing.mjs';
 import {literalGreetingText,literalGreetingReplyProof} from './literal-reception.mjs';
 import {CONVERSATIONAL_AI_GUARD,MIGUEL_CONVERSATIONAL_AI_GUARD,conversationalAiGuard} from './ai-settings.mjs';
-import {ownIntent} from './maria-understanding.mjs';
+import {ownIntent,mariaLiteralSlotAllowed} from './maria-understanding.mjs';
 import {ownMiguelIntent,miguelLiteralSlotAllowed} from './miguel-understanding.mjs';
 import {literalPaintingRequest} from './technical-scope.mjs';
 import {afterServiceKind,afterServiceRequest,afterServiceDecision,explicitNewService,mariaLiteralServiceContext,literalOwnAfterServiceRequest,MARIA_LITERAL_SERVICE_CONTEXT_GUARD,mariaIncidentalPetMention} from './after-service.mjs';
@@ -159,7 +159,7 @@ function ownSavedPendingCustomerTurn(s,c,state,e){
 
 function rememberIntakeTiming(state,event,company){
  if(company!=='fumigacion'||state.programIntake||state.requestedAfterServiceReview||state.requestedProductInquiry||state.requestedControlReview||state.awaitingHumanReview)return null;
- const timing=literalIntakeTiming(company,event);if(!timing)return null;
+ const timing=literalIntakeTiming(company,event);if(!timing||timing.preference&&!mariaLiteralSlotAllowed('preference',timing.preference,event.text,event.at))return null;
  const key=timing.preference?'preference':'urgency';
  state.slots={...state.slots,[key]:timing[key]};
  state.intakeSources={...state.intakeSources,[key]:timing.source};
@@ -441,14 +441,14 @@ function rememberFields(state,e,company,fields=literalFields(state,e,company)){
     state.intakeSources[field]={sourceId:e.id,at:e.at,...(field==='service'?{sources:[...new Map(all.map(s=>[s.sourceId,s])).values()]}:{})};
   }
 }
-export function parseUnderstanding(value,customerText,company='fumigacion') {
+export function parseUnderstanding(value,customerText,company='fumigacion',at=Date.now()) {
   if(!value||typeof value!=='object'||Array.isArray(value))return {};
   customerText=textWithoutLinks(company==='fumigacion'?literalIntakeTextWithoutRegistrationFields(customerText):customerText);
   const fields=['service','location','site','detail','preference'];const result={};
   for(const key of fields) {
     const v=value.slots?.[key];
     // Extract only literal spans. An inferred price, schedule, diagnosis or instruction has no authority.
-    if(typeof v==='string'&&v.length>=2&&v.length<=300&&!/[\[\]]/.test(v)&&normalize(customerText).includes(normalize(v)))result[key]=v;
+    if(typeof v==='string'&&v.length>=2&&v.length<=300&&!/[\[\]]/.test(v)&&normalize(customerText).includes(normalize(v))&&(company!=='fumigacion'||mariaLiteralSlotAllowed(key,v,customerText,at)))result[key]=v;
   }
   return result;
 }
@@ -626,7 +626,7 @@ export function customerDecision(company,state,e,analysis={}) {
   const literalText=textWithoutLinks(company==='fumigacion'?literalIntakeTextWithoutRegistrationFields(e.text):e.text).trim(),t=normalize(literalText);
   const literal=literalFields(state,e,company),existing={...state.slots,...literal};
   if(company==='fumigacion'&&!literalIntakeTurn(e)){delete literal.dimensions;delete existing.dimensions;if(state.slots.dimensions)existing.dimensions=state.slots.dimensions;}
-  let understood=parseUnderstanding(analysis,e.text,company);
+  let understood=parseUnderstanding(analysis,e.text,company,e.at);
   const directOwnAi=[CONVERSATIONAL_AI_GUARD,MIGUEL_CONVERSATIONAL_AI_GUARD].includes(analysis?.guard);
   if(directOwnAi){
     // Direct AI may fill a missing literal field, never replace native facts.
@@ -739,11 +739,11 @@ export function customerDecision(company,state,e,analysis={}) {
   if(company==='fumigacion'&&specialQuotation(literalText,next.slots))return {state:next,reviewTopic:'special-quotation',reviewConditions:{kind:'special-property'},review:'Cotización especial de edificio, unidad, varias propiedades o zonas comunes; necesita alcance y precio propios, sin aplicar la tarifa de una vivienda.',reviewQuestion:'¿Qué alcance y cotización corresponden a esta solicitud especial?',reply:'Gracias. La cotización de este inmueble requiere confirmar su alcance y precio.'};
   if(company==='fumigacion'&&termiteFurnitureMention(e))return {state:{...state,slots:{...state.slots},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)},literalServiceContext:true,reviewTopic:'customer-question',reviewConditions:{kind:'termite-furniture-scope-unconfirmed',directCustomerReport:!e.forwarded&&!e.quotedId},review:'El mensaje menciona comején y muebles, pero no permite afirmar un alcance actual de tratamiento. Hace falta aclarar a qué solicitud se refiere antes de cotizar.',reviewQuestion:'¿Qué solicitud y alcance actuales comprobados corresponden a este mensaje?',reply:'Para responderte bien, necesito aclarar qué deseas cotizar en este caso.'};
   if(company==='fumigacion'&&normalize(next.slots.service).includes('avispas'))return {state:next,reviewTopic:'special-quotation',reviewConditions:{kind:'wasp-inspection'},review:'La cotización de avispas depende del tamaño y la altura del panal; requiere inspección. No hay una tarifa automática aprobada.',reviewQuestion:'¿Qué inspección y cotización corresponden al tamaño y la altura de este panal?',reply:'Para las avispas, la cotización depende del tamaño y la altura del panal y requiere inspección.'};
-  if(!next.slots.detail&&state.asked?.at(-1)==='detail'&&!/[?¿]/.test(literalText)&&t.length>3&&!(company==='servicio-tecnico'&&technicalIntakeLiteralCorrection(e.text)))next.slots.detail=literalText.slice(0,300);
-  if(!next.slots.preference&&state.asked?.includes('preference')&&/\b(hoy|mañana|manana|lunes|martes|miercoles|jueves|viernes|sabado|domingo|\d{1,2}[/:]\d{1,2}|tarde|mañana|noche)\b/.test(t))next.slots.preference=literalText.slice(0,300);
+  if(!next.slots.detail&&state.asked?.at(-1)==='detail'&&!/[?¿]/.test(literalText)&&t.length>3&&!(company==='servicio-tecnico'&&technicalIntakeLiteralCorrection(e.text))&&(company!=='fumigacion'||mariaLiteralSlotAllowed('detail',literalText,e.text,e.at)))next.slots.detail=literalText.slice(0,300);
+  if(!next.slots.preference&&state.asked?.includes('preference')&&/\b(hoy|mañana|manana|lunes|martes|miercoles|jueves|viernes|sabado|domingo|\d{1,2}[/:]\d{1,2}|tarde|mañana|noche)\b/.test(t)&&(company!=='fumigacion'||mariaLiteralSlotAllowed('preference',literalText,e.text,e.at)))next.slots.preference=literalText.slice(0,300);
   if(ordinaryAvailability&&!intakeTiming?.preference){
     const preference=literalText.match(/\b(?:hoy|mañana|manana|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\b[^.!?]*/i)?.[0];
-    if(preference){next.slots.preference=preference;next.intakeSources={...next.intakeSources,preference:{sourceId:e.id,at:e.at,context:'literal-request-not-confirmed-availability'}};}
+    if(preference&&mariaLiteralSlotAllowed('preference',preference,e.text,e.at)){next.slots.preference=preference;next.intakeSources={...next.intakeSources,preference:{sourceId:e.id,at:e.at,context:'literal-request-not-confirmed-availability'}};}
   }
   const mattressService=company==='fumigacion'&&normalize(next.slots.service).includes('chinches');
   const dimensions=company==='fumigacion'&&literalIntakeDimensions(next.slots.dimensions);

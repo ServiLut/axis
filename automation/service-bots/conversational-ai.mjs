@@ -5,7 +5,7 @@ import {conversationalAiGuard,ownAiScope,ownAiScopeMatches} from './ai-settings.
 import {mariaOrdinaryIntakeReply} from './adviser-tone.mjs';
 import {mariaModelKnowledge} from './maria-knowledge.mjs';
 import {pendingOrdinaryDataInformationTurn} from './maria-program.mjs';
-import {MARIA_UNDERSTANDING_GUARD,MARIA_UNDERSTANDING_VERSION,MARIA_UNDERSTANDING_INSTRUCTIONS,MARIA_INTENTS,MARIA_REVIEWED_EXAMPLES,MARIA_EVALUATION_CASES,validatedIntent} from './maria-understanding.mjs';
+import {MARIA_UNDERSTANDING_GUARD,MARIA_UNDERSTANDING_VERSION,MARIA_UNDERSTANDING_INSTRUCTIONS,MARIA_INTENTS,MARIA_REVIEWED_EXAMPLES,MARIA_EVALUATION_CASES,validatedIntent,mariaLiteralSlotAllowed} from './maria-understanding.mjs';
 import {MIGUEL_UNDERSTANDING_GUARD,MIGUEL_UNDERSTANDING_VERSION,MIGUEL_UNDERSTANDING_INSTRUCTIONS,MIGUEL_INTENTS,MIGUEL_REVIEWED_EXAMPLES,MIGUEL_EVALUATION_CASES,validatedMiguelIntent,miguelLiteralSlotAllowed,miguelModelKnowledge} from './miguel-understanding.mjs';
 const endpoint='https://api.openai.com/v1/responses';
 const fields=['service','location','site','detail','preference'];
@@ -151,7 +151,7 @@ export async function understandOwnCustomer(config,store,fetcher,event,context){
  const slots={};
  for(const field of fields){
   const value=result?.slots?.[field];
-  if(typeof value==='string'&&value.length>=2&&value.length<=200&&normalize(value)&&normalize(text).includes(normalize(value))&&normalize(event.text).includes(normalize(value))&&(config.company!=='servicio-tecnico'||miguelLiteralSlotAllowed(field,value,event.text)))slots[field]=value;
+  if(typeof value==='string'&&value.length>=2&&value.length<=200&&normalize(value)&&normalize(text).includes(normalize(value))&&normalize(event.text).includes(normalize(value))&&(config.company!=='servicio-tecnico'||miguelLiteralSlotAllowed(field,value,event.text))&&(config.company!=='fumigacion'||mariaLiteralSlotAllowed(field,value,event.text,event.at)))slots[field]=value;
  }
  return {company:p.company,eventId:event.id,guard:conversationalAiGuard(config.company),semanticGuard:p.guard,slots,intent:p.validate(result.intent,text)};
 }
