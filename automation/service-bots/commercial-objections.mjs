@@ -7,13 +7,28 @@ export const COMMERCIAL_OBJECTION_GUARD='own-prospective-refusal-optout-and-deli
 const hash=value=>createHash('sha256').update(value).digest('hex');
 const sourceHash=e=>hash(JSON.stringify([e.id,e.phone,e.line,e.at,e.kind,e.fromMe,Boolean(e.forwarded),e.quotedId??null,e.text]));
 const optoutKey=e=>'commercial-optout:fumigacion:'+hash(e.phone+':'+e.line);
+// Read compatibility only. Refining the current grammar must never revoke a
+// source-verified durable exclusion that the previous v1 guard already stored.
+const legacyNoContact=t=>/\b(?:no (?:me )?(?:(?:vuelvan|vuelva|vuelvas) a )?(?:escriban|escriba|escribas|escribir|contacten|contacte|contactes|contactar|llamen|llame|llames|llamar)(?: (?:mas|nuevamente))?|(?:dejen|deja|deje) de (?:escribirme|contactarme|llamarme)|no quiero (?:que me (?:escriban|contacten|llamen)|recibir (?:mas )?(?:mensajes|llamadas)))\b/.test(t);
 const relayed=/["'“”«»<>]|https?:|www\.|\b(?:dijo|dice|dicen|dijeron|segun|comento|pregunto|preguntan|mi (?:vecin[oa]|mama|papa|espos[oa]|amig[oa]|cliente)|un tercero|otra persona|(?:otro|un|el) cliente|otra empresa|otro proveedor|la competencia|(?:le|les) (?:parece|resulta|sale))\b/i;
 
 function directText(e){return e?.kind==='text'&&e.fromMe===false&&!e.forwarded&&!e.quotedId&&typeof e.text==='string'&&e.text.length<=1200&&!relayed.test(normalize(e.text));}
+function literalNoContact(e,t){
+ // A conditional, question or negated quotation is not a current instruction
+ // to stop contact. Keep an explicit accented affirmative separate from 'si'.
+ const framed=normalize(e.text.replace(/^\s*sí(?=[\s,.!;])(?:[\s,.!;])*/iu,''));
+ if(/[?¿]/.test(e.text)||/\b(?:si|cuando|a menos que|en caso de|tal vez|quizas)\b/.test(framed))return false;
+ const again='(?:(?:vuelvan|vuelva|vuelvas) a )?',verbs='(?:escriban|escriba|escribas|escribir|contacten|contacte|contactes|contactar|llamen|llame|llames|llamar)';
+ const match=new RegExp('\\b(?:no (?:me )?'+again+verbs+'(?: (?:mas|nuevamente))?|(?:dejen|deja|deje) de (?:escribirme|contactarme|llamarme)|no (?:quiero|deseo) (?:que me '+again+verbs+'|que (?:vuelvan|vuelva|vuelvas) a (?:escribirme|contactarme|llamarme)|(?:volver a )?recibir (?:mas )?(?:mensajes|llamadas)))\\b').exec(t);
+ if(!match)return false;
+ const prefix=t.slice(0,match.index).split(/[.!?;]/).at(-1).trim();
+ if(/\b(?:no quiero que|no deseo que|no dije que|no digo que|nunca dije que|no estoy diciendo que|no es que|no (?:les )?(?:pido|pedi) que)\s*$/.test(prefix))return false;
+ return true;
+}
 export function literalCommercialRefusal(e){
  if(!directText(e))return null;
  const t=normalize(e.text).replace(/\s+/g,' ').trim();
- const optout=/\b(?:no (?:me )?(?:(?:vuelvan|vuelva|vuelvas) a )?(?:escriban|escriba|escribas|escribir|contacten|contacte|contactes|contactar|llamen|llame|llames|llamar)(?: (?:mas|nuevamente))?|(?:dejen|deja|deje) de (?:escribirme|contactarme|llamarme)|no quiero (?:que me (?:escriban|contacten|llamen)|recibir (?:mas )?(?:mensajes|llamadas)))\b/.test(t);
+ const optout=literalNoContact(e,t);
  const refused=/\b(?:no (?:quiero|deseo|necesito|me interesa) (?:(?:tomar|contratar) )?(?:(?:el|este|ese|un) )?servicio|no (?:quiero|deseo) (?:continuar|seguir)(?: con (?:la |esta |esa |el |este |ese )?(?:cotizacion|solicitud|servicio))?|no voy a (?:continuar|contratar)|prefiero no (?:continuar|contratar))\b/.test(t)||/^(?:no[, ]+)?(?:muchas )?gracias[,!. ]*(?:por ahora no|no gracias)?[.! ]*$/.test(t)&&/^no\b/.test(t)||/^(?:no[, ]+)?(?:muchas )?gracias[,!. ]*(?:mejor no|lo dejo asi|prefiero no)[.! ]*$/.test(t);
  if(!optout&&!refused)return null;
  if(!optout&&/\b(?:si|a menos que|en caso de|tal vez|quizas)\b/.test(t))return null;
@@ -63,13 +78,14 @@ function prospectiveSource(store,config,e){
 function validMarker(store,marker,e){
  if(marker?.guard!==COMMERCIAL_OBJECTION_GUARD||marker.phone!==e.phone||marker.line!==e.line||marker.at>e.at||!marker.sourceId)return false;
  const row=store.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(marker.sourceId,e.phone,e.line);
- const source=row&&store.open(row.body),literal=source&&literalCommercialRefusal(source);
+ const source=row&&store.open(row.body),literal=source&&(literalCommercialRefusal(source)||(marker.kind==='no-contact'&&directText(source)&&legacyNoContact(normalize(source.text))?{kind:'no-contact'}:null));
  return Boolean(source&&literal&&source.at===marker.at&&sourceHash(source)===marker.sourceHash&&literal.kind===marker.kind);
 }
 
 /** Only the current native inbound source may create these prospective facts. */
-export function ownCommercialCustomerTurn(store,config,state,e,{newCase=false,personalPriority=false}={}){
+export function ownCommercialCustomerTurn(store,config,state,e,{newCase=false,personalPriority=false,noContactOnly=false}={}){
  if(!prospectiveSource(store,config,e))return null;
+ if(noContactOnly&&!literalCommercialRefusal(e)?.optout)return null;
  const saved=store.db.prepare('SELECT value FROM meta WHERE key=?').get(optoutKey(e));
  const durable=saved&&store.open(saved.value);
  if(validMarker(store,durable,e)&&durable.kind==='no-contact')return {kind:'optout-preserved',state:{...state,closed:true,doNotContact:true,contactDeclined:true,commercialRefusal:durable},reply:null};
@@ -80,13 +96,13 @@ export function ownCommercialCustomerTurn(store,config,state,e,{newCase=false,pe
   const next={...state,caseId:marker.caseId,closed:true,contactDeclined:true,commercialRefusal:marker,...(refusal.optout?{doNotContact:true}:{})};
   // Preserve a saved order's facts. Closing this conversation does not cancel
   // an order or create authority to alter a business record.
-  if(!state.programServiceId&&!state.serviceRegistered){
+  if(!noContactOnly&&!state.programServiceId&&!state.serviceRegistered){
    if(state.quotedPrice)next.quotedPrice={...state.quotedPrice,accepted:false};
    if(state.programIntake&&state.programIntake.stage!=='registered')next.programIntake={...state.programIntake,stage:'declined',preview:null};
   }
   if(refusal.optout)store.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(optoutKey(e),store.seal(marker));
   const decline=officeReceptionDeclineText({state:next,courtesy:true,reply:'Entendido, gracias por avisarme.'});
-  return {kind:refusal.kind,state:next,reply:refusal.optout?'Entendido. Respetaremos tu decisión de no recibir más mensajes.':decline};
+  return {kind:refusal.kind,state:next,reply:noContactOnly?null:refusal.optout?'Entendido. Respetaremos tu decisión de no recibir más mensajes.':decline};
  }
  if(state.closed&&state.commercialRefusal?.caseId===state.caseId&&validMarker(store,state.commercialRefusal,e)&&!newCase)return {kind:'refusal-preserved',state,reply:null};
 

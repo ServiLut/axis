@@ -1,5 +1,13 @@
 # María Ángel y Miguel Ángel
 
+## Último bloqueo de no-contacto y corrección — 17/10/2026
+
+Runtime **63775de DONE 4 s**, Backend **44ec59a DONE 3 m 7 s**, conservando Web/cambios de otras tareas. La repetición nativa de garantía, datos, costo/fecha y queja pasó: cuatro fuentes y cinco salidas **READ exactas**, chief-readonly/run-2026-10-17T19-39-34-928Z; sin consulta real a TESA, Luna o negocio.
+
+El ensayo comercial confirmó presupuesto y posposición, pero «No quiero que me vuelvan a escribir» creó una pregunta de precio incorrecta. Fallo preservado con fuente 3EB0628A952BCD03143FFD y salidas DELIVERED exactas, run-2026-10-17T19-36-39-317Z. Bloquea apertura hasta repetir corregido. Este candidato amplía sólo el reconocimiento literal y preserva exclusión durable por teléfono/línea/fuente; bajo hold registra el pedido sin responder o liberar atención humana. Negaciones, citas y condiciones no se convierten en opt-out. **2844/2844 pruebas locales**, cero omisiones, full-runtime-optout-release.txt. Instalación y repetición nativa de este último cambio todavía pendientes al preparar commit.
+
+La solicitud de un permiso PRUEBA nuevo de hasta dos horas está pendiente de respuesta humana, por vencimiento del anterior y confirmación de acceso al activarlo exigida por computer-use. No hay token nuevo generado, alta nueva ni apertura pública. La sesión visual Tenaxis sigue mostrando iniciar-sesion; el lector/API propio permanece separado. No reiterar acceso ni atribuir a esta sesión permisos del bot.
+
 ## Comprobación nativa y cierre del candidato — 17/10/2026
 
 Runtime **4077779 DONE 2 s** y Backend **a608cb0 DONE 3 m 38 s** comprobados. En WhatsApp de Sandra, cuatro entradas nuevas comprobaron cotización, aceptación con nombre/dirección, petición únicamente del horario faltante, resumen a las 10 a. m. y «Sí, esos datos están correctos» sin recotizar; las cuatro respuestas fueron READ exactas (chief-readonly/run-2026-10-17T19-17-48-545Z). Es simulación Engine, no nueva venta ni escritura ordinaria; Luna está excluida de ese chat de ensayo.

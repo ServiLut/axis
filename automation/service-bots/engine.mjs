@@ -855,7 +855,16 @@ export class Engine {
         }
         finish('OBSERVED_INTERNAL');return;
       }
-      if(conv.hold){finish('OBSERVED_HUMAN');return;}
+      if(conv.hold){
+        // Observe a direct current stop-contact instruction without answering,
+        // altering the human hold or changing its intake/payment facts.
+        const scope=assertOperationalLineScope(c);
+        if(!scope||operationalLineAllowed(c,e.line)&&e.at>=Date.parse(scope.authorizedAt)&&!s.hasSourcesOutsideLine(e.phone,e.line)){
+          const noContact=ownCommercialCustomerTurn(s,c,conv.state,e,{noContactOnly:true});
+          if(noContact){s.saveConversation(e.phone,noContact.state);s.audit('OWN_NO_CONTACT_OBSERVED_UNDER_HUMAN_HOLD',e.id,{guard:COMMERCIAL_OBJECTION_GUARD,caseId:noContact.state.caseId,businessWritten:false,humanHoldReleased:false,customerReplyQueued:false});}
+        }
+        finish('OBSERVED_HUMAN');return;
+      }
       const lineScope=assertOperationalLineScope(c);
       if(lineScope&&(!operationalLineAllowed(c,e.line)||e.at<Date.parse(lineScope.authorizedAt)||s.hasSourcesOutsideLine(e.phone,e.line))){
         finish('OBSERVED_TEMPORARY_LINE_SCOPE');return;
