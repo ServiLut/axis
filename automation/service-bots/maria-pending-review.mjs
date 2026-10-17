@@ -125,7 +125,7 @@ export function mariaPendingReviewReply({company,state,event,hold=false,sources=
  }
  if(facts.receivedData){
   const fields=facts.receivedData;
-  parts.push('Recibí '+(fields.length===1?'el dato de '+fields[0]:'los datos de '+fields.slice(0,-1).join(', ')+' y '+fields.at(-1))+'.');
+  parts.push(fields.length===1&&fields[0]==='plaga indicada'?'Gracias por la información.':'Recibí '+(fields.length===1?'el dato de '+fields[0]:'los datos de '+fields.slice(0,-1).join(', ')+' y '+fields.at(-1))+'.');
  }
  if(facts.todayRequested&&facts.discountRequested)parts.push('Recibí tu solicitud de una visita para hoy y de un descuento. Aún no están confirmados ni la visita para hoy ni el descuento.');
  else if(facts.todayRequested)parts.push('Recibí tu solicitud de una visita para hoy. Aún no tengo confirmada la disponibilidad para hoy.');
