@@ -334,12 +334,17 @@ const registrationPreface=/^(?:(?:aqui|ahi) (?:te |se )?lo (?:mande|envie|mando|
 function registrationSourcePreface(text){const t=normalize(text),match=t.match(registrationPreface);return Boolean(match&&/^[.!¡, ]*$/.test(t.slice(match[0].length)));}
 const correctionFieldReference=text=>/^(?:(?:mi|el) nombre(?: completo)?|(?:mi|la) direccion(?: completa)?|(?:mi|el) apellido|(?:mis|los) datos|(?:ese|este|el) dato|(?:esta|estan|es|son) (?:mal|incorrect[oa]s?|equivocad[oa]s?))[.! ]*$/.test(normalize(text));
 const directNameCorrection=text=>/^(?:corrijo|rectifico)\s+(?:(?:mi|el)\s+)?nombre(?: completo)?\s*:\s*[\p{L}'’ -]{1,160}[.! ]*$/iu.test(text.trim());
-function promptedLiteralFields(text,requested,correction=false){
+function promptedLiteralFields(text,requested,correction=false,at=Date.now()){
  const lines=text.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
  if(lines.length<2)return {};
  const values={};
  for(const line of lines){
   if(registrationSourcePreface(line)||correction&&correctionFieldReference(line))continue;
+  // A valid standalone day and an explicitly unanswered hour can accompany
+  // the two requested literal fields. Retain the complete native source;
+  // neither an alternative meridian nor a day alone supplies a schedule.
+  if(literalProgramPreference(line,at)&&nativePreferenceDate(line,iso(at))&&!nativePreferenceTime(line,iso(at))){if(values.dateLiteral)return {};values.dateLiteral=line;continue;}
+  if(/^hora\s*:\s*(?:p\s*\.?\s*m\.?\s+o\s+a\s*\.?\s*m\.?|a\s*\.?\s*m\.?\s+o\s+p\s*\.?\s*m\.?)[.! ]*$/iu.test(line)){if(values.ambiguousClock)return {};values.ambiguousClock=true;continue;}
   const labelled=explicitFields(line),name=labelled.name||(requested.includes('name')&&literalName(line,true)),address=labelled.address||(requested.includes('address')&&literalAddress(line,true));
   if(labelled.conflict||(!name&&!address)||(name&&address))return {};
   const key=name?'name':'address',value=name||address;
@@ -540,7 +545,7 @@ function promptedBatchFields(s,c,previous,e,pi,prompt){
   if(turn.phone!==e.phone||turn.line!==e.line||turn.fromMe||turn.forwarded||turn.kind!=='text'||turn.at<c.mariaProgram.startsAt)return [];
   if(confirms(turn.text)||mariaIncidentalPetMention(turn)||neutralCourtesy(turn.text)||/^(?:hola|hola buenas noches|buenos dias|buen dia|buenas tardes|buenas noches)[.!¡, ]*$/.test(normalize(turn.text))||/^[¡ ]*(?:hola[,!. ]+)?(?:(?:buenos dias|buen dia|buenas tardes|buenas noches)[,!. ]+)?[¿¡ ]*como esta(?:s|n)?[?!.,! ]*$/.test(normalize(turn.text))||registrationSourcePreface(turn.text)||literalProgramPreference(turn.text,turn.at)||pi.stage==='correction'&&correctionFieldReference(turn.text))continue;
   if(blockedText(turn.text))return [];
-  const explicit=explicitFields(turn.text),separated=promptedLiteralFields(turn.text,requested,pi.stage==='correction');
+  const explicit=explicitFields(turn.text),separated=promptedLiteralFields(turn.text,requested,pi.stage==='correction',turn.at);
   const name=explicit.name||separated.name||(requested.includes('name')&&literalName(turn.text,true)),address=explicit.address||separated.address||(requested.includes('address')&&literalAddress(turn.text,true));
   if(!name&&!address||name&&address&&!explicit.name&&!separated.name)return [];
   const fact={...explicit,...(name?{name}:{}),...(address?{address}:{}),source:source(turn),position};
@@ -664,7 +669,7 @@ export function ordinaryDataInformationTurn(s,c,state,e){
   if(own.q.accepted||confirms(e.text)||blockedText(e.text))return null;
   const prompt=previous?.promptId&&s.db.prepare("SELECT id FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND state IN ('DELIVERED','READ') AND mid IS NOT NULL").get(previous.promptId,e.phone,e.line,state.caseId);
   if(!prompt)return null;
-  const requested=[...(!data.customerName?['name']:[]),...(!data.address?['address']:[])],explicit=explicitFields(e.text),separated=promptedLiteralFields(e.text,requested);
+  const requested=[...(!data.customerName?['name']:[]),...(!data.address?['address']:[])],explicit=explicitFields(e.text),separated=promptedLiteralFields(e.text,requested,false,e.at);
   if(explicit.conflict)return null;
   const name=explicit.name||separated.name,address=explicit.address||separated.address,preference=literalProgramPreference(e.text,e.at);
   if(!name&&!address&&!preference)return null;
@@ -676,6 +681,29 @@ export function ordinaryDataInformationTurn(s,c,state,e){
  return {state,registrationInformation:true,reply:reply+(!question&&!own.q.accepted?'\n\n¿Aceptas la cotización para continuar?':'')};
 }
 function blockedText(text){return /[?¿]|^no\b|\b(?:refuerzo|garantia|verificacion|visita anterior|ya fumig|certificado|documento|cancel|no quiero|no acepto|pague|pago|pagar|transfer|comprobante|consign|descuento|gratis|otra solicitud|nuevo servicio|otro servicio|otro inmueble)\w*/.test(normalize(text));}
+// Receipt of literal customer facts can continue while the customer's exact
+// expanded-scope question is under review. It does not resume registration.
+export function pendingMattressScopeFactsTurn(s,c,state,e){
+ const marker=state.requestedMattressScopeReview,pi=state.programIntake;
+ if(!programEnabled(c)||!state.awaitingHumanReview||!pi||!['name','address','details'].includes(pi.stage)||marker?.caseId!==state.caseId||marker.phone!==e.phone||marker.line!==e.line||marker.quoteSourceId!==state.quotedPrice?.sourceId||!state.quotedPrice?.accepted||e.kind!=='text'||e.fromMe||e.forwarded||e.quotedId||e.at<=marker.at||!operationalLineAllowed(c,e.line)||s.conversation(e.phone)?.hold||blockedText(e.text))return null;
+ const own=eligibleQuote(s,state,e.phone,e.line);if(!own)return null;
+ const currentRow=s.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(e.id,e.phone,e.line),current=currentRow&&s.open(currentRow.body);
+ if(current?.id!==e.id||current.text!==e.text||current.at!==e.at||current.kind!=='text'||current.fromMe!==false||current.forwarded||current.quotedId)return null;
+ const row=s.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(marker.sourceId,e.phone,e.line),original=row&&s.open(row.body);
+ if(original?.text!==marker.text||original.at!==marker.at||original.kind!=='text'||original.forwarded||original.quotedId)return null;
+ const prompt=s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND internal=0 AND state IN ('DELIVERED','READ') AND mid IS NOT NULL").get(marker.dataPromptId||pi.promptId,e.phone,e.line,state.caseId),proof=prompt&&get(s,'first-delivery:'+prompt.id);
+ if(!prompt||!/^Para registrar tu solicitud, compárteme:\n/.test(s.open(prompt.body))||proof?.mid!==prompt.mid||proof.line!==e.line||!['DELIVERED','READ'].includes(proof.state)||!Number.isSafeInteger(proof.verifiedAt)||proof.verifiedAt<prompt.created||e.at<Math.floor(proof.verifiedAt/1000)*1000)return null;
+ const fields=promptedLiteralFields(e.text,['name','address'],false,e.at);
+ if(!fields.name&&!fields.address)return null;
+ const next={...pi,...(fields.name?{customerName:fields.name,nameSource:source(e)}:{}),...(fields.address?{address:fields.address,addressSource:source(e)}:{}),...(fields.dateLiteral?{requestedDateLiteral:fields.dateLiteral,requestedDateSource:source(e)}:{}),preview:null};
+ if(next.address&&changedAddressScope(next.address,state.slots))return null;
+ if(next.customerName&&next.address){next.stage='details';next.requestedFields=['preference'];}
+ state.programIntake=next;
+ state.requestedMattressScopeReview={...marker,dataPromptId:marker.dataPromptId||pi.promptId,latestFactsSourceId:e.id};
+ const missing=[...(!next.customerName?['tu nombre completo']:[]),...(!next.address?['la dirección completa']:[]),...(!next.requestedDateLiteral?['el día del servicio']:[]),'la hora exacta, con a. m. o p. m.'];
+ const reply='Gracias, conservé los datos que compartiste'+(next.requestedDateLiteral?' y el día «'+next.requestedDateLiteral+'»':'')+'. Me falta '+missing.join(' y ')+'. El valor y alcance de los muebles, tomacorrientes y demás zonas siguen pendientes de confirmación.';
+ return {state,reply};
+}
 // Called only inside the engine's existing transaction; no network or business write.
 export function registrationTurn(s,c,previous,e,decision,{literalSlots=null}={}){
  if(!programEnabled(c)||e.fromMe||e.forwarded||e.kind!=='text'||e.at<c.mariaProgram.startsAt)return null;
@@ -703,7 +731,7 @@ export function registrationTurn(s,c,previous,e,decision,{literalSlots=null}={})
  const pi={...prior},prompt=pi.promptId&&s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND state IN ('DELIVERED','READ')").get(pi.promptId,e.phone,e.line),batchFields=promptedBatchFields(s,c,previous,e,pi,prompt);
  if(decision.courtesy&&!confirms(e.text)&&!batchFields.some(fact=>fact.name||fact.address))return null;
  state.programIntake=pi;
- const candidateRequested=pi.requestedFields||(['name','address'].includes(pi.stage)?[pi.stage]:['name','address']),candidateExplicit=explicitFields(e.text),candidateSeparated=prompt&&!confirms(e.text)?promptedLiteralFields(e.text,candidateRequested,pi.stage==='correction'):{};
+ const candidateRequested=pi.requestedFields||(['name','address'].includes(pi.stage)?[pi.stage]:['name','address']),candidateExplicit=explicitFields(e.text),candidateSeparated=prompt&&!confirms(e.text)?promptedLiteralFields(e.text,candidateRequested,pi.stage==='correction',e.at):{};
  const candidateName=candidateExplicit.name||candidateSeparated.name||(!confirms(e.text)&&!mariaIncidentalPetMention(e)&&literalName(e.text,(pi.stage==='name'||pi.stage==='correction'&&!correctionFieldReference(e.text))&&Boolean(prompt)));
  const candidateAddress=candidateExplicit.address||candidateSeparated.address||literalAddress(e.text,(['address','confirm','correction'].includes(pi.stage)||pi.requestedFields?.includes('address'))&&Boolean(prompt));
  if(directNameCorrection(e.text)&&!candidateName&&!blockedText(e.text)){
@@ -737,7 +765,8 @@ export function registrationTurn(s,c,previous,e,decision,{literalSlots=null}={})
   if(!pi[valueKey]||fact.position>position){if(pi[valueKey]&&pi[valueKey]!==fact[key])conflicting=true;pi[valueKey]=fact[key];pi[sourceKey]=fact.source;}
  }
  const explicit=explicitFields(e.text),requested=pi.requestedFields||(['name','address'].includes(pi.stage)?[pi.stage]:['name','address']);
- const separated=prompt&&!confirms(e.text)?promptedLiteralFields(e.text,requested,pi.stage==='correction'):{};
+ const separated=prompt&&!confirms(e.text)?promptedLiteralFields(e.text,requested,pi.stage==='correction',e.at):{};
+ if(separated.dateLiteral){pi.requestedDateLiteral=separated.dateLiteral;pi.requestedDateSource=source(e);}
  const name=!unresolved.has('name')&&(explicit.name||separated.name||(!confirms(e.text)&&!mariaIncidentalPetMention(e)&&literalName(e.text,(pi.stage==='name'||pi.stage==='correction'&&!correctionFieldReference(e.text))&&Boolean(prompt)))),address=!unresolved.has('address')&&(explicit.address||separated.address||literalAddress(e.text,(['address','confirm','correction'].includes(pi.stage)||pi.requestedFields?.includes('address'))&&Boolean(prompt)));
  const scopedAddress=address||pi.address;
  if(scopedAddress&&changedAddressScope(scopedAddress,state.slots)){
@@ -777,7 +806,7 @@ export function registrationTurn(s,c,previous,e,decision,{literalSlots=null}={})
   if(!timingParts.complete){pi.stage='details';pi.requestedFields=['preference'];pi.preview=null;pi.promptId=e.id+':reply';return {state,reply:timingParts.missing==='future-time'?'Ese horario ya pasó. ¿Qué fecha y hora nuevas necesitas?':timingParts.missing==='date'?'Ya tengo la hora que me indicaste. ¿Qué día necesitas el servicio?':'Ya tengo el día que me indicaste. Me falta la hora exacta, con a. m. o p. m. ¿A qué hora necesitas el servicio?'};}
   preference={value:timingParts.preferenceLiteral,parts:timingParts.parts,projection:timingParts};
  }
- if(planning&&!preference){pi.stage='details';pi.requestedFields=['preference'];pi.preview=null;pi.promptId=e.id+':reply';return {state,reply:clientCalendarIntake?'¿Qué día y a qué hora necesitas el servicio? Indícame si es a. m. o p. m.':'¿Qué día y franja horaria prefieres para el servicio? Lo guardaré como horario solicitado; el equipo interno se encargará de asignar el técnico y la ruta.'};}
+ if(planning&&!preference){pi.stage='details';pi.requestedFields=['preference'];pi.preview=null;pi.promptId=e.id+':reply';return {state,reply:clientCalendarIntake?(pi.requestedDateLiteral?'Conservé el día «'+pi.requestedDateLiteral+'». Me falta la hora exacta, con a. m. o p. m. ¿A qué hora necesitas el servicio?':'¿Qué día y a qué hora necesitas el servicio? Indícame si es a. m. o p. m.'):'¿Qué día y franja horaria prefieres para el servicio? Lo guardaré como horario solicitado; el equipo interno se encargará de asignar el técnico y la ruta.'};}
  const clientSchedule=Boolean(planning&&clientRequestedScheduleEnabled(c,planning.caseSourceAt)&&preference&&(preference.parts||Date.parse(preference.source.at)>=c.clientRequestedSchedule.startsAt));
  if(clientSchedule){
   const requested=preference.parts?preference.projection:projectClientRequestedSchedule(preference.value,preference.source.at,iso(e.at));

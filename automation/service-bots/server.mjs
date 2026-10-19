@@ -12,7 +12,7 @@ import {CHIEF_READ_ONLY_GUARD} from './chief-readonly.mjs';
 import {CHIEF_ACTIONS_GUARD,chiefActionsStatus,reviewChiefActions} from './chief-actions.mjs';
 import {CHIEF_COMMAND_AI_GUARD} from './chief-command-ai.mjs';
 import {MARIA_DIMENSIONS_GUARD} from './intake-dimensions.mjs';
-import { Transport,drain,MARIA_HISTORY_PROTOCOL_GUARD } from './transport.mjs';
+import { Transport,drain,MARIA_HISTORY_PROTOCOL_GUARD,READ_SUPERVISION_GUARD } from './transport.mjs';
 import { pathToFileURL } from 'node:url';
 import { decodeWebhook,observePrivateIdentity,privateIdentityStatus,initializePrivateNativeCachePair,prospectivePrivateNativeCacheBody,recordPrivateNativeCachePairs,decodePrivateNativeCachePairs } from './webhook.mjs';
 import {resolveOwnBlueNativeIdentity,NATIVE_IDENTITY_RESOLUTION_GUARD,NATIVE_IDENTITY_DIAGNOSTIC_CONTENT_KEYS,NATIVE_IDENTITY_DIAGNOSTIC_CONTENT_PATHS,NATIVE_IDENTITY_DIAGNOSTIC_SEMANTIC_FIELDS,NATIVE_IDENTITY_DIAGNOSTIC_VALUE_TYPES} from './native-identity-resolution.mjs';
@@ -49,6 +49,15 @@ import {createRetentionDeliveryRuntime} from './retention-delivery.mjs';
 import {createRetentionEligibilityAdapter} from './retention-eligibility.mjs';
 import {createRetentionDispatchRuntime,restoreRetentionNoteAccess,installRetentionNoteAccess} from './retention-dispatch.mjs';
 import {reviewContactAttention} from './attention-audit-readonly.mjs';
+import {createReviewedCustomerFollowupRuntime} from './reviewed-customer-followup.mjs';
+
+// This is the direct human authorization for the current, manually reviewed
+// audit. It creates no campaign, source replay, handover or background sender.
+const REVIEWED_BLUE_AUDIT_AUTHORIZATION=Object.freeze({
+  auditId:'audit-blue4997-20261019-v1',
+  authorizationReference:'direct-user-blue4997-audit-followups-20261019',
+  sourceHash:createHash('sha256').update('María Angel, por favor revísame quirúrgicamente todos los WhatsApp que han entrado a este teléfono Mariángel 4997confrontándolos con el programa si efectivamente fueron subidos o no si los servicios fueron tomados o no. Si el cliente aún no se ha decidido a tomar el Servicio escribámosle de nuevo').digest('hex'),
+});
 
 export const HTTP_BODY_DECODING_GUARD='authenticated-byte-bounded-complete-utf8-json-v1';
 export const FUMIGACION_WEBHOOK_BODY_LIMIT=2*1024*1024;
@@ -139,6 +148,11 @@ export function createBotServer(config,store,transport,engine) {
   const retentionEligibility=config.company==='fumigacion'?createRetentionEligibilityAdapter(config,store,transport):null;
   const retentionDelivery=retentionEligibility?createRetentionDeliveryRuntime(config,store,transport,{loadEligibility:retentionEligibility.loadEligibility}):null;
   const retentionDispatch=retentionEligibility?createRetentionDispatchRuntime(config,store,transport,{loadPlan:retentionEligibility.loadPlan,loadEligibility:retentionEligibility.loadEligibility,fetcher:transport.fetcher,enabled:false}):null;
+  let reviewedFollowup=null;
+  const ownReviewedFollowup=()=>{
+    if(config.company!=='fumigacion'||!config.lines.some(line=>line.phone==='573126944997'&&line.instance==='cucaracha-azul'))return null;
+    return reviewedFollowup??=createReviewedCustomerFollowupRuntime(config,store,transport,{authorization:REVIEWED_BLUE_AUDIT_AUTHORIZATION});
+  };
   persistMariaKnowledge(config,store);
   initializeInactivityFollowup(config,store);
   let draining=false,settingUpAi=false;
@@ -285,7 +299,7 @@ export function createBotServer(config,store,transport,engine) {
         customerIntakeEnabled:config.enabled,businessWritesEnabled:registrationStatus(config,store).enabled,capabilityDisclosure:'runtime-mode-and-own-registration-status-v2',chiefReadOnlyGuard:CHIEF_READ_ONLY_GUARD,mariaAutonomousIntakeGuard:config.company==='fumigacion'?MARIA_AUTONOMOUS_INTAKE_GUARD:null,postServiceContinuityGuard:config.company==='fumigacion'?MARIA_AFTER_SERVICE_CONTINUITY_GUARD:null,customerCourtesyGuard:'gratitude-only-without-intake-or-ownership-v1',customerAdviserGuard:config.company==='fumigacion'?ADVISER_TONE_GUARD:null,historyProtocolGuard:config.company==='fumigacion'?MARIA_HISTORY_PROTOCOL_GUARD:null,incidentalPetsGuard:config.company==='fumigacion'?MARIA_INCIDENTAL_PETS_GUARD:null,operationalConfirmationGuard:config.company==='fumigacion'?MARIA_PROGRAM_OPERATIONAL_CONFIRMATION_GUARD:null,
         commonAnswerGuard:config.company==='fumigacion'?'approved-source-context-and-complete-topics-v1':null,pendingFollowupGuard:config.company==='fumigacion'?'punctuation-only-own-pending-case-without-repeat-v1':null,approvedCustomerAnswerDocuments:store.approvedCustomerAnswers().length,customerActivity:customerActivity(store,config),
         controlVisitGuard:config.company==='fumigacion'?'requested-control-antecedent-before-intake-v1':null,intakePestGuard:config.company==='fumigacion'?'literal-additive-pests-and-own-source-union-v1':null,propertyScopeGuard:config.company==='fumigacion'?'single-apartment-address-and-explicit-special-scope-v1':null,
-        caseOwnershipGuard:'first-reply-source-preserved-v2',conversationContext:'stored-scoped-turns-with-coverage-v2',internalQuestionGuard:'missing-field-and-case-dedup-v1',supervisorContentReview:'explicit-source-ids-readonly-v1',liveAttentionGuard:'staff-ingestion-freeze-and-own-native-before-send-v2',intakeGuard:config.company==='fumigacion'?'service-specific-intake-and-reviewed-price-before-schedule-v2':'technical-intake-with-human-review-v1',
+        caseOwnershipGuard:'first-reply-source-preserved-v2',conversationContext:'stored-scoped-turns-with-coverage-v2',internalQuestionGuard:'missing-field-and-case-dedup-v1',supervisorContentReview:'explicit-source-ids-readonly-v1',liveAttentionGuard:'staff-ingestion-freeze-and-own-native-before-send-v2',readSupervisionGuard:config.company==='fumigacion'?READ_SUPERVISION_GUARD:null,intakeGuard:config.company==='fumigacion'?'service-specific-intake-and-reviewed-price-before-schedule-v2':'technical-intake-with-human-review-v1',
         priceCatalogGuard:config.company==='fumigacion'?'exact-reviewed-native-price-and-special-property-review-v1':null,approvedPriceEntries:currentPriceEntries(store.approvedPriceCatalogs()).length,
         businessPriceGuard:config.company==='fumigacion'?BUSINESS_PRICE_GUARD:null,businessPriceScheduleActive:config.company==='fumigacion'&&store.approvedPriceCatalogs().some(d=>d.kind==='approved_price_schedule'),businessPriceScheduleHash:config.company==='fumigacion'?BUSINESS_PRICE_HASH:null,
         intakeContinuationGuard:'literal-questions-and-first-batch-without-reasking-v3',intakeLiteralFieldsGuard:config.company==='fumigacion'?'literal-business-place-written-rooms-and-square-units-v4':null,intakeLocationGuard:config.company==='fumigacion'?'literal-prompted-location-and-batch-sources-v1':null,customerGreetingGuard:'pure-greeting-preserves-pending-intake-v1',linkedContentGuard:'unread-links-and-url-query-without-question-v1',serviceFollowupGuard:'existing-service-arrival-before-intake-v1',
@@ -323,6 +337,19 @@ export function createBotServer(config,store,transport,engine) {
       if(req.url==='/review-contact-attention'){
         try{return reply(200,reviewContactAttention(store,config,body));}
         catch(error){return reply(error.message==='CONTACT_ATTENTION_OWN_FUMIGACION_REQUIRED'?403:400,{error:error.message==='CONTACT_ATTENTION_OWN_FUMIGACION_REQUIRED'?'CONTACT_ATTENTION_OWN_FUMIGACION_REQUIRED':'CONTACT_ATTENTION_CLOSED_SOURCE_SCOPE_REQUIRED'});}
+      }
+      if(req.url==='/reviewed-customer-followup-status'||req.url==='/reviewed-customer-followup-prepare'||req.url==='/reviewed-customer-followup-send'){
+        const reviewedFollowup=ownReviewedFollowup();
+        if(!reviewedFollowup)return reply(403,{error:'FOLLOWUP_OWN_BLUE_RUNTIME_REQUIRED'});
+        if(req.url==='/reviewed-customer-followup-status'){
+          try{return reply(200,await reviewedFollowup.readStatus(body));}
+          catch(error){return reply(400,{error:/^FOLLOWUP_[A-Z0-9_]+$/.test(error.message)?error.message:'FOLLOWUP_READ_UNVERIFIED'});}
+        }
+        if(draining||settingUpAi)return reply(409,{error:'FOLLOWUP_RUNTIME_BUSY'});
+        settingUpAi=true;
+        try{return reply(200,await (req.url==='/reviewed-customer-followup-prepare'?reviewedFollowup.prepare(body):reviewedFollowup.send(body)));}
+        catch(error){return reply(400,{error:/^FOLLOWUP_[A-Z0-9_]+$/.test(error.message)?error.message:'FOLLOWUP_REQUEST_UNVERIFIED'});}
+        finally{settingUpAi=false;scheduler.wake();}
       }
       if(req.url==='/review-events'){
         if(body.company!==config.company||!Array.isArray(body.eventIds)||body.eventIds.length<1||body.eventIds.length>50||new Set(body.eventIds).size!==body.eventIds.length||body.eventIds.some(id=>typeof id!=='string'||!/^[A-Za-z0-9_-]{8,100}$/.test(id)))return reply(400,{error:'SCOPED_SOURCE_IDS_REQUIRED'});

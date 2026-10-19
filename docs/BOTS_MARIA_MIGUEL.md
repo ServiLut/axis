@@ -1,5 +1,23 @@
 # María Ángel y Miguel Ángel
 
+## Supervisión por lectura 19/oct/2026 — candidato prospectivo propio
+
+La usuaria aclaró que abrir un chat para supervisar no devuelve su atención al personal. Una intervención escrita real sigue pausando la IA; esta aclaración no libera holds históricos. El callback normal READ ya actualizaba únicamente entrega. Se reprodujeron dos vías alternativas: `/event` aceptaba texto saliente vacío y un acuse nativo puro sin timestamp terminaba en revisión de atención. El candidato rechaza texto vacío y separa acuses inequívocos del contenido, con identidad y cobertura verificadas. Una consulta histórica sólo puede descartar esos acuses tras releer íntegramente el resultado anclado; ediciones, borrados, medios, contenido desconocido y fuentes incompletas conservan revisión.
+
+Guardia verificable en `/status`: `own-blue-empty-read-receipts-without-human-authorship-v1`. Se conserva el motivo técnico saneado de una revisión de atención. La relectura real de 115 eventos recientes BLUE en STAFF_TAKEOVER encontró 112 textos no vacíos y tres medios, sin textos vacíos; no prueba que abrir WhatsApp causara esas pausas. Las fuentes y el caso concreto todavía pendiente están en `.tmp/maria-blue-audit-20261019/read-supervision-findings-private.md`.
+
+La instalación se prepara únicamente para `mariangel-production`, desde la rama aislada `codex/maria-blue-audit-read-supervision-20261019`, para no disparar actualizaciones de otros bots. Incluye las regresiones de recepción pendientes y el canal manual de seguimientos revisados: una respuesta/no-contacto nueva durante la consulta nativa/Tenaxis debe bloquear el envío; una cita no elimina el opt-out escrito por el cliente y un aplazamiento sin fecha resuelta conserva revisión. Gate completo del candidato: **3030/3030**, cero fallos u omisiones, en `.tmp/maria-blue-audit-20261019/verification/all-runtime-tests-read-supervision.txt`. No hay campaña habilitada, liberación histórica, replay, acceso nuevo ni cambio de la roja. La instalación debe verificarse antes de describir este candidato como instalado.
+
+## Auditoría BLUE 19/oct/2026 — lectura realizada; cambios preparados sin instalar
+
+Instrucción humana directa: revisar todos los chats disponibles de la 4997 contra Tenaxis y retomar los casos aún indecisos. Evidencia privada y continuación: `.tmp/maria-blue-audit-20261019/checkpoint-private.json`.
+
+Se observaron las 583 páginas de caché BLUE hasta el corte fijo `2026-10-19T15:05:29.264Z`: 708 PN externos con entrada, 691 dentro del contrato colombiano del lector y 17 fuera. La extracción no acredita historia completa, identidad de personas, revisión de medios ni lectura semántica completa. El cruce canónico de los 691 devolvió 594 con registros y 97 sin coincidencia; hay 61 coincidencias ambiguas y 91 detalles parciales. Una ausencia por teléfono no prueba un servicio aceptado omitido. Roja y demás bots quedaron fuera de las consultas de este trabajo.
+
+Dos fallas reales posteriores a la reapertura se reprodujeron: cantidad elíptica/cuna repetida y pregunta de alcance sustituida por el formulario, con descarte de datos que incluían hora ambigua. Hay correcciones locales y una salida manual revisada con ledger, relecturas nativas/Tenaxis, preservación de holds/no-contacto y sin replay. Gate local final: **2990/2990**, cero omisiones. **No están instaladas**: no hubo commit, despliegue, mensajes a clientes, altas, cambios de servicios ni devolución de chats. El endpoint nuevo devolvió 404 y `/status` 200 con `enabled=true` a las 15:23:57Z; la atención pública existente se conserva. No usar estos tests como permiso de producción ni declarar outreach enviado.
+
+El control visual fue detenido por la herramienta al no poder verificar con seguridad la URL de Chrome. No se reintentó ni se usó otra ruta de UI. La instalación, revisión final por destinatario, entrega real y casos de identidad/medios/detalle pendientes deben continuar desde el checkpoint cuando el control esté disponible.
+
 ## Estado vigente — 17/10/2026 20:23Z: azul reabierta, PRUEBA retirada
 
 **La atención de azul 573126944997 quedó reabierta prospectivamente desde 20:20:36.716Z**, bajo la autorización humana previa y después del ensayo y retiro. La lectura autenticada de 20:21:05Z aprobó **21 comprobaciones**: recepción/respuestas/registro ordinario activos, restricción a Sandra desactivada y ruta interna de jefatura conservada. El corte público propio no cambia `BOT_ACTIVATED_AT`, credenciales ni vencimiento **07/11/2026 16:56:52.680Z**; no recupera entradas o colas antiguas. Este estado sustituye las pausas históricas siguientes.
@@ -985,4 +1003,3 @@ La reactivación preventiva autorizada se programa a las 08:00 en `reactivaci-n-
 El comparador diario y el filtro preventivo son funciones verificadas en aislamiento; no envían ni escriben notas por sí mismos. La API informa explícitamente envíos/notas preventivas deshabilitados mientras falten el historial completo, el acceso general propio y el adaptador de entrega/nota. La nota exacta solicitada es «Mensaje de seguimiento 2-3 meses enviado», sólo tras entrega nativa y guardado deduplicado/auditado. No usar la campaña de email/SMS de otro chat ni reactivar la roja suspendida por tiempo. Los heartbeats dependen de Codex, equipo y conexiones disponibles.
 
 Una consulta dirigida y verificada de Sandra sobre las entradas observadas del día ya puede responderse sin pedirle otra aprobación; conserva la toma humana. María debe informar sólo la azul activa y la roja suspendida. No declarar cero real ante falta de cobertura, ni confundir conteos de entradas con salidas entregadas o servicios concretados. Pasaron 580 comprobaciones aisladas antes de publicar estas ampliaciones.
-

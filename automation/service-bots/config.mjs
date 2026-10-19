@@ -110,6 +110,7 @@ export function validateEvent(body, config, now = Date.now(), recoverChief = fal
   if (!/^[A-Za-z0-9_-]{8,100}$/.test(event.id || '') || !/^57\d{10}$/.test(event.phone || '') ||
       typeof event.fromMe !== 'boolean' || !Number.isFinite(at) || at < config.activatedAt || at > now+60000 || at < now-(recoverChief&&internal&&!event.fromMe?86400000:600000) ||
       !['text','audio','image','document','video','call'].includes(event.kind) || typeof event.text !== 'string' || event.text.length > 6000 ||
+      (event.kind==='text'&&!event.text.trim()) ||
       event.group === true || /@g\.us$/.test(event.jid || '')) return null;
   return { id:event.id, phone:event.phone, at, line:line.phone, kind:event.kind, fromMe:event.fromMe,
     text:event.text, forwarded:event.forwarded===true, quotedId:typeof event.quotedId==='string'?event.quotedId.slice(0,120):null };

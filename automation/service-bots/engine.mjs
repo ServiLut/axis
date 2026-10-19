@@ -13,7 +13,7 @@ import {ownIntent,mariaLiteralSlotAllowed} from './maria-understanding.mjs';
 import {ownMiguelIntent,miguelLiteralSlotAllowed} from './miguel-understanding.mjs';
 import {literalPaintingRequest} from './technical-scope.mjs';
 import {afterServiceKind,afterServiceRequest,afterServiceDecision,explicitNewService,mariaLiteralServiceContext,literalOwnAfterServiceRequest,MARIA_LITERAL_SERVICE_CONTEXT_GUARD,mariaIncidentalPetMention} from './after-service.mjs';
-import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,acceptsExplicitOrdinaryQuotation,acceptsOwnQuotedAmount,quotationAmountAffirmation,literalIntakeTextWithoutRegistrationFields,literalProgramPreference,calendarProgramPreferenceIssue,prepareRegisteredTesaContinuation,registeredTesaConfirmation,ownRegisteredReceiptForPresentation,ownSavedPendingOperation,queueOwnSavedServiceReview,ownQuoteOutboxId,ownDeliveredQuoteEntry,ordinaryDataInformationTurn,pendingOrdinaryDataInformationTurn,ordinaryProgramDeferralTurn,ownStaffPlanningReceipt,staffPlanningCustomerTurn} from './maria-program.mjs';
+import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,acceptsExplicitOrdinaryQuotation,acceptsOwnQuotedAmount,quotationAmountAffirmation,literalIntakeTextWithoutRegistrationFields,literalProgramPreference,calendarProgramPreferenceIssue,prepareRegisteredTesaContinuation,registeredTesaConfirmation,ownRegisteredReceiptForPresentation,ownSavedPendingOperation,queueOwnSavedServiceReview,ownQuoteOutboxId,ownDeliveredQuoteEntry,ordinaryDataInformationTurn,pendingOrdinaryDataInformationTurn,pendingMattressScopeFactsTurn,ordinaryProgramDeferralTurn,ownStaffPlanningReceipt,staffPlanningCustomerTurn} from './maria-program.mjs';
 import {prepareMariaUnregisteredTesaPlan,mariaCaseQuoteCustomerTurn} from './maria-tesa-unregistered.mjs';
 import {prepareOwnSchedulingPlan,ownSchedulingCustomerTurn} from './maria-own-order-scheduling.mjs';
 import {createHash} from 'node:crypto';
@@ -70,6 +70,10 @@ function ownDeliveredClarification(store,state,event,id,text){
 function rememberAdditionalLiteralFields(store,config,state,event){
  const caseSource=ownCaseAnchor(store,config,state,event);if(!caseSource)return;
   rememberFurnitureExclusion(store,config,state,event,caseSource);
+ if(!state.programIntake&&normalize(state.slots.service)==='chinches'&&!state.slots.mattresses&&event.kind==='text'&&!event.fromMe&&!event.forwarded&&!event.quotedId&&/^(?:[1-9]\d?|un[ao]?|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)[.! ]*$/iu.test(event.text.trim())){
+  const promptId=state.lastHandledSourceId+':reply',row=store.db.prepare('SELECT body FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND internal=0').get(promptId,event.phone,event.line,state.caseId),text=row&&store.open(row.body);
+  if(typeof text==='string'&&/cuántos colchones/iu.test(text)&&ownDeliveredClarification(store,state,event,promptId,text))state.pendingMattressCountClarification={caseId:state.caseId,phone:event.phone,line:event.line,sourceId:event.id,at:event.at,literal:event.text.trim(),promptId,unitInferred:false};
+ }
  const pest=state.pendingPestClarification;
  if(pest?.guard===MARIA_BATCH_INTAKE_GUARD&&pest.caseId===state.caseId&&pest.phone===event.phone&&pest.line===event.line&&state.pendingMediaBurst?.sourceIds?.includes(state.lastHandledSourceId)&&event.kind==='text'&&!event.forwarded&&!event.quotedId&&event.at>pest.at&&event.at-pest.at<=600000&&/^(?:s[ií]|correcto|exacto|as[ií] es)[.! ]*$/iu.test(event.text.trim())&&(!state.slots.service||genericPestDescription(state.slots.service))){
   const raw=store.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(pest.literalSourceId,event.phone,event.line);
@@ -509,6 +513,11 @@ function mattressRoomScopeQuestion(state,event){
   return normalize(state.slots?.service).includes('chinches')&&/\bcolch(?:on|ones)\b/.test(t)&&/\bhabitacion(?:es)?\b/.test(t)&&/\b(?:solo|solamente|tambien|toda|incluye|cub[ar]\w*|hacen|tratan|aplican|aplica)\b/.test(t)&&isCustomerQuestion(event.text);
 }
 const MATTRESS_ROOM_SCOPE_REPLY='Quieres saber si el servicio cubre solo el colchón o también la habitación. Ese alcance aún debe confirmarse para tu caso.';
+function acceptedMattressAdditionalScopeQuestion(state,event){
+ if(event.kind!=='text'||event.fromMe||event.forwarded||event.quotedId||!state.quotedPrice?.accepted||!['name','address','details','confirm','correction'].includes(state.programIntake?.stage)||normalize(state.slots?.service)!=='chinches'||contextNeedsPersonalPriority(event.text,event))return false;
+ const t=normalize(event.text);
+ return /\b(?:muebles?|toma\s*corrientes?|enchufes?|bases? de cama)\b/.test(t)&&/\b(?:cuanto (?:cuesta|vale|cobran)|que incluye|incluye|tambien (?:tratan|hacen|fumigan)|cubre)\b/.test(t)&&!/["“”«»]|https?:|\b(?:dijo|dice|segun|vecin[oa]|tercero)\b/.test(t);
+}
 function postServiceDocuments(text){
   const t=normalize(textWithoutLinks(text));
   if(!/\b(?:documentos?|soportes?|fichas de seguridad|certificados?|permisos?|arl)\b/.test(t))return false;
@@ -624,6 +633,10 @@ export function customerDecision(company,state,e,analysis={}) {
   const currentLiteralContext=company==='fumigacion'&&mariaLiteralServiceContext(e);
   if(currentLiteralContext&&!contextNeedsPersonalPriority(e.text,e))return {...mariaLiteralContextDecision(state,e,currentLiteralContext),literalServiceContext:true};
   const literalText=textWithoutLinks(company==='fumigacion'?literalIntakeTextWithoutRegistrationFields(e.text):e.text).trim(),t=normalize(literalText);
+  if(company==='fumigacion'&&acceptedMattressAdditionalScopeQuestion(state,e)){
+    const reply='La cotización que te envié corresponde al tratamiento de colchones. Aún falta confirmar el valor y el alcance para muebles, tomacorrientes u otras zonas que mencionas. Revisaremos esa pregunta antes de confirmar el servicio.';
+    return {state:{...state,slots:{...state.slots},lastText:e.text,awaitingHumanReview:true,requestedMattressScopeReview:{caseId:state.caseId,phone:e.phone,line:e.line,sourceId:e.id,at:e.at,text:e.text,quoteSourceId:state.quotedPrice.sourceId}},literalServiceContext:true,mattressScopeClarification:true,specificCustomerQuestionReply:reply,reviewTopic:'customer-question',reviewConditions:{kind:'accepted-mattress-additional-scope',caseId:state.caseId},review:'La persona aceptó el precio de un colchón y después pregunta por el valor y alcance de muebles, tomacorrientes u otras zonas. El precio aceptado no acredita que esos elementos estén incluidos. Debe resolverse esa pregunta antes de confirmar un servicio.',reviewQuestion:'¿Qué alcance y valor aprobados corresponden a los muebles, tomacorrientes y demás elementos que menciona?',reply};
+  }
   const literal=literalFields(state,e,company),existing={...state.slots,...literal};
   if(company==='fumigacion'&&!literalIntakeTurn(e)){delete literal.dimensions;delete existing.dimensions;if(state.slots.dimensions)existing.dimensions=state.slots.dimensions;}
   let understood=parseUnderstanding(analysis,e.text,company,e.at);
@@ -636,6 +649,14 @@ export function customerDecision(company,state,e,analysis={}) {
     else understood=Object.fromEntries(Object.entries(understood).filter(([k,v])=>!existing[k]&&(company!=='fumigacion'||k!=='location'||ordinaryLiteralMunicipality(v)&&normalize(ordinaryLiteralMunicipality(v))===normalize(literal.location))));
   }
   const next={...state,slots:{...existing,...understood},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)};
+  if(company==='fumigacion'&&!state.programIntake&&normalize(state.slots.service)==='chinches'&&!e.forwarded&&!e.quotedId&&/^no he visto (?:el|un|ningun) chinche[.! ]*$/.test(t)){
+    const reply='Gracias por aclararlo. Aún necesitamos confirmar qué plaga está causando el problema. Conservé lo que nos contaste sobre la cama o cuna; revisaremos el caso antes de cotizar.';
+    return {state:{...next,awaitingHumanReview:true},literalServiceContext:true,specificCustomerQuestionReply:reply,reviewTopic:'cotizacion-verificada',reviewConditions:{kind:'bedbug-identification-unverified',caseId:state.caseId},review:'La persona aclara que no ha visto el chinche. La persona afectada, la cama o la cuna no prueban una plaga identificada ni un número de colchones. Debe aclararse la identificación y el alcance sin repetir la misma pregunta.',reviewQuestion:'¿Qué identificación de la plaga y alcance pueden confirmarse con estos datos?',reply};
+  }
+  if(company==='fumigacion'&&state.pendingMattressCountClarification?.sourceId&&state.pendingMattressCountClarification.sourceId===e.id){
+    const reply='Conservé tu respuesta «'+state.pendingMattressCountClarification.literal+'». ¿Te refieres a esa cantidad de colchones, o a la cama o estructura de la cuna?';
+    return {state:next,mattressCountClarification:true,reply};
+  }
   if(company==='fumigacion')discardSupersededSizeDuplicate(next,state,literal,literalQuoteFieldConflicts(e.text));
   if(company==='fumigacion'&&state.customerDeferral?.guard===CUSTOMER_DEFERRAL_GUARD&&state.customerDeferral.active===true&&state.customerDeferral.caseId===state.caseId&&state.customerDeferral.line===e.line&&e.at>state.customerDeferral.at&&!contextNeedsPersonalPriority(e.text,e)){
     if(customerDeclinesAfterDeferral(e))return {state:{...next,closed:true},courtesy:true,reply:'Entendido, gracias por avisarme.'};
@@ -759,6 +780,7 @@ export function customerDecision(company,state,e,analysis={}) {
   if(!missing&&nonResidentialDimensions)return {state:next,reviewTopic:'special-quotation',reviewConditions:{kind:'literal-special-property-dimensions',guard:MARIA_DIMENSIONS_GUARD},review:'La persona indicó un inmueble no residencial y sus dimensiones literales. No se calculó superficie ni hay precio aprobado; necesita alcance y cotización propios del mismo caso.',reviewQuestion:'¿Qué alcance y cotización propios corresponden a este inmueble y las medidas indicadas?',reply:'Conservé las medidas '+dimensions.literal+'. La cotización de este inmueble necesita verificar su alcance.'};
   if(missing&&!next.asked.includes(missing)){next.asked.push(missing);return {state:next,reply:company==='fumigacion'&&missing==='location'&&next.slots.locationDetails?'¿En qué municipio necesitas el servicio? Ya conservé la ubicación que me indicaste.':questions[missing]};}
   if(missing){
+    if(company==='fumigacion'&&missing==='mattresses'&&/^(?:un[ao]?|[1-9]\d?)\s+(?:cuna|cama)[.! ]*$/.test(t))return {state:next,reply:'Para esa cama o cuna, ¿cuántos colchones necesitas tratar? Confirma también si te refieres a la estructura.'};
     if(company==='fumigacion')return {state:next,reply:missing==='location'&&next.slots.locationDetails?'Me falta confirmar el municipio para cotizarte; ya conservé la ubicación que me indicaste.':missing==='mattresses'&&!furnitureExclusionForPresentation(next,e)?'Para cotizar esa cama, confirma cuántos colchones están afectados y si también hay chinches en la base u otros muebles.':questions[missing]};
     const names={service:'la plaga o el servicio solicitado',site:'el tipo de inmueble',size:'las habitaciones o metros cuadrados del lugar',mattresses:'los colchones y muebles afectados',detail:'la falla del equipo',location:'el municipio y barrio'};
     return {state:next,reviewTopic:'missing-intake:'+missing,reviewConditions:{missing},review:'Ya preguntamos por '+names[missing]+', pero la respuesta no permite confirmarlo.',reviewQuestion:'¿Qué dato podemos confirmar sobre '+names[missing]+' para esta solicitud?',reply:'Gracias. Revisaremos los detalles que nos compartiste para continuar.'};
@@ -976,6 +998,14 @@ export class Engine {
       const staffStatus=!caseState.awaitingHumanReview&&ownPendingCustomerKind(e)==='status'&&staffPlanningCustomerTurn(s,c,caseState,e,{status:true});
       if(staffStatus){staffStatus.state.lastHandledSourceId=e.id;staffStatus.state.lastText=e.text;s.saveConversation(e.phone,staffStatus.state);s.queue(e.id+':reply',e.phone,e.line,staffStatus.reply,false,conv.revision,caseState.caseId);finish('OWN_STAFF_ASSIGNMENT_PENDING_STATUS');return;}
       if(caseState.awaitingHumanReview&&!caseQuoteTurn){
+        const scopeFacts=pendingMattressScopeFactsTurn(s,c,caseState,e);
+        if(scopeFacts){
+          scopeFacts.state.lastHandledSourceId=e.id;scopeFacts.state.lastText=e.text;s.saveConversation(e.phone,scopeFacts.state);
+          if(!publicTextSafe(scopeFacts.reply))throw new Error('EXTERNAL_TEXT_REJECTED');
+          s.queue(e.id+':reply',e.phone,e.line,scopeFacts.reply,false,conv.revision,caseState.caseId);
+          s.audit('OWN_PENDING_MATTRESS_SCOPE_FACTS_RECEIVED',e.id,{caseId:caseState.caseId,scopeSourceId:caseState.requestedMattressScopeReview.sourceId,businessWritten:false,reviewPreserved:true});
+          finish('PENDING_MATTRESS_SCOPE_FACTS');return;
+        }
         const information=pendingOrdinaryDataInformationTurn(s,c,caseState,e);
         if(information){
           caseState.lastHandledSourceId=e.id;caseState.lastText=e.text;s.saveConversation(e.phone,caseState);
@@ -1132,7 +1162,7 @@ export class Engine {
       }
       const ordinaryInformation=ordinaryDataInformationTurn(s,c,decision.state,e);
       if(ordinaryInformation){selectedPrice=null;decision=ordinaryInformation;}
-      if(c.company==='fumigacion'&&!decision.state.customerDeferral?.active&&!decision.registrationInformation&&!(currentQuote&&(naturalAcceptance||unverifiedAmountAttempt))&&(decision.question?.topic==='cotizacion-verificada'||decision.reviewTopic==='customer-question'&&quotationInquiry(e.text))){
+      if(c.company==='fumigacion'&&!decision.mattressScopeClarification&&!decision.state.customerDeferral?.active&&!decision.registrationInformation&&!(currentQuote&&(naturalAcceptance||unverifiedAmountAttempt))&&(decision.question?.topic==='cotizacion-verificada'||decision.reviewTopic==='customer-question'&&quotationInquiry(e.text))){
         const selection=selectPrice(decision.state.slots,s.approvedPriceCatalogs(),null,{scheduleHash:businessPriceHashAt(e.at),issuedAt:e.at});
         if(selection.entry&&!e.forwarded&&!ambiguousIntake(e.text)&&!termiteFurnitureMention(e)&&!specialQuotation(textWithoutLinks(literalIntakeTextWithoutRegistrationFields(e.text)),decision.state.slots)){
           selectedPrice=selection.entry;

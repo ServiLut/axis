@@ -1,5 +1,17 @@
 # Registro propio de servicios nuevos de María
 
+## Supervisión por lectura 19/oct/2026 — registro comercial preservado
+
+El candidato propio distingue supervisión por lectura de intervención escrita y conserva los bloqueos de agenda/registro durante atención humana real. No crea servicios ni cambia el horario, el técnico, el pago, el estado comercial o el acceso ordinario. El recorrido de horario pedido por el cliente sin técnico continúa bajo sus fuentes, resumen entregado y nueva confirmación; ningún acuse de lectura constituye aceptación del servicio.
+
+Guardia `own-blue-empty-read-receipts-without-human-authorship-v1` y motivo técnico saneado preparados para `/status`/auditoría. Diagnóstico inicial autenticado 19/oct 15:57Z: recepción activa y corte público original conservados. El candidato incluye las correcciones de campos/alcance ya probadas localmente y seguimientos manuales revisados, sin permisos de escritura de negocio por esa ruta. No atribuir sus pruebas o lecturas a una venta real ni liberar chats históricos por el despliegue.
+
+## Control BLUE 19/oct/2026 — auditoría y regresiones locales, sin escritura real
+
+Ver `.tmp/maria-blue-audit-20261019/checkpoint-private.json` y el apartado del mismo día de `BOTS_MARIA_MIGUEL.md`. Los 691 PN colombianos externos observados se cruzaron en lectura: 594 con registros, 97 sin coincidencia canónica, 61 ambiguos y 91 detalles parciales. No son conteos de contratos, servicios ejecutados, pagos ni ventas propias de María. Las órdenes previas, bajas lógicas, campos sin hora y fuentes de otros casos se conservaron; no hubo altas, actualizaciones, bajas, asignaciones ni liberaciones humanas.
+
+Correcciones de recepción y ruta de seguimiento manual quedan **PREPARADAS_NO_INSTALADAS**; 2990 pruebas locales aprobadas. No se reencolaron fuentes históricas ni se convirtió una propuesta en alta. La atención azul existente sigue habilitada, la roja no fue consultada y el acceso PRUEBA no se renovó. La detención del control visual impidió instalar y ejecutar los seguimientos; continuar desde las fuentes privadas y sus límites, sin presentar la auditoría semántica o entrega como completas.
+
 ## Estado vigente — 17/10/2026 20:23Z: horario exacto comprobado y PRUEBA retirada
 
 **Registro ordinario y horario solicitado activos prospectivamente en azul desde 20:20:36.716Z**, verificados a las 20:21:05Z. Runtime **9783dde**, Backend **44ec59aa**, Web **97b8de9**. El perfil `own-confirmed-client-time-without-technician-v1` exige precio propio aceptado, datos completos, horario exacto con fuente, resumen entregado y confirmación nueva; registra PROGRAMADO sin asignar técnico ni inventar hora final. Confirmación comercial y estado operativo se mantienen separados. Corte, límites de fuentes y reapertura al inicio de `BOTS_MARIA_MIGUEL.md`; credenciales/vencimiento 07/nov intactos, sin replay.
