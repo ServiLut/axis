@@ -1,5 +1,19 @@
 # Registro propio de servicios nuevos de María
 
+## Estado vigente 19/oct/2026 19:08Z — registro ordinario de ambas líneas
+
+Prevalece el estado nuevo de `BOTS_MARIA_MIGUEL.md`: ambas líneas propias conectadas/owner exacto y habilitadas por instrucción humana. Runtime `da0ae72` instalado; 3152/3152 pruebas más 28/28 del último ajuste defensivo. API 19:08:12Z confirma registro ordinario y `own-confirmed-client-time-without-technician-v1` habilitados, sin asignar técnico. BLUE conserva corte público 17/oct20:20:36.716Z; RED admite sólo fuentes/recepción nuevas desde **19/oct19:07:53.012Z**. El registro backend ya admite ambas líneas con el mismo actor/tenant/empresa y vencimiento original; no se creó acceso nuevo.
+
+Los hechos, precio, resumen y confirmación nativos deben pertenecer al mismo caso/línea y pasar su corte. No reaprovechar fuentes rojas antiguas, colas históricas, aceptación en otra línea, resultados inciertos ni chats bajo atención humana para fabricar un alta. La agenda separada TESA/own-order-scheduling no se amplió a RED y sigue OFF; la ruta ordinaria del horario solicitado sin técnico conserva sus controles. SAVED=1 histórico y preparado/incierto/revisión=0 al corte; ninguna nueva alta real se acredita por estas pruebas o la habilitación. Cero servicios de prueba nuevos, correcciones de órdenes ajenas, pagos o devoluciones de chats.
+
+Respuestas rápidas de oficina revisadas y ordenadas por condición, sin convertir garantías/precios/ejemplos en políticas generales. Las preguntas informativas posteriores a la aceptación conservan la recepción ya recogida, sin pedir de nuevo la misma aceptación ni borrar la duda. Informes existentes abarcarán ambas líneas declarando sus fuentes pendientes; no reenviar los del 19/oct. Evidencia: `.tmp/maria-office-replies-20261019/checkpoint-dual-private.json`.
+
+## Auditoría 4997 — 19/oct/2026 17:05Z
+
+Prevalece el estado nuevo de `BOTS_MARIA_MIGUEL.md`. Textos disponibles de 708 casos revisados; cruce canónico de 691 teléfonos y relecturas puntuales actuales conservados. Se verificaron reservas recientes ya registradas con hora literal; cinco hallazgos quedan para conciliación, sin alta duplicada ni modificación de órdenes del personal por el lector de auditoría. Una búsqueda canónica negativa no demuestra un servicio omitido. Sesión editable vencida, medios e identidades pendientes; cero escrituras de negocio.
+
+API propia 17:02Z conserva atención pública azul, registro y horario del cliente sin asignación automática de técnico; SAVED=1 histórico. De 69 fuentes calificadas de seguimiento revisadas, 23 tienen atención humana y 46 atención desconocida; cero elegibles o envíos. No liberar holds para ejecutar la autorización de retoma. Evidencia privada vigente: `.tmp/maria-blue-audit-20261019/checkpoint-private.json`; no sustituye recibos históricos ni permite reproducir aceptaciones antiguas como nuevas.
+
 ## Estado comprobado 19/oct/2026 16:05Z — supervisión sin nuevas altas
 
 Runtime `44a8088` instalado sólo para FUMIGACIÓN; guardia de supervisión por lectura verificada por API. **3030/3030 pruebas, cero omisiones.** Registro ordinario y perfil `own-confirmed-client-time-without-technician-v1` configurados/habilitados, técnico automático OFF y vencimiento original 07/nov16:56:52.680Z. SAVED=1 histórico; preparado/incierto/revisión=0. Esta instalación y las pruebas sintéticas no son una venta ni programación real nuevas.
