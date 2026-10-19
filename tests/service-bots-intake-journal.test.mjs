@@ -41,8 +41,9 @@ test('unknown LID and conflicting PN are separate; canonical phone comes only fr
  const a=audit(s,c);assert.equal(a.contacts.length,1);assert.equal(a.aggregates.pendingLidIncomingMessages,1);assert.equal(a.pendingIdentitySources.length,2);assert.equal(a.sources[0].phone,null);assert.equal(a.sources[2].identity,'PN_CONFLICT');assert.equal(a.phoneInferred,false);
  }finally{s.close();}
 });
-test('group/staff/outgoing exclusions are explicit and staff filtering is configurable',()=>{
+test('group/status/newsletter and outgoing exclusions are explicit and staff filtering is configurable',()=>{
  const {s,c}=fixture();try{c.intakeJournalStaffPhones=[customer];put(s,c,payload(c));put(s,c,payload(c,'OWN_OUTGOING_NATIVE',{fromMe:true,remoteJid:'573009998877@s.whatsapp.net'}));const group=payload(c,'GROUP_NATIVE',{remoteJid:'123456789@g.us'});assert.equal(put(s,c,group).excludedGroups,1);
+ const status=payload(c,'STATUS_NATIVE',{remoteJid:'status@broadcast'}),newsletter=payload(c,'NEWSLETTER_NATIVE',{remoteJid:'120363001@newsletter'});assert.equal(put(s,c,status).excludedNonPrivateAddresses,1);assert.equal(put(s,c,newsletter).excludedNonPrivateAddresses,1);
  assert.equal(audit(s,c).sources.length,0);assert.equal(audit(s,c).aggregates.staffOriginalMessagesExcluded,1);assert.equal(audit(s,c).aggregates.outgoingOriginalMessagesExcluded,1);assert.equal(audit(s,c,{includeStaff:true,includeOutgoing:true}).sources.length,2);
  }finally{s.close();}
 });

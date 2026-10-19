@@ -9,6 +9,7 @@ const cacheStartKey='private-native-cache-pair-start:v1',cacheProofPrefix='priva
 const cacheProofKey=(line,id)=>cacheProofPrefix+createHash('sha256').update(line+':'+id).digest('hex');
 const readMeta=(store,key)=>{const row=store.db.prepare('SELECT value FROM meta WHERE key=?').get(key);return row?store.open(row.value):null;};
 const nativeAt=raw=>Number(typeof raw?.messageTimestamp==='object'?raw.messageTimestamp.low:raw?.messageTimestamp)*1000;
+const webhookEvent=body=>String(body?.event??'').toLowerCase().replaceAll('_','.');
 const ownBlue=config=>config.company==='fumigacion'&&config.lines.some(line=>line.phone===FUMIGACION_BLUE&&line.instance==='cucaracha-azul')&&operationalLineAllowed(config,FUMIGACION_BLUE);
 const ownCacheLine=(config,body)=>{try{return nativeIdentityOperationalLine(config,body?.instance);}catch{return null;}};
 
@@ -22,7 +23,7 @@ export function initializePrivateNativeCachePair(store,config,now=Date.now()){
 }
 export function prospectivePrivateNativeCacheBody(store,config,body,{startedAt,now=Date.now()}={}){
   const line=ownCacheLine(config,body);
-  if(store.company!==config.company||!line||config.enabled!==true||body?.event!=='messages.upsert'||!Number.isSafeInteger(startedAt)||!Number.isSafeInteger(now)||startedAt<config.activatedAt||startedAt>now)return null;
+  if(store.company!==config.company||!line||config.enabled!==true||webhookEvent(body)!=='messages.upsert'||!Number.isSafeInteger(startedAt)||!Number.isSafeInteger(now)||startedAt<config.activatedAt||startedAt>now)return null;
   startedAt=nativeIdentityStartedAt(config,line,startedAt);
   const rows=(Array.isArray(body.data)?body.data:[body.data]).filter(raw=>{
     const key=raw?.key,at=nativeAt(raw);
@@ -32,7 +33,7 @@ export function prospectivePrivateNativeCacheBody(store,config,body,{startedAt,n
 }
 function cacheProofForRaw(store,config,body,raw){
   const line=ownCacheLine(config,body);
-  if(store.company!==config.company||!line||config.enabled!==true||body?.event!=='messages.upsert'||raw?.key?.fromMe!==false||!/^\d{5,30}@lid$/.test(raw.key.remoteJid||'')||raw.key.remoteJidAlt!=null&&raw.key.remoteJidAlt!=='')return null;
+  if(store.company!==config.company||!line||config.enabled!==true||webhookEvent(body)!=='messages.upsert'||raw?.key?.fromMe!==false||!/^\d{5,30}@lid$/.test(raw.key.remoteJid||'')||raw.key.remoteJidAlt!=null&&raw.key.remoteJidAlt!=='')return null;
   const value=readMeta(store,cacheProofKey(line.phone,raw.key.id)),start=readMeta(store,cacheStartKey),proof=value?.proof;
   const {proofHash,...unsigned}=proof||{},startedAt=nativeIdentityStartedAt(config,line,start?.startedAt);
   return start?.guard===NATIVE_IDENTITY_RESOLUTION_GUARD&&start.line===FUMIGACION_BLUE&&start.instance==='cucaracha-azul'&&start.historicalReplayEnabled===false&&Number.isSafeInteger(start.startedAt)&&start.startedAt>=config.activatedAt&&Number.isSafeInteger(startedAt)&&
@@ -44,7 +45,7 @@ function cacheProofForRaw(store,config,body,raw){
 // journal. No native key or original identity claim is rewritten.
 export function recordPrivateNativeCachePairs(store,config,body,result,{startedAt,now=Date.now()}={}){
   const line=ownCacheLine(config,body);
-  if(store.company!==config.company||!line||config.enabled!==true||body?.event!=='messages.upsert'||!Number.isSafeInteger(startedAt)||startedAt<config.activatedAt||!Number.isSafeInteger(now)||startedAt>now||result?.guard!==NATIVE_IDENTITY_RESOLUTION_GUARD||result.originalBodyPreserved!==true||result.originalBodyHash!==nativeIdentityResolutionHash(body))return {recorded:0};
+  if(store.company!==config.company||!line||config.enabled!==true||webhookEvent(body)!=='messages.upsert'||!Number.isSafeInteger(startedAt)||startedAt<config.activatedAt||!Number.isSafeInteger(now)||startedAt>now||result?.guard!==NATIVE_IDENTITY_RESOLUTION_GUARD||result.originalBodyPreserved!==true||result.originalBodyHash!==nativeIdentityResolutionHash(body))return {recorded:0};
   startedAt=nativeIdentityStartedAt(config,line,startedAt);
   const rows=Array.isArray(body.data)?body.data:[body.data];let recorded=0;
   store.tx(()=>{for(const resolution of result.resolutions||[]){
@@ -71,7 +72,7 @@ export function decodePrivateNativeCachePairs(store,config,body,{now=Date.now()}
 // An unmapped LID cannot identify a customer or a chief. Preserve the reception
 // gap as encrypted metadata instead of silently counting the request as handled.
 export function observePrivateIdentity(store,body,config,parsed,now=Date.now()){
-  if(config.company!=='fumigacion'||body.event!=='messages.upsert')return 0;
+  if(config.company!=='fumigacion'||webhookEvent(body)!=='messages.upsert')return 0;
   const line=config.lines.find(l=>l.instance===body.instance);if(!line)return 0;
   let observed=0;
   store.tx(()=>{
@@ -114,8 +115,8 @@ function decodePrivateSource(d,line,phone){
 }
 export function decodeWebhook(body,config) {
   const line=config.lines.find(l=>l.instance===body.instance);if(!line)return {events:[],deliveries:[]};
-  const events=[],deliveries=[];const data=Array.isArray(body.data)?body.data:[body.data];
-  if(body.event==='messages.upsert')for(const d of data){
+  const events=[],deliveries=[],event=webhookEvent(body);const data=Array.isArray(body.data)?body.data:[body.data];
+  if(event==='messages.upsert')for(const d of data){
     const key=d?.key;let jid=key?.remoteJid;
     // The own authenticated provider may supply an explicit direct phone alternative.
     // Authority still comes from validateEvent's exact internal roles, never a LID or name.
@@ -125,7 +126,7 @@ export function decodeWebhook(body,config) {
     if(!/^57\d{10}@s\.whatsapp\.net$/.test(jid||'')||!key.id||typeof key.fromMe!=='boolean')continue;
     const value=decodePrivateSource(d,line,jid.split('@')[0]);if(value)events.push(value);
   }
-  if(body.event==='messages.update')for(const d of data){
+  if(event==='messages.update')for(const d of data){
     const mid=d?.key?.id??d?.keyId;const status=d?.update?.status??d?.status;
     const state=({DELIVERY_ACK:'DELIVERED',READ:'READ',3:'DELIVERED',4:'READ'})[status];
     if(mid&&state)deliveries.push({instance:line.instance,owner:line.phone,mid,state});
