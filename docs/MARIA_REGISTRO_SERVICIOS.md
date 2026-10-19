@@ -1,5 +1,11 @@
 # Registro propio de servicios nuevos de María
 
+## Estado comprobado 19/oct/2026 16:05Z — supervisión sin nuevas altas
+
+Runtime `44a8088` instalado sólo para FUMIGACIÓN; guardia de supervisión por lectura verificada por API. **3030/3030 pruebas, cero omisiones.** Registro ordinario y perfil `own-confirmed-client-time-without-technician-v1` configurados/habilitados, técnico automático OFF y vencimiento original 07/nov16:56:52.680Z. SAVED=1 histórico; preparado/incierto/revisión=0. Esta instalación y las pruebas sintéticas no son una venta ni programación real nuevas.
+
+No se crearon, corrigieron ni retiraron servicios durante este control. Tampoco se generó acceso, se liberó atención humana o se reprodujo una aceptación histórica. La ruta de seguimientos manuales revisados carece de escrituras de negocio; las 34 comprobaciones posteriores quedaron bloqueadas por atención humana/atención desconocida, sin envío. La recolección canónica negativa sigue sin acreditar un servicio aceptado omitido.
+
 ## Supervisión por lectura 19/oct/2026 — registro comercial preservado
 
 El candidato propio distingue supervisión por lectura de intervención escrita y conserva los bloqueos de agenda/registro durante atención humana real. No crea servicios ni cambia el horario, el técnico, el pago, el estado comercial o el acceso ordinario. El recorrido de horario pedido por el cliente sin técnico continúa bajo sus fuentes, resumen entregado y nueva confirmación; ningún acuse de lectura constituye aceptación del servicio.

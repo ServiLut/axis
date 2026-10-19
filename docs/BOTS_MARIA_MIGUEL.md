@@ -1,5 +1,17 @@
 # María Ángel y Miguel Ángel
 
+## Estado comprobado 19/oct/2026 16:05Z — correcciones instaladas sólo en Mariángel
+
+**Runtime propio `44a80883a990dbf3ece38fc4e63b85e767511047` instalado, Dokploy DONE 2 s y 3030/3030 pruebas locales aprobadas.** API propia 16:05:45Z verificó `readSupervisionGuard=own-blue-empty-read-receipts-without-human-authorship-v1`, recepción/respuestas activas y el corte público exacto original de 17/oct 20:20:36.716Z. Registro ordinario y horario del cliente sin técnico siguen activos; actor, empresa, tenant y vencimiento 07/nov permanecen propios. SAVED ordinario=1 histórico: no se acredita una venta nueva por esta comprobación.
+
+Se rechazaron textos vacíos y se separaron acuses nativos puros de una intervención humana, con escaneo histórico íntegro antes de excluir metadata. Una escritura real del personal conserva la pausa. **No se liberó ningún hold histórico ni se reprodujeron mensajes.** Sigue sin identificarse un caso concreto que demuestre la cadena abrir-chat→hold; la usuaria informó que enviará evidencia si reaparece. Las 115 fuentes recientes revisadas tenían texto o medio, por lo que no deben atribuirse todas a una lectura.
+
+La rama propia persistida es `codex/maria-blue-audit-read-supervision-20261019`, autodeploy OFF; ningún otro bot o backend fue desplegado. Se conservó el primer despliegue `4fbedf7` DONE 6 s que aún tomó la rama anterior: el selector había quedado abierto y la selección no se había guardado. Tras cerrar el selector, guardar y recargar se verificó persistencia y se instaló `44a8088`. No se ocultó ese primer resultado ni se afirmó éxito por ACCEPTED.
+
+El canal de seguimiento manual ya está instalado. Lectura posterior de 34 borradores con fuente exacta utilizable: **23 bajo atención humana, 11 con atención local desconocida, cero elegibles**. No preparó ni envió mensajes y no liberó esos chats. Tres borradores adicionales aún no entraron por sus fuentes; se conservan para revisión. La auditoría avanzó otros 45 casos (184..228): textos disponibles revisados y originales de medios aún pendientes. El conjunto no está completo; no confundir 37 borradores privados con reactivaciones enviadas ni búsqueda negativa con servicio omitido.
+
+Evidencia y continuación: `.tmp/maria-blue-audit-20261019/checkpoint-private.json`, `read-supervision-after-2026-10-19T16-05-45-086Z/receipt-private.json`, `draft-eligibility-2026-10-19T16-08-19-559Z/receipt-private.json` y `read-supervision-findings-private.md`. La roja, preventiva/notas, fuentes, credenciales, holds y demás bots quedan preservados. Este estado sustituye sólo los candidatos pendientes y el bloqueo UI históricos siguientes.
+
 ## Supervisión por lectura 19/oct/2026 — candidato prospectivo propio
 
 La usuaria aclaró que abrir un chat para supervisar no devuelve su atención al personal. Una intervención escrita real sigue pausando la IA; esta aclaración no libera holds históricos. El callback normal READ ya actualizaba únicamente entrega. Se reprodujeron dos vías alternativas: `/event` aceptaba texto saliente vacío y un acuse nativo puro sin timestamp terminaba en revisión de atención. El candidato rechaza texto vacío y separa acuses inequívocos del contenido, con identidad y cobertura verificadas. Una consulta histórica sólo puede descartar esos acuses tras releer íntegramente el resultado anclado; ediciones, borrados, medios, contenido desconocido y fuentes incompletas conservan revisión.
