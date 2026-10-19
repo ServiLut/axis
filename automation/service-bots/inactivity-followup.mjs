@@ -1,9 +1,9 @@
 import {createHash} from 'node:crypto';
 import {knownInternalRecipient,normalize,publicTextSafe} from './config.mjs';
 import {programEnabled,programFollowupEligible} from './maria-program.mjs';
-import {assertOperationalLineScope,operationalLineAllowed} from './line-scope.mjs';
+import {assertOperationalLineScope,operationalLineAllowed,operationalLineStartsAt} from './line-scope.mjs';
 import {customerDeferralStillBlocks,CUSTOMER_DEFERRAL_GUARD} from './customer-deferral.mjs';
-import {publicEventAllowed,publicOperationAllowed,publicResponseSqlCutoff} from './public-response-window.mjs';
+import {publicEventAllowed,publicOperationAllowed,publicResponseSqlCutoff,publicLineSqlFilter} from './public-response-window.mjs';
 
 export const INACTIVITY_GUARD='own-delivered-open-case-once-after-20-minutes-and-native-recheck-v1';
 const WAIT=20*60000,WINDOW=86400000;
@@ -33,7 +33,7 @@ function blockedState(state){return state.customerDeferral?.guard===CUSTOMER_DEF
 function quoteCurrent(quote,now){return !quote||!((quote.validUntil&&quote.validUntil<=now)||(quote.expiresAt&&quote.expiresAt<=now));}
 function lineScopeEligible(config,store,phone,line,sourceAt){
  const scope=assertOperationalLineScope(config);
- return !scope||(operationalLineAllowed(config,line)&&sourceAt>=Date.parse(scope.authorizedAt)&&!store.hasSourcesOutsideLine(phone,line));
+ return !scope||(operationalLineAllowed(config,line)&&sourceAt>=operationalLineStartsAt(config,line)&&!store.hasSourcesOutsideLine(phone,line));
 }
 function followupText(state){
  if(state.quotedPrice&&!state.quotedPrice.accepted)return '¿Deseas continuar con la cotización que te compartí?';
@@ -63,7 +63,7 @@ export function inactivityCandidate(config,store,phone,now=Date.now()){
  if(!lineScopeEligible(config,store,phone,event.line,event.at))return null;
  if(event.kind!=='text'||event.forwarded||event.id!==state.lastHandledSourceId||excluded.test(normalize(event.text)))return null;
  const firstId=state.caseId.startsWith('fumigacion:')?state.caseId.slice('fumigacion:'.length):null;
- const first=firstId&&store.db.prepare('SELECT at,received_at FROM events WHERE id=? AND phone=? AND from_me=0').get(firstId,phone);
+ const first=firstId&&store.db.prepare('SELECT line,at,received_at FROM events WHERE id=? AND phone=? AND from_me=0').get(firstId,phone);
  if(!first||!publicEventAllowed(config,first,now))return null;
  const total=store.db.prepare('SELECT COUNT(*) n FROM events WHERE phone=? AND from_me=0 AND at BETWEEN ? AND ?').get(phone,first.at,latest.at).n;
  if(total>40)return null;
@@ -76,7 +76,7 @@ export function inactivityCandidate(config,store,phone,now=Date.now()){
     store.db.prepare("SELECT 1 FROM outbox WHERE phone=? AND internal=0 AND state IN ('READY','SENDING','UNCERTAIN','ACCEPTED')").get(phone))return null;
  const source=store.db.prepare("SELECT * FROM outbox WHERE phone=? AND case_id=? AND internal=0 AND state IN ('DELIVERED','READ') ORDER BY created DESC,rowid DESC LIMIT 1").get(phone,state.caseId);
  if(!source||source.line!==event.line||!source.mid||source.created<latest.received_at||source.updated>now-WAIT||!store.approvedReplyStillValid(source)||!store.priceReplyStillValid(source))return null;
- if(!publicOperationAllowed(config,{sourceAt:latest.at,createdAt:source.created},now))return null;
+ if(!publicOperationAllowed(config,{line:event.line,sourceAt:latest.at,createdAt:source.created},now))return null;
  if(!quoteCurrent(state.quotedPrice,now))return null;
  const text=followupText(state);if(!text||!publicTextSafe(text))return null;
  const id='inactivity:fumigacion:'+createHash('sha256').update(state.caseId).digest('hex')+':v1';
@@ -94,7 +94,7 @@ export async function revalidateInactivity(store,config,transport,candidate,now=
  if(!await programFollowupEligible(config,store,transport,candidate.phone))return false;
  const latest=store.conversation(candidate.phone);
  const checkedAt=Math.max(now,Date.now());
- return lineScopeEligible(config,store,candidate.phone,candidate.line,candidate.lastSourceAt)&&!latest?.hold&&!blockedState(latest?.state||{})&&latest?.revision===candidate.revision&&candidate.lastSourceAt>=checkedAt-WINDOW&&quoteCurrent(latest?.state.quotedPrice,checkedAt);
+ return Boolean(inactivityCandidate(config,store,candidate.phone,checkedAt))&&lineScopeEligible(config,store,candidate.phone,candidate.line,candidate.lastSourceAt)&&!latest?.hold&&!blockedState(latest?.state||{})&&latest?.revision===candidate.revision&&candidate.lastSourceAt>=checkedAt-WINDOW&&quoteCurrent(latest?.state.quotedPrice,checkedAt);
 }
 
 export async function queueInactivityFollowups(store,config,transport,now=Date.now()){
@@ -102,7 +102,10 @@ export async function queueInactivityFollowups(store,config,transport,now=Date.n
  if(config.company!=='fumigacion'||!config.enabled||!config.inactivityFollowupEnabled||!programEnabled(config,now))return {enabled:false,queued:0,prepared:config.company==='fumigacion'};
  let queued=0,review=0,attempts=0;
  const publicCut=publicResponseSqlCutoff(config);
- for(const row of store.db.prepare('SELECT phone FROM conversations WHERE hold=0 AND at BETWEEN ? AND ? AND (?<0 OR at>=?) ORDER BY at LIMIT 20').all(now-WINDOW,now-WAIT,publicCut,publicCut)){
+ const conversationFilter=publicLineSqlFilter(config,{lineColumn:'conversations.line',sourceAtColumn:'conversations.at',createdAtColumn:'conversations.at'});
+ const sourceFilter=publicLineSqlFilter(config,{lineColumn:'e.line',sourceAtColumn:'e.at',createdAtColumn:'e.received_at'});
+ const currentSource=sourceFilter.sql==='1'?'1':'EXISTS(SELECT 1 FROM events e WHERE e.phone=conversations.phone AND e.line=conversations.line AND e.revision=conversations.revision AND e.from_me=0 AND ('+sourceFilter.sql+'))';
+ for(const row of store.db.prepare('SELECT phone FROM conversations WHERE hold=0 AND at BETWEEN ? AND ? AND (?<0 OR at>=?) AND ('+conversationFilter.sql+') AND ('+currentSource+') ORDER BY at LIMIT 20').all(now-WINDOW,now-WAIT,publicCut,publicCut,...conversationFilter.params,...(sourceFilter.sql==='1'?[]:sourceFilter.params))){
   const candidate=inactivityCandidate(config,store,row.phone,now);if(!candidate)continue;
   // Only one candidate performs network reads per idle worker cycle. A new
   // authenticated source wakes active reception rather than waiting behind
@@ -125,9 +128,9 @@ export async function inactivityDeliveryValid(store,config,transport,row){
  const record=store.db.prepare('SELECT body FROM inactivity_followups WHERE outbox_id=?').get(row.id);if(!record)return false;
  const candidate=store.open(record.body),conv=store.conversation(row.phone),now=Date.now();
  const firstId=candidate.caseId?.startsWith('fumigacion:')?candidate.caseId.slice('fumigacion:'.length):null;
- const first=firstId&&store.db.prepare('SELECT at,received_at FROM events WHERE id=? AND phone=? AND from_me=0').get(firstId,row.phone);
- const source=store.db.prepare('SELECT at,received_at FROM events WHERE id=? AND phone=? AND from_me=0').get(candidate.sourceId,row.phone);
- if(!first||!source||!publicEventAllowed(config,first,now)||!publicEventAllowed(config,source,now)||!publicOperationAllowed(config,{sourceAt:candidate.lastSourceAt,createdAt:row.created},now))return false;
+ const first=firstId&&store.db.prepare('SELECT line,at,received_at FROM events WHERE id=? AND phone=? AND from_me=0').get(firstId,row.phone);
+ const source=store.db.prepare('SELECT line,at,received_at FROM events WHERE id=? AND phone=? AND from_me=0').get(candidate.sourceId,row.phone);
+ if(!first||!source||!publicEventAllowed(config,first,now)||!publicEventAllowed(config,source,now)||!publicOperationAllowed(config,{line:row.line,sourceAt:candidate.lastSourceAt,createdAt:row.created},now))return false;
  if(!lineScopeEligible(config,store,row.phone,candidate.line,candidate.lastSourceAt))return false;
  if(!config.inactivityFollowupEnabled||conv?.hold||blockedState(conv?.state||{})||conv?.state.caseId!==candidate.caseId||conv?.revision!==candidate.revision||candidate.lastSourceAt<now-WINDOW)return false;
  const quote=conv.state.quotedPrice,prior=store.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND case_id=? AND state IN ('DELIVERED','READ')").get(candidate.lastReplyId,row.phone,candidate.caseId);
@@ -138,7 +141,7 @@ export async function inactivityDeliveryValid(store,config,transport,row){
  if(!await programFollowupEligible(config,store,transport,row.phone))return false;
  const latest=store.conversation(row.phone);
  const checkedAt=Date.now();
- if(!lineScopeEligible(config,store,row.phone,candidate.line,candidate.lastSourceAt))return false;
+ if(!lineScopeEligible(config,store,row.phone,candidate.line,candidate.lastSourceAt)||!publicEventAllowed(config,first,checkedAt)||!publicEventAllowed(config,source,checkedAt)||!publicOperationAllowed(config,{line:row.line,sourceAt:candidate.lastSourceAt,createdAt:row.created},checkedAt))return false;
  return programEnabled(config,checkedAt)&&!latest?.hold&&!blockedState(latest?.state||{})&&latest?.revision===candidate.revision&&candidate.lastSourceAt>=checkedAt-WINDOW&&quoteCurrent(latest?.state.quotedPrice,checkedAt)&&store.approvedReplyStillValid(prior)&&store.priceReplyStillValid(prior)&&native.complete&&native.sources.some(s=>s.id===candidate.sourceId&&s.line===candidate.line&&s.at===candidate.lastSourceAt)&&!native.sources.some(s=>s.at>candidate.lastSourceAt||s.at===candidate.lastSourceAt&&s.id!==candidate.sourceId);
 }
 

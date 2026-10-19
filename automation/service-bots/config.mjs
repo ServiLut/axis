@@ -3,7 +3,7 @@ import {aiConfiguration} from './ai-settings.mjs';
 import {registrationConfig,staffPlanningConfig} from './maria-program.mjs';
 import {clientRequestedScheduleConfig} from './client-requested-schedule.mjs';
 import {tesaConfiguration} from './tesa-config.mjs';
-import {assertOperationalLineScope,operationalLineAllowed} from './line-scope.mjs';
+import {assertOperationalLineScope,operationalLineAllowed,operationalLineStartsAt,DUAL_LINE_SCOPE_VERSION,FUMIGACION_RED} from './line-scope.mjs';
 import {mariaTestOrderAccessConfig} from './maria-test-order-access.mjs';
 import {CHIEF_TESA_TEST_CYCLE} from './chief-tesa-test.mjs';
 import {publicResponseWindowConfig} from './public-response-window.mjs';
@@ -61,6 +61,8 @@ export function configFromEnv(env = process.env) {
       lines.some(l=>!business.phones.includes(l.phone) || !/^[a-z0-9][a-z0-9_-]{1,80}$/i.test(l.instance) ||
       ['abogados','psicologos-en-colombia'].includes(l.instance))) throw new Error('OWN_LINES_REQUIRED');
   const operationalLineScope=assertOperationalLineScope({company,lines,activatedAt:Date.parse(env.BOT_ACTIVATED_AT||''),operationalLineScope:env.BOT_OPERATIONAL_LINE_SCOPE_JSON?JSON.parse(env.BOT_OPERATIONAL_LINE_SCOPE_JSON):null});
+  const publicResponseStartsAt=publicResponseWindowConfig(env,company,Date.parse(env.BOT_ACTIVATED_AT||''));
+  if(operationalLineScope?.version===DUAL_LINE_SCOPE_VERSION&&(publicResponseStartsAt===null||operationalLineStartsAt({company,lines,operationalLineScope,activatedAt:Date.parse(env.BOT_ACTIVATED_AT||'')},FUMIGACION_RED)<=publicResponseStartsAt))throw Error('DUAL_PROSPECTIVE_CUTOFF_REQUIRED');
   if (!/^[a-f0-9]{64}$/.test(env.BOT_AUTH_TOKEN_HASH || '') || !/^[a-f0-9]{64}$/.test(env.BOT_WEBHOOK_TOKEN_HASH || '') ||
       env.BOT_AUTH_TOKEN_HASH===env.BOT_WEBHOOK_TOKEN_HASH || !/^[a-f0-9]{64}$/.test(env.BOT_DATA_KEY || '')) throw new Error('DEDICATED_KEYS_REQUIRED');
   const database = env.BOT_DATABASE_PATH;
@@ -78,7 +80,7 @@ export function configFromEnv(env = process.env) {
   return { operatorRouting:env.BOT_OPERATIONAL_ROUTING||'sandra',company, ...business, lines, operationalLineScope, database, encryptionKey: Buffer.from(env.BOT_DATA_KEY,'hex'),
     authHash: env.BOT_AUTH_TOKEN_HASH, webhookHash:env.BOT_WEBHOOK_TOKEN_HASH, provider: provider.href.replace(/\/$/,''),
     enabled: env.BOT_ENABLED === 'true', chiefOnly:env.BOT_CHIEF_ONLY==='true', replyOnlyToChief:company==='fumigacion'&&env.BOT_REPLY_ONLY_TO_CHIEF==='true', activatedAt: Date.parse(env.BOT_ACTIVATED_AT || ''),
-    publicResponseStartsAt:publicResponseWindowConfig(env,company,Date.parse(env.BOT_ACTIVATED_AT||'')),
+    publicResponseStartsAt,
     historyCheckRequired:env.BOT_PRIOR_HISTORY_CHECK==='true',
     port: Number(env.PORT || 8080), programContextUrl: env.BOT_PROGRAM_CONTEXT_URL || null,
     programToken: env.BOT_PROGRAM_READ_TOKEN || null, expectedProgramCompanyId: env.BOT_PROGRAM_COMPANY_ID || null,
@@ -106,7 +108,7 @@ export function validateEvent(body, config, now = Date.now(), recoverChief = fal
   const internal=event&&internalRecipients(config).includes(event.phone);
   if (!line || !event || !operationalLineAllowed(config,line.phone) || (!config.enabled&&!(config.chiefOnly&&internal)) || !Number.isFinite(config.activatedAt)) return null;
   const at = Date.parse(event.at);
-  if(config.operationalLineScope&&at<Date.parse(config.operationalLineScope.authorizedAt))return null;
+  if(config.operationalLineScope&&at<operationalLineStartsAt(config,line.phone))return null;
   if (!/^[A-Za-z0-9_-]{8,100}$/.test(event.id || '') || !/^57\d{10}$/.test(event.phone || '') ||
       typeof event.fromMe !== 'boolean' || !Number.isFinite(at) || at < config.activatedAt || at > now+60000 || at < now-(recoverChief&&internal&&!event.fromMe?86400000:600000) ||
       !['text','audio','image','document','video','call'].includes(event.kind) || typeof event.text !== 'string' || event.text.length > 6000 ||

@@ -10,7 +10,7 @@ import {continueOwnSchedulingOffer,ownSchedulingPlan,ownSchedulingProof,ownSched
 import {routeCaseQuestion} from './engine.mjs';
 import {verifyStoredNativeIdentitySource} from './native-identity-resolution.mjs';
 import {partitionNativeAttention} from './explicit-return-attention.mjs';
-import {publicResponseWindow,publicResponseSqlCutoff,publicTesaOutboxAllowed} from './public-response-window.mjs';
+import {publicResponseWindow,publicResponseSqlCutoff,publicTesaOutboxAllowed,publicLineSqlFilter} from './public-response-window.mjs';
 
 const nativeText=r=>{const m=r.message?.ephemeralMessage?.message??r.message??{};return m.conversation??m.extendedTextMessage?.text??null;};
 const phoneJid=j=>/^57\d{10}@s\.whatsapp\.net$/.test(j??'')?j.split('@')[0]:null;
@@ -277,7 +277,10 @@ export async function drainTesaGroup(store,config,transport){
     try{await verifyTesaNativeDelivery(store,config,transport,o);}catch{store.audit('TESA_NATIVE_DELIVERY_REVIEW',o.id,{attemptedSend:false});}
   }
   const publicCut=publicResponseSqlCutoff(config);
-  const ready=store.db.prepare("SELECT * FROM tesa_outbox WHERE state='READY' AND (?<0 OR created>=?) ORDER BY created LIMIT 5").all(publicCut,publicCut);
+  const lineFilter=publicLineSqlFilter(config,{lineColumn:'source_line',sourceAtColumn:'created',createdAtColumn:'created'});
+  // The exact customer source ID is encrypted in its question body. Apply its
+  // source/receipt boundary before the dispatch limit as well as the SQL cut.
+  const ready=store.db.prepare("SELECT * FROM tesa_outbox WHERE state='READY' AND (?<0 OR created>=?) AND ("+(lineFilter.sql||'1=1')+") ORDER BY created").all(publicCut,publicCut,...lineFilter.params).filter(row=>publicTesaOutboxAllowed(store,config,row)).slice(0,5);
   for(const o of ready){
     if(!publicTesaOutboxAllowed(store,config,o))continue;
     if(!scopedReady(o))continue;

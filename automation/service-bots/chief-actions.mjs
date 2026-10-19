@@ -12,7 +12,7 @@ import {parseChiefCustomerSimulationCommand} from './chief-customer-simulation.m
 import {executeChiefCustomerSimulation,CHIEF_CUSTOMER_SIMULATION_HOOK_GUARD} from './chief-customer-simulation-hook.mjs';
 import {parseMariaTestOrderCommand,mariaTestOrderAccessStatus} from './maria-test-order-access.mjs';
 import {parseChiefTesaTestCommand,executeChiefTesaTest,chiefTesaTestStatus} from './chief-tesa-test.mjs';
-import {publicResponseWindow,publicResponseSqlCutoff,publicOperationAllowed,publicEventAllowed} from './public-response-window.mjs';
+import {publicResponseWindow,publicResponseSqlCutoff,publicOperationAllowed,publicEventAllowed,publicLineSqlFilter} from './public-response-window.mjs';
 
 export const CHIEF_ACTIONS_GUARD='own-native-directed-chief-durable-command-and-verified-result-v1';
 export const CHIEF_CONVERSATION_RULE_GUARD='own-native-chief-versioned-conversation-rules-only-v1';
@@ -24,8 +24,8 @@ const sourceKey=e=>'chief-command:'+e.id;
 const forbiddenReference=text=>/["“”«»]|\b(?:dijo|dice|escribio|comento|segun|me dijeron|un tercero|que harias|si te digo|supongamos|hipotetic\w*|no ejecutes|no hagas|no retomes|no liberes)\b/.test(normalize(text));
 function commandWindowAllowed(s,c,row,now=Date.now()){
  if(!publicResponseWindow(c).active)return true;
- const event=s.db.prepare('SELECT at,received_at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(row.source_id,SANDRA,row.line);
- return Boolean(event&&event.at===row.source_at&&publicEventAllowed(c,event,now)&&publicOperationAllowed(c,{sourceAt:row.source_at,createdAt:row.created},now));
+ const event=s.db.prepare('SELECT line,at,received_at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(row.source_id,SANDRA,row.line);
+ return Boolean(event&&event.at===row.source_at&&publicEventAllowed(c,event,now)&&publicOperationAllowed(c,{line:row.line,sourceAt:row.source_at,createdAt:row.created},now));
 }
 function resolvedDay(body,at){
  const match=body.match(/\b\d{4}-\d{2}-\d{2}\b/),today=dayAt(at);
@@ -204,8 +204,10 @@ export async function drainChiefActions(s,c,t,{now=Date.now()}={}){
  if(c.company!=='fumigacion'||s.company!==c.company||!tableExists(s))return {processed:0,completed:0,blocked:0,uncertain:0};
  const result={processed:0,completed:0,blocked:0,uncertain:0};
  const publicCut=publicResponseSqlCutoff(c);
+ const lineFilter=publicLineSqlFilter(c,{lineColumn:'chief_commands.line',sourceAtColumn:'chief_commands.source_at',createdAtColumn:'chief_commands.created'});
+ const eventFilter=publicLineSqlFilter(c,{lineColumn:'e.line',sourceAtColumn:'e.at',createdAtColumn:'e.received_at'});
  const running=s.db.prepare("SELECT * FROM chief_commands WHERE state='RUNNING' AND (?<0 OR (source_at>=? AND created>=?))").all(publicCut,publicCut,publicCut);for(const old of running){if(!commandWindowAllowed(s,c,old,Math.max(now,Date.now())))continue;s.db.prepare("UPDATE chief_commands SET state='UNCERTAIN',updated=? WHERE id=? AND state='RUNNING'").run(now,old.id);s.audit('CHIEF_COMMAND_INTERRUPTED_UNCERTAIN',old.source_id,{id:old.id,automaticallyRetried:false});result.uncertain++;}
- for(const row of s.db.prepare("SELECT * FROM chief_commands WHERE state='PENDING' AND (?<0 OR (source_at>=? AND created>=? AND EXISTS(SELECT 1 FROM events e WHERE e.id=chief_commands.source_id AND e.phone=? AND e.line=chief_commands.line AND e.from_me=0 AND e.at=chief_commands.source_at AND e.received_at>=?))) ORDER BY rowid LIMIT 2").all(publicCut,publicCut,publicCut,SANDRA,publicCut)){
+ for(const row of s.db.prepare("SELECT * FROM chief_commands WHERE state='PENDING' AND ("+(lineFilter.sql||'1=1')+") AND (?<0 OR (source_at>=? AND created>=? AND EXISTS(SELECT 1 FROM events e WHERE e.id=chief_commands.source_id AND e.phone=? AND e.line=chief_commands.line AND e.from_me=0 AND e.at=chief_commands.source_at AND e.received_at>=? AND ("+(eventFilter.sql||'1=1')+")))) ORDER BY rowid LIMIT 2").all(...lineFilter.params,publicCut,publicCut,publicCut,SANDRA,publicCut,...eventFilter.params)){
   if(!commandWindowAllowed(s,c,row,Math.max(now,Date.now())))continue;
   let reserved=false;
   const currentWindow=()=>commandWindowAllowed(s,c,row,Math.max(now,Date.now()));

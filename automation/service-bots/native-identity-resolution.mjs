@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import {knownInternalRecipient,internalRecipients} from './config.mjs';
-import {FUMIGACION_BLUE,operationalLineAllowed} from './line-scope.mjs';
+import {FUMIGACION_BLUE,FUMIGACION_RED,DUAL_LINE_SCOPE_VERSION,operationalLineAllowed,operationalLineStartsAt} from './line-scope.mjs';
 
 export const NATIVE_IDENTITY_RESOLUTION_GUARD='own-blue-prospective-native-explicit-lid-pair-readonly-v1';
 export const NATIVE_IDENTITY_MAX_AGE_MS=120000;
@@ -10,6 +10,17 @@ export const NATIVE_IDENTITY_DIAGNOSTIC_CONTENT_PATHS=Object.freeze(['conversati
 export const NATIVE_IDENTITY_DIAGNOSTIC_SEMANTIC_FIELDS=Object.freeze(['textMatches','kindMatches','quotedIdsMatch','forwardingMatches']);
 export const NATIVE_IDENTITY_DIAGNOSTIC_VALUE_TYPES=Object.freeze(['absent','null','array','object','string','number','boolean','other']);
 const INSTANCE='cucaracha-azul',PAGE_SIZE=100;
+// The legacy export/guard remain valid for existing BLUE proofs. RED is only
+// admitted by the separately validated prospective two-line authorization.
+export function nativeIdentityOperationalLine(config,instance){
+  if(config?.company!=='fumigacion')return null;
+  const line=config.lines?.find(value=>value.instance===instance&&(
+    value.phone===FUMIGACION_BLUE&&value.instance===INSTANCE||
+    value.phone===FUMIGACION_RED&&value.instance==='cucaracha-roja'&&config.operationalLineScope?.version===DUAL_LINE_SCOPE_VERSION));
+  return line&&operationalLineAllowed(config,line.phone)?line:null;
+}
+const pairSourceStartsAt=(config,line)=>line.phone===FUMIGACION_RED?Math.max(config.activatedAt,operationalLineStartsAt(config,line.phone)):config.activatedAt;
+export const nativeIdentityStartedAt=(config,line,startedAt)=>line.phone===FUMIGACION_RED?Math.max(startedAt,pairSourceStartsAt(config,line)):startedAt;
 const nativeMid=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{8,100}$/.test(value);
 const lidJid=value=>typeof value==='string'&&/^\d{5,30}@lid$/.test(value);
 const phoneJid=value=>typeof value==='string'&&/^57\d{10}@s\.whatsapp\.net$/.test(value);
@@ -150,9 +161,11 @@ const blockedPhone=(config,phone)=>knownInternalRecipient(phone)||internalRecipi
 export async function resolveOwnBlueNativeIdentity(config,transport,originalBody,{startedAt,now=Date.now(),authenticated=false}={}){
   const result={guard:NATIVE_IDENTITY_RESOLUTION_GUARD,resolutions:[],unresolved:[],originalBodyHash:hash(originalBody),originalBodyPreserved:true,readOnly:true,historicalCoverageComplete:false};
   const fail=(sourceId,reason,diagnostics)=>result.unresolved.push({sourceId:typeof sourceId==='string'?sourceId:null,reason,...(diagnostics?{diagnostics}:{})});
-  let line;
-  try{line=config?.lines?.find(value=>value.phone===FUMIGACION_BLUE&&value.instance===INSTANCE);
-    if(!authenticated||config?.company!=='fumigacion'||config.enabled!==true||!line||transport?.config!==config||!Number.isSafeInteger(config.activatedAt)||!Number.isSafeInteger(startedAt)||startedAt<config.activatedAt||!Number.isSafeInteger(now)||startedAt>now||!operationalLineAllowed(config,FUMIGACION_BLUE)||originalBody?.instance!==INSTANCE||originalBody?.event!=='messages.upsert')throw Error('scope');
+  let line,sourceStartsAt;
+  try{line=nativeIdentityOperationalLine(config,originalBody?.instance);
+    if(!authenticated||config.enabled!==true||!line||transport?.config!==config||!Number.isSafeInteger(config.activatedAt)||!Number.isSafeInteger(startedAt)||startedAt<config.activatedAt||!Number.isSafeInteger(now)||startedAt>now||originalBody?.event!=='messages.upsert')throw Error('scope');
+    sourceStartsAt=pairSourceStartsAt(config,line);startedAt=nativeIdentityStartedAt(config,line,startedAt);
+    if(!Number.isSafeInteger(sourceStartsAt)||startedAt>now)throw Error('scope');
   }catch{fail(null,'OWN_BLUE_AUTHENTICATED_PROSPECTIVE_SCOPE_REQUIRED');return result;}
   const data=Array.isArray(originalBody.data)?originalBody.data:[originalBody.data];
   if(!data.length||data.length>20){fail(null,'NATIVE_CALLBACK_BATCH_LIMIT');return result;}
@@ -163,7 +176,7 @@ export async function resolveOwnBlueNativeIdentity(config,transport,originalBody
     // admits an external incoming private LID with no direct native PN yet.
     if(!lidJid(key?.remoteJid)||phoneJid(key?.remoteJidAlt))continue;
     if(!object(record)||!nativeMid(key?.id)||key.fromMe!==false||key.remoteJidAlt!=null&&key.remoteJidAlt!==''||!ownRecord(record,line)||forwarded(record)||changed(record)||!readable(record)){fail(key?.id,'CURRENT_PRIVATE_NATIVE_SOURCE_REQUIRED');continue;}
-    if(at===null||at<startedAt||at<config.activatedAt||at>now||now-at>NATIVE_IDENTITY_MAX_AGE_MS){fail(key.id,'CURRENT_PROSPECTIVE_NATIVE_SOURCE_REQUIRED');continue;}
+    if(at===null||at<startedAt||at<sourceStartsAt||at>now||now-at>NATIVE_IDENTITY_MAX_AGE_MS){fail(key.id,'CURRENT_PROSPECTIVE_NATIVE_SOURCE_REQUIRED');continue;}
     const fingerprint=hash(record);
     if(callbackSources.has(key.id)){if(callbackSources.get(key.id)!==fingerprint)callbackConflicts.add(key.id);continue;}
     callbackSources.set(key.id,fingerprint);pendingCandidates.push({record,key,at});
@@ -172,14 +185,14 @@ export async function resolveOwnBlueNativeIdentity(config,transport,originalBody
   if(!candidates.length)return result;
   let binding;
   try{binding=await transport.verifyLine(line.phone);if(!bindingVerified(binding,line,now))throw Error('binding');}
-  catch{for(const value of candidates)fail(value.key.id,'OWN_BLUE_NATIVE_OWNER_UNVERIFIED');return result;}
+  catch{for(const value of candidates)fail(value.key.id,line.phone===FUMIGACION_BLUE?'OWN_BLUE_NATIVE_OWNER_UNVERIFIED':'OWN_RED_NATIVE_OWNER_UNVERIFIED');return result;}
   const latestByLid=new Map();for(const value of candidates)latestByLid.set(value.key.remoteJid,Math.max(latestByLid.get(value.key.remoteJid)||0,value.at));
   const pages=new Map();
   for(const candidate of candidates){
     const {record,key,at}=candidate,cacheKey=key.remoteJid;let page=pages.get(cacheKey);
     if(!page){
       try{
-        const response=await transport.request(line,'/chat/findMessages/'+encodeURIComponent(line.instance),{where:{key:{remoteJid:key.remoteJid},messageTimestamp:{gte:new Date(config.activatedAt).toISOString(),lte:new Date(latestByLid.get(cacheKey)).toISOString()}},offset:PAGE_SIZE,page:1});
+        const response=await transport.request(line,'/chat/findMessages/'+encodeURIComponent(line.instance),{where:{key:{remoteJid:key.remoteJid},messageTimestamp:{gte:new Date(sourceStartsAt).toISOString(),lte:new Date(latestByLid.get(cacheKey)).toISOString()}},offset:PAGE_SIZE,page:1});
         const value=response?.messages;
         if(!object(value)||!Number.isSafeInteger(value.total)||value.total<0||!Array.isArray(value.records)||value.records.length>PAGE_SIZE||value.total>PAGE_SIZE||value.records.length!==value.total)throw Error('shape');
         page={records:value.records,total:value.total};
@@ -196,12 +209,12 @@ export async function resolveOwnBlueNativeIdentity(config,transport,originalBody
     const pairs=[],seenNativeSources=new Map(),rawPhones=new Set();let conflict=false;
     for(const value of rows){
       const nativeKey=value?.key,pairAt=timestamp(value);
-      if(nativeMid(nativeKey?.id)&&pairAt!==null&&pairAt>=config.activatedAt&&pairAt<=at&&ownRecord(value,line)){
+      if(nativeMid(nativeKey?.id)&&pairAt!==null&&pairAt>=sourceStartsAt&&pairAt<=at&&ownRecord(value,line)){
         const sourceHash=recordHash(value);if(seenNativeSources.has(nativeKey.id)&&seenNativeSources.get(nativeKey.id)!==sourceHash)conflict=true;seenNativeSources.set(nativeKey.id,sourceHash);
       }
       if(!phoneJid(nativeKey?.remoteJidAlt))continue;
-      if(pairAt!==null&&pairAt>=config.activatedAt&&pairAt<=at&&ownRecord(value,line)){const phone=nativeKey.remoteJidAlt.split('@')[0];rawPhones.add(phone);if(blockedPhone(config,phone))conflict=true;}
-      if(!nativeMid(nativeKey.id)||typeof nativeKey.fromMe!=='boolean'||!ownRecord(value,line)||pairAt===null||pairAt<config.activatedAt||pairAt>at||forwarded(value)||changed(value)||!readable(value))continue;
+      if(pairAt!==null&&pairAt>=sourceStartsAt&&pairAt<=at&&ownRecord(value,line)){const phone=nativeKey.remoteJidAlt.split('@')[0];rawPhones.add(phone);if(blockedPhone(config,phone))conflict=true;}
+      if(!nativeMid(nativeKey.id)||typeof nativeKey.fromMe!=='boolean'||!ownRecord(value,line)||pairAt===null||pairAt<sourceStartsAt||pairAt>at||forwarded(value)||changed(value)||!readable(value))continue;
       if(nativeKey.fromMe&&!nativeStates(value).states.some(state=>['DELIVERY_ACK','READ',3,4].includes(state)))continue;
       const phone=nativeKey.remoteJidAlt.split('@')[0];
       if(blockedPhone(config,phone)){conflict=true;break;}
@@ -220,19 +233,20 @@ export async function resolveOwnBlueNativeIdentity(config,transport,originalBody
     result.resolutions.push({sourceId:key.id,phone:phones[0],lid:key.remoteJid,line:line.phone,instance:line.instance,proof});
   }
   try{const after=await transport.verifyLine(line.phone);if(!bindingVerified(after,line,now))throw Error('binding');}
-  catch{for(const value of result.resolutions)fail(value.sourceId,'OWN_BLUE_NATIVE_OWNER_CHANGED');result.resolutions=[];}
+  catch{for(const value of result.resolutions)fail(value.sourceId,line.phone===FUMIGACION_BLUE?'OWN_BLUE_NATIVE_OWNER_CHANGED':'OWN_RED_NATIVE_OWNER_CHANGED');result.resolutions=[];}
   return result;
 }
 
 const cacheProofPrefix='private-native-cache-pair-proof:';
-const metaSuffix=id=>createHash('sha256').update(FUMIGACION_BLUE+':'+id).digest('hex');
+const metaSuffix=(line,id)=>createHash('sha256').update(line+':'+id).digest('hex');
 const readStoredMeta=(store,key)=>{const row=store.db.prepare('SELECT value FROM meta WHERE key=?').get(key);return row?store.open(row.value):null;};
 const hashString=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 function storedScope(store,config,phone,line){
+  const own=config?.lines?.find(value=>value.phone===line);
   return store?.company==='fumigacion'&&config?.company==='fumigacion'&&config.enabled===true&&
-    /^57\d{10}$/.test(phone??'')&&!blockedPhone(config,phone)&&line===FUMIGACION_BLUE&&
+    /^57\d{10}$/.test(phone??'')&&!blockedPhone(config,phone)&&own&&nativeIdentityOperationalLine(config,own.instance)?.phone===line&&
     Number.isSafeInteger(config.activatedAt)&&operationalLineAllowed(config,line)&&
-    config.lines.some(value=>value.phone===line&&value.instance===INSTANCE);
+    Number.isSafeInteger(pairSourceStartsAt(config,own));
 }
 function processedProof(store,config,expected,now){
   if(!object(expected)||!nativeMid(expected.id)||!storedScope(store,config,expected.phone,expected.line))return null;
@@ -243,10 +257,12 @@ function processedProof(store,config,expected,now){
   for(const key of ['kind','text','at','fromMe','forwarded'])if(expected[key]!==undefined&&expected[key]!==event[key])return null;
   if(expected.quotedId!==undefined&&(expected.quotedId??null)!==(event.quotedId??null))return null;
   const start=readStoredMeta(store,'private-native-cache-pair-start:v1');
-  const value=readStoredMeta(store,cacheProofPrefix+metaSuffix(row.id));
-  const identity=readStoredMeta(store,'private-native-identity:'+metaSuffix(row.id));
+  const own=config.lines.find(value=>value.phone===row.line),sourceStartsAt=pairSourceStartsAt(config,own),startedAt=nativeIdentityStartedAt(config,own,start?.startedAt);
+  const value=readStoredMeta(store,cacheProofPrefix+metaSuffix(row.line,row.id));
+  const identity=readStoredMeta(store,'private-native-identity:'+metaSuffix(row.line,row.id));
   if(!object(start)||start.guard!==NATIVE_IDENTITY_RESOLUTION_GUARD||start.line!==FUMIGACION_BLUE||start.instance!==INSTANCE||start.historicalReplayEnabled!==false||!Number.isSafeInteger(start.startedAt)||start.startedAt<config.activatedAt||start.startedAt>event.at||
-    !object(value)||value.guard!==NATIVE_IDENTITY_RESOLUTION_GUARD||value.state!=='RESOLVED_NATIVE_CACHE_PAIR'||value.company!==config.company||value.sourceId!==row.id||value.phone!==row.phone||value.line!==row.line||value.instance!==INSTANCE||!lidJid(value.lid)||value.firstInstalledAt!==start.startedAt||value.originalCarriedPhone!==false||value.authority!=='external-customer-only'||value.historicalReplayEnabled!==false||
+    !Number.isSafeInteger(startedAt)||startedAt>event.at||
+    !object(value)||value.guard!==NATIVE_IDENTITY_RESOLUTION_GUARD||value.state!=='RESOLVED_NATIVE_CACHE_PAIR'||value.company!==config.company||value.sourceId!==row.id||value.phone!==row.phone||value.line!==row.line||value.instance!==own.instance||!lidJid(value.lid)||value.firstInstalledAt!==startedAt||value.originalCarriedPhone!==false||value.authority!=='external-customer-only'||value.historicalReplayEnabled!==false||
     !object(identity)||identity.sourceId!==row.id||identity.line!==row.line||identity.phone!==row.phone||identity.lid!==value.lid||identity.at!==event.at||identity.fromMe!==false||identity.state!=='RESOLVED_NATIVE_CACHE_PAIR'||identity.guard!==NATIVE_IDENTITY_RESOLUTION_GUARD||identity.originalCarriedPhone!==false)return null;
   const proof=value.proof;if(!object(proof))return null;
   const comparisonGuardPresent=Object.prototype.hasOwnProperty.call(proof,'messageBodyComparisonGuard'),rawEqualityPresent=Object.prototype.hasOwnProperty.call(proof,'rawMessageBodiesEqual');
@@ -254,10 +270,10 @@ function processedProof(store,config,expected,now){
   // closed and must be present as a pair; its flag never replaces native reads.
   if(comparisonGuardPresent!==rawEqualityPresent||comparisonGuardPresent&&(proof.messageBodyComparisonGuard!==NATIVE_MESSAGE_BYTE_EQUIVALENCE_GUARD||typeof proof.rawMessageBodiesEqual!=='boolean'))return null;
   const {proofHash,...unsigned}=proof;
-  if(!hashString(proofHash)||hash(unsigned)!==proofHash||identity.proofHash!==proofHash||proof.guard!==NATIVE_IDENTITY_RESOLUTION_GUARD||proof.immutableFingerprintVersion!==NATIVE_IDENTITY_STORED_FINGERPRINT_VERSION||!hashString(proof.sourceImmutableHash)||!hashString(proof.sourceHash)||!hashString(proof.callbackHash)||value.callbackHash!==proof.callbackHash||!hashString(value.originalBodyHash)||proof.sourceId!==row.id||proof.phone!==row.phone||proof.line!==row.line||proof.instance!==INSTANCE||proof.lid!==value.lid||proof.sourceAt!==event.at||proof.startsAt!==start.startedAt||
+  if(!hashString(proofHash)||hash(unsigned)!==proofHash||identity.proofHash!==proofHash||proof.guard!==NATIVE_IDENTITY_RESOLUTION_GUARD||proof.immutableFingerprintVersion!==NATIVE_IDENTITY_STORED_FINGERPRINT_VERSION||!hashString(proof.sourceImmutableHash)||!hashString(proof.sourceHash)||!hashString(proof.callbackHash)||value.callbackHash!==proof.callbackHash||!hashString(value.originalBodyHash)||proof.sourceId!==row.id||proof.phone!==row.phone||proof.line!==row.line||proof.instance!==own.instance||proof.lid!==value.lid||proof.sourceAt!==event.at||proof.startsAt!==startedAt||
     !Number.isSafeInteger(proof.checkedAt)||proof.checkedAt<event.at||proof.checkedAt-event.at>NATIVE_IDENTITY_MAX_AGE_MS||!Number.isSafeInteger(value.recordedAt)||value.recordedAt<proof.checkedAt||value.recordedAt-event.at>NATIVE_IDENTITY_MAX_AGE_MS||value.recordedAt>now||
-    proof.owner?.phone!==FUMIGACION_BLUE||proof.owner.instance!==INSTANCE||proof.owner.open!==true||proof.owner.ownerVerified!==true||proof.phoneInferred!==false||proof.originalKeyPreserved!==true||proof.historicalCoverageComplete!==false||
-    !Array.isArray(proof.pairSources)||!proof.pairSources.length||proof.pairSources.length>PAGE_SIZE||new Set(proof.pairSources.map(pair=>pair.id)).size!==proof.pairSources.length||proof.pairSources.some(pair=>!object(pair)||!nativeMid(pair.id)||!Number.isSafeInteger(pair.at)||pair.at<config.activatedAt||pair.at>event.at||typeof pair.fromMe!=='boolean'||!hashString(pair.sourceHash)||!hashString(pair.immutableHash)))return null;
+    proof.owner?.phone!==row.line||proof.owner.instance!==own.instance||proof.owner.open!==true||proof.owner.ownerVerified!==true||proof.phoneInferred!==false||proof.originalKeyPreserved!==true||proof.historicalCoverageComplete!==false||
+    !Array.isArray(proof.pairSources)||!proof.pairSources.length||proof.pairSources.length>PAGE_SIZE||new Set(proof.pairSources.map(pair=>pair.id)).size!==proof.pairSources.length||proof.pairSources.some(pair=>!object(pair)||!nativeMid(pair.id)||!Number.isSafeInteger(pair.at)||pair.at<sourceStartsAt||pair.at>event.at||typeof pair.fromMe!=='boolean'||!hashString(pair.sourceHash)||!hashString(pair.immutableHash)))return null;
   return {row,event,value,proof};
 }
 
@@ -278,7 +294,8 @@ export function listStoredNativeIdentitySources(store,config,{phone,line,since=c
       if(!object(value)||!/^57\d{10}$/.test(value.phone??'')||!nativeMid(value.sourceId))throw Error('invalid');
       if(value.phone!==phone)continue;
       const prefix=proofArtifact?cacheProofPrefix:'private-native-identity:';
-      if(value.line!==line||artifact.key!==prefix+metaSuffix(value.sourceId))throw Error('scope');
+      if(artifact.key!==prefix+metaSuffix(value.line,value.sourceId))throw Error('scope');
+      if(value.line!==line)continue;
       if(seen.has(value.sourceId))continue;seen.add(value.sourceId);
       const saved=processedProof(store,config,{id:value.sourceId,phone,line},through);if(!saved)throw Error('invalid');
       if(saved.event.at>=since&&saved.event.at<=through)result.push({id:value.sourceId,phone,line,lid:saved.value.lid,at:saved.event.at,proofHash:saved.proof.proofHash});
@@ -303,15 +320,15 @@ export async function verifyStoredNativeIdentitySource(store,config,transport,ex
   try{
     const now=Date.now();if(transport?.config!==config||typeof transport.verifyLine!=='function'||typeof transport.request!=='function')return null;
     const saved=processedProof(store,config,expected,now);if(!saved)return null;
-    const {event,proof,value}=saved,line=config.lines.find(item=>item.phone===FUMIGACION_BLUE&&item.instance===INSTANCE);
-    const before=await transport.verifyLine(FUMIGACION_BLUE);if(!bindingVerified(before,line,Date.now()))return null;
-    const direct=await transport.request(line,'/chat/findMessages/'+INSTANCE,{where:{key:{id:event.id}},offset:10,page:1});
+    const {event,proof,value}=saved,line=config.lines.find(item=>item.phone===event.line),sourceStartsAt=pairSourceStartsAt(config,line);
+    const before=await transport.verifyLine(line.phone);if(!bindingVerified(before,line,Date.now()))return null;
+    const direct=await transport.request(line,'/chat/findMessages/'+encodeURIComponent(line.instance),{where:{key:{id:event.id}},offset:10,page:1});
     const records=direct?.messages?.records;if(!Array.isArray(records)||records.length>10)return null;
     const matches=records.filter(row=>row?.key?.id===event.id);if(matches.length!==1)return null;
     const record=matches[0],pn=event.phone+'@s.whatsapp.net';
     if(record.key.remoteJid!==proof.lid||record.key.remoteJidAlt!=null&&record.key.remoteJidAlt!==''&&record.key.remoteJidAlt!==pn||!ownRecord(record,line)||!sameEventBody(record,event)||immutableRecordHash(record)!==proof.sourceImmutableHash||
       nativeRecord!==undefined&&(!object(nativeRecord)||nativeRecord.key?.id!==event.id||!sameEventBody(nativeRecord,event)||immutableRecordHash(nativeRecord)!==proof.sourceImmutableHash))return null;
-    const response=await transport.request(line,'/chat/findMessages/'+INSTANCE,{where:{key:{remoteJid:proof.lid},messageTimestamp:{gte:new Date(config.activatedAt).toISOString(),lte:new Date(event.at).toISOString()}},offset:PAGE_SIZE,page:1});
+    const response=await transport.request(line,'/chat/findMessages/'+encodeURIComponent(line.instance),{where:{key:{remoteJid:proof.lid},messageTimestamp:{gte:new Date(sourceStartsAt).toISOString(),lte:new Date(event.at).toISOString()}},offset:PAGE_SIZE,page:1});
     const page=response?.messages;if(!object(page)||!Number.isSafeInteger(page.total)||page.total<1||page.total>PAGE_SIZE||!Array.isArray(page.records)||page.records.length!==page.total)return null;
     const rows=page.records.filter(row=>row?.key?.remoteJid===proof.lid);
     if(rows.some(row=>phoneJid(row.key?.remoteJidAlt)&&row.key.remoteJidAlt!==pn))return null;
@@ -320,7 +337,7 @@ export async function verifyStoredNativeIdentitySource(store,config,transport,ex
       const found=rows.filter(row=>row.key?.id===pair.id);if(found.length!==1)return null;const row=found[0];
       if(row.key.remoteJidAlt!==pn||row.key.fromMe!==pair.fromMe||timestamp(row)!==pair.at||!ownRecord(row,line)||forwarded(row)||changed(row)||!readable(row)||immutableRecordHash(row)!==pair.immutableHash||pair.fromMe&&!nativeStates(row).states.some(state=>['DELIVERY_ACK','READ',3,4].includes(state)))return null;
     }
-    const after=await transport.verifyLine(FUMIGACION_BLUE);if(!bindingVerified(after,line,Date.now()))return null;
+    const after=await transport.verifyLine(line.phone);if(!bindingVerified(after,line,Date.now()))return null;
     const latest=processedProof(store,config,expected,Date.now());
     if(!latest||latest.proof.proofHash!==proof.proofHash||hash(latest.event)!==hash(event)||latest.value.lid!==value.lid)return null;
     return {verified:true,readOnly:true,sourceId:event.id,phone:event.phone,line:event.line,lid:proof.lid,proofHash:proof.proofHash,record};

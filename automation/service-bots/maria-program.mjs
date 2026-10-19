@@ -2,7 +2,7 @@ import {createHash} from 'node:crypto';
 import {normalize,questionRecipients,SANDRA} from './config.mjs';
 import {BUSINESS_PRICE_HASH,LEGACY_BUSINESS_PRICE_HASH,BUSINESS_PRICE_CUTOVER_AT,businessPriceHashAt,selectBusinessPrice} from './business-prices.mjs';
 import {selectPrice} from './prices.mjs';
-import {operationalLineAllowed,operationalCoverage} from './line-scope.mjs';
+import {operationalLineAllowed,operationalCoverage,operationalLineStartsAt} from './line-scope.mjs';
 import {getTesaConfig} from './tesa-config.mjs';
 import {mariaIncidentalPetMention,explicitNewService,afterServiceRequest} from './after-service.mjs';
 import {verifyStoredNativeIdentitySource} from './native-identity-resolution.mjs';
@@ -587,7 +587,7 @@ export function ordinaryRegistrationDataQuestion(text){
 // A customer's pause during data collection is neither a cancellation nor a
 // new permission to write. Keep the original accepted quote and sourced facts.
 export function ordinaryProgramDeferralTurn(s,c,state,e){
- if(!programEnabled(c)||!state.programIntake||!state.caseId?.startsWith('fumigacion:')||state.closed||!Number.isSafeInteger(e.at)||e.at<c.mariaProgram.startsAt||!operationalLineAllowed(c,e.line)||c.operationalLineScope&&(e.at<Date.parse(c.operationalLineScope.authorizedAt)||typeof s.hasSourcesOutsideLine!=='function'||s.hasSourcesOutsideLine(e.phone,e.line)))return null;
+ if(!programEnabled(c)||!state.programIntake||!state.caseId?.startsWith('fumigacion:')||state.closed||!Number.isSafeInteger(e.at)||e.at<c.mariaProgram.startsAt||!operationalLineAllowed(c,e.line)||c.operationalLineScope&&(e.at<operationalLineStartsAt(c,e.line)||typeof s.hasSourcesOutsideLine!=='function'||s.hasSourcesOutsideLine(e.phone,e.line)))return null;
  const pi=state.programIntake,marker=state.customerDeferral,requested=customerDeferralRequested(e),active=marker?.guard===CUSTOMER_DEFERRAL_GUARD&&marker.active===true&&marker.caseId===state.caseId&&marker.line===e.line&&e.at>marker.at;
  if(!requested&&!active)return null;
  const conv=s.conversation(e.phone),row=s.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(e.id,e.phone,e.line),native=row&&s.open(row.body),anchor=s.db.prepare('SELECT at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(state.caseId.slice(11),e.phone,e.line);
@@ -630,7 +630,7 @@ export function ordinaryProgramDeferralTurn(s,c,state,e){
 // will be needed. This path grants no acceptance, registration or schedule and
 // deliberately leaves both the review and its original consultation intact.
 export function pendingOrdinaryDataInformationTurn(s,c,state,e){
- if(!programEnabled(c)||!state.awaitingHumanReview||state.programIntake||!state.caseId?.startsWith('fumigacion:')||!Number.isSafeInteger(e.at)||e.at<c.mariaProgram.startsAt||!operationalLineAllowed(c,e.line)||c.operationalLineScope&&(e.at<Date.parse(c.operationalLineScope.authorizedAt)||typeof s.hasSourcesOutsideLine!=='function'||s.hasSourcesOutsideLine(e.phone,e.line)))return null;
+ if(!programEnabled(c)||!state.awaitingHumanReview||state.programIntake||!state.caseId?.startsWith('fumigacion:')||!Number.isSafeInteger(e.at)||e.at<c.mariaProgram.startsAt||!operationalLineAllowed(c,e.line)||c.operationalLineScope&&(e.at<operationalLineStartsAt(c,e.line)||typeof s.hasSourcesOutsideLine!=='function'||s.hasSourcesOutsideLine(e.phone,e.line)))return null;
  if(e.kind!=='text'||e.fromMe!==false||e.forwarded||e.quotedId||!ordinaryRegistrationDataQuestion(e.text)||state.closed||state.customerDeferral?.active||state.requestedAfterServiceReview||state.requestedControlReview||state.requestedDocumentReview||state.requestedProductInquiry||state.pendingFaqQuestion||Object.keys(state).some(k=>k.startsWith('requestedPayment')&&state[k]))return null;
  const conv=s.conversation(e.phone);if(!conv||conv.hold||conv.state.caseId!==state.caseId)return null;
  const first=s.db.prepare('SELECT rowid,body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(state.caseId.slice(11),e.phone,e.line),current=s.db.prepare('SELECT rowid,body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(e.id,e.phone,e.line);
@@ -653,7 +653,7 @@ export function pendingOrdinaryDataInformationTurn(s,c,state,e){
  return {state,reply,questionId:pending.id,topic:pending.topic};
 }
 export function ordinaryDataInformationTurn(s,c,state,e){
- if(!programEnabled(c)||e.at<c.mariaProgram.startsAt||!operationalLineAllowed(c,e.line)||c.operationalLineScope&&e.at<Date.parse(c.operationalLineScope.authorizedAt)||c.operationalLineScope&&(typeof s.hasSourcesOutsideLine!=='function'||s.hasSourcesOutsideLine(e.phone,e.line)))return null;
+ if(!programEnabled(c)||e.at<c.mariaProgram.startsAt||!operationalLineAllowed(c,e.line)||c.operationalLineScope&&e.at<operationalLineStartsAt(c,e.line)||c.operationalLineScope&&(typeof s.hasSourcesOutsideLine!=='function'||s.hasSourcesOutsideLine(e.phone,e.line)))return null;
  if(e.quotedId||e.kind!=='text'||e.fromMe||e.forwarded||state.closed||state.awaitingHumanReview||state.customerDeferral?.active||state.requestedAfterServiceReview||state.requestedControlReview||state.requestedDocumentReview||state.requestedProductInquiry||state.pendingFaqQuestion||Object.keys(state).some(k=>k.startsWith('requestedPayment')&&state[k])||['pending','review','registered','declined'].includes(state.programIntake?.stage))return null;
  const conversation=s.conversation(e.phone);if(!conversation||conversation.hold||conversation.state.caseId!==state.caseId)return null;
  const question=ordinaryRegistrationDataQuestion(e.text),previous=state.registrationInformationRequest;
@@ -708,11 +708,11 @@ export function pendingMattressScopeFactsTurn(s,c,state,e){
 export function registrationTurn(s,c,previous,e,decision,{literalSlots=null}={}){
  if(!programEnabled(c)||e.fromMe||e.forwarded||e.kind!=='text'||e.at<c.mariaProgram.startsAt)return null;
  if(publicResponseWindow(c).active){
-  const current=s.db.prepare('SELECT at,received_at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(e.id,e.phone,e.line);
-  const anchor=decision.state?.caseId?.startsWith('fumigacion:')&&s.db.prepare('SELECT at,received_at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(decision.state.caseId.slice(11),e.phone,e.line);
+  const current=s.db.prepare('SELECT line,at,received_at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(e.id,e.phone,e.line);
+  const anchor=decision.state?.caseId?.startsWith('fumigacion:')&&s.db.prepare('SELECT line,at,received_at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(decision.state.caseId.slice(11),e.phone,e.line);
   if(!publicEventAllowed(c,current)||!publicEventAllowed(c,anchor))return null;
  }
- if(!operationalLineAllowed(c,e.line)||c.operationalLineScope&&e.at<Date.parse(c.operationalLineScope.authorizedAt))return null;
+ if(!operationalLineAllowed(c,e.line)||c.operationalLineScope&&e.at<operationalLineStartsAt(c,e.line))return null;
  if(c.operationalLineScope&&(typeof s.hasSourcesOutsideLine!=='function'||s.hasSourcesOutsideLine(e.phone,e.line)))return null;
  const state=decision.state;
  if(state.customerDeferral?.guard===CUSTOMER_DEFERRAL_GUARD&&state.customerDeferral.active===true)return null;
@@ -910,13 +910,13 @@ async function nativeMessage(s,t,c,id,phone,line){
 function nativeText(r){const m=r.message?.ephemeralMessage?.message??r.message??{};return m.conversation??m.extendedTextMessage?.text;}
 // A temporary line scope permits only a new, explicit acceptance on that line.
 // Earlier literal facts and a delivered price remain reusable in the same case,
-// but every original source still has to be stored and rechecked on the blue line.
+// but every original source must be stored and rechecked on its actual line.
 function registrationOperationalScope(s,c,entry){
  const p=entry.payload;if(!operationalLineAllowed(c,p.line))return false;
  if(!c.operationalLineScope)return true;
  if(typeof s.hasSourcesOutsideLine!=='function'||s.hasSourcesOutsideLine(p.phone,p.line))return false;
  const acceptanceAt=Date.parse(p.sources?.acceptance?.at);
- if(!Number.isFinite(acceptanceAt)||acceptanceAt<Date.parse(c.operationalLineScope.authorizedAt)||p.sources?.acceptance?.line!==p.line)return false;
+ if(!Number.isFinite(acceptanceAt)||acceptanceAt<operationalLineStartsAt(c,p.line)||p.sources?.acceptance?.line!==p.line)return false;
  return registrationSources(p).every(src=>Boolean(s.db.prepare('SELECT 1 FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(src.id,p.phone,p.line)))&&
   Boolean(s.db.prepare('SELECT 1 FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(p.quote.sourceId,p.phone,p.line));
 }
@@ -1149,10 +1149,10 @@ function saved(s,c,key,entry,r,routeQuestion){
 export function publicRegistrationAllowed(s,c,entry){
  if(!publicResponseWindow(c).active)return true;
  const p=entry?.payload;
- if(!p||!publicOperationAllowed(c,{sourceAt:Date.parse(p.sources?.acceptance?.at),createdAt:entry.createdAt}))return false;
+ if(!p||!publicOperationAllowed(c,{line:p.line,sourceAt:Date.parse(p.sources?.acceptance?.at),createdAt:entry.createdAt}))return false;
  const ids=new Set([...registrationSources(p).map(src=>src.id),p.quote?.sourceId,p.caseId?.startsWith('fumigacion:')?p.caseId.slice(11):null]);
  for(const id of ids){
-  const row=id&&s.db.prepare('SELECT at,received_at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(id,p.phone,p.line);
+  const row=id&&s.db.prepare('SELECT line,at,received_at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(id,p.phone,p.line);
   if(!publicEventAllowed(c,row))return false;
  }
  return true;
@@ -1161,12 +1161,13 @@ export async function drainProgramRegistrations(s,c,t,routeQuestion=null){
  if(!programEnabled(c))return {enabled:false};
  const rows=s.db.prepare('SELECT key,value FROM meta WHERE key LIKE ? ORDER BY key').all(prefix+'%');let persisted=0,reviewed=0,deferred=0;
  for(const row of rows){let entry=s.open(row.value);if(!['PENDING','SENDING','UNCERTAIN'].includes(entry.status))continue;
+  // A newly reopened line cannot recover or rewrite a historical reservation.
+  if(!publicRegistrationAllowed(s,c,entry)){deferred++;continue;}
   if(['SENDING','UNCERTAIN'].includes(entry.status)){
    if(entry.nextReceiptAt>Date.now())continue;
    try{const r=await request(c,'/receipt',{caseId:entry.payload.caseId,acceptanceId:entry.payload.quote.acceptanceId},t.fetcher);if(receiptValid(c,entry,r)){saved(s,c,row.key,entry,r,routeQuestion);persisted++;}else if(ownScope(c,r)&&r.persisted===false){review(s,c,row.key,entry,'UNCERTAIN_WRITE_NOT_FOUND');reviewed++;}else throw Error('PROGRAM_RECEIPT_SCOPE_UNVERIFIED');}
    catch{const failures=(entry.receiptFailures||0)+1;entry={...entry,receiptFailures:failures,nextReceiptAt:Date.now()+60000};put(s,row.key,entry);s.audit('OWN_REGISTRATION_RECEIPT_UNAVAILABLE',entry.payload.sourceId,{caseId:entry.payload.caseId,writeRetried:false});if(failures>=3){review(s,c,row.key,entry,'UNCERTAIN_RECEIPT_REQUIRES_REVIEW');reviewed++;}}continue;
   }
-  if(!publicRegistrationAllowed(s,c,entry)){deferred++;continue;}
   if(entry.staffPlanning&&!staffPlanningRecord(s,entry)){review(s,c,row.key,entry,'STAFF_PLANNING_SOURCE_UNVERIFIED');reviewed++;continue;}
   if(entry.payload.clientSchedule&&!clientRequestedScheduleEnabled(c,entry.staffPlanning?.caseSourceAt)){review(s,c,row.key,entry,'CLIENT_REQUESTED_SCHEDULE_DISABLED');reviewed++;continue;}
   if(!registrationOperationalScope(s,c,entry)){review(s,c,row.key,entry,'OPERATIONAL_LINE_SCOPE_REVIEW',false);reviewed++;continue;}

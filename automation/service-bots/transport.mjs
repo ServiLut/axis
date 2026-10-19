@@ -14,14 +14,14 @@ import {drainTesaGroup,tesaCustomerReplyStillValid,unregisteredTesaReplyValid,sc
 import {chiefTesaTestSendEntry,chiefTesaTestHash,CHIEF_TESA_TEST_DELIVERY_GUARD} from './chief-tesa-test.mjs';
 import {drainOwnScheduling} from './maria-own-order-scheduling.mjs';
 import {drainTesaGuidanceLists} from './tesa-guidance-list.mjs';
-import {assertOperationalLineScope,operationalLines,operationalLineAllowed,operationalHistoryGuard,operationalCoverage,FUMIGACION_BLUE} from './line-scope.mjs';
+import {assertOperationalLineScope,operationalLines,operationalLineAllowed,operationalLineStartsAt,operationalHistoryGuard,operationalCoverage,FUMIGACION_BLUE,FUMIGACION_RED,DUAL_LINE_SCOPE_VERSION} from './line-scope.mjs';
 import {drainChiefActions} from './chief-actions.mjs';
 import {decodeWebhook} from './webhook.mjs';
 import {validateEvent} from './config.mjs';
 import {literalGreetingEligible,literalGreetingReplyStillValid} from './literal-reception.mjs';
 import {priorAttentionRelease,nativeSourceBeforeRelease} from './explicit-return-attention.mjs';
 import {listStoredNativeIdentitySources,verifyStoredNativeIdentitySource} from './native-identity-resolution.mjs';
-import {publicEventAllowed,publicOutboxAllowed,publicOperationAllowed,publicResponseSqlCutoff} from './public-response-window.mjs';
+import {publicEventAllowed,publicOutboxAllowed,publicOperationAllowed,publicResponseSqlCutoff,publicLineSqlFilter} from './public-response-window.mjs';
 
 export const MARIA_HISTORY_PROTOCOL_GUARD='own-preactivation-synchronization-only-complete-history-v1';
 export const READ_SUPERVISION_GUARD='own-blue-empty-read-receipts-without-human-authorship-v1';
@@ -40,7 +40,8 @@ function isolatedReadReceipt(config,line,record){
   // This exception proves only empty acknowledgement metadata. Any original
   // media, protocol, unknown body, mutation marker or unrecognized status stays
   // on the existing conservative path; a receipt never releases a stored hold.
-  if(config.company!=='fumigacion'||line.phone!==FUMIGACION_BLUE||!historyObject(record)||Object.keys(record).some(key=>!receiptFields.has(key))||!emptyReceiptBody(record.message)||record.messageType!=null||receiptFlags.some(key=>record[key]!=null&&record[key]!==false))return false;
+  const approvedRed=config.company==='fumigacion'&&line.phone===FUMIGACION_RED&&line.instance==='cucaracha-roja'&&assertOperationalLineScope(config)?.version===DUAL_LINE_SCOPE_VERSION&&operationalLineAllowed(config,line.phone);
+  if(config.company!=='fumigacion'||line.phone!==FUMIGACION_BLUE&&!approvedRed||!historyObject(record)||Object.keys(record).some(key=>!receiptFields.has(key))||!emptyReceiptBody(record.message)||record.messageType!=null||receiptFlags.some(key=>record[key]!=null&&record[key]!==false))return false;
   if(['id','instanceId','pushName','source'].some(key=>record[key]!=null&&typeof record[key]!=='string'))return false;
   if(record.contextInfo!=null&&(!historyObject(record.contextInfo)||Object.keys(record.contextInfo).length))return false;
   const states=[];
@@ -266,7 +267,7 @@ export class Transport {
   }
   async send(row,text) {
     if(!outboundRecipientAllowed(this.config,row?.phone))throw Error('CHIEF_ONLY_DELIVERY_RESTRICTION');
-    if(!publicOperationAllowed(this.config,{sourceAt:row?.created,createdAt:row?.created}))throw Error('PUBLIC_RESPONSE_WINDOW_REQUIRED');
+    if(!publicOperationAllowed(this.config,{line:row?.line,sourceAt:row?.created,createdAt:row?.created}))throw Error('PUBLIC_RESPONSE_WINDOW_REQUIRED');
     if(!row.internal&&!this.config.enabled)throw new Error('CUSTOMER_GATE_CLOSED');
     if(row.internal&&!internalRecipients(this.config).includes(row.phone))throw new Error('INTERNAL_RECIPIENT_MISMATCH');
     if(!row.internal&&knownInternalRecipient(row.phone))throw new Error('INTERNAL_ROLE_REQUIRED');
@@ -303,7 +304,7 @@ export class Transport {
       checks.push({line:line.phone,instance:line.instance,addressField,total:value.total,lastSourceId:r?.key.id??null,lastAt:r?Number(r.messageTimestamp)*1000:null,...protocolReview});
       }
     }
-    return {cutoff:c.activatedAt,checkedAt:Date.now(),guardVersion:operationalHistoryGuard(c),priorOutgoing:checks.some(x=>x.attentionOutgoing??(x.total>0)),checks,coverage:operationalCoverage(c),scope:assertOperationalLineScope(c)?'authorized-own-blue-line-and-explicit-phone-alternatives; red-history-not-read; metadata-only; historical-author-unattributed':'own-two-lines-and-explicit-phone-alternatives; metadata-only; historical-author-unattributed',
+    return {cutoff:c.activatedAt,checkedAt:Date.now(),guardVersion:operationalHistoryGuard(c),priorOutgoing:checks.some(x=>x.attentionOutgoing??(x.total>0)),checks,coverage:operationalCoverage(c),scope:assertOperationalLineScope(c)&&assertOperationalLineScope(c).version!==DUAL_LINE_SCOPE_VERSION?'authorized-own-blue-line-and-explicit-phone-alternatives; red-history-not-read; metadata-only; historical-author-unattributed':'own-two-lines-and-explicit-phone-alternatives; metadata-only; historical-author-unattributed',
       ...(c.company==='fumigacion'&&checks.some(x=>x.protocolGuard===MARIA_HISTORY_PROTOCOL_GUARD||x.readSupervisionGuard===READ_SUPERVISION_GUARD)?{classificationScope:checks.some(x=>x.readSupervisionGuard===READ_SUPERVISION_GUARD)?'explicit-native-synchronization-or-empty-acknowledgement-packets-and-outgoing-attention; no-complete-chat-history':'explicit-native-synchronization-packets-and-outgoing-attention; no-complete-chat-history'}:{})};
   }
   async currentAttention(phone,{store=null}={}) {
@@ -398,13 +399,14 @@ export async function drain(store,config,transport,engine) {
   const fastMaria=config.company==='fumigacion'&&config.responseTargetMs===3000;
   const before=fastMaria?await flushOutbox(store,config,transport):{accepted:0,suppressed:0,uncertain:0};
   const publicCut=publicResponseSqlCutoff(config);
-  const pending=store.db.prepare("SELECT body,revision,at,received_at FROM events WHERE state='PENDING' AND (?=1 OR phone IN (?,?,?)) AND (?=0 OR phone=?) AND (?<0 OR (at>=? AND received_at>=?)) ORDER BY from_me DESC,at,rowid LIMIT ?").all(Number(config.enabled),SANDRA,DIEGO,HILARY,Number(chiefReplyRestrictionActive(config)),SANDRA,publicCut,publicCut,publicCut,fastMaria?1:30);
+  const eventFilter=publicLineSqlFilter(config,{lineColumn:'line',sourceAtColumn:'at',createdAtColumn:'received_at'});
+  const pending=store.db.prepare("SELECT body,revision,line,at,received_at FROM events WHERE state='PENDING' AND (?=1 OR phone IN (?,?,?)) AND (?=0 OR phone=?) AND (?<0 OR (at>=? AND received_at>=?)) AND ("+eventFilter.sql+") ORDER BY from_me DESC,at,rowid LIMIT ?").all(Number(config.enabled),SANDRA,DIEGO,HILARY,Number(chiefReplyRestrictionActive(config)),SANDRA,publicCut,publicCut,publicCut,...eventFilter.params,fastMaria?1:30);
   for(const row of pending) {
     if(!publicEventAllowed(config,row))continue;
     const e=store.open(row.body); let analysis={};
     const lineScope=assertOperationalLineScope(config);
     if(lineScope&&!e.fromMe&&!knownInternalRecipient(e.phone)&&
-      (e.at<Date.parse(lineScope.authorizedAt)||
+      (e.at<operationalLineStartsAt(config,e.line)||
         !operationalLineAllowed(config,e.line)||
         typeof store.hasSourcesOutsideLine!=='function'||store.hasSourcesOutsideLine(e.phone,e.line))){
       store.db.prepare("UPDATE events SET state='OPERATIONAL_SCOPE_REVIEW' WHERE id=? AND state='PENDING'").run(e.id);
@@ -428,6 +430,7 @@ export async function drain(store,config,transport,engine) {
       store.db.prepare("UPDATE events SET state='OPERATIONAL_SCOPE_REVIEW' WHERE id=? AND state='PENDING'").run(e.id);
       store.audit('OPERATIONAL_SCOPE_CHANGED_BEFORE_MODEL',e.id,{line:e.line,coverage:operationalCoverage(config),replayed:false,migrated:false});continue;
     }
+    if(!publicEventAllowed(config,row))continue;
     const newCase=config.company==='fumigacion'?explicitNewService(e.text):explicitNewTechnicalCase(e.text);
     const intakeStage=store.conversation(e.phone)?.state.programIntake?.stage;
     const ownQuotationAcceptance=config.company==='fumigacion'&&Boolean(conversation?.state.quotedPrice)&&acceptsOrdinaryQuotation(e.text);
@@ -444,6 +447,7 @@ export async function drain(store,config,transport,engine) {
       const semanticState=intakeStage==='registered'?{slots:conversation?.state.slots,asked:conversation?.state.asked,requestedAfterServiceReview:conversation?.state.requestedAfterServiceReview,lastText:null}:conversation?.state;
       try{analysis=await transport.understand(e,{...(newCase?{slots:{},asked:[]}:semanticState),requestedNewCase:newCase,caseAnswers,...(intakeStage==='registered'?{}:{conversationHistory})},knowledge,store);}catch{store.audit('AI_UNAVAILABLE',e.id);}
     }
+    if(!publicEventAllowed(config,row))continue;
     await engine.process(e,analysis);
   }
   const after=await flushOutbox(store,config,transport);
@@ -486,14 +490,17 @@ export async function flushOutbox(store,config,transport){
     store.audit('TESA_CONTINUATION_BEFORE_SEND_REVIEW',outbox.id,{attemptedSend:false,humanAttentionPreserved:true});suppressed++;return false;
   };
   const publicCut=publicResponseSqlCutoff(config);
-  const out=store.db.prepare("SELECT * FROM outbox WHERE state='READY' AND (?=1 OR (internal=1 AND phone IN (?,?,?))) AND (?=0 OR phone=?) AND (?<0 OR (created>=? AND (internal=1 OR EXISTS(SELECT 1 FROM events e WHERE e.phone=outbox.phone AND e.line=outbox.line AND e.from_me=0 AND e.revision=outbox.revision AND e.at>=? AND e.received_at>=? AND e.at<=outbox.created)))) ORDER BY created,rowid LIMIT 20").all(Number(config.enabled),SANDRA,DIEGO,HILARY,Number(chiefReplyRestrictionActive(config)),SANDRA,publicCut,publicCut,publicCut,publicCut);
+  const queueFilter=publicLineSqlFilter(config,{lineColumn:'outbox.line',sourceAtColumn:'outbox.created',createdAtColumn:'outbox.created'});
+  const sourceFilter=publicLineSqlFilter(config,{lineColumn:'e.line',sourceAtColumn:'e.at',createdAtColumn:'e.received_at'});
+  const exactSource=sourceFilter.sql==='1'?'1':"(internal=1 OR EXISTS(SELECT 1 FROM events e WHERE e.phone=outbox.phone AND e.line=outbox.line AND e.from_me=0 AND ((outbox.id LIKE '%:reply' AND e.id=substr(outbox.id,1,length(outbox.id)-6)) OR (outbox.id NOT LIKE '%:reply' AND e.revision=outbox.revision)) AND e.at<=outbox.created AND ("+sourceFilter.sql+")))";
+  const out=store.db.prepare("SELECT * FROM outbox WHERE state='READY' AND (?=1 OR (internal=1 AND phone IN (?,?,?))) AND (?=0 OR phone=?) AND (?<0 OR (created>=? AND (internal=1 OR EXISTS(SELECT 1 FROM events e WHERE e.phone=outbox.phone AND e.line=outbox.line AND e.from_me=0 AND e.revision=outbox.revision AND e.at>=? AND e.received_at>=? AND e.at<=outbox.created)))) AND ("+queueFilter.sql+") AND ("+exactSource+") ORDER BY created,rowid LIMIT 20").all(Number(config.enabled),SANDRA,DIEGO,HILARY,Number(chiefReplyRestrictionActive(config)),SANDRA,publicCut,publicCut,publicCut,publicCut,...queueFilter.params,...(sourceFilter.sql==='1'?[]:sourceFilter.params));
   for(const o of out) {
     // Keep blocked rows exactly as recorded; this restriction is not a send
     // failure, a recipient migration, a hold or permission to replay later.
     if(!outboundRecipientAllowed(config,o.phone))continue;
     if(!publicOutboxAllowed(store,config,o))continue;
     const lineScope=assertOperationalLineScope(config);
-    if(lineScope&&(o.created<Date.parse(lineScope.authorizedAt)||
+    if(lineScope&&(o.created<operationalLineStartsAt(config,o.line)||
       (!o.internal&&(typeof store.hasSourcesOutsideLine!=='function'||store.hasSourcesOutsideLine(o.phone,o.line))))){
       if(store.db.prepare("UPDATE outbox SET state='OPERATIONAL_SCOPE_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id).changes){
         store.audit('OPERATIONAL_SCOPE_OUTBOX_BLOCKED',o.id,{line:o.line,coverage:operationalCoverage(config),attemptedSend:false,migrated:false});suppressed++;
@@ -607,7 +614,8 @@ export async function flushOutbox(store,config,transport){
         store.db.prepare("UPDATE outbox SET state='PRICE_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id);store.audit('PRICE_SOURCE_RECHECK_FAILED',o.id,{attemptedSend:false});suppressed++;continue;
       }
     }
-    if(lineScope&&(o.created<Date.parse(lineScope.authorizedAt)||!operationalLineAllowed(config,o.line)||
+    if(!publicOutboxAllowed(store,config,o))continue;
+    if(lineScope&&(o.created<operationalLineStartsAt(config,o.line)||!operationalLineAllowed(config,o.line)||
       (!o.internal&&(typeof store.hasSourcesOutsideLine!=='function'||store.hasSourcesOutsideLine(o.phone,o.line))))){
       if(store.db.prepare("UPDATE outbox SET state='OPERATIONAL_SCOPE_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id).changes){
         store.audit('OPERATIONAL_SCOPE_CHANGED_BEFORE_SEND',o.id,{line:o.line,coverage:operationalCoverage(config),attemptedSend:false,migrated:false});suppressed++;
@@ -620,6 +628,8 @@ export async function flushOutbox(store,config,transport){
     if(!checkOwnSavedReview(o,text))continue;
     if(!outboundRecipientAllowed(config,o.phone))continue;
     if(!publicOutboxAllowed(store,config,o))continue;
+    const latest=store.conversation(o.phone);
+    if(!o.internal&&(latest?.hold||latest?.revision!==o.revision))continue;
     if(!store.db.prepare("UPDATE outbox SET state='SENDING',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id).changes)continue;
     try {
       const mid=await transport.send(o,text);

@@ -4,6 +4,7 @@ import {registrationHash,ownRegisteredReceiptForPresentation,MARIA_COMPANY,MARIA
 import {ownSchedulingEnabled,ownSchedulingAccessStatus} from './maria-scheduling-access.mjs';
 import {verifyStoredNativeIdentitySource} from './native-identity-resolution.mjs';
 import {partitionNativeAttention} from './explicit-return-attention.mjs';
+import {FUMIGACION_BLUE} from './line-scope.mjs';
 import {publicResponseWindow,publicOperationAllowed,publicEventAllowed,publicTesaOutboxAllowed} from './public-response-window.mjs';
 
 export const MARIA_OWN_SCHEDULING_GUARD='own-new-receipt-native-tesa-explicit-slot-customer-confirmed-first-schedule-v1';
@@ -19,14 +20,17 @@ const sameTechnicianName=(left,right)=>typeof left==='string'&&typeof right==='s
 const pendingClassification=(s,phone)=>Boolean(s.db.prepare("SELECT 1 FROM events WHERE phone=? AND state IN ('PENDING','PROCESSING')").get(phone));
 const stableProofHash=proof=>{const {checkedAt,expiresAt,...stable}=proof;return registrationHash(stable);};
 function schedulingWindowAllowed(s,c,entry,now=Date.now()){
+ // The separate first-schedule/TESA contract remains blue-only. Ordinary
+ // client-requested scheduling uses its own registration contract instead.
+ if(entry?.plan?.line!==FUMIGACION_BLUE)return false;
  if(!publicResponseWindow(c).active)return true;
- const p=entry?.plan;if(!p||!publicOperationAllowed(c,{sourceAt:Date.parse(p.registrationCreatedAt),createdAt:p.createdAt},now)||
-  !publicOperationAllowed(c,{sourceAt:entry.customerAt??p.createdAt,createdAt:entry.createdAt??p.createdAt},now))return false;
+ const p=entry?.plan;if(!p||!publicOperationAllowed(c,{line:p.line,sourceAt:Date.parse(p.registrationCreatedAt),createdAt:p.createdAt},now)||
+  !publicOperationAllowed(c,{line:p.line,sourceAt:entry.customerAt??p.createdAt,createdAt:entry.createdAt??p.createdAt},now))return false;
  const anchorId=p.caseId?.startsWith('fumigacion:')?p.caseId.slice('fumigacion:'.length):null;
- const anchor=anchorId&&s.db.prepare('SELECT at,received_at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(anchorId,p.phone,p.line);
+ const anchor=anchorId&&s.db.prepare('SELECT line,at,received_at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(anchorId,p.phone,p.line);
  const question=s.db.prepare('SELECT * FROM tesa_outbox WHERE question_id=?').get(p.questionId);
  if(!anchor||!publicEventAllowed(c,anchor,now)||!question||!publicTesaOutboxAllowed(s,c,question,now))return false;
- if(entry.confirmation){const source=s.db.prepare('SELECT at,received_at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(entry.confirmation.id,p.phone,p.line);if(!source||source.at!==entry.confirmation.at||!publicEventAllowed(c,source,now))return false;}
+ if(entry.confirmation){const source=s.db.prepare('SELECT line,at,received_at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(entry.confirmation.id,p.phone,p.line);if(!source||source.at!==entry.confirmation.at||!publicEventAllowed(c,source,now))return false;}
  return true;
 }
 
@@ -43,7 +47,7 @@ export function parseOwnTesaSchedulingSlot(text,{now=Date.now(),expiresAt=Infini
  return {...fields,startsAtUtc:new Date(startsAt).toISOString(),endsAtUtc:new Date(endsAt).toISOString()};
 }
 export function prepareOwnSchedulingPlan(s,c,request,result){
- if(!ownSchedulingEnabled(c)||!result?.created||!result.outboxId?.startsWith('tesa-question:')||request.topic!=='disponibilidad-y-tecnico')return false;
+ if(!ownSchedulingEnabled(c)||request?.line!==FUMIGACION_BLUE||!result?.created||!result.outboxId?.startsWith('tesa-question:')||request.topic!=='disponibilidad-y-tecnico')return false;
  const entry=ownRegisteredReceiptForPresentation(s,c,request),conv=s.conversation(request.phone),q=s.db.prepare('SELECT * FROM tesa_questions WHERE id=? AND company=?').get(result.id,c.company);
  if(!entry||!q||q.state!=='PENDING'||q.source_line!==request.line||!Number.isFinite(Date.parse(entry.receipt.createdAt))||Date.parse(entry.receipt.createdAt)<c.ownOrderScheduling.startsAt||get(s,planPrefix+q.id))return false;
  const plan={guard:MARIA_OWN_SCHEDULING_GUARD,questionId:q.id,caseId:request.caseId,phone:request.phone,line:request.line,actorId:c.mariaProgram.actorId,registrationAcceptanceId:entry.payload.quote.acceptanceId,registrationRequestHash:entry.requestHash,orderId:entry.receipt.orderId,slotsHash:registrationHash(conv.state.slots),createdAt:Date.now(),registrationCreatedAt:entry.receipt.createdAt};

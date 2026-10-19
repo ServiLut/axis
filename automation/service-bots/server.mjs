@@ -42,7 +42,7 @@ import {restoreOwnSchedulingAccess,installOwnSchedulingAccess,ownSchedulingProof
 import {ownSchedulingStatus} from './maria-own-order-scheduling.mjs';
 import {queueTesaGuidanceList,guidanceListStatus} from './tesa-guidance-list.mjs';
 import {MARIA_TESA_QUESTION_WORDING_GUARD} from './tesa-question-wording.mjs';
-import {operationalLines,operationalLineAllowed,operationalCoverage} from './line-scope.mjs';
+import {operationalLines,operationalLineAllowed,operationalCoverage,BLUE_ONLY_SCOPE_VERSION,DUAL_LINE_SCOPE_VERSION} from './line-scope.mjs';
 import {initializeIntakeJournal,recordIntakeWebhook,recordIntakeBinding,recordIntakeIngressGap,intakeAudit,intakeJournalStatus} from './intake-journal.mjs';
 import {restoreProgramSupervision,programSupervisionStatus,installProgramSupervision,dailyProgramCross,readRetentionCandidates} from './program-supervision.mjs';
 import {PREVENTIVE_RETENTION_GUARD} from './preventive-retention.mjs';
@@ -64,7 +64,9 @@ const REVIEWED_BLUE_AUDIT_AUTHORIZATION=Object.freeze({
 export const HTTP_BODY_DECODING_GUARD='authenticated-byte-bounded-complete-utf8-json-v1';
 export const FUMIGACION_WEBHOOK_BODY_LIMIT=2*1024*1024;
 
-function auditPrivateNativeCacheUnresolved(store,body,result,{startedAt,receivedAt}){
+function auditPrivateNativeCacheUnresolved(config,store,body,result,{startedAt,receivedAt}){
+  const binding=config.lines.find(line=>line.instance===body.instance);
+  if(!binding)return;
   const rows=Array.isArray(body.data)?body.data:[body.data],sources=new Map(rows.filter(row=>/^[A-Za-z0-9_-]{8,100}$/.test(row?.key?.id||'')).map(row=>[row.key.id,row])),seen=new Set();
   for(const unresolved of result.unresolved||[]){
     const reason=/^[A-Z][A-Z0-9_]{0,99}$/.test(unresolved?.reason||'')?unresolved.reason:'NATIVE_CACHE_RESOLUTION_FAILED';
@@ -81,7 +83,7 @@ function auditPrivateNativeCacheUnresolved(store,body,result,{startedAt,received
     for(const id of ids){
       const marker=id+':'+reason;if(seen.has(marker))continue;seen.add(marker);
       const raw=sources.get(id),seconds=typeof raw.messageTimestamp==='object'?raw.messageTimestamp?.low:raw.messageTimestamp,providerAt=Number(seconds)*1000;
-      store.audit('PRIVATE_NATIVE_IDENTITY_CACHE_PAIR_UNRESOLVED',id,{guard:NATIVE_IDENTITY_RESOLUTION_GUARD,line:'573126944997',instance:body.instance,reason,...(Object.keys(diagnostics).length?{diagnostics}:{}),receivedAt,providerAt:Number.isSafeInteger(providerAt)?providerAt:null,firstInstalledAt:startedAt,originalJournalPreserved:true,customerEventQueued:false,historicalReplayEnabled:false});
+      store.audit('PRIVATE_NATIVE_IDENTITY_CACHE_PAIR_UNRESOLVED',id,{guard:NATIVE_IDENTITY_RESOLUTION_GUARD,line:binding.phone,instance:body.instance,reason,...(Object.keys(diagnostics).length?{diagnostics}:{}),receivedAt,providerAt:Number.isSafeInteger(providerAt)?providerAt:null,firstInstalledAt:startedAt,originalJournalPreserved:true,customerEventQueued:false,historicalReplayEnabled:false});
     }
   }
 }
@@ -303,6 +305,7 @@ export function createBotServer(config,store,transport,engine) {
         controlVisitGuard:config.company==='fumigacion'?'requested-control-antecedent-before-intake-v1':null,intakePestGuard:config.company==='fumigacion'?'literal-additive-pests-and-own-source-union-v1':null,propertyScopeGuard:config.company==='fumigacion'?'single-apartment-address-and-explicit-special-scope-v1':null,
         caseOwnershipGuard:'first-reply-source-preserved-v2',conversationContext:'stored-scoped-turns-with-coverage-v2',internalQuestionGuard:'missing-field-and-case-dedup-v1',supervisorContentReview:'explicit-source-ids-readonly-v1',liveAttentionGuard:'staff-ingestion-freeze-and-own-native-before-send-v2',readSupervisionGuard:config.company==='fumigacion'?READ_SUPERVISION_GUARD:null,officeReception:config.company==='fumigacion'?{guard:OFFICE_CUSTOMER_REPLY_GUARD,version:OFFICE_CUSTOMER_REPLY_VERSION,reviewedCopyCount:officeReceptionCopyCount(),policyChanges:0}:null,intakeGuard:config.company==='fumigacion'?'service-specific-intake-and-reviewed-price-before-schedule-v2':'technical-intake-with-human-review-v1',
         officeResponseCatalog:officeResponseCatalogStatus(config),
+        operationalScopeCapabilities:config.company==='fumigacion'?{supportedVersions:[BLUE_ONLY_SCOPE_VERSION,DUAL_LINE_SCOPE_VERSION],lineSourceCutoffs:true,historicalReplayEnabled:false}:null,
         priceCatalogGuard:config.company==='fumigacion'?'exact-reviewed-native-price-and-special-property-review-v1':null,approvedPriceEntries:currentPriceEntries(store.approvedPriceCatalogs()).length,
         businessPriceGuard:config.company==='fumigacion'?BUSINESS_PRICE_GUARD:null,businessPriceScheduleActive:config.company==='fumigacion'&&store.approvedPriceCatalogs().some(d=>d.kind==='approved_price_schedule'),businessPriceScheduleHash:config.company==='fumigacion'?BUSINESS_PRICE_HASH:null,
         intakeContinuationGuard:'literal-questions-and-first-batch-without-reasking-v3',intakeLiteralFieldsGuard:config.company==='fumigacion'?'literal-business-place-written-rooms-and-square-units-v4':null,intakeLocationGuard:config.company==='fumigacion'?'literal-prompted-location-and-batch-sources-v1':null,customerGreetingGuard:'pure-greeting-preserves-pending-intake-v1',linkedContentGuard:'unread-links-and-url-query-without-question-v1',serviceFollowupGuard:'existing-service-arrival-before-intake-v1',
@@ -425,9 +428,9 @@ export function createBotServer(config,store,transport,engine) {
         if(prospectiveIdentityBody){
           try{
             const resolution=await resolveOwnBlueNativeIdentity(config,transport,prospectiveIdentityBody,{startedAt:privateNativeCacheStartedAt,now:serverReceivedAt,authenticated:true});
-            auditPrivateNativeCacheUnresolved(store,prospectiveIdentityBody,resolution,{startedAt:privateNativeCacheStartedAt,receivedAt:serverReceivedAt});
+            auditPrivateNativeCacheUnresolved(config,store,prospectiveIdentityBody,resolution,{startedAt:privateNativeCacheStartedAt,receivedAt:serverReceivedAt});
             recordPrivateNativeCachePairs(store,config,prospectiveIdentityBody,resolution,{startedAt:privateNativeCacheStartedAt});
-          }catch{auditPrivateNativeCacheUnresolved(store,prospectiveIdentityBody,{unresolved:[{sourceId:null,reason:'NATIVE_CACHE_RESOLUTION_FAILED'}]},{startedAt:privateNativeCacheStartedAt,receivedAt:serverReceivedAt});}
+          }catch{auditPrivateNativeCacheUnresolved(config,store,prospectiveIdentityBody,{unresolved:[{sourceId:null,reason:'NATIVE_CACHE_RESOLUTION_FAILED'}]},{startedAt:privateNativeCacheStartedAt,receivedAt:serverReceivedAt});}
         }
         // The original callback never acquires a fictional native PN field.
         // Only separately proven future sources add a derived decoding envelope.

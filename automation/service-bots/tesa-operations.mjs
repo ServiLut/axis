@@ -4,7 +4,8 @@ import {getTesaConfig} from './tesa-config.mjs';
 import {TESA_GROUP_JID,validateTesaGroupEvent} from './tesa-webhook.mjs';
 import {quotationInquiry} from './prices.mjs';
 import {customerQuestionKey,technicalAvailabilityQuestion} from './technical-scope.mjs';
-import {assertOperationalLineScope,operationalLineAllowed,operationalCoverage} from './line-scope.mjs';
+import {assertOperationalLineScope,operationalLineAllowed,operationalCoverage,operationalLineStartsAt} from './line-scope.mjs';
+import {publicOperationAllowed,publicEventAllowed} from './public-response-window.mjs';
 
 export const TESA_OPERATIONS_GUARD='exact-group-native-human-quoted-case-answer-v1';
 const sha=value=>createHash('sha256').update(value).digest('hex');
@@ -39,15 +40,16 @@ function pendingPrivateQuestion(store,{phone,caseId,topic,conditions}){
 }
 
 // Scoped continuity applies to the customer's actual source, not merely the
-// blue group sender. An old or shared/red case never becomes a new blue case.
+// blue group sender. Old or cross-line sources never become a new scoped case.
 export function tesaOperationalScopeSafe(store,config,{phone,line,source,senderLine,created}={}){
  const scope=assertOperationalLineScope(config);if(!scope)return true;
- const cutoff=Date.parse(scope.authorizedAt);
+ const cutoff=operationalLineStartsAt(config,line);
  if(!operationalLineAllowed(config,line)||!operationalLineAllowed(config,senderLine)||
    !Number.isFinite(created)||created<cutoff||typeof store.hasSourcesOutsideLine!=='function'||
    store.hasSourcesOutsideLine(phone,line))return false;
  const row=store.db.prepare('SELECT * FROM events WHERE id=? AND phone=? AND from_me=0').get(source,phone);
- return Boolean(row&&row.line===line&&row.at>=cutoff);
+ return Boolean(row&&row.line===line&&row.at>=cutoff&&publicEventAllowed(config,row)&&
+   publicOperationAllowed(config,{line,sourceAt:row.at,createdAt:created}));
 }
 
 export function tesaOutboxScopeSafe(store,config,row){
@@ -141,12 +143,13 @@ export function acceptTesaQuotedAnswer(store,config,event){
  return atomic(store,()=>{
   const finish=state=>{store.db.prepare('UPDATE tesa_events SET state=? WHERE id=?').run(state,sourceKey);return {accepted:false,id:sourceKey,state};};
   if(['CASE_ANSWER','ANSWER_REVIEW','OBSERVATION_CONFLICT_REVIEW'].includes(observed.state))return {accepted:false,id:sourceKey,state:observed.state,duplicate:true};
-  const scope=assertOperationalLineScope(config);if(scope&&e.at<Date.parse(scope.authorizedAt))return finish('OBSERVED_OPERATIONAL_SCOPE_REVIEW');
   const phone=e.participant?.phone,human=t.allowedParticipantPhones.includes(phone)&&t.verifiedMembership.participantPhones.includes(phone)&&!ownBots.includes(phone);
   if(!human||e.fromMe||e.forwarded||e.kind!=='text'||e.media||!e.text.trim()||e.at<t.activatedAt||e.at<now-freshSourceMs||e.at>now+60000)return finish('OBSERVED');
   const quote=e.quote;if(!quote?.mid||quote.groupJid!==t.groupJid||quote.participantJid!==t.senderLine+'@s.whatsapp.net'||e.receivingLine!==t.senderLine)return finish('OBSERVED_UNSCOPED_QUOTE');
   const q=store.db.prepare("SELECT q.*,o.state delivery,o.mid,o.native_proof,o.created outbox_created FROM tesa_questions q JOIN tesa_outbox o ON o.id=q.outbox_id WHERE q.company=? AND q.group_jid=? AND q.sender_line=? AND o.mid=? AND o.state IN ('DELIVERED','READ') AND q.state IN ('PENDING','ANSWERED','ANSWER_REVIEW')").get(store.company,t.groupJid,e.receivingLine,quote.mid);
   if(!q||!q.native_proof||e.caseId&&e.caseId!==q.case_id||e.customerPhone&&e.customerPhone!==q.customer_phone)return finish('OBSERVED_UNSCOPED_QUOTE');
+  const scope=assertOperationalLineScope(config);
+  if(scope&&(e.at<operationalLineStartsAt(config,q.source_line)||!publicOperationAllowed(config,{line:q.source_line,sourceAt:e.at,createdAt:e.at})))return finish('OBSERVED_OPERATIONAL_SCOPE_REVIEW');
   if(!tesaOperationalScopeSafe(store,config,{phone:q.customer_phone,line:q.source_line,source:store.open(q.body).source,senderLine:q.sender_line,created:q.outbox_created}))return finish('OBSERVED_OPERATIONAL_SCOPE_REVIEW');
   const nativeProof=store.open(q.native_proof);if(!nativeProof.nativeVerified||nativeProof.mid!==quote.mid)return finish('OBSERVED_UNSCOPED_QUOTE');
   if(forbidden(e.text))return finish('OBSERVED_DIRECTION_REVIEW');

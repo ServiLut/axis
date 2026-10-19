@@ -22,7 +22,7 @@ import {tesaOperationalTopic} from './tesa-config.mjs';
 import {prepareTesaQuestion,initializeTesaStore} from './tesa-operations.mjs';
 import {formatMariaTesaQuestion} from './tesa-question-wording.mjs';
 import {ownMariaChiefQuestionText,MARIA_CHIEF_QUESTION_WORDING_GUARD} from './chief-question-wording.mjs';
-import {assertOperationalLineScope,operationalLineAllowed} from './line-scope.mjs';
+import {assertOperationalLineScope,operationalLineAllowed,operationalLineStartsAt} from './line-scope.mjs';
 import {ownQuoteClarification,OWN_QUOTE_CLARIFICATION_GUARD} from './own-quote-clarification.mjs';
 import {explicitNewTechnicalCase,technicalIntakeMetaQuestion,technicalIntakeClarificationReply,technicalIntakeLiteralCorrection} from './technical-intake-continuity.mjs';
 import {literalIntakeDimensions,MARIA_DIMENSIONS_GUARD} from './intake-dimensions.mjs';
@@ -882,14 +882,14 @@ export class Engine {
         // Observe a direct current stop-contact instruction without answering,
         // altering the human hold or changing its intake/payment facts.
         const scope=assertOperationalLineScope(c);
-        if(!scope||operationalLineAllowed(c,e.line)&&e.at>=Date.parse(scope.authorizedAt)&&!s.hasSourcesOutsideLine(e.phone,e.line)){
+        if(!scope||operationalLineAllowed(c,e.line)&&e.at>=operationalLineStartsAt(c,e.line)&&!s.hasSourcesOutsideLine(e.phone,e.line)){
           const noContact=ownCommercialCustomerTurn(s,c,conv.state,e,{noContactOnly:true});
           if(noContact){s.saveConversation(e.phone,noContact.state);s.audit('OWN_NO_CONTACT_OBSERVED_UNDER_HUMAN_HOLD',e.id,{guard:COMMERCIAL_OBJECTION_GUARD,caseId:noContact.state.caseId,businessWritten:false,humanHoldReleased:false,customerReplyQueued:false});}
         }
         finish('OBSERVED_HUMAN');return;
       }
       const lineScope=assertOperationalLineScope(c);
-      if(lineScope&&(!operationalLineAllowed(c,e.line)||e.at<Date.parse(lineScope.authorizedAt)||s.hasSourcesOutsideLine(e.phone,e.line))){
+      if(lineScope&&(!operationalLineAllowed(c,e.line)||e.at<operationalLineStartsAt(c,e.line)||s.hasSourcesOutsideLine(e.phone,e.line))){
         finish('OBSERVED_TEMPORARY_LINE_SCOPE');return;
       }
       const commercialTurn=ownCommercialCustomerTurn(s,c,conv.state,e,{newCase:literalOwnNewService(e),personalPriority:contextNeedsPersonalPriority(e.text,e)||Boolean(afterServiceRequest(e,analysis))});

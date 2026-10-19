@@ -1,7 +1,7 @@
 import {internalRecipients,knownInternalRecipient} from './config.mjs';
 import {createHash} from 'node:crypto';
 import {FUMIGACION_BLUE,operationalLineAllowed} from './line-scope.mjs';
-import {NATIVE_IDENTITY_RESOLUTION_GUARD,NATIVE_IDENTITY_MAX_AGE_MS,nativeIdentityResolutionHash} from './native-identity-resolution.mjs';
+import {NATIVE_IDENTITY_RESOLUTION_GUARD,NATIVE_IDENTITY_MAX_AGE_MS,nativeIdentityResolutionHash,nativeIdentityOperationalLine,nativeIdentityStartedAt} from './native-identity-resolution.mjs';
 export const PRIVATE_IDENTITY_GUARD='native-private-phone-mapping-observed-without-guessing-v1';
 const identityPrefix='private-native-identity:';
 const identityKey=(line,id)=>identityPrefix+createHash('sha256').update(line+':'+id).digest('hex');
@@ -10,6 +10,7 @@ const cacheProofKey=(line,id)=>cacheProofPrefix+createHash('sha256').update(line
 const readMeta=(store,key)=>{const row=store.db.prepare('SELECT value FROM meta WHERE key=?').get(key);return row?store.open(row.value):null;};
 const nativeAt=raw=>Number(typeof raw?.messageTimestamp==='object'?raw.messageTimestamp.low:raw?.messageTimestamp)*1000;
 const ownBlue=config=>config.company==='fumigacion'&&config.lines.some(line=>line.phone===FUMIGACION_BLUE&&line.instance==='cucaracha-azul')&&operationalLineAllowed(config,FUMIGACION_BLUE);
+const ownCacheLine=(config,body)=>{try{return nativeIdentityOperationalLine(config,body?.instance);}catch{return null;}};
 
 // This installation cutoff is durable and never advances on a restart. It is
 // not a cursor or permission to recover any previously unidentified message.
@@ -20,30 +21,39 @@ export function initializePrivateNativeCachePair(store,config,now=Date.now()){
   return saved?.guard===NATIVE_IDENTITY_RESOLUTION_GUARD&&saved.line===FUMIGACION_BLUE&&saved.instance==='cucaracha-azul'&&saved.historicalReplayEnabled===false&&Number.isSafeInteger(saved.startedAt)&&saved.startedAt>=config.activatedAt?saved.startedAt:null;
 }
 export function prospectivePrivateNativeCacheBody(store,config,body,{startedAt,now=Date.now()}={}){
-  if(!ownBlue(config)||config.enabled!==true||body.instance!=='cucaracha-azul'||body.event!=='messages.upsert'||!Number.isSafeInteger(startedAt)||startedAt>now)return null;
+  const line=ownCacheLine(config,body);
+  if(store.company!==config.company||!line||config.enabled!==true||body?.event!=='messages.upsert'||!Number.isSafeInteger(startedAt)||!Number.isSafeInteger(now)||startedAt<config.activatedAt||startedAt>now)return null;
+  startedAt=nativeIdentityStartedAt(config,line,startedAt);
   const rows=(Array.isArray(body.data)?body.data:[body.data]).filter(raw=>{
     const key=raw?.key,at=nativeAt(raw);
-    return key?.fromMe===false&&/^\d{5,30}@lid$/.test(key.remoteJid||'')&&(key.remoteJidAlt==null||key.remoteJidAlt==='')&&/^[A-Za-z0-9_-]{8,100}$/.test(key.id||'')&&Number.isSafeInteger(at)&&at>=startedAt&&at<=now&&now-at<=NATIVE_IDENTITY_MAX_AGE_MS&&!store.db.prepare('SELECT 1 FROM events WHERE id=?').get(key.id)&&!readMeta(store,identityKey(FUMIGACION_BLUE,key.id));
+    return key?.fromMe===false&&/^\d{5,30}@lid$/.test(key.remoteJid||'')&&(key.remoteJidAlt==null||key.remoteJidAlt==='')&&/^[A-Za-z0-9_-]{8,100}$/.test(key.id||'')&&Number.isSafeInteger(at)&&at>=startedAt&&at<=now&&now-at<=NATIVE_IDENTITY_MAX_AGE_MS&&!store.db.prepare('SELECT 1 FROM events WHERE id=?').get(key.id)&&!readMeta(store,identityKey(line.phone,key.id));
   });
   return rows.length?{...body,data:rows}:null;
 }
 function cacheProofForRaw(store,config,body,raw){
-  if(!ownBlue(config)||body.instance!=='cucaracha-azul'||body.event!=='messages.upsert'||raw?.key?.fromMe!==false||!/^\d{5,30}@lid$/.test(raw.key.remoteJid||'')||raw.key.remoteJidAlt!=null&&raw.key.remoteJidAlt!=='')return null;
-  const value=readMeta(store,cacheProofKey(FUMIGACION_BLUE,raw.key.id));
-  return value?.guard===NATIVE_IDENTITY_RESOLUTION_GUARD&&value.state==='RESOLVED_NATIVE_CACHE_PAIR'&&value.company===config.company&&value.line===FUMIGACION_BLUE&&value.instance===body.instance&&value.sourceId===raw.key.id&&value.lid===raw.key.remoteJid&&value.callbackHash===nativeIdentityResolutionHash(raw)&&/^57\d{10}$/.test(value.phone||'')&&!knownInternalRecipient(value.phone)&&!internalRecipients(config).includes(value.phone)&&!config.lines.some(line=>line.phone===value.phone)?value:null;
+  const line=ownCacheLine(config,body);
+  if(store.company!==config.company||!line||config.enabled!==true||body?.event!=='messages.upsert'||raw?.key?.fromMe!==false||!/^\d{5,30}@lid$/.test(raw.key.remoteJid||'')||raw.key.remoteJidAlt!=null&&raw.key.remoteJidAlt!=='')return null;
+  const value=readMeta(store,cacheProofKey(line.phone,raw.key.id)),start=readMeta(store,cacheStartKey),proof=value?.proof;
+  const {proofHash,...unsigned}=proof||{},startedAt=nativeIdentityStartedAt(config,line,start?.startedAt);
+  return start?.guard===NATIVE_IDENTITY_RESOLUTION_GUARD&&start.line===FUMIGACION_BLUE&&start.instance==='cucaracha-azul'&&start.historicalReplayEnabled===false&&Number.isSafeInteger(start.startedAt)&&start.startedAt>=config.activatedAt&&Number.isSafeInteger(startedAt)&&
+    value?.guard===NATIVE_IDENTITY_RESOLUTION_GUARD&&value.state==='RESOLVED_NATIVE_CACHE_PAIR'&&value.company===config.company&&value.line===line.phone&&value.instance===body.instance&&value.sourceId===raw.key.id&&value.lid===raw.key.remoteJid&&value.callbackHash===nativeIdentityResolutionHash(raw)&&value.firstInstalledAt===startedAt&&
+    proofHash===nativeIdentityResolutionHash(unsigned)&&proof.guard===NATIVE_IDENTITY_RESOLUTION_GUARD&&proof.line===line.phone&&proof.instance===line.instance&&proof.sourceId===raw.key.id&&proof.lid===raw.key.remoteJid&&proof.phone===value.phone&&proof.callbackHash===value.callbackHash&&proof.startsAt===startedAt&&proof.sourceAt===nativeAt(raw)&&proof.owner?.phone===line.phone&&proof.owner.instance===line.instance&&proof.owner.open===true&&proof.owner.ownerVerified===true&&
+    /^57\d{10}$/.test(value.phone||'')&&!knownInternalRecipient(value.phone)&&!internalRecipients(config).includes(value.phone)&&!config.lines.some(line=>line.phone===value.phone)?value:null;
 }
 // Proofs are encrypted and inserted once, separately from the immutable raw
 // journal. No native key or original identity claim is rewritten.
 export function recordPrivateNativeCachePairs(store,config,body,result,{startedAt,now=Date.now()}={}){
-  if(!ownBlue(config)||body.instance!=='cucaracha-azul'||result?.guard!==NATIVE_IDENTITY_RESOLUTION_GUARD||result.originalBodyPreserved!==true||result.originalBodyHash!==nativeIdentityResolutionHash(body))return {recorded:0};
+  const line=ownCacheLine(config,body);
+  if(store.company!==config.company||!line||config.enabled!==true||body?.event!=='messages.upsert'||!Number.isSafeInteger(startedAt)||startedAt<config.activatedAt||!Number.isSafeInteger(now)||startedAt>now||result?.guard!==NATIVE_IDENTITY_RESOLUTION_GUARD||result.originalBodyPreserved!==true||result.originalBodyHash!==nativeIdentityResolutionHash(body))return {recorded:0};
+  startedAt=nativeIdentityStartedAt(config,line,startedAt);
   const rows=Array.isArray(body.data)?body.data:[body.data];let recorded=0;
   store.tx(()=>{for(const resolution of result.resolutions||[]){
     const raw=rows.find(value=>value?.key?.id===resolution.sourceId),proof=resolution.proof;
-    if(!raw||raw.key.fromMe!==false||raw.key.remoteJid!==resolution.lid||raw.key.remoteJidAlt!=null&&raw.key.remoteJidAlt!==''||resolution.line!==FUMIGACION_BLUE||resolution.instance!==body.instance||!/^57\d{10}$/.test(resolution.phone||'')||knownInternalRecipient(resolution.phone)||internalRecipients(config).includes(resolution.phone)||config.lines.some(line=>line.phone===resolution.phone))continue;
+    if(!raw||raw.key.fromMe!==false||raw.key.remoteJid!==resolution.lid||raw.key.remoteJidAlt!=null&&raw.key.remoteJidAlt!==''||resolution.line!==line.phone||resolution.instance!==body.instance||!/^57\d{10}$/.test(resolution.phone||'')||knownInternalRecipient(resolution.phone)||internalRecipients(config).includes(resolution.phone)||config.lines.some(line=>line.phone===resolution.phone))continue;
     const {proofHash,...unsigned}=proof||{},at=nativeAt(raw);
-    if(proof?.guard!==NATIVE_IDENTITY_RESOLUTION_GUARD||proofHash!==nativeIdentityResolutionHash(unsigned)||proof.sourceId!==raw.key.id||proof.phone!==resolution.phone||proof.lid!==resolution.lid||proof.line!==resolution.line||proof.instance!==resolution.instance||proof.sourceAt!==at||proof.callbackHash!==nativeIdentityResolutionHash(raw)||proof.startsAt!==startedAt||at<startedAt||at>now||now-at>NATIVE_IDENTITY_MAX_AGE_MS||proof.owner?.phone!==FUMIGACION_BLUE||proof.owner.instance!==body.instance||proof.owner.open!==true||proof.owner.ownerVerified!==true||!Array.isArray(proof.pairSources)||!proof.pairSources.length)continue;
-    if(store.db.prepare('SELECT 1 FROM events WHERE id=?').get(raw.key.id)||readMeta(store,identityKey(FUMIGACION_BLUE,raw.key.id)))continue;
-    const key=cacheProofKey(FUMIGACION_BLUE,raw.key.id),existing=readMeta(store,key);
+    if(proof?.guard!==NATIVE_IDENTITY_RESOLUTION_GUARD||proofHash!==nativeIdentityResolutionHash(unsigned)||proof.sourceId!==raw.key.id||proof.phone!==resolution.phone||proof.lid!==resolution.lid||proof.line!==resolution.line||proof.instance!==resolution.instance||proof.sourceAt!==at||proof.callbackHash!==nativeIdentityResolutionHash(raw)||proof.startsAt!==startedAt||at<startedAt||at>now||now-at>NATIVE_IDENTITY_MAX_AGE_MS||proof.owner?.phone!==line.phone||proof.owner.instance!==body.instance||proof.owner.open!==true||proof.owner.ownerVerified!==true||!Array.isArray(proof.pairSources)||!proof.pairSources.length)continue;
+    if(store.db.prepare('SELECT 1 FROM events WHERE id=?').get(raw.key.id)||readMeta(store,identityKey(line.phone,raw.key.id)))continue;
+    const key=cacheProofKey(line.phone,raw.key.id),existing=readMeta(store,key);
     if(existing){if(existing.callbackHash!==proof.callbackHash||existing.phone!==resolution.phone)throw Error('PRIVATE_NATIVE_IDENTITY_PROOF_CONFLICT');continue;}
     const value={guard:NATIVE_IDENTITY_RESOLUTION_GUARD,state:'RESOLVED_NATIVE_CACHE_PAIR',company:config.company,sourceId:raw.key.id,line:resolution.line,instance:resolution.instance,lid:resolution.lid,phone:resolution.phone,callbackHash:proof.callbackHash,originalBodyHash:result.originalBodyHash,proof,recordedAt:now,firstInstalledAt:startedAt,originalCarriedPhone:false,authority:'external-customer-only',historicalReplayEnabled:false};
     store.db.prepare('INSERT INTO meta(key,value) VALUES(?,?)').run(key,store.seal(value));
@@ -51,7 +61,7 @@ export function recordPrivateNativeCachePairs(store,config,body,result,{startedA
   }});return {recorded};
 }
 export function decodePrivateNativeCachePairs(store,config,body,{now=Date.now()}={}){
-  const line=config.lines.find(value=>value.phone===FUMIGACION_BLUE&&value.instance===body.instance);if(!line)return [];
+  const line=ownCacheLine(config,body);if(!line)return [];
   return (Array.isArray(body.data)?body.data:[body.data]).flatMap(raw=>{
     const proof=cacheProofForRaw(store,config,body,raw);if(!proof)return [];
     const at=nativeAt(raw);if(at<proof.firstInstalledAt||at>now||now-at>NATIVE_IDENTITY_MAX_AGE_MS)return [];
