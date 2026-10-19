@@ -1,5 +1,9 @@
 # Registro propio de servicios nuevos de María
 
+## Continuación 19/oct/2026 — comprobación comercial y corrección manual
+
+Ver la directriz nueva de autonomía de cuatro bots en `BOTS_MARIA_MIGUEL.md` y `.tmp/four-advisers-autonomy-20261019/checkpoint-private.json`. Las auditorías BLUE/RED comprobaron fuente, horario y órdenes actuales, pero el lector propio no expone `confirmacionComercial`; PROGRAMADO no permite inferir CONFIRMADO. Una orden aceptada se marcó CONFIRMADO con fuente WhatsApp y referencias nativas, y se corrigió su inicio16:00→16:30 en la sesión humana existente. El lector posterior verificó fin17:30/duración60, tarifa125000 y técnico/cliente/dirección/servicio intactos; otras11órdenes no cambiaron. No hay cobertura de pagos por ese lector. Fue una corrección manual autorizada, no una alta o venta autónoma del bot. Registro borrado anterior conservado; cero nuevas órdenes, seguimientos o liberaciones de chats en esta continuación. Las demás diferencias de precio/alcance/facturación e identidades pendientes no se resolvieron por inferencia.
+
 ## Estado vigente 19/oct/2026 19:08Z — registro ordinario de ambas líneas
 
 Prevalece el estado nuevo de `BOTS_MARIA_MIGUEL.md`: ambas líneas propias conectadas/owner exacto y habilitadas por instrucción humana. Runtime `da0ae72` instalado; 3152/3152 pruebas más 28/28 del último ajuste defensivo. API 19:08:12Z confirma registro ordinario y `own-confirmed-client-time-without-technician-v1` habilitados, sin asignar técnico. BLUE conserva corte público 17/oct20:20:36.716Z; RED admite sólo fuentes/recepción nuevas desde **19/oct19:07:53.012Z**. El registro backend ya admite ambas líneas con el mismo actor/tenant/empresa y vencimiento original; no se creó acceso nuevo.
