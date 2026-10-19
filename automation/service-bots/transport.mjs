@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {officeReceptionReplyStillValid} from './office-customer-replies.mjs';
 import {explicitNewService} from './after-service.mjs';
 import {explicitNewTechnicalCase,technicalIntakeMetaQuestion} from './technical-intake-continuity.mjs';
 import { SANDRA, DIEGO, HILARY, CURRENT_OPERATOR_ROUTING, publicTextSafe, normalize,internalRecipients,knownInternalRecipient,chiefReplyRestrictionActive,outboundRecipientAllowed } from './config.mjs';
@@ -584,6 +585,10 @@ export async function flushOutbox(store,config,transport){
     const conv=store.conversation(o.phone);
     if(!o.internal&&(conv?.hold||conv?.revision!==o.revision)){
       store.db.prepare("UPDATE outbox SET state='SUPPRESSED_HUMAN',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id);suppressed++;continue;
+    }
+    if(!o.internal&&!officeReceptionReplyStillValid(store,o)){
+      store.db.prepare("UPDATE outbox SET state='OFFICE_RECEPTION_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id);
+      store.audit('OFFICE_RECEPTION_RECHECK_FAILED',o.id,{attemptedSend:false});suppressed++;continue;
     }
     if(!o.internal&&!store.approvedReplyStillValid(o)){
       store.db.prepare("UPDATE outbox SET state='APPROVED_ANSWER_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id);

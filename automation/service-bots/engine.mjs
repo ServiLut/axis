@@ -6,6 +6,7 @@ import {businessPriceHashAt} from './business-prices.mjs';
 import {directedNonserviceTurn,unscopedInitialImageReply} from './directed-nonservice.mjs';
 import {selectPrice,priceText,quotationInquiry,specialQuotation,currentPriceEntries} from './prices.mjs';
 import {adviserReply} from './adviser-tone.mjs';
+import {selectOfficeReceptionReply,saveOfficeReceptionReference} from './office-customer-replies.mjs';
 import {literalIntakeTiming} from './intake-timing.mjs';
 import {literalGreetingText,literalGreetingReplyProof} from './literal-reception.mjs';
 import {CONVERSATIONAL_AI_GUARD,MIGUEL_CONVERSATIONAL_AI_GUARD,conversationalAiGuard} from './ai-settings.mjs';
@@ -1052,7 +1053,11 @@ export class Engine {
       const currentContext=c.company==='fumigacion'&&mariaLiteralServiceContext(e);
       const literalContextSource=c.company==='fumigacion'&&e.kind==='text'&&!contextNeedsPersonalPriority(e.text,e)?(currentContext?.documentDetail&&literalContextRequest?literalContextRequest:currentContext?e:literalContextRequest):null;
       const faqClassificationText=mariaIncidentalPetMention(faqQuestion)?.classificationText??faqQuestion.text;
-      const faq=c.company==='fumigacion'&&!documentSource&&!controlSource&&!followupSource&&!caseState.requestedAfterServiceReview&&!caseState.requestedControlReview&&e.kind==='text'&&!e.forwarded&&!unreadLinkOnly(e.text)&&!faqNeedsPersonalReview(e.text)&&!paymentInquiry(e.text)&&!previousQuotation(e.text)&&!postServiceReturn(e.text)&&!plannedRevisit(e.text)&&faqQuestion.kind==='text'?selectCommonAnswer(textWithoutLinks(faqClassificationText),caseState.slots,s.approvedCustomerAnswers(),caseState.caseId):null;
+      let faq=c.company==='fumigacion'&&!documentSource&&!controlSource&&!followupSource&&!caseState.requestedAfterServiceReview&&!caseState.requestedControlReview&&e.kind==='text'&&!e.forwarded&&!unreadLinkOnly(e.text)&&!faqNeedsPersonalReview(e.text)&&!paymentInquiry(e.text)&&!previousQuotation(e.text)&&!postServiceReturn(e.text)&&!plannedRevisit(e.text)&&faqQuestion.kind==='text'?selectCommonAnswer(textWithoutLinks(faqClassificationText),caseState.slots,s.approvedCustomerAnswers(),caseState.caseId):null;
+      // An approved informational fragment cannot dispose of consent, client
+      // data or a requested time in the same native message. Keep that whole
+      // question on its ordinary review path; never trim it into intake facts.
+      if(faq?.answer&&/\b(?:acepto|confirmo|agendame|programame|reservame|registrar|registra|pago|pagar|pague|abono|comprobante|transfer\w*|consign\w*|horario|disponibilidad|fecha|hoy|manana|lunes|martes|miercoles|jueves|viernes|sabado|domingo|me llamo|mi nombre|datos son correctos)\b|\b(?:nombre|direccion)\s*:|\ba las?\s+\d/.test(normalize(faqQuestion.text)))faq={topics:faq.topics,reason:'ADDITIONAL_UNVERIFIED_REQUEST'};
       let decision;
       const directedPurpose=directedNonserviceTurn(s,c,caseState,e);
       const productClarification=c.company==='fumigacion'&&caseState.requestedProductInquiry&&literalIntakeTurn(e)&&!contextNeedsPersonalPriority(e.text,e)&&(Object.keys(extractSlots(e.text,c.company)).length||/^(?:solo|solamente|unicamente) (?:el )?producto[.! ]*$/.test(normalize(e.text)));
@@ -1094,6 +1099,7 @@ export class Engine {
         decision={state:{...caseState,lastText:e.text,pendingFaqQuestion:{id:faqQuestion.id,text:faqQuestion.text,kind:'text'}},reply:field==='service'?'¿Para qué plaga necesitas el servicio?':'¿En qué tipo de inmueble necesitas el servicio?'};
       }else decision=pendingQuestion&&!caseState.requestedAfterServiceReview&&!quotationInquiry(pendingQuestion.text)?{state:{...caseState,lastText:e.text},reviewTopic:'customer-question',reviewConditions:{question:normalize(pendingQuestion.text),caseId:caseState.caseId},reviewSource:pendingQuestion.id,pendingQuestion:pendingQuestion.text,review:'Hay una pregunta pendiente en esta misma secuencia; el mensaje siguiente aporta datos, pero no sustituye esa pregunta.',reviewQuestion:'¿Qué respuesta verificada corresponde a esta pregunta?',reply:'Recibí tu pregunta. Tu solicitud sigue pendiente de confirmación.'}:customerDecision(c.company,caseState,e,analysis);
       if(pendingQuestion&&decision.review&&!decision.state.requestedAfterServiceReview){decision.reviewSource=pendingQuestion.id;decision.pendingQuestion=pendingQuestion.text;}
+      const informationalFaq=Boolean(faq?.answer&&decision.reply===faq.answer&&!decision.review&&!decision.question);
       let selectedPrice=quoteClarification?.entry||null;
       const currentQuote=caseState.quotedPrice;
       const priceNow=currentQuote&&ownDeliveredQuoteEntry(s,caseState,e.phone,e.line,decision.state.slots)?.entry;
@@ -1122,7 +1128,7 @@ export class Engine {
       // An affirmative amount without the quotation's delivery proof cannot
       // grant consent or silently issue a replacement quotation either.
       const unverifiedAmountAttempt=currentQuote&&!priceNow&&e.kind==='text'&&e.fromMe===false&&!e.forwarded&&!e.quotedId&&quotationAmountAffirmation(e.text,e.at)!==null;
-      const continuingQuote=!decision.invalidRequestedTiming&&!decision.state.customerDeferral?.active&&!decision.quoteClarification&&!decision.literalServiceContext&&!decision.observed&&c.company==='fumigacion'&&currentQuote&&priceNow?.id===currentQuote.entryId&&priceNow.priceCop===currentQuote.priceCop&&
+      const continuingQuote=!informationalFaq&&!decision.invalidRequestedTiming&&!decision.state.customerDeferral?.active&&!decision.quoteClarification&&!decision.literalServiceContext&&!decision.observed&&c.company==='fumigacion'&&currentQuote&&priceNow?.id===currentQuote.entryId&&priceNow.priceCop===currentQuote.priceCop&&
         ((!decision.review&&!decision.courtesy)||(naturalAcceptance&&(decision.courtesy||decision.reviewTopic==='customer-question')))&&!specialQuotation(textWithoutLinks(literalIntakeTextWithoutRegistrationFields(e.text)),decision.state.slots)&&
         (currentQuote.accepted||naturalAcceptance);
       if(continuingQuote){
@@ -1162,7 +1168,7 @@ export class Engine {
       }
       const ordinaryInformation=ordinaryDataInformationTurn(s,c,decision.state,e);
       if(ordinaryInformation){selectedPrice=null;decision=ordinaryInformation;}
-      if(c.company==='fumigacion'&&!decision.mattressScopeClarification&&!decision.state.customerDeferral?.active&&!decision.registrationInformation&&!(currentQuote&&(naturalAcceptance||unverifiedAmountAttempt))&&(decision.question?.topic==='cotizacion-verificada'||decision.reviewTopic==='customer-question'&&quotationInquiry(e.text))){
+      if(c.company==='fumigacion'&&(!faq||faq.answer)&&!decision.mattressScopeClarification&&!decision.state.customerDeferral?.active&&!decision.registrationInformation&&!(currentQuote&&(naturalAcceptance||unverifiedAmountAttempt))&&(decision.question?.topic==='cotizacion-verificada'||decision.reviewTopic==='customer-question'&&quotationInquiry(e.text))){
         const selection=selectPrice(decision.state.slots,s.approvedPriceCatalogs(),null,{scheduleHash:businessPriceHashAt(e.at),issuedAt:e.at});
         if(selection.entry&&!e.forwarded&&!ambiguousIntake(e.text)&&!termiteFurnitureMention(e)&&!specialQuotation(textWithoutLinks(literalIntakeTextWithoutRegistrationFields(e.text)),decision.state.slots)){
           selectedPrice=selection.entry;
@@ -1180,7 +1186,7 @@ export class Engine {
       // descriptions. In particular a street number before "apartamento"
       // must not become a quantity of apartments for quotation scope.
       const literalProgramStage=['name','address','details','confirm','correction'].includes(caseState.programIntake?.stage);
-      const registration=decision.invalidRequestedTiming||decision.quoteClarification||decision.literalServiceContext||decision.quoteEvidenceReview||decision.directedNonservice?null:registrationTurn(s,c,caseState,e,literalProgramStage?{...decision,state:{...decision.state,slots:{...caseState.slots,...(decision.state.slots.preference?{preference:decision.state.slots.preference}:{})}}}:decision,{literalSlots:extractSlots});
+      const registration=informationalFaq||decision.invalidRequestedTiming||decision.quoteClarification||decision.literalServiceContext||decision.quoteEvidenceReview||decision.directedNonservice?null:registrationTurn(s,c,caseState,e,literalProgramStage?{...decision,state:{...decision.state,slots:{...caseState.slots,...(decision.state.slots.preference?{preference:decision.state.slots.preference}:{})}}}:decision,{literalSlots:extractSlots});
       if(registration)decision=registration;
        if(caseState.customerDeferral?.active===true&&decision.state.customerDeferral?.active===false&&decision.state.customerDeferral.resumedBy?.sourceId===e.id)s.audit('OWN_CUSTOMER_DEFERRAL_RESUMED',e.id,{caseId:caseState.caseId,deferralSourceId:caseState.customerDeferral.sourceId,resumeSourceId:e.id,kind:decision.state.customerDeferral.resumedBy.kind,humanHoldReleased:false,acceptanceGrantedByMarker:false});
       decision.state.lastHandledSourceId=e.id;
@@ -1259,6 +1265,7 @@ export class Engine {
       // formatter. This adds no internal question or case/business authority.
       if(decision.specificCustomerQuestionReply&&decision.reply!==null)decision.reply=decision.specificCustomerQuestionReply;
       if(decision.reply){
+        const office=selectOfficeReceptionReply(c.company,decision,{approvedAnswer:Boolean(faq?.answer)});
         decision.reply=adviserReply(c.company,decision,{firstReply:!conv.state.lastHandledSourceId&&!decision.state.pendingFaqQuestion,approvedAnswer:Boolean(faq?.answer)});
         if(!decision.review&&!decision.question&&!selectedPrice&&!faq?.answer){
           const proof=literalGreetingReplyProof(c,e,decision.state,decision.reply);
@@ -1266,6 +1273,10 @@ export class Engine {
         }
         if(!publicTextSafe(decision.reply))throw new Error('EXTERNAL_TEXT_REJECTED');
         s.queue(e.id+':reply',e.phone,e.line,decision.reply,false,conv.revision,decision.courtesy?null:caseState.caseId);
+        if(office&&decision.reply===office.text){
+          saveOfficeReceptionReference(s,e,caseState.caseId,office);
+          s.audit('OWN_OFFICE_RECEPTION_SELECTED',e.id,{guard:office.guard,version:office.version,catalogIds:office.catalogIds,ranges:office.ranges,reviewPreserved:true,businessWritten:false});
+        }
         if(faq?.answer)s.saveApprovedReplyReference(e.id+':reply',{question:faqQuestion.text,context:caseState.slots,caseId:caseState.caseId,answer:faq.answer,finalText:decision.reply,answerIds:faq.answerIds,sourceIds:faq.sourceIds});
         if(selectedPrice)s.savePriceReplyReference(e.id+':reply',quoteClarification?.quotationReference?{...quoteClarification.quotationReference,finalText:decision.reply}:{entryId:selectedPrice.id,priceCop:selectedPrice.priceCop,context:{...decision.state.slots},finalText:decision.reply,...(selectedPrice.source?.scheduleHash?{scheduleHash:selectedPrice.source.scheduleHash,issuedAt:e.at}:{})});
       }

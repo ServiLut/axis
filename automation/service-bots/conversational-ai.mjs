@@ -265,6 +265,9 @@ function replyFacts(config,store,row,source,text){
 }
 export function mariaReplyContract(config,store,row,text){
  if(config.company!=='fumigacion'||!publicTextSafe(text))return null;
+ // Reviewed office reception is a versioned deterministic response. Free
+ // composition must not add promises or hide the still-pending condition.
+ if(store.db.prepare('SELECT 1 FROM meta WHERE key=?').get('office-reception:'+row.id))return null;
  const source=replySource(config,store,row);
  // Registration summaries and saved receipts contain personal fields. Their
  // atomic deterministic text is not sent to the model or paraphrased.

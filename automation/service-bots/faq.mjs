@@ -7,8 +7,8 @@ export const faqTopicLabel=topic=>({duration:'la duración de la visita',treatme
 const patterns={
   duration:/\b(?:cuanto (?:tiempo )?(?:dura|tarda|se demora)|duracion (?:del servicio|de la visita)|tiempo (?:del servicio|de la visita)|cuanto se demoran)\b/,
   treatment:/\b(?:que (?:productos?|tratamiento|aplican|usan|utilizan)|con que (?:fumigan|tratan)|productos? (?:que|utiliz)|como (?:fumigan|hacen el tratamiento))\b/,
-  safety:/\b(?:toxic\w*|inofensiv\w*|mascotas?|ninos?|bebes?|alimentos?|volver (?:a|al)|regresar|reingreso|salir (?:de|del)|quedarme|permanecer|ventilar)\b/,
-  preparation:/\b(?:preparar|preparacion|antes (?:del servicio|de la fumigacion)|mover (?:los )?muebles|sacar (?:las )?cosas)\b/,
+  safety:/\b(?:toxic\w*|inofensiv\w*|mascotas?|ninos?|bebes?|alimentos?|volver (?:a|al)|regresar|reingreso|salir (?:de|del)|quedarme|permanecer|ventilar|(?:puedo|podemos|debo|debemos) (?:entrar|ingresar)|(?:estar|quedar(?:me|nos)?|permanecer) (?:por )?(?:fuera|afuera)|(?:tiempo|horas?) (?:fuera|afuera))\b/,
+  preparation:/\b(?:preparar|preparacion|antes (?:del servicio|de la fumigacion|de (?:que )?(?:vengan|lleguen|fumiguen))|mover (?:los )?muebles|sacar (?:las )?cosas)\b/,
   cleaning:/\b(?:limpiar|limpieza|lavar|barrer|trapear)\b/,
   inclusions:/\b(?:que incluye|que cubre|incluye (?:el|la))\b/,
   reinforcement:/\b(?:refuerzo\w*|segunda (?:visita|aplicacion)|repetir (?:el|la)|otra aplicacion)\b/,
@@ -19,7 +19,7 @@ const exception=/\b(?:intoxic\w*|vomit\w*|maread\w*|mareo\w*|ingiri\w*|ingest\w*
 export const faqNeedsPersonalReview=text=>exception.test(normalize(text));
 export function commonQuestionTopics(text){
   const t=normalize(text);
-  const asks=/[?¿]/.test(text)||/\b(?:cuanto|que (?:productos?|tratamiento|aplican|usan|incluye|cubre)|con que|como (?:prepar|fumig|hacen)|es toxico|son toxicos|tengo que salir|puedo (?:volver|regresar|limpiar|quedarme|permanecer)|tiene garantia)\b/.test(t);
+  const asks=/[?¿]/.test(text)||/\b(?:cuanto|que (?:productos?|tratamiento|aplican|usan|incluye|cubre|debo hacer)|con que|como (?:prepar|fumig|hacen)|es toxico|son toxicos|tengo que salir|(?:cuando )?(?:puedo|podemos) (?:entrar|ingresar|volver|regresar|limpiar|quedarme|permanecer)|tiene garantia)\b/.test(t);
   if(!asks||priorReference.test(t)||exception.test(t))return [];
   return FAQ_TOPICS.filter(topic=>patterns[topic].test(t)&&!(topic==='duration'&&/\b(?:efecto|proteccion|garantia|veneno|producto)\b/.test(t)&&!/\b(?:visita|servicio|fumigacion)\b/.test(t)));
 }

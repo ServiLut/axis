@@ -2,6 +2,7 @@
 // This changes reviewed reception wording, never the price, scope or authority.
 import {currentIntakeTimingAcknowledgement} from './intake-timing.mjs';
 import {officeReceptionRequestValues,formatOfficeReceptionRequests,officeReceptionDeclineText} from './office-reception-snippets.mjs';
+import {selectOfficeReceptionReply} from './office-customer-replies.mjs';
 export const ADVISER_TONE_GUARD='identified-maria-reception-and-current-requested-timing-v3';
 const ordinaryIntakeQuestions=new Set([
  'Para cotizarte, me falta:\n1. Qué plaga deseas tratar o si buscas prevención.\n2. En qué barrio o vereda necesitas el servicio.',
@@ -57,6 +58,8 @@ const reviewedWording=new Map([
 export function adviserReply(company,decision,{firstReply=false,approvedAnswer=false}={}) {
  const text=decision.reply;
  if(company!=='fumigacion'||!text||approvedAnswer)return text;
+ const office=selectOfficeReceptionReply(company,decision,{approvedAnswer});
+ if(office)return office.text;
  // Personal summaries and persisted receipt confirmations retain their exact
  // deterministic facts. Tone does not change a registration contract.
  if(decision.state?.programIntake||/^(?:Registraré el servicio|Tu solicitud quedó registrada|Registré tu solicitud|Tu servicio quedó registrado)\b/.test(text))return text;
