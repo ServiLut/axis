@@ -206,7 +206,7 @@ test('a private media question cannot hide the own pending TESA quotation from a
   const quoted=await f.turn('Cucarachas en un edificio de 7 apartamentos en Medellín');
   const groupBefore=f.s.db.prepare('SELECT * FROM tesa_questions').all();assert.equal(groupBefore.length,1);assert.equal(groupBefore[0].topic,'special-quotation');
   const media=await f.turn('',null,{kind:'image'});assert.ok(media.text);const privateBefore=f.questions();assert.equal(privateBefore.length,1);assert.equal(privateBefore[0].topic,'media-content-review');
-  const status=await f.turn('Sigo pendiente');assert.match(status.text||'',/precio confirmado para esta cotización/);assert.doesNotMatch(status.text,/archivo|imagen|revisi[oó]n del contenido/);
+  const status=await f.turn('Sigo pendiente');assert.match(status.text||'',/consultando el valor y qué incluye el servicio/);assert.doesNotMatch(status.text,/archivo|imagen|revisi[oó]n del contenido/);
   assert.equal(status.state.caseId,quoted.state.caseId);assert.deepEqual(f.questions(),privateBefore);assert.deepEqual(f.s.db.prepare('SELECT * FROM tesa_questions').all(),groupBefore);f.noBusiness();
  }finally{f.s.close();}
 });

@@ -5,6 +5,7 @@ import {conversationalAiGuard,ownAiScope,ownAiScopeMatches} from './ai-settings.
 import {mariaOrdinaryIntakeReply} from './adviser-tone.mjs';
 import {mariaModelKnowledge} from './maria-knowledge.mjs';
 import {pendingOrdinaryDataInformationTurn} from './maria-program.mjs';
+import {MARIA_PENDING_REVIEW_GUARD} from './maria-pending-review.mjs';
 import {MARIA_UNDERSTANDING_GUARD,MARIA_UNDERSTANDING_VERSION,MARIA_UNDERSTANDING_INSTRUCTIONS,MARIA_INTENTS,MARIA_REVIEWED_EXAMPLES,MARIA_EVALUATION_CASES,validatedIntent,mariaLiteralSlotAllowed} from './maria-understanding.mjs';
 import {MIGUEL_UNDERSTANDING_GUARD,MIGUEL_UNDERSTANDING_VERSION,MIGUEL_UNDERSTANDING_INSTRUCTIONS,MIGUEL_INTENTS,MIGUEL_REVIEWED_EXAMPLES,MIGUEL_EVALUATION_CASES,validatedMiguelIntent,miguelLiteralSlotAllowed,miguelModelKnowledge} from './miguel-understanding.mjs';
 const endpoint='https://api.openai.com/v1/responses';
@@ -273,6 +274,11 @@ export function mariaReplyContract(config,store,row,text){
  // Registration summaries and saved receipts contain personal fields. Their
  // atomic deterministic text is not sent to the model or paraphrased.
  if(!source||registrationStages.has(source.current.state.programIntake?.stage))return null;
+ // This source-checked consultation already states the next action. A second
+ // styling call must not add a repeated size acknowledgement or delay it.
+ const pending=source.current.state.pendingReviewReply;
+ const pendingBodies=[text,text.replace(/^Hola, soy María Ángel\. /,'')];
+ if(pending?.guard===MARIA_PENDING_REVIEW_GUARD&&pending.caseId===row.case_id&&pending.phone===row.phone&&pending.line===row.line&&pending.sourceId===source.event.id&&pendingBodies.some(body=>createHash('sha256').update(JSON.stringify(body)).digest('hex')===pending.replyHash))return null;
  // This exact informational list preserves a pending review; it is neither a
  // quote nor permission to register. Keep its verified deterministic wording.
  if(pendingOrdinaryDataInformationTurn(store,config,source.current.state,source.event)?.reply===text)return null;

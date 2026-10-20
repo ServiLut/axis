@@ -72,9 +72,9 @@ test('new literal intervention counts remain new information even when the pendi
 
 test('pending quotation, documents, arrival, guarantee and schedule have precise separate limits',()=>{
  for(const [topic,caseKind,expected,excluded] of [
-  ['cotizacion-verificada',null,/precio confirmado para esta cotización/,/refuerzo|horario/],
-  ['special-quotation',null,/precio confirmado para esta cotización/,/refuerzo|horario/],
-  ['existing-quotation',null,/precio confirmado para esta cotización/,/refuerzo|horario/],
+  ['cotizacion-verificada',null,/consultando el valor y qué incluye el servicio/,/refuerzo|horario/],
+  ['special-quotation',null,/consultando el valor y qué incluye el servicio/,/refuerzo|horario/],
+  ['existing-quotation',null,/consultando el valor y qué incluye el servicio/,/refuerzo|horario/],
   ['service-documents',null,/solicitud de documentos.*no tengo confirmada su entrega/,/horario|precio/],
   ['service-followup','arrival',/hora de llegada confirmada/,/refuerzo|precio/],
   ['warranty-review','warranty',/no tengo confirmadas la cobertura de garantía ni una visita/,/garantia aprobada|gratis/],

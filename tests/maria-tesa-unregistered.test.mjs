@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
 import {Store} from '../automation/service-bots/store.mjs';
-import {Engine} from '../automation/service-bots/engine.mjs';
+import {Engine,extractSlots} from '../automation/service-bots/engine.mjs';
 import {BUSINESSES,CURRENT_OPERATOR_ROUTING,HILARY} from '../automation/service-bots/config.mjs';
 import {TESA_GROUP_JID,TESA_GROUP_SUBJECT,TESA_BOT_PHONES} from '../automation/service-bots/tesa-config.mjs';
 import {initializeTesaStore,prepareTesaQuestion,bindTesaQuestionDelivery,acceptTesaQuotedAnswer} from '../automation/service-bots/tesa-operations.mjs';
@@ -58,13 +58,13 @@ function freshEngineFixture(){
  const row=id=>s.db.prepare('SELECT * FROM outbox WHERE id=?').get(id);
  const deliver=(id,at=Math.floor(Date.now()/1000)*1000)=>{const out=row(id);assert.ok(out,id);const mid='MID_'+id.replace(/[^a-zA-Z0-9_]/g,'_');s.db.prepare("UPDATE outbox SET state='ACCEPTED',mid=? WHERE id=?").run(mid,id);s.recordFirstBotReply({...out,mid},mid,c.bot,at);s.delivery(mid,line,'DELIVERED');s.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('first-delivery:'+id,s.seal({mid,line,state:'DELIVERED',verifiedAt:at}));return mid;};
  const ownQuestion=()=>s.db.prepare('SELECT * FROM tesa_questions ORDER BY rowid DESC LIMIT 1').get();
- const answerAndQuote=async(price=129000)=>{
+ const answerAndQuote=async(price=129000,answerText='valor '+price+'; incluye control de cucarachas')=>{
   const q=ownQuestion(),out=s.db.prepare('SELECT * FROM tesa_outbox WHERE id=?').get(q.outbox_id),mid='TESA_ENGINE_OWN_GROUP_MID';assert.ok(q);
   s.db.prepare("UPDATE tesa_outbox SET state='ACCEPTED',mid=? WHERE id=?").run(mid,out.id);bindTesaQuestionDelivery(s,c,{outboxId:out.id,mid,groupJid:TESA_GROUP_JID,senderLine:line,text:s.open(out.body),state:'DELIVERED',at:Date.now(),nativeVerified:true});
-  const e={id:'TESA_ENGINE_HUMAN_001',company:'fumigacion',groupJid:TESA_GROUP_JID,line,receivingLine:line,participant:{phone:HILARY,jid:HILARY+'@s.whatsapp.net'},at:Date.now(),kind:'text',text:'valor '+price+'; incluye control de cucarachas',fromMe:false,forwarded:false,quote:{mid,groupJid:TESA_GROUP_JID,participantJid:line+'@s.whatsapp.net'}};
+  const e={id:'TESA_ENGINE_HUMAN_001',company:'fumigacion',groupJid:TESA_GROUP_JID,line,receivingLine:line,participant:{phone:HILARY,jid:HILARY+'@s.whatsapp.net'},at:Date.now(),kind:'text',text:answerText,fromMe:false,forwarded:false,quote:{mid,groupJid:TESA_GROUP_JID,participantJid:line+'@s.whatsapp.net'}};
   const accepted=acceptTesaQuotedAnswer(s,c,e);assert.equal(accepted.accepted,true);
   const t={currentAttention:async()=>({complete:true,sources:[]}),currentCustomerActivity:async()=>({complete:true,sources:s.db.prepare('SELECT id,line,at FROM events WHERE phone=? AND from_me=0').all(phone)})};
-  const result=await continueMariaUnregisteredTesaCustomer(s,c,t,accepted,{verifyQuestionDelivery:async()=>true,verifyHumanAnswer:async()=>true});assert.equal(result.queued,true);return {q,e,result};
+  const result=await continueMariaUnregisteredTesaCustomer(s,c,t,accepted,{verifyQuestionDelivery:async()=>true,verifyHumanAnswer:async()=>true});assert.equal(result.queued,true);return {q,e,result,accepted,t};
  };
  const previousQuoteQuestion=async()=>{
   const one=native('Tengo cucarachas en apartamento de 2 habitaciones en Medellín.'),two=native('Quiero solicitar el servicio de acuerdo con la cotización recibida');s.enqueue(one);s.enqueue(two);await engine.process(one);await engine.process(two);assert.ok(ownQuestion());assert.equal(ownQuestion().topic,'existing-quotation');return {one,two};
@@ -260,5 +260,21 @@ test('Engine follows a new native TESA answer through own ordinary quote, direct
   e=await f.turn('Nombre: Persona Sintética\nDirección: Calle 50 # 42-18 apartamento 301');assert.match(f.s.open(f.row(e.id+':reply').body),/Persona Sintética/);assert.match(f.s.open(f.row(e.id+':reply').body),/Calle 50 # 42-18 apartamento 301/);f.deliver(e.id+':reply',e.at);
   e=await f.turn('Confirmo');state=f.s.conversation(f.phone).state;const ledger=f.s.db.prepare('SELECT value FROM meta WHERE key=?').get('maria-registration:'+state.caseId);assert.ok(ledger);const entry=f.s.open(ledger.value),p=entry.payload;
   assert.equal(entry.status,'PENDING');assert.equal(p.customerName,'Persona Sintética');assert.equal(p.address,'Calle 50 # 42-18 apartamento 301');assert.equal(p.quote.priceCop,129000);assert.equal(p.quote.mid,mid);assert.equal(p.quote.sourceId,two.id);assert.equal(p.quote.acceptanceId,e.id);assert.equal(p.sources.customerName.id,p.sources.address.id);assert.equal(p.sources.acceptance.id,e.id);assert.equal(p.sources.acceptance.fromMe,false);assert.equal(p.sources.acceptance.forwarded,false);assert.equal(p.phone,f.phone);assert.equal(p.line,f.line);assert.equal(p.municipality,'medellin');assert.equal(p.slots.service,'cucarachas');assert.equal(p.slots.rooms,'2 habitaciones');assert.equal(p.createdById,undefined);assert.equal(p.advisorMembershipId,undefined);assert.equal(p.scheduled,undefined);assert.equal(p.paymentRecorded,undefined);assert.equal(entry.receipt,undefined);assert.equal(f.c.mariaProgram.actorId,'7508385b-536e-4aa2-8137-d734dfc900ef');assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM tesa_questions').get().n,1);assert.equal(f.s.db.prepare("SELECT COUNT(*) n FROM events WHERE id LIKE 'tesa-unregistered:%'").get().n,0);
+ }finally{f.s.close();}
+});
+
+test('the reported house intake consumes the announced TESA format once and keeps special-price acceptance under registration review',async()=>{
+ const f=freshEngineFixture();try{
+  const first='1. Cucarachas, arañas y hormigas\n2. casa\n3. Medellín, san Antonio de Prado',last='Son 2 habitaciones, casa de dos pisos, 2 baños, la cocina y zona de ropas un poco menos de 70 mts';
+  assert.equal(extractSlots(first,'fumigacion').service,'cucarachas y hormigas y arañas');
+  let e=await f.turn('Buenas tardes');f.deliver(e.id+':reply');
+  e=await f.turn(first);assert.match(f.s.open(f.row(e.id+':reply').body),/habitaciones o metros cuadrados/);f.deliver(e.id+':reply');
+  e=await f.turn(last);const state=f.s.conversation(f.phone).state,q=f.ownQuestion(),questionText=f.s.open(f.s.db.prepare('SELECT body FROM tesa_outbox WHERE question_id=?').get(q.id).body);
+  assert.equal(state.slots.service,'cucarachas y hormigas y arañas');assert.equal(state.slots.site,'casa');assert.equal(state.slots.rooms,'2 habitaciones');assert.equal(state.slots.area,undefined);assert.match(state.slots.floors,/2|dos/);assert.equal(state.slots.location,'medellin');assert.match(state.slots.locationDetails,/san antonio de prado/i);
+  assert.equal(q.topic,'cotizacion-verificada');assert.match(questionText,/valor total \[importe\]; incluye \[alcance\]/);assert.match(questionText,/cucarachas y hormigas y arañas/);assert.match(questionText,/habitaciones/i);assert.ok(questionText.includes(last));assert.match(questionText,/Pisos informados: (?:2|dos)/);
+  const scope='control de hormigas, arañas y cucarachas en casa de dos pisos',answer='valor total: $350.000 COP; incluye: '+scope,{result,accepted,t}=await f.answerAndQuote(350000,answer);
+  assert.equal(result.ordinaryPrice,false);assert.ok(f.s.open(f.row(result.id).body).includes('$350.000 COP e incluye '+scope));assert.equal(f.s.conversation(f.phone).state.quotedCasePrice.scope,scope);
+  const duplicate=await continueMariaUnregisteredTesaCustomer(f.s,f.c,t,accepted,{});assert.equal(duplicate.duplicate,true);assert.equal(f.s.db.prepare("SELECT COUNT(*) n FROM outbox WHERE id LIKE 'tesa-unregistered:%'").get().n,1);f.deliver(result.id);
+  e=await f.turn('Sí');const confirmed=f.s.conversation(f.phone).state;assert.equal(confirmed.quotedCasePrice.accepted,true);assert.equal(confirmed.quotedCasePrice.acceptanceSourceId,e.id);assert.equal(confirmed.quotedCasePrice.status,'REGISTRATION_REVIEW');assert.equal(confirmed.quotedCasePrice.ordinaryRegistrationEligible,false);assert.equal(confirmed.quotedPrice,undefined);assert.equal(confirmed.awaitingHumanReview,true);assert.match(f.s.open(f.row(e.id+':reply').body),/Falta validar el registro del servicio/);assert.equal(f.s.db.prepare("SELECT COUNT(*) n FROM meta WHERE key LIKE 'maria-registration:%'").get().n,0);
  }finally{f.s.close();}
 });

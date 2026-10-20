@@ -7,7 +7,7 @@ const questions=text=>(text.match(/¿/g)||[]).length;
 const assertContract=text=>{assert.ok(text.length<=1200,text.length+' characters');assert.match(text,/Respondan citando este mensaje\./);assert.match(text,/Ejemplo de formato \(por completar\):/);assert.match(text.split('\n').at(-1),/Referencia interna:/);};
 
 test('v2 guard identifies one decision with an explicit presentation stage',()=>{
-  assert.equal(MARIA_TESA_QUESTION_WORDING_GUARD,'own-fum-one-case-one-decision-with-explicit-presentation-stage-v2');
+  assert.equal(MARIA_TESA_QUESTION_WORDING_GUARD,'own-fum-complete-quote-facts-explicit-doubt-and-source-line-v3');
 });
 test('availability has one objective, useful literal context and one decision with answer fields',()=>{
   const text=formatMariaTesaQuestion(input);

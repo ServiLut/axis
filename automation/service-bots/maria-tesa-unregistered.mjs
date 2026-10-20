@@ -17,6 +17,7 @@ const quoteTopics=new Set(['cotizacion-verificada','special-quotation','existing
 const fields={plaga:'service',servicio:'service',municipio:'location',ubicacion:'location',area:'area','metros cuadrados':'area',habitaciones:'rooms',cuartos:'rooms','tipo de inmueble':'site',inmueble:'site',colchones:'mattresses'};
 const questions={service:'¿Qué plaga deseas tratar?',location:'¿En qué municipio necesitas el servicio?',area:'¿Cuántos metros cuadrados tiene el lugar?',rooms:'¿Cuántas habitaciones tiene el lugar?',site:'¿Es una casa, un apartamento u otro tipo de inmueble?',mattresses:'¿Cuántos colchones están afectados?'};
 const risky=text=>/https?:|www\.|@|[<>"“”«»\[\]{}]|\b(?:57)?3\d{9}\b|#\s*\d|\b(?:calle|carrera|cra|cl)\.?\s*\d/i.test(text)||/\b(?:ignora\w*|instruccion\w*|prompt|sistema|token|contrasena|politica\w*|garantia\w*|gratis|gratuit\w*|descuento\w*|rebaja\w*|refuerzo\w*|pagad\w*|pagos?|pagar|transfer\w*|abonos?|banc\w*|cuenta\w*|segur\w*|inofensiv\w*|toxic\w*|quimic\w*|veneno\w*|insecticida\w*|producto\w*|reingreso|cancel\w*|reprogram\w*|reserva\w*|agendad\w*|registrad\w*|confirmale|dile|envia|obedece|siempre|todos los clientes)\b/.test(normalize(text));
+const unclearScope=text=>/\b(?:no|sin|excepto|excluye|unicamente|solamente|o|si|quizas|depende|posiblemente|aproximadamente|desde|hasta|valor|precio|tarifa|costo|cop|pesos)\b|\btal vez\b/.test(normalize(text));
 const direct=e=>e?.kind==='text'&&e.fromMe===false&&!e.forwarded&&!e.quotedId&&typeof e.text==='string'&&typeof e.id==='string'&&Number.isSafeInteger(e.at);
 const ordinary=state=>state&&!state.closed&&!state.humanHold&&!state.doNotContact&&!state.optOutGlobal&&!state.programIntake&&!state.requestedAfterServiceReview&&!state.requestedControlReview&&!state.requestedDocumentReview&&!state.requestedProductInquiry&&!state.quotedPrice?.accepted&&!state.quotedCasePrice;
 const enabled=(s,c,now)=>s.company==='fumigacion'&&c.company==='fumigacion'&&c.enabled===true&&c.mariaTesaUnregistered?.enabled===true&&Number.isSafeInteger(c.mariaTesaUnregistered.startsAt)&&c.mariaTesaUnregistered.startsAt>0&&c.mariaTesaUnregistered.startsAt<=now;
@@ -28,10 +29,13 @@ export function parseMariaUnregisteredTesaAnswer(text){
  if(typeof text!=='string'||text.length>500||!text.trim()||risky(text)||/[?¿]/.test(text))return null;
  const raw=text.trim().replace(/[.!]+$/,''),missing=normalize(raw).match(/^falta\s*:?\s*(.+)$/);
  if(missing){const field=fields[missing[1].trim()];return field?{kind:'missing-field',field,reply:questions[field]}:null;}
- const match=raw.match(/^valor\s*:?\s*\$?\s*([1-9]\d*|[1-9]\d{0,2}(?:\.\d{3})+)(?:\s*(?:COP|pesos))?\s*[;\n]\s*incluye\s*:?\s*(.+)$/iu);
+ // Keep this a closed amount + explicit scope, while accepting the wording
+ // that the question itself requests and equivalent human labels.
+ const match=raw.match(/^(?:valor(?:\s+total)?|precio(?:\s+total)?|cotizaci[oó]n(?:\s+total)?|total)\s*:?\s*(?:(COP)\s+)?\$?\s*([1-9]\d*|[1-9]\d{0,2}(?:\.\d{3})+)(?:\s*(COP|pesos))?\s*[;\n]\s*incluye\s*:?\s*(.+)$/iu);
  if(!match)return null;
- const priceCop=Number(match[1].replace(/\./g,'')),scope=match[2].replace(/\s+/g,' ').trim();
- if(!Number.isSafeInteger(priceCop)||priceCop<1000||priceCop>100000000||scope.length<5||scope.length>180||!publicTextSafe(scope)||/[;\n]|\b\d{7,}\b/.test(scope)||!/^\p{L}[\p{L}\p{N} ,.:()²/-]*$/u.test(scope))return null;
+ if(match[1]&&match[3])return null;
+ const priceCop=Number(match[2].replace(/\./g,'')),scope=match[4].replace(/\s+/g,' ').trim();
+ if(!Number.isSafeInteger(priceCop)||priceCop<1000||priceCop>100000000||scope.length<5||scope.length>180||!publicTextSafe(scope)||unclearScope(scope)||/[;\n]|\b\d{7,}\b/.test(scope)||!/^\p{L}[\p{L}\p{N} ,.:()²/-]*$/u.test(scope))return null;
  return {kind:'case-quote',priceCop,scope};
 }
 
@@ -42,9 +46,13 @@ function genericOwnScope(scope,slots){
 }
 function scopeMatchesCurrent(scope,slots){
  const t=normalize(scope),service=normalize(slots.service);
- if(!service||!t.includes(service))return false;
- const other=['cucarachas','chinches','comejen','roedores','ratas','ratones','pulgas','hormigas'].filter(p=>t.includes(p)&&!service.includes(p));
- return other.length===0;
+ if(!service||!t||/\b(?:otras? plagas?|todos? los (?:insectos|animales)|cualquier plaga)\b/.test(t))return false;
+ // Match literal pest coverage as a set, not the exact intake ordering. No
+ // broader category (for example roedores) substitutes for a named pest.
+ const pests=[/\bcucarachas?\b/,/\baranas?\b/,/\bhormigas?\b/,/\bchinches?\b/,/\bcomejen(?:es)?\b/,/\broedor(?:es)?\b/,/\bratas?\b/,/\b(?:raton|ratones)\b/,/\bpulgas?\b/,/\bmosquitos?\b/,/\bmoscas?\b/,/\bavispas?\b/,/\b(?:zancudos?|sancudos?)\b/,/\bchiripas?\b/,/\btermitas?\b/,/\bgarrapatas?\b/,/\balacran(?:es)?\b/,/\bescorpion(?:es)?\b/,/\bacaros?\b/];
+ const requested=pests.filter(pattern=>pattern.test(service)),included=pests.filter(pattern=>pattern.test(t));
+ if(requested.length)return requested.length===included.length&&requested.every(pattern=>pattern.test(t));
+ return included.length===0&&t.includes(service);
 }
 function question(s,id){return s.db.prepare('SELECT q.*,o.state delivery,o.mid,o.created outbox_created,o.body outbox_body,o.native_proof FROM tesa_questions q JOIN tesa_outbox o ON o.id=q.outbox_id WHERE q.id=? AND q.company=?').get(id,'fumigacion');}
 

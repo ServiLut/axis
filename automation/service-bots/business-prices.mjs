@@ -58,7 +58,7 @@ export function selectBusinessPrice(slots,{scheduleHash=BUSINESS_PRICE_HASH}={})
  const schedule=schedules.get(scheduleHash);if(!schedule)return {reason:'BUSINESS_PRICE_VERSION_REVIEW'};
  if(specialPropertyScope(Object.values(slots).join(' '),slots))return {reason:'BUSINESS_SPECIAL_PROPERTY_REVIEW'};
  if(!schedule.scope.properties.includes(normalize(slots.site))||!schedule.scope.municipalities.includes(normalize(slots.location)))return {reason:'BUSINESS_PRICE_SCOPE_REVIEW'};
- if(slots.roomScale||slots.siteScale||slots.treatmentScope||slots.patio&&slots.patio!=='sin patio'||slots.floors&&!/^1(?:er|ro)?\s+(?:piso|nivel)$/.test(normalize(slots.floors)))return {reason:'BUSINESS_PRICE_EXTRA_SCOPE_REVIEW'};
+ if(slots.roomScale||slots.siteScale||slots.treatmentScope||slots.patio&&slots.patio!=='sin patio'||slots.floors&&!/^(?:1(?:er|ro)?|un|uno)\s+(?:piso|nivel)$/.test(normalize(slots.floors)))return {reason:'BUSINESS_PRICE_EXTRA_SCOPE_REVIEW'};
  const service=normalize(slots.service);let amount,row,basis,category,unitPrice;
  if(service==='chinches'){
   const n=count(slots.mattresses);

@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto';
 import {knownInternalRecipient,normalize} from './config.mjs';
 
-export const MARIA_PENDING_REVIEW_GUARD='own-native-current-case-specific-pending-continuity-without-new-authority-v1';
+export const MARIA_PENDING_REVIEW_GUARD='own-native-case-pending-quote-consultation-without-new-authority-v2';
 
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const pendingStates=new Set(['PENDING','ANSWER_REVIEW','REVIEW']);
@@ -54,7 +54,7 @@ function kindFor(state,pending){
 
 function pendingText(topic,kind){
  if(topic==='service-documents')return 'Tu solicitud de documentos sigue pendiente de revisión. Aún no tengo confirmada su entrega.';
- if(['cotizacion-verificada','special-quotation','existing-quotation'].includes(topic))return 'Aún no tengo un precio confirmado para esta cotización.';
+ if(['cotizacion-verificada','special-quotation','existing-quotation'].includes(topic))return 'Estoy consultando el valor y qué incluye el servicio para darte la cotización.';
  if(topic==='disponibilidad-y-tecnico')return 'Aún no tengo confirmados el horario ni el técnico para la visita.';
  if(kind==='arrival')return 'Aún no tengo una hora de llegada confirmada para esta visita.';
  if(kind==='warranty')return 'Tu solicitud de garantía sigue pendiente de revisión. Aún no tengo confirmadas la cobertura de garantía ni una visita.';

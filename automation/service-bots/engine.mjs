@@ -2,7 +2,7 @@ import { normalize, SANDRA, DIEGO, CURRENT_OPERATOR_ROUTING,TECHNICAL_COORDINATO
 import {selectCommonAnswer,commonQuestionTopics,faqNeedsPersonalReview,faqTopicLabel} from './faq.mjs';
 import {chiefStatusTopic,chiefStatusReply} from './chief-status.mjs';
 import {chiefReadOnlyTopic,chiefReadOnlyReply} from './chief-readonly.mjs';
-import {businessPriceHashAt} from './business-prices.mjs';
+import {businessPriceHashAt,selectBusinessPrice} from './business-prices.mjs';
 import {directedNonserviceTurn,unscopedInitialImageReply} from './directed-nonservice.mjs';
 import {selectPrice,priceText,quotationInquiry,specialQuotation,currentPriceEntries} from './prices.mjs';
 import {adviserReply} from './adviser-tone.mjs';
@@ -241,6 +241,15 @@ export function routeCaseQuestion(store,config,request){
   }
   if(!presentationStage&&config.company==='fumigacion'&&request.topic==='disponibilidad-y-tecnico'&&ownCase?.caseId===request.caseId&&ownCase.quotedPrice?.accepted&&registrationQuoteReady(store,ownCase,request.phone,request.line))presentationStage='accepted-unregistered';
   const display={...(ownCase?.caseId===request.caseId?ownCase.slots:{}),...request.conditions};
+  // Present only the literal location item of a numbered intake, without
+  // changing its source, stored slots or quotation scope. The complete native
+  // event remains available; pests and property have their own named fields.
+  if(config.company==='fumigacion'&&typeof display.locationDetails==='string'){
+    const numbered=/^1[.)]\s/.test(display.locationDetails.trim());
+    const parts=display.locationDetails.split(numbered?/\r?\n|\s+(?=\d{1,2}[.)]\s)/:/\r?\n/).map(part=>part.trim().replace(/^\d{1,2}[.)]\s*/,''));
+    const locations=parts.filter(part=>ordinaryLiteralMunicipality(part)===normalize(display.location));
+    if(parts.length>1&&locations.length===1)display.locationDetails=locations[0];
+  }
   if(!display.question&&source)display.question=store.open(source.body).text;
   const facts=Object.entries(display).filter(([key,value])=>labels[key]&&typeof value==='string').map(([key,value])=>labels[key]+': '+groupField(value)).join('; ').slice(0,700);
   const question=request.conditions?.kind==='technical-painting'?'¿Ofrecemos la pintura solicitada y qué alcance está disponible para este caso?':request.conditions?.kind==='reported-existing-schedule'?'¿Cuál es la programación verificada de esta visita?':['cotizacion-verificada','special-quotation','existing-quotation'].includes(request.topic)?'¿Qué cotización corresponde a este caso?':request.topic==='requested-technician-contact'?'¿Qué contacto del técnico está autorizado para este caso?':request.topic==='service-followup'?'¿Cuál es el estado de llegada de este servicio?':request.topic.startsWith('missing-intake:')?'¿Qué dato verificado falta para continuar este caso?':'¿Qué disponibilidad, ruta y técnico corresponden a este caso?';
@@ -407,7 +416,10 @@ export function extractSlots(text,company) {
     slots.affectedFurniture=literalAffectedFurniture(text);
     slots.roomScale=/\b(?:habitaciones?|cuartos?|piezas?)\s*\(?\s*pequen[oa]s?\b/.test(t)?'pequeños':/\b(?:habitaciones?|cuartos?|piezas?)\s*\(?\s*grandes?\b/.test(t)?'grandes':undefined;
     slots.siteScale=/\b(?:apartamento|apto|casa|local)\s+pequen[oa]\b/.test(t)?'pequeño':/\b(?:apartamento|apto|casa|local)\s+grande\b/.test(t)?'grande':undefined;
-    slots.floors=text.match(/\b\d{1,2}(?:er|ro|do|to)?\s+(?:pisos?|niveles?)\b/i)?.[0];
+    const floors=affirmedIntakeMatches(text,/\b(?:\d{1,2}(?:er|ro|do|to)?|un|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+(?:pisos?|niveles?)\b/iu);
+    // A literal written count must reach the consultation as written. Do not
+    // select an endpoint from an alternative or treat a floor as an address.
+    slots.floors=new Set(floors.map(normalize)).size===1&&!/\b(?:\d{1,2}|un|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s*(?:o|a|[-–/])\s*(?:\d{1,2}|un|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+(?:pisos?|niveles?)\b/iu.test(text)?floors[0]:undefined;
     slots.patio=/\b(?:no (?:tiene|hay|tenemos)|sin) patio\b/.test(t)?'sin patio':/\bpatio\b/.test(t)?'patio':undefined;
     slots.treatmentScope=/\b(?:solo|solamente)\s+(?:el )?interior\b/.test(t)?'solo interior':/\b(?:solo|solamente)\s+(?:en )?(?:la )?cocina\b/.test(t)?'solo cocina':undefined;
     slots.rooms=affirmedIntakeMatches(text,literalRoomPattern)[0];
@@ -1189,6 +1201,9 @@ export class Engine {
           selectedPrice=selection.entry;
           decision={state:{...decision.state,quotedPrice:{entryId:selectedPrice.id,priceCop:selectedPrice.priceCop,slots:{...decision.state.slots},sourceId:e.id,...(selectedPrice.source?.scheduleHash?{scheduleHash:selectedPrice.source.scheduleHash,issuedAt:e.at}:{})}},reply:priceText(selectedPrice)};
           s.audit('REVIEWED_PRICE_SELECTED',e.id,{entryId:selectedPrice.id,priceCop:selectedPrice.priceCop,quoteSources:selection.sourceIds,caseId:caseState.caseId,businessWritten:false});
+        }else if(!selection.entry&&decision.question?.topic==='cotizacion-verificada'){
+          const table=selectBusinessPrice(decision.state.slots,{scheduleHash:businessPriceHashAt(e.at)});
+          decision.question={...decision.question,conditions:{...decision.question.conditions,quotationGapReason:table.reason||'REVIEWED_CASE_PRICE_REQUIRED'}};
         }
       }
       if(faq&&!faq.answer&&decision.review){

@@ -1,6 +1,6 @@
 // Presentation only. Routing, source verification, minimization and authority
 // remain with the existing TESA guards; a formatted question grants none.
-export const MARIA_TESA_QUESTION_WORDING_GUARD='own-fum-one-case-one-decision-with-explicit-presentation-stage-v2';
+export const MARIA_TESA_QUESTION_WORDING_GUARD='own-fum-complete-quote-facts-explicit-doubt-and-source-line-v3';
 const MAX_LENGTH=1200;
 const compact=value=>typeof value==='string'?value.replace(/\s+/g,' ').trim():'';
 const short=(value,max)=>{const text=compact(value);return text.length>max?text.slice(0,max-1).trimEnd()+'…':text;};
@@ -42,13 +42,23 @@ function knownFacts({values,raw}){
   for(const [key,label]of [['service','Servicio'],['location','Municipio'],['locationDetails','Ubicación indicada'],['site','Inmueble'],['rooms','Habitaciones'],['roomScale','Tamaño de las habitaciones'],['siteScale','Tamaño del inmueble'],['area','Área informada'],['dimensions','Dimensiones literales'],['floors','Pisos informados'],['patio','Patio informado'],['treatmentScope','Alcance informado'],['mattresses','Colchones'],['detail','Detalle'],['preference','Preferencia del cliente']]){
     if(compact(values[key])&&!(key==='area'&&unreportedMeasure(values[key])))rows.push(label+': '+compact(values[key]));
   }
-  if((compact(values.rooms)||compact(values.dimensions))&&unreportedMeasure(values.area))rows.push(values.dimensions?'Área total: no informada':'Medida: no informada');
+  if((compact(values.rooms)||compact(values.dimensions))&&unreportedMeasure(values.area)){
+    const ambiguousMeasure=/\b\d{1,5}(?:[.,]\d{1,2})?\s*(?:mts?|metros?)\b(?!\s*(?:[2²]|cuadrados?))/iu.test(values.question||'');
+    rows.push(ambiguousMeasure?'Medida con unidad por aclarar: ver mensaje literal del cliente':values.dimensions?'Área total: no informada':'Medida: no informada');
+  }
   return rows.join('\n• ');
 }
 
-function quoteRequest(){
+function quoteRequest(conditions){
+  const reasons={
+    NO_APPROVED_BUSINESS_PEST_PRICE:'Falta confirmar: un valor total y alcance para todas las plagas indicadas.',
+    BUSINESS_PRICE_EXTRA_SCOPE_REVIEW:'Falta confirmar: valor total y alcance para todas las plagas indicadas, considerando las características adicionales del inmueble.',
+    BUSINESS_SIZE_BAND_REVIEW:'Falta confirmar: cómo aplicar el tamaño informado y qué valor total corresponde.',
+    BUSINESS_SIZE_UNIT_REVIEW:'Falta confirmar: qué medida o dato concreto debe aclarar el cliente para cotizar.',
+    BUSINESS_PRICE_SCOPE_REVIEW:'Falta confirmar: el valor total y alcance para este inmueble y ubicación.'
+  };
   return {purpose:'confirmar el valor total y qué incluye este caso',
-    pending:'Falta confirmar: valor total y qué incluye.',
+    pending:reasons[conditions?.quotationGapReason]||'Falta confirmar: valor total y qué incluye.',
     question:'¿Qué valor total y alcance podemos confirmar para este caso?',
     format:'valor total [importe]; incluye [alcance] / falta [dato concreto para cotizar].'};
 }
@@ -77,7 +87,7 @@ function requestFor(topic,conditions,presentationStage){
     question:'¿Qué disponibilidad verificada pueden ofrecer para este caso? Indiquen técnico, fecha y franja, o qué falta confirmar.',
     format:'técnico [nombre en Tenaxis]; fecha [día]; inicio [hora]; fin [hora].'
   };
-  if(stage==='quote-needed'||quotationTopics.includes(topic))return quoteRequest();
+  if(stage==='quote-needed'||quotationTopics.includes(topic))return quoteRequest(conditions);
   if(topic==='disponibilidad-y-cotizacion')return {
     purpose:'preparar una propuesta para este caso',
     question:'¿Qué propuesta verificada podemos ofrecer? Indiquen valor, alcance, técnico, fecha y franja, o qué falta confirmar.',
@@ -121,8 +131,9 @@ function fitContext(text,limit,marker){
 export function formatMariaTesaQuestion({bot,name,reference,last4,lineLast4,facts,contextFacts,topic,conditions,presentationStage}={}){
   const context=readableContext(facts,contextFacts),request=requestFor(topic,conditions,presentationStage);
   const header='Equipo TESA, necesito '+request.purpose+'.';
+  const lineLabel=lineLast4==='4997'?'azul ':lineLast4==='8721'?'roja ':'';
   const identity=(/^\d{4}$/.test(last4||'')?'Cliente …'+last4:'Cliente sin terminación disponible')+
-    (/^\d{4}$/.test(lineLast4||'')?' · línea azul …'+lineLast4:'')+'.';
+    (/^\d{4}$/.test(lineLast4||'')?' · línea '+lineLabel+'…'+lineLast4:'')+'.';
   const footer=(short(minimized(bot),24)||'María Ángel')+' · '+(short(minimized(name),32)||'Fumigación')+'. Referencia interna: '+(short(minimized(reference),32)||'[referencia]')+'.';
   const render=(known,quote)=>[header,identity,known?'Datos del cliente:\n• '+known:'',quote,request.pending,request.question,'Ejemplo de formato (por completar): '+request.format,'Respondan citando este mensaje.',footer].filter(Boolean).join('\n');
   const known=knownFacts(context),literal=compact(context.values.question);

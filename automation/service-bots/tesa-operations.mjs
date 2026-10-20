@@ -8,6 +8,7 @@ import {assertOperationalLineScope,operationalLineAllowed,operationalCoverage,op
 import {publicOperationAllowed,publicEventAllowed} from './public-response-window.mjs';
 
 export const TESA_OPERATIONS_GUARD='exact-group-native-human-quoted-case-answer-v1';
+export const TESA_CASE_REVIEW_GUARD='own-fum-exact-phone-line-case-local-tesa-readonly-v1';
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const ownBots=Object.values(BUSINESSES).flatMap(b=>b.phones);
 const freshSourceMs=600000,answerValidityMs=1800000;
@@ -179,4 +180,62 @@ export function reviewTesaSources(store,{ids,afterCursor,limit}={}){
  else if(Number.isInteger(afterCursor)&&afterCursor>=0&&Number.isInteger(limit)&&limit>=1&&limit<=50)rows=store.db.prepare('SELECT rowid cursor,* FROM tesa_events WHERE rowid>? ORDER BY rowid LIMIT ?').all(afterCursor,limit);
  else throw Error('TESA_EXPLICIT_SOURCE_SELECTION_REQUIRED');
  return {company:store.company,readOnly:true,results:rows.map(row=>({id:row.id,mid:row.mid,state:row.state,cursor:row.cursor,event:store.open(row.body),sources:store.db.prepare('SELECT body FROM tesa_event_sources WHERE event_id=?').all(row.id).map(s=>store.open(s.body))})),sends:0};
+}
+
+const reviewObject=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
+const reviewSecretKey=key=>/(?:auth|token|secret|password|credential|api.?key|encryption.?key|hash)/i.test(key);
+// Conditions are business facts, never a route to export configuration or a
+// sealed proof's credentials. Keep the native question/answer text separate.
+function reviewConditions(value){
+ if(Array.isArray(value))return value.map(reviewConditions);
+ if(reviewObject(value))return Object.fromEntries(Object.entries(value).filter(([key])=>!reviewSecretKey(key)).map(([key,item])=>[key,reviewConditions(item)]));
+ return value;
+}
+
+/** Local inspection only: no membership refresh, native lookup or state change. */
+export function reviewTesaCase(store,config,body){
+ if(store?.company!=='fumigacion'||config?.company!=='fumigacion'||!Array.isArray(config.lines)||
+   config.lines.some(line=>!BUSINESSES.fumigacion.phones.includes(line.phone)))throw Error('TESA_CASE_REVIEW_OWN_FUM_REQUIRED');
+ const fields=['company','phone','line','caseId','afterCursor','limit'];
+ if(!reviewObject(body)||Object.keys(body).some(key=>!fields.includes(key))||body.company!=='fumigacion'||
+   typeof body.phone!=='string'||!/^57\d{10}$/.test(body.phone)||!BUSINESSES.fumigacion.phones.includes(body.line)||
+   !config.lines.some(line=>line.phone===body.line)||typeof body.caseId!=='string'||!/^[A-Za-z0-9:_-]{1,160}$/.test(body.caseId)||
+   !Number.isSafeInteger(body.afterCursor)||body.afterCursor<0||!Number.isInteger(body.limit)||body.limit<1||body.limit>25)throw Error('TESA_CASE_REVIEW_EXACT_SCOPE_REQUIRED');
+ const {phone,line,caseId,afterCursor,limit}=body;
+ const base={guard:TESA_CASE_REVIEW_GUARD,company:'fumigacion',readOnly:true,scope:{phone,line,caseId},afterCursor,limit,
+   coverage:'stored-own-case-questions-only',nativeHistoryComplete:false,sends:0,businessWrites:0,humanHoldsModified:false};
+ const tables=store.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('tesa_questions','tesa_outbox')").all();
+ if(tables.length!==2)return {...base,tablesInitialized:false,total:0,remaining:0,nextCursor:afterCursor,hasMore:false,selectionComplete:true,results:[]};
+ const scope=['fumigacion',phone,line,caseId];
+ const where='company=? AND customer_phone=? AND source_line=? AND case_id=?';
+ const total=store.db.prepare('SELECT COUNT(*) n FROM tesa_questions WHERE '+where).get(...scope).n;
+ const rows=store.db.prepare('SELECT rowid cursor,* FROM tesa_questions WHERE '+where+' AND rowid>? ORDER BY rowid LIMIT ?').all(...scope,afterCursor,limit);
+ const nextCursor=rows.at(-1)?.cursor??afterCursor;
+ const remaining=store.db.prepare('SELECT COUNT(*) n FROM tesa_questions WHERE '+where+' AND rowid>?').get(...scope,nextCursor).n;
+ const results=rows.map(q=>{
+   const question=store.open(q.body);
+   if(!reviewObject(question)||question.caseId!==caseId||question.customerPhone!==phone||question.sourceLine!==line||question.groupJid!==q.group_jid||question.senderLine!==q.sender_line||typeof question.text!=='string')throw Error('TESA_CASE_REVIEW_STORED_SCOPE_CONFLICT');
+   // The outbox is separately scoped. A corrupt/foreign relationship is never
+   // unsealed merely because its identifier is present in an own question.
+   const outgoing=store.db.prepare('SELECT * FROM tesa_outbox WHERE id=? AND question_id=? AND company=? AND customer_phone=? AND source_line=? AND case_id=? AND sender_line=? AND group_jid=?').get(q.outbox_id,q.id,...scope,q.sender_line,q.group_jid);
+   let outbox=null;
+   if(outgoing){
+     let proof=null,outgoingText=null;try{proof=outgoing.native_proof?store.open(outgoing.native_proof):null;}catch{}
+     try{outgoingText=store.open(outgoing.body);}catch{}
+     outbox={id:outgoing.id,state:outgoing.state,mid:outgoing.mid,createdAt:outgoing.created,updatedAt:outgoing.updated,textMatchesQuestion:outgoingText===question.text,
+       storedNativeProof:{exists:Boolean(outgoing.native_proof),readable:Boolean(proof),recordedNativeVerified:proof?.nativeVerified===true,
+         storedScopeMatches:Boolean(proof&&proof.company==='fumigacion'&&proof.outboxId===outgoing.id&&proof.mid===outgoing.mid&&proof.groupJid===outgoing.group_jid&&proof.senderLine===outgoing.sender_line&&proof.text===outgoingText&&outgoingText===question.text)}};
+   }
+   let answer=null;
+   if(q.answer){
+     const value=store.open(q.answer);
+     if(!reviewObject(value)||value.caseId!==caseId||value.customerPhone!==phone||value.groupJid!==q.group_jid||value.receivingLine!==q.sender_line||value.sourceId!==q.source_id||value.questionMid!==outgoing?.mid||typeof value.text!=='string')throw Error('TESA_CASE_REVIEW_STORED_SCOPE_CONFLICT');
+     answer={text:value.text,sourceId:q.source_id,sourceKey:value.sourceKey??null,at:q.answer_at,validUntil:q.valid_until,
+       validNow:q.state==='ANSWERED'&&Number.isFinite(q.valid_until)&&q.valid_until>Date.now(),questionMid:value.questionMid,
+       participant:{phone:value.participant?.phone??null,jid:value.participant?.jid??null}};
+   }
+   return {cursor:q.cursor,id:q.id,topic:q.topic,state:q.state,sourceId:question.source??null,conditions:reviewConditions(question.conditions??{}),text:question.text,
+     sourceLine:q.source_line,senderLine:q.sender_line,groupJid:q.group_jid,outbox,answer};
+ });
+ return {...base,tablesInitialized:true,total,remaining,nextCursor,hasMore:remaining>0,selectionComplete:remaining===0,results};
 }
