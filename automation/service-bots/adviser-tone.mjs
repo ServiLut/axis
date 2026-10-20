@@ -3,7 +3,8 @@
 import {currentIntakeTimingAcknowledgement} from './intake-timing.mjs';
 import {officeReceptionRequestValues,formatOfficeReceptionRequests,officeReceptionDeclineText} from './office-reception-snippets.mjs';
 import {selectOfficeReceptionReply} from './office-customer-replies.mjs';
-export const ADVISER_TONE_GUARD='identified-maria-reception-and-current-requested-timing-v3';
+export const ADVISER_TONE_GUARD='warm-identified-maria-first-intake-and-current-requested-timing-v4';
+const firstIntakeWelcome='Gracias por escribirnos 😊 Con gusto te ayudo.';
 const ordinaryIntakeQuestions=new Set([
  'Para cotizarte, me falta:\n1. Qué plaga deseas tratar o si buscas prevención.\n2. En qué barrio o vereda necesitas el servicio.',
  '¿Qué plaga deseas tratar o buscas un servicio preventivo?',
@@ -23,7 +24,7 @@ const ordinaryIntakeQuestions=new Set([
 // continue to use their original text, source and hash without being rewritten.
 export function mariaOrdinaryIntakeReply(text){
  if(typeof text!=='string')return false;
- const body=text.replace(/^(?:Hola|Buen día|Buenas tardes|Buenas noches), soy María Ángel\.\s+/,'').replace(/^Entiendo que lo necesitas [^\n.!?]+\.\s+/,'').replace(/^Te ayudo con la cotización\. /,'');
+ const body=text.replace(/^(?:Hola|Buen día|Buenas tardes|Buenas noches), soy María Ángel\.\s+/,'').replace(/^Gracias por escribirnos 😊 Con gusto te ayudo\.\s+/,'').replace(/^Entiendo que lo necesitas [^\n.!?]+\.\s+/,'').replace(/^Gracias por escribirnos 😊 Con gusto te ayudo\.\s+/,'').replace(/^Te ayudo con la cotización\. /,'');
  if(ordinaryIntakeQuestions.has(body))return true;
  const title='Para cotizarte, cuéntame';
  if(!body.startsWith(title))return false;
@@ -68,7 +69,7 @@ export function adviserReply(company,decision,{firstReply=false,approvedAnswer=f
  const timing=!decision.review&&!decision.question&&!decision.courtesy&&!decision.observed?currentIntakeTimingAcknowledgement(decision.state):null;
  const render=reply=>{
   if(!timing||reply.includes(timing))return reply;
-  const intro=reply.match(/^((?:Hola|Buen día|Buenas tardes|Buenas noches), soy María Ángel\.\s+)/);
+  const intro=reply.match(/^((?:Hola|Buen día|Buenas tardes|Buenas noches), soy María Ángel\.(?: Gracias por escribirnos 😊 Con gusto te ayudo\.)?\s+)/);
   const rest=(intro?reply.slice(intro[0].length):reply).replace(/^Con gusto\. /,'');
   return (intro?.[0]||'')+timing+(reply.includes('\n')?'\n\n':' ')+rest;
  };
@@ -83,13 +84,14 @@ export function adviserReply(company,decision,{firstReply=false,approvedAnswer=f
   const lines=body.slice('Para ayudarte con la cotización, cuéntame:\n'.length).split('\n');
   const requestText=lines.every(line=>line.startsWith('• '))?formatOfficeReceptionRequests(lines.map(line=>line.slice(2))):null;
   if(requestText){
-   const greetingPrefix=prefix?prefix.trimEnd()+'\n\n':'';
+   const greetingPrefix=prefix?prefix.trimEnd()+(firstReply?' '+firstIntakeWelcome:'')+'\n\n':'';
    return render(greetingPrefix+requestText);
   }
  }
- // Only the first intake question gets an invitation. Later questions stay brief.
+ // Only the first ordinary intake gets this welcome. Prices, approved answers,
+ // registration, review and later questions keep their existing wording.
  if(firstReply&&!decision.review&&!decision.question&&!decision.courtesy&&!decision.observed&&
-    (/^¿/.test(body)||/^Para ayudarte con la cotización, cuéntame:/.test(body)))
-  return render(prefix+'Te ayudo con la cotización. '+body);
+    mariaOrdinaryIntakeReply(body))
+  return render(prefix+firstIntakeWelcome+'\n\n'+body);
  return render(prefix+body);
 }

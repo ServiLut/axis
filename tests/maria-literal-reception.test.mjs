@@ -5,7 +5,7 @@ import {Store} from '../automation/service-bots/store.mjs';
 import {Engine} from '../automation/service-bots/engine.mjs';
 import {drain,flushOutbox} from '../automation/service-bots/transport.mjs';
 import {BUSINESSES} from '../automation/service-bots/config.mjs';
-import {literalGreetingEligible,literalGreetingReplyStillValid,MARIA_LITERAL_RECEPTION_GUARD} from '../automation/service-bots/literal-reception.mjs';
+import {literalGreetingEligible,literalGreetingReplyProof,literalGreetingReplyStillValid,MARIA_LITERAL_RECEPTION_GUARD} from '../automation/service-bots/literal-reception.mjs';
 import {BLUE_ONLY_SCOPE_VERSION,BLUE_ONLY_AUTHORIZATION_SOURCE} from '../automation/service-bots/line-scope.mjs';
 import {initializeInactivityFollowup} from '../automation/service-bots/inactivity-followup.mjs';
 
@@ -30,11 +30,26 @@ test('each complete literal Maria greeting skips both model methods while native
   const f=fixture({nativeCheck});try{
    const {e,row}=await f.run(text);assert.equal(f.calls.understand,0,text);assert.equal(f.calls.compose,0,text);assert.equal(f.calls.sends,1,text);assert.equal(row.state,'ACCEPTED');
    assert.ok(f.calls.owner>=1);assert.equal(f.calls.history,nativeCheck?1:0);assert.equal(f.calls.attention,nativeCheck?1:0);
-   assert.match(row.text,/soy María Ángel/);assert.doesNotMatch(row.text,/tipo de inmueble|habitaciones|\$|reservad|agendad|registrad/i);
+   assert.match(row.text,/soy María Ángel\. Gracias por escribirnos 😊 Con gusto te ayudo/);assert.match(row.text,/2\. Qué tipo de inmueble es\./);assert.doesNotMatch(row.text,/habitaciones|\$|reservad|agendad|registrad/i);
    assert.equal(f.s.conversation(e.phone).state.literalGreetingReply.guard,MARIA_LITERAL_RECEPTION_GUARD);
    assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);
   }finally{f.s.close();}
  }
+});
+
+test('the new exact three-field warm greeting works on either own line and rejects altered wording',async()=>{
+ for(const line of BUSINESSES.fumigacion.phones){const f=fixture();try{
+  const {e,row}=await f.run('Hola',{line});assert.equal(row.line,line);assert.equal(f.calls.sends,1);assert.equal(f.calls.understand,0);assert.equal(f.calls.compose,0);assert.ok(row.text.length<=350);
+  const state=f.s.conversation(e.phone).state;assert.ok(literalGreetingReplyProof(f.c,e,state,row.text));
+  for(const changed of [row.text.replace('Qué tipo de inmueble es.','Qué tipo de inmueble necesitas confirmar.'),row.text.replace('Gracias por escribirnos 😊','Gracias por escribirnos.'),row.text+' Texto adicional.',row.text.replace('3. El municipio','2. El municipio')])assert.equal(literalGreetingReplyProof(f.c,e,state,changed),null);
+ }finally{f.s.close();}}
+});
+
+test('historical two-field literal proofs retain their original exact whitelist',()=>{
+ const f=fixture();try{
+  const e=f.event('Hola'),state={slots:{},asked:[],caseId:'fumigacion:'+e.id};
+  for(const text of ['Hola.','Hola, soy María Ángel. Para cotizarte, cuéntame qué plaga deseas tratar o si buscas prevención; el municipio y barrio o vereda donde necesitas el servicio.','Hola, soy María Ángel.\n\nPara cotizarte, cuéntame:\n1. Qué plaga deseas tratar o si buscas prevención.\n2. El municipio y barrio o vereda donde necesitas el servicio.'])assert.ok(literalGreetingReplyProof(f.c,e,state,text),text);
+ }finally{f.s.close();}
 });
 
 test('a greeting prefix, media, quotes, forwards and another company cannot use the literal greeting shortcut',async()=>{
@@ -53,7 +68,8 @@ test('staff takeover, observed prior outgoing and incomplete native attention st
    if(mode==='prior-staff')f.t.priorHistory=async()=>{f.calls.history++;return {cutoff:f.c.activatedAt,priorOutgoing:true,guardVersion:'canonical-and-alternate-phone-v2'};};
    if(mode==='native-staff')f.t.currentAttention=async()=>{f.calls.attention++;return {complete:true,sources:[{id:'LOCAL_NATIVE_STAFF',line:probe.line,at:probe.at}]};};
    if(mode==='incomplete-attention')f.t.currentAttention=async()=>{f.calls.attention++;return {complete:false,sources:[]};};
-   await f.run();assert.equal(f.calls.understand,0,mode);assert.equal(f.calls.compose,0,mode);assert.equal(f.calls.sends,0,mode);assert.equal(f.s.conversation(probe.phone).hold,1,mode);
+   const {row}=await f.run();assert.equal(f.calls.understand,0,mode);assert.equal(f.calls.compose,0,mode);assert.equal(f.calls.sends,0,mode);assert.equal(f.s.conversation(probe.phone).hold,mode==='incomplete-attention'?0:1,mode);
+   if(mode==='incomplete-attention'){assert.equal(row.state,'ATTENTION_REVIEW');assert.equal(f.s.db.prepare("SELECT COUNT(*) n FROM audit WHERE action='HUMAN_TAKEOVER'").get().n,0);}
   }finally{f.s.close();}
  }
 });

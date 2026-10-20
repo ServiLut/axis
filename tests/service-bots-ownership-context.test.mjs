@@ -217,7 +217,7 @@ test('different ordinary replies keep the missing property question with the cus
     assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE internal=1').get().n,0);
     const state=f.s.conversation(last.phone).state;
     assert.equal(state.slots.service,'cucarachas');assert.equal(state.slots.location,'sabaneta');assert.equal(state.slots.site,undefined);
-    assert.deepEqual(state.asked,['site']);
+    assert.deepEqual(state.asked,['site','size']);
     for(const id of ['MISSINGONE','MISSINGTWO']){
       const reply=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(id+':reply').body);
       assert.match(reply,/tipo de inmueble/);assert.doesNotMatch(reply,/qué plaga|municipio|revisaremos|asesora|Sandra|Diego/i);
@@ -422,11 +422,11 @@ test('a new pest-control greeting stages the essential quotation facts without a
     const first=await f.process({text:'Buenos días'});
     const reply=f.s.open(f.s.db.prepare('SELECT body FROM outbox WHERE id=?').get(first.id+':reply').body);
     assert.match(reply,/^Buen día, soy María Ángel\./);assert.match(reply,/qué plaga/i);
-    assert.doesNotMatch(reply,/tipo de inmueble|habitaciones o metros cuadrados/);
+    assert.match(reply,/Qué tipo de inmueble es/);assert.doesNotMatch(reply,/habitaciones o metros cuadrados/);
     assert.match(reply,/municipio y barrio o vereda/);
     assert.doesNotMatch(reply,/139|300|ISO|insecticida|veneno|Sandra|Diego|técnico/i);
     assert.equal(f.s.conversation(first.phone).state.initialIntakeAllRequested,false);
-    assert.deepEqual(f.s.conversation(first.phone).state.initialIntakeRequestedFields,['service','location']);
+    assert.deepEqual(f.s.conversation(first.phone).state.initialIntakeRequestedFields,['service','site','location']);
   }finally{f.s.close();}
 });
 

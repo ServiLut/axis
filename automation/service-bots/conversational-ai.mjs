@@ -10,6 +10,7 @@ import {MIGUEL_UNDERSTANDING_GUARD,MIGUEL_UNDERSTANDING_VERSION,MIGUEL_UNDERSTAN
 const endpoint='https://api.openai.com/v1/responses';
 const fields=['service','location','site','detail','preference'];
 export const MARIA_CONVERSATION_GUARD='same-case-source-bounded-context-and-factual-reply-plan-v1';
+export const MARIA_FIXED_REPLY_GUARD='own-source-checked-fixed-intake-and-quotation-without-style-call-v1';
 export const MARIA_AI_FAILURE_GUARD='own-fumigacion-fixed-failure-diagnostic-without-retry-v1';
 const failureReasons=new Set(['AI_PROVIDER_HTTP','AI_PROVIDER_TIMEOUT','AI_PROVIDER_ABORTED','AI_PROVIDER_TRANSPORT_FAILURE','AI_PROVIDER_RESPONSE_INVALID_JSON','AI_STRUCTURED_OUTPUT_INVALID_JSON','AI_RESPONSE_UNUSABLE','AI_RESPONSE_SCHEMA','AI_REPLY_NOT_APPROVED','AI_LOCAL_RESULT_HANDLING_FAILURE','AI_REQUEST_FAILURE']);
 const failureStages=new Set(['provider-request','provider-response','provider-json','structured-json','schema-validation','local-result']);
@@ -342,6 +343,14 @@ export async function composeOwnReply(config,store,fetcher,row,text){
    store.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO NOTHING').run(wordingKey,store.seal({guard:MARIA_CONVERSATION_GUARD,caseId:row.case_id,revision:row.revision,originalText:text,finalText:composed,contractHash:hash}));
    return composed;
   };
+  // These exact next steps already express the missing fields or the verified
+  // quotation. A second provider call can only choose cosmetic wording here.
+  // Keep the durable wording reservation and the original case/source checks;
+  // input understanding and transport's live attention/price checks still run.
+  if(mariaOrdinaryIntakeReply(text)||clearQuotation){
+   store.audit('AI_FIXED_REPLY_RETAINED',row.id,{guard:MARIA_FIXED_REPLY_GUARD,caseId:row.case_id,providerCallSkipped:true,factualContractPreserved:true});
+   return save(text);
+  }
   try{
    // One provider reservation per source outbox, independent of wording or
    // refreshed context. A later flush cannot spend a third call for the turn.

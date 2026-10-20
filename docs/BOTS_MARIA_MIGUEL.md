@@ -1,5 +1,21 @@
 # María Ángel y Miguel Ángel
 
+## Correcciones 20/oct/2026 — candidato local, instalación pendiente
+
+La usuaria reportó recepción seca, inmueble pedido en un segundo turno, lentitud, respuestas en bucle y falta de nuevas altas. El primer mensaje de recepción ahora incluye una bienvenida cálida y pide plaga, inmueble y ubicación, únicamente cuando faltan; las solicitudes sin saludo también reúnen faltantes. No modifica precios, respuestas aprobadas, garantías, atención humana ni otros bots.
+
+Se reprodujeron fallos de programación: aceptación con «a. m./p. m.» que volvía a cotizar, cabecera de aceptación que ocultaba el horario y formulario por líneas que descartaba datos al incluir una hora completa. La corrección conserva los originales, el resumen entregado y la confirmación posterior antes del alta. También se corrige «no es para cucarachas, si no que para chinches» sin adoptar la vivienda de otra persona ni condicionales como datos del cliente.
+
+Una comprobación técnica fallida de atención bloqueaba la salida y creaba un hold humano permanente. El candidato FUM bloquea esa salida, conserva su revisión y exige una fuente nueva con comprobación fresca para continuar; no libera holds históricos o reales. La lectura por sí sola ya tiene guardias prospectivas. Las fuentes revisadas no permiten atribuir cada pausa a abrir WhatsApp.
+
+La recepción y cotización literales verificadas conservan su texto sin una segunda llamada de estilo; la comprensión de entrada y el plan contextual de otros turnos permanecen. Muestra propia20/oct16:18Z: 100 observaciones, 98 con aceptación del proveedor, mediana de 4.206 ms y p95 de 11.884 ms; aceptación no equivale a entrega exacta y aún no hay medición posterior al candidato. Estado propio: IA configurada, 9.640/10.000 llamadas disponibles y SAVED=1 histórico, colas ordinarias pendientes/inciertas/revisión=0. Backend propio respondió201 a las16:28Z con actor/empresa/tenant, horario sin técnico y vencimiento07/nov exactos; no hay caída de cuota o integración demostrada ni una venta nueva.
+
+La revisión también reprodujo la pérdida de un ACK que llega antes del MID de la respuesta HTTP, dejando una cotización en ACCEPTED sin prueba de entrega y bloqueando la aceptación posterior. El candidato conserva evidencia temprana cifrada sólo para una salida propia SENDING de esa línea iniciada hace menos de60s, máximo8MIDs; aplica la prueba tras éxito y coincidencia exacta de MID/línea, preservando primera observación ACK/READ. Ningún UNCERTAIN, reinicio, eco desconocido o resultado histórico se concilia automáticamente. La confirmación de entrega conserva su fuente, sin equiparar HTTP ACCEPTED con entrega.
+
+Gate completo del candidato: **3168/3168 pruebas aisladas, cero fallos u omisiones**, en `.tmp/maria-first-message-20261020/all-runtime-tests.txt`. La primera ejecución conservada encontró una regresión de la forma histórica «Sí, agéndame…», corregida sin reducir sus expectativas de disponibilidad; las otras diferencias verificadas correspondían a expectativas de llamada de estilo y clasificación de pausa técnica. No hubo modelos, mensajes, altas, cambios de horario reales, grants, env ni liberaciones desde estas pruebas. Instalación y primera alta real posteriores todavía pendientes.
+
+Fuentes privadas y continuación: `.tmp/maria-first-message-20261020/`. Se revisaron 81 turnos almacenados de 20 casos activos además de metadatos recientes, con cobertura parcial y sin mensajes, modelos o escrituras de negocio de la auditoría. El candidato todavía no debe describirse como instalado. Cortes prospectivos de ambas líneas, accesos/vencimiento, preventivo OFF, holds y trabajo de las cuatro asesoras y asesores permanecen preservados.
+
 ## Directriz humana 19/oct/2026 — autonomía de las cuatro asesoras y asesores
 
 La usuaria exige funcionamiento ordinario autónomo en servidor para María Ángel, Miguel Ángel, Luisa Fernanda y Abogado Jeison, y encargó a Codex las correcciones, mejoras y actualizaciones. Es un trabajo vigente, **no un resultado completado**. Checkpoint de continuidad: `.tmp/four-advisers-autonomy-20261019/checkpoint-private.json`; mapa con fuentes por aplicación en `.tmp/maria-dual-audit-20261019/capabilities/`. No basta cambiar una etiqueta `fullyAutonomous` ni eliminar revisiones necesarias para aparentar autonomía.

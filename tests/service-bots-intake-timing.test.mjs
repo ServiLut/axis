@@ -31,7 +31,7 @@ test('timing rejects denied, conditional, quoted, third-party, previous-service 
 test('ordinary tone acknowledges only timing supplied by the source being answered',()=>{
  const e=event('Para hoy porfavor'),current=state(e),reply='¿Qué plaga deseas tratar o buscas un servicio preventivo?';
  const first=adviserReply('fumigacion',{reply,state:current},{firstReply:true});
- assert.match(first,/^Hola, soy María Ángel\. Entiendo que lo necesitas hoy\./);assert.match(first,/¿Qué plaga/);assert.equal((first.match(/hoy/g)||[]).length,1);
+ assert.match(first,/^Hola, soy María Ángel\. Gracias por escribirnos 😊 Con gusto te ayudo\.\n\nEntiendo que lo necesitas hoy\./);assert.match(first,/¿Qué plaga/);assert.equal((first.match(/hoy/g)||[]).length,1);
  assert.doesNotMatch(first,/disponible|reservad|agendad|técnico|registrad|confirmad|gratis|garant/i);
  const old={...current,lastHandledSourceId:'LATER_SOURCE'};assert.equal(currentIntakeTimingAcknowledgement(old),null);
  assert.equal(adviserReply('fumigacion',{reply,state:old}),reply);

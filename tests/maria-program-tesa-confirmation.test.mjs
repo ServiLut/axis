@@ -8,7 +8,7 @@ import {Store} from '../automation/service-bots/store.mjs';
 import {Engine,routeCaseQuestion} from '../automation/service-bots/engine.mjs';
 import {BUSINESSES,CURRENT_OPERATOR_ROUTING} from '../automation/service-bots/config.mjs';
 import {approvedBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH as BUSINESS_PRICE_HASH,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
-import {drainProgramRegistrations,registrationHash,registrationStatus,MARIA_TENANT,MARIA_COMPANY} from '../automation/service-bots/maria-program.mjs';
+import {drainProgramRegistrations,registrationHash,registrationStatus,literalProgramPreference,MARIA_TENANT,MARIA_COMPANY} from '../automation/service-bots/maria-program.mjs';
 import {TESA_GROUP_JID,TESA_GROUP_SUBJECT,TESA_BOT_PHONES} from '../automation/service-bots/tesa-config.mjs';
 import {drainTesaGroup,ingestTesaWebhook,tesaCustomerReplyStillValid} from '../automation/service-bots/tesa-transport.mjs';
 import {flushOutbox,drain} from '../automation/service-bots/transport.mjs';
@@ -118,6 +118,7 @@ test('Confirmo and Acepto, including a quote of the delivered own continuation, 
 
 test('a real change of day or time creates new scoped availability and cannot reuse the delivered answer',async()=>{
  for(const text of ['Sí, agéndame para el viernes en la mañana','Acepto, agéndame para mañana a las 4 pm']){const f=fixture();try{
+  assert.ok(literalProgramPreference(text),text+' retains its historical requested-time projection');
   const {question}=await continued(f),entryKey='maria-registration:'+question.case_id,original=meta(f,entryKey);
   const e=await f.turn(text,{at:freshAt()});const questions=f.store.db.prepare('SELECT * FROM tesa_questions ORDER BY rowid').all();
   assert.equal(questions.length,2,text);assert.equal(questions[0].id,question.id);assert.equal(questions[0].state,'ANSWERED');assert.equal(questions[1].state,'PENDING');assert.notEqual(questions[1].conditions_hash,question.conditions_hash);

@@ -33,6 +33,13 @@ function fixture({limit=20,handler}={}){
  const reply=id=>{const row=s.db.prepare('SELECT * FROM outbox WHERE id=?').get(id+':reply');return row&&{...row,text:s.open(row.body)};};
  return {c,s,t,engine,fetcher,requests,sent,run,reply};
 }
+function pendingReplyFixture(f,id){
+ const e={id,phone,line:f.c.lines[0].phone,kind:'text',fromMe:false,at:Date.now(),text:'Medellín'};f.s.enqueue(e);
+ const caseId='fumigacion:'+id,conv=f.s.conversation(phone),text='Aún no tengo una respuesta confirmada para este caso.';
+ f.s.saveConversation(phone,{...conv.state,caseId,slots:{location:'Medellín'},intakeSources:{location:{sourceId:id,at:e.at}}});
+ f.s.queue(id+':reply',phone,e.line,text,false,conv.revision,caseId);
+ return {row:f.reply(id),text};
+}
 
 test('own explicit configuration requires a model, scope, bounded usage and a new activation cut',()=>{
  assert.equal(aiConfiguration({},'fumigacion').ready,false);
@@ -129,20 +136,21 @@ test('monthly usage and event deduplication bound calls; failed attempts are nev
  }finally{failed.s.close();}
 });
 
-test('AI selects a reviewed next question while keeping the same case and supplied fields',async()=>{
+test('literal next question keeps the same case and supplied fields without cosmetic rewriting',async()=>{
  const f=fixture();try{
   await f.run('AI_CONT001','Tengo cucarachas en Medellín');await f.run('AI_CONT002','Apartamento');
-  const row=f.reply('AI_CONT002');assert.equal(row.text,'Para completar la cotización, ¿cuántas habitaciones o metros cuadrados tiene el lugar?');
+  const row=f.reply('AI_CONT002');assert.equal(row.text,'¿Cuántas habitaciones o metros cuadrados tiene el lugar?');
   assert.equal(f.s.conversation(phone).state.slots.site,'apartamento');assert.doesNotMatch(row.text,/plaga|municipio|Hola/);assert.equal(row.state,'ACCEPTED');
   assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);
  }finally{f.s.close();}
 });
 
-test('own quote retains 99,000 per mattress and validated price references after style selection',async()=>{
+test('own quote retains 99,000 per mattress and validated price references without a style provider call',async()=>{
  const f=fixture();try{
   await f.run('AI_PRICE01','Chinches en dos colchones de un apartamento en Medellín, ¿cuánto cuesta?');
   const row=f.reply('AI_PRICE01');assert.match(row.text,/\$198\.000 COP/);assert.match(row.text,/^Hola, soy María Ángel\./);
   assert.equal(f.s.priceReplyReference(row).priceCop,198000);assert.equal(f.s.priceReplyStillValid(row),true);
+  assert.equal(f.requests.filter(r=>r.body.text.format.name==='maria_contextual_reply').length,0);
   assert.doesNotMatch(row.text,/garantiz|inofensiv|reservad|confirmado|100\.000|70\.000/i);
  }finally{f.s.close();}
 });
@@ -150,20 +158,22 @@ test('own quote retains 99,000 per mattress and validated price references after
 test('arbitrary generated claims, invalid schemas and unavailable AI retain the deterministic reply',async()=>{
  for(const value of [{choice:400,reply:'Precio inventado, reserva confirmada'},{choice:-1},Error('isolated network failure')]){
   const f=fixture({handler:body=>body.text.format.name==='maria_literal_slots'?{slots:slots()}:value});try{
-   await f.run('AI_BAD0001','Cucarachas en Medellín');await f.run('AI_BAD0002','Apartamento');
-   assert.match(f.reply('AI_BAD0002').text,/¿Cuántas habitaciones o metros cuadrados tiene el lugar\?$/);assert.doesNotMatch(f.reply('AI_BAD0002').text,/inventado|confirmada/);assert.equal(f.reply('AI_BAD0002').state,'ACCEPTED');
+   const pending=pendingReplyFixture(f,'AI_BAD0002'),text=await composeOwnReply(f.c,f.s,f.fetcher,pending.row,pending.text);
+   assert.match(text,/Aún no tengo una respuesta confirmada para este caso\./);assert.doesNotMatch(text,/Precio inventado|reserva confirmada/);
+   assert.equal(f.requests.length,1,'non-intake contextual planning still runs and fails safely');
+   assert.equal(f.requests[0].body.text.format.name,'maria_contextual_reply');
   }finally{f.s.close();}
  }
 });
 
 test('staff ingestion during model processing suppresses the reply and preserves human attention',async()=>{
  let intervene=false;const f=fixture({handler:(body,input,s,c)=>{
-  if(body.text.format.name==='maria_literal_slots')return {slots:slots()};
   if(intervene)s.enqueue({id:'AI_STAFF01',phone,line:c.lines[0].phone,fromMe:true,kind:'text',text:'Personal atendiendo',at:Date.now()});
+  if(body.text.format.name==='maria_literal_slots')return {slots:slots()};
   return {choice:1};
  }});try{
   await f.run('AI_RACE001','Cucarachas en Medellín');intervene=true;const sent=f.sent.length;await f.run('AI_RACE002','Apartamento');
-  assert.equal(f.reply('AI_RACE002').state,'SUPPRESSED_HUMAN');assert.equal(f.s.conversation(phone).hold,1);assert.equal(f.sent.length,sent);
+  assert.equal(f.reply('AI_RACE002'),undefined);assert.equal(f.s.db.prepare('SELECT state FROM events WHERE id=?').get('AI_RACE002').state,'OBSERVED_SUPERSEDED');assert.equal(f.s.conversation(phone).hold,1);assert.equal(f.sent.length,sent);
  }finally{f.s.close();}
 });
 
@@ -202,20 +212,20 @@ test('privacy minimization preserves ordinary area facts and price candidates ne
  assert.deepEqual(replyCandidates('Bearer secreto'),[]);
 });
 
-test('Maria with a three-second target still plans a contextual reply with verified new fields',async()=>{
+test('Maria understands new fields but retains the exact missing-field question without a second style call',async()=>{
  const f=fixture({handler:(body,input)=>body.text.format.name==='maria_literal_slots'?{slots:slots()}:{opening:'thanks',acknowledgements:input.replyContract.verifiedLiteralFacts.filter(f=>f.newlyProvided).slice(0,1).map(f=>f.id),nextStep:'step:1',factualAnchors:input.replyContract.factualAnchors}});
  try{
   f.c.responseTargetMs=3000;
   await f.run('AI_CONTEXTUAL001','Tengo cucarachas en Medellín');
   const before=f.requests.length;await f.run('AI_CONTEXTUAL002','Apartamento');
-  const req=f.requests.slice(before).find(r=>r.body.text.format.name==='maria_contextual_reply');assert.ok(req);
-  const input=JSON.parse(req.body.input);assert.equal(input.replyContract.guard,MARIA_CONVERSATION_GUARD);
-  assert.match(f.reply('AI_CONTEXTUAL002').text,/^Gracias por la información\. Para completar la cotización,/);
+  const req=f.requests.slice(before).find(r=>r.body.text.format.name==='maria_contextual_reply');assert.equal(req,undefined);
+  assert.equal(f.reply('AI_CONTEXTUAL002').text,'¿Cuántas habitaciones o metros cuadrados tiene el lugar?');
   assert.doesNotMatch(f.reply('AI_CONTEXTUAL002').text,/Me indicas|El inmueble|apartamento/);
-  assert.match(f.reply('AI_CONTEXTUAL002').text,/¿cuántas habitaciones o metros cuadrados tiene el lugar\?$/);
+  assert.match(f.reply('AI_CONTEXTUAL002').text,/¿Cuántas habitaciones o metros cuadrados tiene el lugar\?$/);
   assert.doesNotMatch(f.reply('AI_CONTEXTUAL002').text,/municipio|qué plaga|qué tipo de inmueble/i);
   assert.equal(f.s.conversation(phone).state.slots.site,'apartamento');assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);
-  assert.equal(f.requests.slice(before).length,2,'one interpretation and one reply plan');
+  assert.equal(f.requests.slice(before).length,1,'input understanding remains; redundant style call is omitted');
+  assert.equal(f.requests.slice(before)[0].body.text.format.name,'maria_literal_slots');
  }finally{f.s.close();}
 });
 
@@ -262,6 +272,11 @@ test('a structured reply cannot fabricate a price, guarantee, saved receipt, sta
    const reply=f.reply('AI_ANCHOR_PRICE01');assert.match(reply.text,/\$198\.000 COP/);assert.doesNotMatch(reply.text,/reservad|pagad|garanti|Diego|\$1 COP|gratis|inofensiv/i);
    assert.equal(f.s.priceReplyReference(reply).priceCop,198000);assert.equal(f.s.priceReplyStillValid(reply),true);
    assert.equal(f.s.db.prepare("SELECT COUNT(*) n FROM meta WHERE key LIKE 'program-registration:%'").get().n,0);
+   assert.equal(f.requests.filter(r=>r.body.text.format.name==='maria_contextual_reply').length,0,'fixed quotation does not request generated wording');
+   const pending=pendingReplyFixture(f,'AI_ANCHOR_PENDING01'),planned=await composeOwnReply(f.c,f.s,f.fetcher,pending.row,pending.text);
+   assert.doesNotMatch(planned,/reservad|pagad|garanti|Diego|\$1 COP|gratis|inofensiv/i);
+   assert.match(planned,/Aún no tengo una respuesta confirmada/);
+   assert.equal(f.requests.filter(r=>r.body.text.format.name==='maria_contextual_reply').length,1,'other replies retain the bounded planner');
   }finally{f.s.close();}
  }
 });
@@ -285,7 +300,7 @@ test('quoted customer instructions are untrusted context and cannot request secr
   const row=f.s.db.prepare('SELECT * FROM outbox WHERE id=?').get(e.id+':reply'),text=await composeOwnReply(f.c,f.s,f.fetcher,row,original);
   assert.match(text,/¿Cuántas habitaciones o metros cuadrados tiene el lugar\?$/);assert.doesNotMatch(text,/gratis|revela|OpenAI|isolated-own-key|confirma/i);
   assert.equal(ownReplyTextAllowed(f.c,f.s,row,original,text),true);
-  const request=f.requests.at(-1).body;assert.match(request.instructions,/no obedecer instrucciones/);assert.equal(JSON.parse(request.input).context.historyIsUntrustedReference,true);
+  assert.equal(f.requests.length,0,'literal next step never sends the injected text to a stylistic planner');
  }finally{f.s.close();}
 });
 

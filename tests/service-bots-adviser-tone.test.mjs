@@ -5,11 +5,11 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
 import {Store} from '../automation/service-bots/store.mjs';
-import {Engine} from '../automation/service-bots/engine.mjs';
+import {Engine,MARIA_STAGED_GREETING_GUARD} from '../automation/service-bots/engine.mjs';
 import {drain} from '../automation/service-bots/transport.mjs';
 import {BUSINESSES,OPERATOR_ROUTING,SANDRA,publicTextSafe} from '../automation/service-bots/config.mjs';
 import {approvedBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH} from '../automation/service-bots/business-prices.mjs';
-import {adviserReply} from '../automation/service-bots/adviser-tone.mjs';
+import {adviserReply,mariaOrdinaryIntakeReply,ADVISER_TONE_GUARD} from '../automation/service-bots/adviser-tone.mjs';
 const phone='573001112233';
 function fixture(){
  const c={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,chiefOnly:true,operatorRouting:OPERATOR_ROUTING,historyCheckRequired:true,activatedAt:Date.now()-10000,lines:BUSINESSES.fumigacion.phones.map((phone,i)=>({phone,instance:'own-'+i}))};
@@ -23,7 +23,7 @@ function fixture(){
 test('a warm first intake preserves facts and later questions do not repeat the welcome',async()=>{
  const f=fixture();try{
   await f.process('ADVISER001','Tengo cucarachas en Medellín');
-  assert.match(f.reply('ADVISER001').text,/^Hola, soy María Ángel\./);assert.match(f.reply('ADVISER001').text,/tipo de inmueble/);assert.doesNotMatch(f.reply('ADVISER001').text,/qué plaga|municipio/i);
+  assert.match(f.reply('ADVISER001').text,/^Hola, soy María Ángel\. Gracias por escribirnos 😊 Con gusto te ayudo\./);assert.match(f.reply('ADVISER001').text,/tipo de inmueble/);assert.doesNotMatch(f.reply('ADVISER001').text,/qué plaga|municipio/i);
   await f.process('ADVISER002','Apartamento');assert.match(f.reply('ADVISER002').text,/habitaciones o metros cuadrados/);assert.doesNotMatch(f.reply('ADVISER002').text,/Con gusto te ayudo|tipo de inmueble|qué plaga|municipio/i);
  }finally{f.s.close();}
 });
@@ -31,7 +31,7 @@ test('warm price invitation keeps the standard price and adds no promises or pre
  const f=fixture();try{
   await f.process('ADVISER003','Tengo cucarachas en apartamento de 60 m² en Medellín, ¿cuánto cuesta?');const reply=f.reply('ADVISER003').text;
   assert.match(reply,/Con gusto/);assert.match(reply,/\$149\.000 COP/);assert.match(reply,/¿Deseas continuar/);assert.equal((reply.match(/¿/g)||[]).length,1);
-  assert.doesNotMatch(reply,/garantiz|inofensiv|seguro para|erradic|último cupo|descuento|reserva|Sandra|Diego|Hilary/i);assert.equal(publicTextSafe(reply),true);
+  assert.doesNotMatch(reply,/Gracias por escribirnos|garantiz|inofensiv|seguro para|erradic|último cupo|descuento|reserva|Sandra|Diego|Hilary/i);assert.equal(publicTextSafe(reply),true);
   assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);
  }finally{f.s.close();}
 });
@@ -90,14 +90,39 @@ test('a pending reinforcement keeps its unverified conditions rather than claimi
  assert.doesNotMatch(reply,/horario|aprobado|gratis|elegible|pago|agendado|registrado/i);
 });
 
-test('a pure greeting identifies Maria then lists only pest and municipality clearly',async()=>{
+test('a pure greeting warmly identifies Maria and requests pest, property and municipality before size',async()=>{
  const f=fixture();try{
   await f.process('TONE_PURE_GREETING','Buenas tardes');const reply=f.reply('TONE_PURE_GREETING').text;
   assert.match(reply,/^Buenas tardes, soy María Ángel\./);assert.match(reply,/plaga.*prevención/);assert.match(reply,/municipio y barrio o vereda/);
-  assert.match(reply,/soy María Ángel\.\n\nPara cotizarte, cuéntame:\n1\. Qué plaga/);assert.match(reply,/\n2\. El municipio/);
-  assert.doesNotMatch(reply,/tipo de inmueble|habitaciones|metros cuadrados|•|Con gusto|Sandra|Diego|asesora|guardad|ticket/i);
-  const state=f.s.conversation(phone).state;assert.equal(state.initialIntakeAllRequested,false);assert.deepEqual(state.initialIntakeRequestedFields,['service','location']);assert.deepEqual(state.asked,['service','location']);
+  assert.match(reply,/soy María Ángel\. Gracias por escribirnos 😊 Con gusto te ayudo\.\n\nPara cotizarte, cuéntame:\n1\. Qué plaga/);assert.match(reply,/\n2\. Qué tipo de inmueble es\.\n3\. El municipio/);
+  assert.doesNotMatch(reply,/habitaciones|metros cuadrados|•|Sandra|Diego|asesora|guardad|ticket/i);
+  const state=f.s.conversation(phone).state;assert.equal(state.initialIntakeAllRequested,false);assert.deepEqual(state.initialIntakeRequestedFields,['service','site','location']);assert.deepEqual(state.asked,['service','site','location']);
+  assert.equal(mariaOrdinaryIntakeReply(reply),true);assert.ok(reply.length<=350);
+  await f.process('TONE_PURE_GREETING_DATA','Cucarachas en apartamento, Medellín');const next=f.reply('TONE_PURE_GREETING_DATA').text;
+  assert.match(next,/habitaciones o metros cuadrados/);assert.doesNotMatch(next,/soy María|Gracias por escribirnos|Con gusto te ayudo|tipo de inmueble|qué plaga|municipio/i);
  }finally{f.s.close();}
+});
+test('a first request without a social prefix asks every missing ordinary field in one warm batch',async()=>{
+ const f=fixture();try{
+  await f.process('TONE_INITIAL_REQUEST','Necesito fumigar');const text=f.reply('TONE_INITIAL_REQUEST').text;
+  assert.match(text,/^Hola, soy María Ángel\. Gracias por escribirnos 😊 Con gusto te ayudo\./);
+  for(const field of [/Qué plaga/,/Qué tipo de inmueble/,/habitaciones o metros cuadrados/,/El municipio y barrio o vereda/])assert.match(text,field);
+  const state=f.s.conversation(phone).state;assert.deepEqual(state.initialIntakeRequestedFields,['service','site','size','location']);assert.equal(state.initialIntakeAllRequested,true);assert.equal(state.introduced,true);
+  assert.equal(mariaOrdinaryIntakeReply(text),true);
+ }finally{f.s.close();}
+});
+test('a known property is preserved while the first ordinary request asks only remaining fields',async()=>{
+ const f=fixture();try{
+  await f.process('TONE_KNOWN_PROPERTY','Tengo cucarachas en mi apartamento');const text=f.reply('TONE_KNOWN_PROPERTY').text,state=f.s.conversation(phone).state;
+  assert.match(text,/Gracias por escribirnos 😊 Con gusto te ayudo/);assert.match(text,/habitaciones o metros cuadrados/);assert.match(text,/municipio y barrio o vereda/);
+  assert.doesNotMatch(text,/tipo de inmueble|Qué plaga/);assert.equal(state.slots.site,'apartamento');assert.equal(state.slots.service,'cucarachas');assert.deepEqual(state.initialIntakeRequestedFields,['size','location']);
+ }finally{f.s.close();}
+});
+test('the exact warm phrase is recognized only with valid deterministic intake wording',()=>{
+ const text='Hola, soy María Ángel. Gracias por escribirnos 😊 Con gusto te ayudo.\n\nPara cotizarte, cuéntame:\n1. Qué plaga deseas tratar o si buscas prevención.\n2. Qué tipo de inmueble es.\n3. El municipio y barrio o vereda donde necesitas el servicio.';
+ assert.equal(mariaOrdinaryIntakeReply(text),true);assert.equal(mariaOrdinaryIntakeReply(text.replace('Con gusto te ayudo.','Con gusto te garantizo resultados.')),false);
+ assert.equal(ADVISER_TONE_GUARD,'warm-identified-maria-first-intake-and-current-requested-timing-v4');
+ assert.equal(MARIA_STAGED_GREETING_GUARD,'own-first-intake-includes-property-before-size-v2');
 });
 test('staff takeover suppresses even a warmly phrased approved price',async()=>{
  const f=fixture();try{

@@ -14,7 +14,8 @@ export function literalGreetingReplyProof(config,event,state,text){
  const brief=/^(?:Hola|Buen día|Buenas tardes|Buenas noches)[.!]$/;
  const intake=/^(?:Hola|Buen día|Buenas tardes|Buenas noches), soy María Ángel\. Para cotizarte, cuéntame qué plaga deseas tratar o si buscas prevención; el municipio y barrio o vereda donde necesitas el servicio\.$/;
  const listedIntake=/^(?:Hola|Buen día|Buenas tardes|Buenas noches), soy María Ángel\.\n\nPara cotizarte, cuéntame:\n1\. Qué plaga deseas tratar o si buscas prevención\.\n2\. El municipio y barrio o vereda donde necesitas el servicio\.$/;
- if(!brief.test(text)&&!intake.test(text)&&!listedIntake.test(text))return null;
+ const warmListedIntake=/^(?:Hola|Buen día|Buenas tardes|Buenas noches), soy María Ángel\. Gracias por escribirnos 😊 Con gusto te ayudo\.\n\nPara cotizarte, cuéntame:\n1\. Qué plaga deseas tratar o si buscas prevención\.\n2\. Qué tipo de inmueble es\.\n3\. El municipio y barrio o vereda donde necesitas el servicio\.$/;
+ if(!brief.test(text)&&!intake.test(text)&&!listedIntake.test(text)&&!warmListedIntake.test(text))return null;
  return {guard:MARIA_LITERAL_RECEPTION_GUARD,sourceId:event.id,at:event.at,caseId:state.caseId??null,sourceTextHash:createHash('sha256').update(event.text,'utf8').digest('hex'),textHash:createHash('sha256').update(text,'utf8').digest('hex')};
 }
 export function literalGreetingReplyStillValid(config,store,outbox,text){

@@ -17,11 +17,11 @@ import {publicResponseWindow,publicOperationAllowed,publicEventAllowed} from './
 export const MARIA_PROGRAM_GUARD='own-accepted-ordinary-service-literal-fields-and-atomic-receipt-v2';
 export const MARIA_PROGRAM_PIPELINE_GUARD='processed-customer-turn-before-registration-v1';
 export const MARIA_PROGRAM_FORM_BATCH_GUARD='own-native-prompt-batch-facts-ordered-acceptance-v1';
-export const MARIA_PROGRAM_LITERAL_FIELDS_GUARD='own-prompted-separate-name-address-standard-labels-and-native-source-v2';
+export const MARIA_PROGRAM_LITERAL_FIELDS_GUARD='own-prompted-name-address-and-complete-native-timing-line-v3';
 export const MARIA_PROGRAM_OPERATIONAL_CONTINUATION_GUARD='own-saved-order-new-quoted-operation-and-customer-continuity-v1';
 export const MARIA_PROGRAM_OPERATIONAL_CONFIRMATION_GUARD='own-saved-delivered-operation-pure-confirmation-without-repeat-v1';
-export const MARIA_PROGRAM_TIMED_ACCEPTANCE_GUARD='own-literal-timed-acceptance-before-conditional-v1';
-export const MARIA_PROGRAM_REQUESTED_TIMING_GUARD='own-literal-preference-source-and-pending-coordination-v1';
+export const MARIA_PROGRAM_TIMED_ACCEPTANCE_GUARD='own-price-timed-consent-before-separate-summary-confirmation-v2';
+export const MARIA_PROGRAM_REQUESTED_TIMING_GUARD='own-native-preference-and-canonical-summary-schedule-v2';
 export const MARIA_PROGRAM_PET_PRESENCE_GUARD='own-confirmed-native-incidental-pet-observation-v1';
 export const MARIA_PROGRAM_SCHEDULING_REVIEW_GUARD='own-saved-service-durable-scheduling-exception-without-resend-v1';
 export const MARIA_STAFF_PLANNING_GUARD='own-prospective-accepted-request-literal-preference-staff-assignment-v1';
@@ -138,7 +138,11 @@ export function acceptsExplicitOrdinaryQuotation(text){
  const raw=text.trim();
  if(/^si\b/iu.test(raw)&&!/^(?:sí(?=[\s,.!;])|si\s*[,.;!])/iu.test(raw))return false;
  const t=normalize(raw).replace(/\bporfavor\b/g,'por favor').replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim();
- return /^(?:si )?acepto (?:(?:esa|esta|la) cotizacion|el servicio)(?: (?:por favor|gracias|muchas gracias))*$/.test(t);
+ if(/^(?:si )?acepto (?:(?:esa|esta|la) cotizacion|el servicio)(?: (?:por favor|gracias|muchas gracias))*$/.test(t))return true;
+ // Price-stage consent may include the customer's literal requested time.
+ // It never extends the separate backend/final-summary acceptance grammar.
+ const timing=priceConsentTimingTail(raw);
+ return timing!==null&&/^(?:hoy|manana|pasado manana|(?:el )?(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo))\b/.test(foldedRelativePreference(timing))&&standaloneRelativePreference(timing);
 }
 // Only the engine's independently verified own delivered quotation may supply
 // the expected amount. This opens data collection, never summary confirmation.
@@ -273,9 +277,29 @@ const calendarDay='(?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domin
 const calendarDate='(?:el\\s+)?(?:'+calendarDay+'\\s+)?(?:\\d{1,2}\\s+de\\s+[\\p{L}]+(?:\\s+(?:de|del)\\s+\\d{4})?|\\d{1,2}/\\d{1,2}(?:/\\d{4})?)';
 const calendarTime='(?:\\s+(?:a las?\\s+\\d{1,2}(?::\\d{2})?(?:\\s*[ap]\\.?\\s*m\\.?)?|(?:en|por) la (?:mañana|manana|tarde|noche)))?';
 const calendarWhole=new RegExp('^(?:(?:me equivoqu[eé]|corrijo)[, ]+)?(?:(?:para|prefiero|preferir[ií]a|quiero|quisiera|lo necesito|lo quiero|ser[ií]a|puede ser|me queda bien|me sirve)\\s+)?('+calendarDate+calendarTime+')(?:[,;.!]?\\s+(?:por favor|gracias|muchas gracias))*[.!]?$','iu');
+// Recognition normalization only: values and sources below retain the exact
+// customer spelling, punctuation and spacing, including "a las10a.m.".
+function foldedRelativePreference(text){
+ return normalize(text).replace(/\bporfavor\b/g,'por favor').replace(/\ba las?(?=\d)/g,'a las ').replace(/(\d)([ap])\.?\s*m\.?\b/g,'$1 $2m').replace(/\b([ap])\.?\s*m\.?\b/g,'$1m').replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim();
+}
+function standaloneRelativePreference(text){
+ return /^(?:(?:me equivoque|corrijo) )?(?:(?:para|el|prefiero|preferiria|quiero|quisiera|lo necesito|lo quiero|seria|puede ser|me queda bien|me sirve) )?(?:hoy|manana|pasado manana|(?:el )?(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo))(?: (?:(?:en|por) la (?:manana|tarde|noche)|a las? \d{1,2}(?::\d{2})?(?: am| pm)?))?(?: (?:por favor|gracias|muchas gracias))*$/.test(foldedRelativePreference(text));
+}
+function priceConsentTimingTail(text){
+ const raw=text.trim(),yes=raw.match(/^(?:sí(?=[\s,.!;])|si\s*[,.;!])[\s,.!;]*/iu);
+ if(/^si\b/iu.test(raw)&&!yes)return null;
+ const rest=yes?raw.slice(yes[0].length):raw;
+ const explicit=rest.match(/^(?:acepto (?:(?:esa|esta|la) cotizaci[oó]n|el servicio)|lo quiero)(?:[.!;,]\s*|\s+)(?:para\s+)?([\s\S]+)$/iu);
+ if(explicit&&(!/^lo quiero\b/iu.test(rest)||yes))return explicit[1].replace(/^horario\s*:\s*/iu,'').trim();
+ const bareTiming=yes?rest.replace(/^para\s+/iu,'').trim():null;
+ // Keep historical "Sí, agéndame ..." intact for its closed ordinary
+ // grammar. Stripping its affirmative would discard an existing time change.
+ return bareTiming&&standaloneRelativePreference(bareTiming)?bareTiming:null;
+}
 function timingProjection(text){
  const projected=literalIntakeTextWithoutRegistrationFields(text).trim(),header=ownQuotationAmountHeader(projected);
- return withoutFieldJoiners(header?header.tail:projected).replace(/^horario\s*:\s*/iu,'');
+ const body=withoutFieldJoiners(header?header.tail:projected),consentTail=priceConsentTimingTail(body);
+ return (consentTail??body).replace(/^horario\s*:\s*/iu,'');
 }
 function calendarPreference(raw,at){
  const match=raw.match(calendarWhole);if(!match)return null;
@@ -307,8 +331,7 @@ export function literalProgramPreference(text,at=Date.now()){
  const raw=timingProjection(text),calendar=calendarPreference(raw,at);
  if(calendar)return calendar.issue?null:calendar.value;
  if(/^(?:en|por) la (?:mañana|manana|tarde|noche)[.! ]*$/i.test(raw))return raw.replace(/[.! ]+$/g,'');
- const folded=normalize(raw).replace(/\bporfavor\b/g,'por favor').replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim();
- const standalone=/^(?:(?:me equivoque|corrijo) )?(?:(?:para|el|prefiero|preferiria|quiero|quisiera|lo necesito|lo quiero|seria|puede ser|me queda bien|me sirve) )?(?:hoy|manana|pasado manana|(?:el )?(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo))(?: (?:(?:en|por) la (?:manana|tarde|noche)|a las? \d{1,2}(?::\d{2})?(?: a ?m| p ?m)?))?(?: (?:por favor|gracias|muchas gracias))*$/.test(folded);
+ const standalone=standaloneRelativePreference(raw);
  if(!standalone&&!acceptsOrdinaryQuotation(raw))return null;
  // Keep punctuation in a. m./p. m. as literal source text, rather than cutting
  // a time at the first abbreviation dot. Full grammar above rejects extra prose.
@@ -340,10 +363,11 @@ function promptedLiteralFields(text,requested,correction=false,at=Date.now()){
  const values={};
  for(const line of lines){
   if(registrationSourcePreface(line)||correction&&correctionFieldReference(line))continue;
-  // A valid standalone day and an explicitly unanswered hour can accompany
-  // the two requested literal fields. Retain the complete native source;
-  // neither an alternative meridian nor a day alone supplies a schedule.
-  if(literalProgramPreference(line,at)&&nativePreferenceDate(line,iso(at))&&!nativePreferenceTime(line,iso(at))){if(values.dateLiteral)return {};values.dateLiteral=line;continue;}
+  // A whole requested-time line may accompany the prompted name/address.
+  // Retain the complete native source. Date/hour completeness is still checked
+  // independently before any summary or scheduled registration is prepared.
+  const preference=literalProgramPreference(line,at);
+  if(preference){if(values.preferenceLiteral)return {};values.preferenceLiteral=preference;if(nativePreferenceDate(line,iso(at))&&!nativePreferenceTime(line,iso(at)))values.dateLiteral=line;continue;}
   if(/^hora\s*:\s*(?:p\s*\.?\s*m\.?\s+o\s+a\s*\.?\s*m\.?|a\s*\.?\s*m\.?\s+o\s+p\s*\.?\s*m\.?)[.! ]*$/iu.test(line)){if(values.ambiguousClock)return {};values.ambiguousClock=true;continue;}
   const labelled=explicitFields(line),name=labelled.name||(requested.includes('name')&&literalName(line,true)),address=labelled.address||(requested.includes('address')&&literalAddress(line,true));
   if(labelled.conflict||(!name&&!address)||(name&&address))return {};
@@ -767,6 +791,7 @@ export function registrationTurn(s,c,previous,e,decision,{literalSlots=null}={})
  const explicit=explicitFields(e.text),requested=pi.requestedFields||(['name','address'].includes(pi.stage)?[pi.stage]:['name','address']);
  const separated=prompt&&!confirms(e.text)?promptedLiteralFields(e.text,requested,pi.stage==='correction',e.at):{};
  if(separated.dateLiteral){pi.requestedDateLiteral=separated.dateLiteral;pi.requestedDateSource=source(e);}
+ if(separated.preferenceLiteral){state.slots={...state.slots,preference:separated.preferenceLiteral};state.intakeSources={...state.intakeSources,preference:{sourceId:e.id,at:e.at,context:'literal-prompted-customer-preference-pending-coordination'}};}
  const name=!unresolved.has('name')&&(explicit.name||separated.name||(!confirms(e.text)&&!mariaIncidentalPetMention(e)&&literalName(e.text,(pi.stage==='name'||pi.stage==='correction'&&!correctionFieldReference(e.text))&&Boolean(prompt)))),address=!unresolved.has('address')&&(explicit.address||separated.address||literalAddress(e.text,(['address','confirm','correction'].includes(pi.stage)||pi.requestedFields?.includes('address'))&&Boolean(prompt)));
  const scopedAddress=address||pi.address;
  if(scopedAddress&&changedAddressScope(scopedAddress,state.slots)){
@@ -808,6 +833,7 @@ export function registrationTurn(s,c,previous,e,decision,{literalSlots=null}={})
  }
  if(planning&&!preference){pi.stage='details';pi.requestedFields=['preference'];pi.preview=null;pi.promptId=e.id+':reply';return {state,reply:clientCalendarIntake?(pi.requestedDateLiteral?'Conservé el día «'+pi.requestedDateLiteral+'». Me falta la hora exacta, con a. m. o p. m. ¿A qué hora necesitas el servicio?':'¿Qué día y a qué hora necesitas el servicio? Indícame si es a. m. o p. m.'):'¿Qué día y franja horaria prefieres para el servicio? Lo guardaré como horario solicitado; el equipo interno se encargará de asignar el técnico y la ruta.'};}
  const clientSchedule=Boolean(planning&&clientRequestedScheduleEnabled(c,planning.caseSourceAt)&&preference&&(preference.parts||Date.parse(preference.source.at)>=c.clientRequestedSchedule.startsAt));
+ let requestedSchedule;
  if(clientSchedule){
   const requested=preference.parts?preference.projection:projectClientRequestedSchedule(preference.value,preference.source.at,iso(e.at));
   if(!requested.complete){
@@ -815,8 +841,12 @@ export function registrationTurn(s,c,previous,e,decision,{literalSlots=null}={})
    const missing=requested.missing==='date'?'Necesito la fecha exacta para programarlo.':requested.missing==='future-time'?'Ese horario ya pasó. Necesito una fecha y hora nuevas.':'Ya tengo el día que indicaste. Me falta la hora exacta, con a. m. o p. m.';
    return {state,reply:missing+' Escríbeme el día y la hora juntos, por ejemplo: «mañana a las 10 a. m.». Conservaré los demás datos que ya me compartiste.'};
   }
+  // Relative wording can stay identical across Bogotá midnight while its
+  // native source refers to another date. A summary confirms that projected
+  // date/time, not merely the display string or a replaceable source ID.
+  requestedSchedule={requestedDate:requested.requestedDate,requestedTime:requested.requestedTime};
  }
- const basePreview={customerName:pi.customerName,address:pi.address,municipality:state.slots.location,service:state.slots.service,priceCop:own.entry.priceCop,...(preference?{preference:preference.value}:{}),...(preference?.parts?{preferenceParts:preference.projection.preferenceParts}:{}),...(clientSchedule?{clientSchedule:true}:{}),...(petPresence?{petPresence:petPresence.value,petPresenceSource:petPresence.source}:{})};
+ const basePreview={customerName:pi.customerName,address:pi.address,municipality:state.slots.location,service:state.slots.service,priceCop:own.entry.priceCop,...(preference?{preference:preference.value}:{}),...(preference?.parts?{preferenceParts:preference.projection.preferenceParts}:{}),...(clientSchedule?{clientSchedule:true,requestedSchedule}:{}),...(petPresence?{petPresence:petPresence.value,petPresenceSource:petPresence.source}:{})};
  const priorSummary=pi.promptId&&s.db.prepare('SELECT created FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND internal=0').get(pi.promptId,e.phone,e.line,state.caseId);
  const legacyPreview=prior.stage==='confirm'&&priorSummary&&own.row.created<=priorSummary.created&&JSON.stringify(pi.preview)===JSON.stringify(basePreview);
  const scope=legacyPreview?{}:ownSummaryScope(s,state,e,own,literalSlots);

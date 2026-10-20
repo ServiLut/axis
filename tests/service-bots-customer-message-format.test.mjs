@@ -37,12 +37,12 @@ function fixture({attack=false}={}){
 test('the reported apartment quotation opens once then lists only the three missing facts without echoes',async()=>{
  const f=fixture();try{
   const r=await f.turn('Buenas tardes, qué precio tiene el servicio de fumigación para un apartamento');
-  assert.equal(r.composed,'Hola, soy María Ángel.\n\nPara cotizarte, cuéntame:\n1. Qué plaga deseas tratar o si buscas prevención.\n2. Cuántas habitaciones o metros cuadrados tiene.\n3. El municipio y barrio o vereda donde necesitas el servicio.');
-  assert.doesNotMatch(r.composed,/Me indicas|El inmueble|tipo de inmueble|Con gusto|;|\$|registrad|agendad/i);
+  assert.equal(r.composed,'Hola, soy María Ángel. Gracias por escribirnos 😊 Con gusto te ayudo.\n\nPara cotizarte, cuéntame:\n1. Qué plaga deseas tratar o si buscas prevención.\n2. Cuántas habitaciones o metros cuadrados tiene.\n3. El municipio y barrio o vereda donde necesitas el servicio.');
+  assert.doesNotMatch(r.composed,/Me indicas|El inmueble|tipo de inmueble|;|\$|registrad|agendad/i);
   assert.equal((r.composed.match(/soy María Ángel/g)||[]).length,1);
   assert.equal(r.state.slots.site,'apartamento');assert.equal(r.state.intakeSources.site.sourceId,r.e.id);
   assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE internal=1').get().n,0);
-  assert.deepEqual(f.requests[0].replyContract.verifiedLiteralFacts,[]);
+  assert.equal(f.requests.length,0,'fixed initial intake does not need a style provider call');
   assert.equal(ownReplyTextAllowed(f.c,f.s,r.row,r.original,r.composed),true);
  }finally{f.s.close();}
 });
@@ -50,7 +50,7 @@ test('the reported apartment quotation opens once then lists only the three miss
 test('a first question with only the municipality missing does not repeat the known pest, property or size',async()=>{
  const f=fixture();try{
   const r=await f.turn('Hola, necesito fumigar cucarachas en un apartamento de 60 m², ¿cuánto cuesta?');
-  assert.match(r.composed,/^Hola, soy María Ángel\.\n\n/);assert.match(r.composed,/municipio y barrio o vereda/);
+  assert.match(r.composed,/^Hola, soy María Ángel\. Gracias por escribirnos 😊 Con gusto te ayudo\.\n\n/);assert.match(r.composed,/municipio y barrio o vereda/);
   assert.doesNotMatch(r.composed,/Me indicas|El inmueble|qué plaga|tipo de inmueble|habitaciones o metros cuadrados|1\.|;/i);
   assert.equal(r.state.slots.service,'cucarachas');assert.equal(r.state.slots.site,'apartamento');assert.equal(r.state.slots.area,'60 m²');
  }finally{f.s.close();}
@@ -62,15 +62,15 @@ test('a later property answer is retained and followed by the size question with
   assert.match(r.composed,/habitaciones o metros cuadrados/);
   assert.doesNotMatch(r.composed,/Me indicas|El inmueble|apartamento|Hola|soy María|municipio|qué plaga/i);
   assert.equal(r.state.slots.site,'apartamento');assert.equal(r.state.slots.location,'medellin');assert.equal(r.state.intakeSources.site.sourceId,r.e.id);
-  assert.deepEqual(f.requests.at(-1).replyContract.verifiedLiteralFacts,[]);
+  assert.equal(f.requests.length,0,'fixed missing-field questions retain literal wording without a style call');
  }finally{f.s.close();}
 });
 
-test('a pure greeting retains its exact source proof with the newly readable two-item list',async()=>{
+test('a pure greeting retains its exact source proof with the warm three-item list',async()=>{
  const f=fixture();try{
   const r=await f.turn('Buenas tardes');
-  assert.match(r.original,/^Buenas tardes, soy María Ángel\.\n\nPara cotizarte, cuéntame:\n1\. Qué plaga/);
-  assert.match(r.original,/\n2\. El municipio/);assert.doesNotMatch(r.original,/tipo de inmueble|habitaciones|metros cuadrados/);
+  assert.match(r.original,/^Buenas tardes, soy María Ángel\. Gracias por escribirnos 😊 Con gusto te ayudo\.\n\nPara cotizarte, cuéntame:\n1\. Qué plaga/);
+  assert.match(r.original,/\n2\. Qué tipo de inmueble es\.\n3\. El municipio/);assert.doesNotMatch(r.original,/habitaciones|metros cuadrados/);
   const proof=literalGreetingReplyProof(f.c,r.e,r.state,r.original);assert.ok(proof);
   assert.equal(literalGreetingReplyStillValid(f.c,f.s,r.row,r.original),true);
   assert.equal(literalGreetingReplyProof(f.c,r.e,r.state,r.original.replace('1.','99.')),null);
@@ -82,17 +82,17 @@ test('a pure greeting retains its exact source proof with the newly readable two
 test('a current timing acknowledgement stays after the greeting and before the readable missing-data list',async()=>{
  const f=fixture();try{
   const r=await f.turn('Hola, necesito fumigación para hoy en un apartamento');
-  assert.match(r.composed,/^Hola, soy María Ángel\.\n\nEntiendo que lo necesitas hoy\.\n\nPara cotizarte, cuéntame:\n1\./);
+  assert.match(r.composed,/^Hola, soy María Ángel\. Gracias por escribirnos 😊 Con gusto te ayudo\.\n\nEntiendo que lo necesitas hoy\.\n\nPara cotizarte, cuéntame:\n1\./);
   assert.doesNotMatch(r.composed,/Me indicas|El inmueble|disponible|agendad|reservad|tipo de inmueble/);
   assert.equal(r.state.slots.preference,'hoy');assert.equal(r.state.intakeSources.preference.sourceId,r.e.id);
  }finally{f.s.close();}
 });
 
-test('invalid model acknowledgement IDs fall back to the same clear intake without reintroducing an echo',async()=>{
+test('clear intake never asks a stylistic provider to supply acknowledgement IDs or echoes',async()=>{
  const f=fixture({attack:true});try{
   const r=await f.turn('Buenas tardes, qué precio tiene el servicio de fumigación para un apartamento');
   assert.equal(r.composed,r.original);assert.doesNotMatch(r.composed,/Me indicas|El inmueble/);
-  assert.ok(f.s.db.prepare("SELECT 1 FROM audit WHERE action='AI_CONTEXTUAL_REPLY_FALLBACK'").get());
+  assert.equal(f.requests.length,0);assert.ok(f.s.db.prepare("SELECT 1 FROM audit WHERE action='AI_FIXED_REPLY_RETAINED'").get());
  }finally{f.s.close();}
 });
 

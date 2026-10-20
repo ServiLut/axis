@@ -26,9 +26,9 @@ function fixture(){
  return {s,c,engine,event,process,turn,deliver,result};
 }
 
-test('pure greeting gathers pest and municipality before property and size, then quotes the literal approved 149000',async()=>{
+test('pure greeting gathers pest, property and municipality before size, then quotes the literal approved 149000',async()=>{
  const f=fixture();try{
-  const greeting=await f.turn('Buenas tardes');assert.match(greeting.text,/^Buenas tardes, soy María Ángel\./);assert.match(greeting.text,/plaga[\s\S]*\n2\. El municipio/);assert.doesNotMatch(greeting.text,/tipo de inmueble|habitaciones|metros cuadrados/);assert.equal(greeting.state.initialIntakeAllRequested,false);assert.deepEqual(greeting.state.asked,['service','location']);
+  const greeting=await f.turn('Buenas tardes');assert.match(greeting.text,/^Buenas tardes, soy María Ángel\. Gracias por escribirnos 😊 Con gusto te ayudo\./);assert.match(greeting.text,/plaga[\s\S]*\n2\. Qué tipo de inmueble es\.\n3\. El municipio/);assert.doesNotMatch(greeting.text,/habitaciones|metros cuadrados/);assert.equal(greeting.state.initialIntakeAllRequested,false);assert.deepEqual(greeting.state.asked,['service','site','location']);
   const pest=await f.turn('Cucarachas en Medellín');assert.match(pest.text,/tipo de inmueble/);assert.doesNotMatch(pest.text,/qué plaga|municipio|soy María/i);assert.equal(pest.state.slots.service,'cucarachas');assert.equal(pest.state.slots.location,'medellin');
   const property=await f.turn('Apartamento');assert.match(property.text,/habitaciones o metros cuadrados/);assert.doesNotMatch(property.text,/tipo de inmueble|municipio|soy María/i);
   const quote=await f.turn('60 m²');assert.match(quote.text,/\$149\.000 COP/);assert.match(quote.text,/¿Deseas continuar con esta cotización\?/);assert.equal(quote.state.quotedPrice.priceCop,149000);assert.notEqual(quote.state.quotedPrice.accepted,true);assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM questions').get().n,0);assert.equal(registrationStatus(f.c,f.s).prepared,0);

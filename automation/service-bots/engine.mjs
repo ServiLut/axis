@@ -35,10 +35,10 @@ import {ownCommercialCustomerTurn,COMMERCIAL_OBJECTION_GUARD} from './commercial
 
 export const MARIA_AUTONOMOUS_INTAKE_GUARD='literal-ordinary-intake-without-staff-delegation-v1';
 export const MARIA_AFTER_SERVICE_CONTINUITY_GUARD='own-same-case-stored-or-quoted-postservice-context-and-priority-preservation-v2';
-export const MARIA_STAGED_GREETING_GUARD='own-pure-greeting-essential-fields-before-property-details-v1';
+export const MARIA_STAGED_GREETING_GUARD='own-first-intake-includes-property-before-size-v2';
 export const MARIA_SAVED_PENDING_CUSTOMER_GUARD='own-saved-pending-operation-direct-status-and-cancellation-request-v1';
 export const MARIA_PENDING_CONVERSATION_GUARD='own-pending-question-does-not-silence-current-customer-v1';
-export const MARIA_PEST_IDENTITY_GUARD='generic-plague-description-is-not-a-verified-pest-v1';
+export const MARIA_PEST_IDENTITY_GUARD='literal-pest-negation-and-contrast-before-generic-description-v2';
 function genericPestDescription(value){return /^(?:plagas?|(?:control|tratamiento|manejo)(?: de)?(?: la| las)? plagas?|(?:servicio de )?(?:fumigacion|fumigar))$/.test(normalize(value));}
 // Presentation only: decide whether to ask for a neighborhood alongside the
 // missing pest. This never fills a slot, confirms a location, or gates a price.
@@ -67,6 +67,18 @@ function ownDeliveredClarification(store,state,event,id,text){
  const own=store.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND internal=0 AND case_id=? AND state IN ('DELIVERED','READ') AND mid IS NOT NULL").get(id,event.phone,event.line,state.caseId);
  const row=own&&store.db.prepare('SELECT value FROM meta WHERE key=?').get('first-delivery:'+own.id),proof=row&&store.open(row.value);
  return Boolean(own&&store.open(own.body)===text&&proof?.mid===own.mid&&proof.line===event.line&&['DELIVERED','READ'].includes(proof.state)&&Number.isSafeInteger(proof.verifiedAt)&&event.at>=Math.floor(proof.verifiedAt/1000)*1000);
+}
+function promptedBareBatchSize(store,config,state,event){
+ if(config.company!=='fumigacion'||event.kind!=='text'||event.fromMe||event.forwarded||event.quotedId||state.programIntake||state.quotedPrice||state.slots.rooms||state.slots.area||state.pendingFaqQuestion||state.pendingTesaQuestionId||state.awaitingHumanReview||state.requestedAfterServiceReview||state.requestedProductInquiry||state.requestedControlReview||!state.slots.site||!state.slots.service||genericPestDescription(state.slots.service)||normalize(state.slots.service)==='chinches'||!state.asked?.includes('size'))return null;
+ const lines=event.text.trim().split(/\r?\n/).map(x=>x.trim()).filter(Boolean),number=lines[0]?.match(/^([1-9]\d{0,2}|un[ao]?|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)[.! ]*$/iu)?.[1];
+ if(!number||lines.length<2||lines.length>3||lines.slice(1).some(line=>!/^\p{L}[\p{L} .'-]{1,80}$/u.test(line)))return null;
+ const place=lines.slice(1).join(' ');
+ if(!ordinaryLiteralMunicipality(place)||/\b(?:no|si|quizas|dijo|dice|vecin[oa]|amig[oa]|nombre|servicio|plaga|habitaciones?|metros?|colchones?|manana|hoy|ayer)\b/.test(normalize(place)))return null;
+ const promptId=state.lastHandledSourceId+':reply',row=store.db.prepare('SELECT body FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND internal=0').get(promptId,event.phone,event.line,state.caseId),text=row&&store.open(row.body);
+ if(typeof text!=='string'||!/cuántas habitaciones o metros cuadrados/iu.test(text)||!ownDeliveredClarification(store,state,event,promptId,text))return null;
+ // The number is never a room/mattress count or a computed surface. Asking
+ // for the complete value plus unit gives the next turn its own literal proof.
+ return {clarification:'¿Ese '+number+' corresponde a habitaciones o a metros cuadrados? Escríbeme la cantidad con su unidad, por ejemplo: «'+number+' habitaciones».',source:{sourceId:event.id,at:event.at,guard:MARIA_BATCH_INTAKE_GUARD,context:'own-delivered-batch-bare-size-unit-needs-clarification'}};
 }
 function rememberAdditionalLiteralFields(store,config,state,event){
  const caseSource=ownCaseAnchor(store,config,state,event);if(!caseSource)return;
@@ -105,7 +117,7 @@ function rememberAdditionalLiteralFields(store,config,state,event){
   }
  }
  if(prior&&state.pendingSizeClarification&&event.kind==='text'&&event.id!==prior.sourceId&&event.at>prior.at)delete state.pendingSizeClarification;
- const rooms=literalMariaRoomCount({company:config.company,state,event,caseSource});
+ const rooms=literalMariaRoomCount({company:config.company,state,event,caseSource})||promptedBareBatchSize(store,config,state,event);
  if(rooms?.rooms){state.slots.rooms=rooms.rooms;state.intakeSources={...state.intakeSources,rooms:rooms.source};delete state.pendingSizeClarification;}
  else if(rooms?.clarification)state.pendingSizeClarification={...rooms.source,text:rooms.clarification,numberText:event.text.match(/\b([1-9]\d{0,2}|un[ao]?|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)[.! ]*$/iu)?.[1]};
 }
@@ -329,26 +341,29 @@ const ordinaryPropertyPatterns={'casa finca':/\bcasas?\s+fincas?\b/,finca:/\bfin
 const literalAreaPattern=/\b\d{1,5}(?:[.,]\d{1,2})?\s*(?:m(?:ts?)?\s*[2²]|m(?:ts?)?\.?\s*cuadrados?|metros?\s*cuadrados?)(?=$|[\s.,;:)])/iu;
 const literalMattressPattern=/\b(?:\d{1,3}|un|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+colch[oó](?:n|nes)\b/iu;
 const literalRoomPattern=/\b(?:\d{1,3}|un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s*(?:habitaci[oó]n(?:es)?|cuartos?)\b/iu;
-function affirmedIntakeMatches(text,pattern){
+function affirmedIntakeMatches(text,pattern,{property=false}={}){
   const matches=[];
   // A decimal separator and the period in "mts. cuadrados" belong to the
   // literal measure, rather than ending a sentence or changing its value.
   const protectedText=String(text).replace(/\b(?:mts?|m)\.(?=\s*cuadrados?)/giu,match=>match.replace('.','\uE000'));
-  for(const part of protectedText.split(/(?<!\d)[.,]|[.,](?!\d)|[!?;\r\n]|\b(?:pero|sino)\b/iu)){
+  for(const part of protectedText.split(/(?<!\d)[.,]|[.,](?!\d)|[!?;\r\n]|\b(?:pero|sino|si\s+no\s+que(?=\s+para\b))\b/iu)){
     const clause=part.replace(/\uE000/g,'.');
     const flags=pattern.flags.replace('g','');
     for(const match of clause.matchAll(new RegExp(pattern.source,flags+(flags.includes('i')?'':'i')+'g'))){
       const before=normalize(clause.slice(0,match.index))+' ',after=normalize(clause.slice(match.index+match[0].length));
-      const negated=/\b(?:no|nunca|sin|ni)\s+(?:(?:son?|es|hay|tengo|tenemos|tienen?|veo|vemos|presentan?|quiero(?: tratar)?|necesito(?: tratar)?)\s+)?(?:(?:ni|un|una|unos|unas|el|la|los|las|en|de|del|muchos?|muchas?|ningunos?|ningunas?)\s+)*$/.test(before)||/^no$/.test(after);
-      const uncertain=/\b(?:si|quizas|tal vez|posiblemente|puede ser|podria ser|no se)\b(?:\s+\p{L}+){0,6}\s*$/u.test(before);
-      if(negated||uncertain)continue;
+      const negated=/\b(?:no|nunca|sin|ni)\s+(?:(?:son?|es|hay|tengo|tenemos|tienen?|veo|vemos|presentan?|quiero(?: tratar)?|necesito(?: tratar)?)\s+)?(?:(?:ni|un|una|unos|unas|el|la|los|las|en|de|del|para|muchos?|muchas?|ningunos?|ningunas?)\s+)*$/.test(before)||/^no$/.test(after);
+      const uncertain=/^si\s+no\b/.test(normalize(clause))||/\b(?:si|quizas|tal vez|posiblemente|puede ser|podria ser|no se)\b(?:\s+\p{L}+){0,6}\s*$/u.test(before);
+      // A reported visit at somebody else's property is context, not the
+      // customer's current billable inmueble. Keep the original message.
+      const foreignProperty=property&&/^(?:de (?:ella|el|ellos|ellas)|de (?:mi|la|una|su) (?:vecin[oa]|amig[oa]|conocid[oa]|mama|madre|papa|padre|herman[oa]))\b/.test(after);
+      if(negated||uncertain||foreignProperty)continue;
       matches.push(match[0]);
     }
   }
   return matches;
 }
 function literalPropertyKinds(text){
-  const t=normalize(text),sites=Object.keys(ordinaryPropertyPatterns).filter(site=>affirmedIntakeMatches(t,ordinaryPropertyPatterns[site]).length);
+  const t=normalize(text),sites=Object.keys(ordinaryPropertyPatterns).filter(site=>affirmedIntakeMatches(t,ordinaryPropertyPatterns[site],{property:true}).length);
   return sites.includes('casa finca')?['casa finca']:sites;
 }
 function literalQuoteFieldConflicts(text){
@@ -1190,21 +1205,25 @@ export class Engine {
       if(registration)decision=registration;
        if(caseState.customerDeferral?.active===true&&decision.state.customerDeferral?.active===false&&decision.state.customerDeferral.resumedBy?.sourceId===e.id)s.audit('OWN_CUSTOMER_DEFERRAL_RESUMED',e.id,{caseId:caseState.caseId,deferralSourceId:caseState.customerDeferral.sourceId,resumeSourceId:e.id,kind:decision.state.customerDeferral.resumedBy.kind,humanHoldReleased:false,acceptanceGrantedByMarker:false});
       decision.state.lastHandledSourceId=e.id;
-      if(/^[¡! ]*(?:hola\b|buenos dias\b|buen dia\b|buenas tardes\b|buenas noches\b)/.test(normalize(e.text))&&!conv.state.introduced&&decision.reply){
-        if(c.company==='fumigacion'&&!decision.directedNonservice&&!selectedPrice&&!decision.courtesy&&!decision.review&&!decision.question&&!decision.observed){
+      const firstGreeting=/^[¡! ]*(?:hola\b|buenos dias\b|buen dia\b|buenas tardes\b|buenas noches\b)/.test(normalize(e.text))&&!conv.state.introduced&&decision.reply;
+      const firstOrdinaryIntake=c.company==='fumigacion'&&!conv.state.introduced&&(!conv.state.lastHandledSourceId||firstGreeting)&&decision.reply&&!decision.state.programIntake&&!decision.state.pendingFaqQuestion&&!decision.directedNonservice&&!selectedPrice&&!faq?.answer&&!decision.courtesy&&!decision.review&&!decision.question&&!decision.observed;
+      if(firstGreeting||firstOrdinaryIntake){
+        if(firstOrdinaryIntake){
           const missing=decision.state.slots,requests=[];
           const pureGreeting=literalGreetingText(e.text);
           const staged=pureGreeting&&(!missing.service||genericPestDescription(missing.service)||!missing.location);
           if(!missing.service||genericPestDescription(missing.service))requests.push('Qué plaga deseas tratar o si buscas prevención.');
-          if(!staged&&normalize(missing.service).includes('chinches')){
+          if(staged){
+            if(!missing.site)requests.push('Qué tipo de inmueble es.');
+          }else if(normalize(missing.service).includes('chinches')){
             if(!missing.site)requests.push('Qué tipo de inmueble es.');
             if(!missing.mattresses)requests.push(furnitureExclusionForPresentation(decision.state,e)?'Cuántos colchones están afectados.':'Cuántos colchones están afectados y si también hay chinches en bases de cama u otros muebles.');
           }else if(!staged&&(!missing.site||!missing.area&&!missing.rooms))requests.push(!missing.site&&!missing.area&&!missing.rooms?'Qué tipo de inmueble es y cuántas habitaciones o metros cuadrados tiene.':!missing.site?'Qué tipo de inmueble es.':'Cuántas habitaciones o metros cuadrados tiene.');
           if(!missing.location)requests.push(missing.locationDetails?'El municipio donde necesitas el servicio; ya conservé la ubicación indicada.':'El municipio y barrio o vereda donde necesitas el servicio.');
           if(requests.length){
             decision.reply='Para ayudarte con la cotización, cuéntame:\n'+requests.map(x=>'• '+x).join('\n');
-            decision.state.initialIntakeAllRequested=!staged;
-            const requested=staged?['service','location'].filter(field=>!missing[field]||field==='service'&&genericPestDescription(missing.service)):['service','site',normalize(missing.service).includes('chinches')?'mattresses':'size','location'].filter(field=>field==='size'?!missing.area&&!missing.rooms:!missing[field]||field==='service'&&genericPestDescription(missing.service));
+            decision.state.initialIntakeAllRequested=!staged||Boolean(missing.area||missing.rooms);
+            const requested=staged?['service','site','location'].filter(field=>!missing[field]||field==='service'&&genericPestDescription(missing.service)):['service','site',normalize(missing.service).includes('chinches')?'mattresses':'size','location'].filter(field=>field==='size'?!missing.area&&!missing.rooms:!missing[field]||field==='service'&&genericPestDescription(missing.service));
             decision.state.initialIntakeRequestedFields=requested;
             decision.state.asked=[...new Set([...decision.state.asked,...requested])];
           }

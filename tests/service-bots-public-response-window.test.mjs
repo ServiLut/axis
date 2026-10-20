@@ -106,7 +106,7 @@ test('a manual outgoing source before reopening holds the customer at ingestion 
  const staff={...event(f,'STAFF_MANUAL_BEFORE_PUBLIC_001',f.c.publicResponseStartsAt-1000),fromMe:true,text:'Te atiendo personalmente.'};f.s.enqueue(staff);assert.equal(f.s.conversation(customer).hold,1);const before=f.s.db.prepare('SELECT * FROM events WHERE id=?').get(staff.id);f.s.enqueue(event(f));let sends=0;
  await drain(f.s,f.c,{verifyLine:async()=>{},send:async()=>{sends++;}},f.e);assert.equal(sends,0);assert.equal(f.s.conversation(customer).hold,1);assert.deepEqual(f.s.db.prepare('SELECT * FROM events WHERE id=?').get(staff.id),before);
 }));
-for(const complete of [true,false])test('native attention closes a manual PENDING source received during an unresolved pre-cut send; coverage complete='+complete,()=>withFixture(async f=>{
+for(const complete of [true,false])test('native attention blocks an unclassified PENDING source from an unresolved pre-cut send; human hold requires complete verified attention='+complete,()=>withFixture(async f=>{
  // During the small unresolved send window ingestion cannot safely attribute
  // an outgoing MID. The native pre-send check must retain that uncertainty.
  const seed=event(f,'PRIOR_CUSTOMER_SEED_001',f.c.publicResponseStartsAt-2000);f.s.enqueue(seed);f.s.db.prepare("UPDATE events SET state='DONE' WHERE id=?").run(seed.id);const conv=f.s.conversation(customer);
@@ -115,5 +115,11 @@ for(const complete of [true,false])test('native attention closes a manual PENDIN
  f.s.db.prepare("UPDATE outbox SET state='UNCERTAIN' WHERE id='unresolved-prior-send'").run();const priorEvent=f.s.db.prepare('SELECT * FROM events WHERE id=?').get(staff.id),priorOut=f.s.db.prepare("SELECT * FROM outbox WHERE id='unresolved-prior-send'").get();
  f.c.historyCheckRequired=true;f.s.savePriorHistory(customer,{cutoff:f.c.activatedAt,priorOutgoing:false},seed.id);f.s.enqueue(event(f));let sends=0,attention=0,writes=0;
  await drain(f.s,f.c,{verifyLine:async()=>{},currentAttention:async()=>{attention++;return {complete,through:Date.now(),sources:[{id:staff.id,line:staff.line,at:staff.at}],checks:[]};},fetcher:async()=>{writes++;throw Error('NO_BUSINESS_WRITE');},send:async()=>{sends++;}},f.e);
- assert.equal(attention,1);assert.equal(sends,0);assert.equal(writes,0);assert.equal(f.s.conversation(customer).hold,1);assert.deepEqual(f.s.db.prepare('SELECT * FROM events WHERE id=?').get(staff.id),priorEvent);assert.deepEqual(f.s.db.prepare("SELECT * FROM outbox WHERE id='unresolved-prior-send'").get(),priorOut);
+ assert.equal(attention,1);assert.equal(sends,0);assert.equal(writes,0);assert.equal(f.s.conversation(customer).hold,Number(complete));
+ // The partial mock has only id/line/time, not independent human authorship.
+ // Its failed coverage blocks this output; the unresolved source stays PENDING
+ // until a subsequent complete native check or normal staff classification.
+ assert.equal(f.s.db.prepare('SELECT state FROM outbox WHERE id=?').get('FRESH_PUBLIC_SOURCE_001:reply').state,complete?'SUPPRESSED_HUMAN':'ATTENTION_REVIEW');
+ if(!complete)assert.equal(f.s.db.prepare("SELECT COUNT(*) n FROM audit WHERE action='HUMAN_TAKEOVER'").get().n,0);
+ assert.deepEqual(f.s.db.prepare('SELECT * FROM events WHERE id=?').get(staff.id),priorEvent);assert.deepEqual(f.s.db.prepare("SELECT * FROM outbox WHERE id='unresolved-prior-send'").get(),priorOut);
 }));

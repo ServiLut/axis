@@ -138,7 +138,8 @@ test('real provider owner mismatch or incomplete native coverage fails closed be
    const native=nativeTransportFixture(f,{wrongOwner:failure==='first-owner'?f.config.lines[0].phone:failure==='other-owner'?f.config.lines[1].phone:null,incomplete:failure==='coverage'});
    const result=await flushOutbox(f.store,f.config,native.transport);
    assert.equal(native.sends,0);assert.equal(result.accepted,0);assert.equal(result.suppressed,1);
-   assert.equal(f.store.db.prepare('SELECT state FROM outbox WHERE id=?').get(e.id+':reply').state,'ATTENTION_REVIEW');assert.equal(f.store.conversation(e.phone).hold,1);
+   assert.equal(f.store.db.prepare('SELECT state FROM outbox WHERE id=?').get(e.id+':reply').state,'ATTENTION_REVIEW');assert.equal(f.store.conversation(e.phone).hold,0,'a technical verification failure blocks this output without attributing a human takeover');
+   assert.equal(f.store.db.prepare("SELECT COUNT(*) n FROM audit WHERE action='HUMAN_TAKEOVER'").get().n,0);
    assert.equal(native.owners.get(f.config.lines[0].phone),1);
    if(failure==='other-owner')assert.equal(native.owners.get(f.config.lines[1].phone),1);
   }finally{f.store.close();}

@@ -3,7 +3,7 @@ import {literalProgramPreference,calendarProgramPreferenceIssue} from './maria-p
 
 export const MARIA_INTAKE_TIMING_GUARD='own-current-literal-requested-timing-before-quotation-v1';
 const day='(?:pasado mañana|pasado manana|mañana|manana|hoy|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)';
-const period='(?:(?:en|por) la (?:mañana|manana|tarde|noche)|a las? \\d{1,2}(?::\\d{2})?(?:\\s*(?:am|pm))?)';
+const period='(?:(?:en|por) la (?:mañana|manana|tarde|noche)|a las?\\s*\\d{1,2}(?::\\d{2})?(?:\\s*[ap]\\.?\\s*m\\.?)?)';
 const temporal=new RegExp('\\b'+day+'\\b(?:\\s+'+period+')?','iu');
 
 // A requested day is an intake fact, never acceptance or confirmed availability.

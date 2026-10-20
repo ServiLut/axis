@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import {publicResponseWindow} from './public-response-window.mjs';
 import {createHash} from 'node:crypto';
 import { configFromEnv,authorized,validateEvent,questionRecipients,operatorRoutingActive,SANDRA,chiefReplyRestrictionActive } from './config.mjs';
-import { Store } from './store.mjs';
+import { Store,MARIA_EARLY_DELIVERY_GUARD } from './store.mjs';
 import { Engine,MARIA_AUTONOMOUS_INTAKE_GUARD,MARIA_AFTER_SERVICE_CONTINUITY_GUARD,MARIA_STAGED_GREETING_GUARD,MARIA_SAVED_PENDING_CUSTOMER_GUARD,MARIA_PENDING_CONVERSATION_GUARD,MARIA_PEST_IDENTITY_GUARD } from './engine.mjs';
 import {MARIA_BATCH_INTAKE_GUARD} from './maria-batch-intake.mjs';
 import {MARIA_PENDING_REVIEW_GUARD} from './maria-pending-review.mjs';
@@ -12,7 +12,7 @@ import {CHIEF_READ_ONLY_GUARD} from './chief-readonly.mjs';
 import {CHIEF_ACTIONS_GUARD,chiefActionsStatus,reviewChiefActions} from './chief-actions.mjs';
 import {CHIEF_COMMAND_AI_GUARD} from './chief-command-ai.mjs';
 import {MARIA_DIMENSIONS_GUARD} from './intake-dimensions.mjs';
-import { Transport,drain,MARIA_HISTORY_PROTOCOL_GUARD,READ_SUPERVISION_GUARD } from './transport.mjs';
+import { Transport,drain,MARIA_HISTORY_PROTOCOL_GUARD,READ_SUPERVISION_GUARD,MARIA_ATTENTION_FAILURE_GUARD } from './transport.mjs';
 import { pathToFileURL } from 'node:url';
 import { decodeWebhook,observePrivateIdentity,privateIdentityStatus,initializePrivateNativeCachePair,prospectivePrivateNativeCacheBody,recordPrivateNativeCachePairs,decodePrivateNativeCachePairs } from './webhook.mjs';
 import {resolveOwnBlueNativeIdentity,NATIVE_IDENTITY_RESOLUTION_GUARD,NATIVE_IDENTITY_DIAGNOSTIC_CONTENT_KEYS,NATIVE_IDENTITY_DIAGNOSTIC_CONTENT_PATHS,NATIVE_IDENTITY_DIAGNOSTIC_SEMANTIC_FIELDS,NATIVE_IDENTITY_DIAGNOSTIC_VALUE_TYPES} from './native-identity-resolution.mjs';
@@ -25,7 +25,7 @@ import {ADVISER_TONE_GUARD} from './adviser-tone.mjs';
 import {OFFICE_CUSTOMER_REPLY_GUARD,OFFICE_CUSTOMER_REPLY_VERSION,officeReceptionCopyCount} from './office-customer-replies.mjs';
 import {officeResponseCatalogStatus} from './office-response-catalog.mjs';
 import {aiStatus} from './ai-settings.mjs';
-import {evaluateOwnAi,ownAiUsage,MARIA_CONVERSATION_GUARD} from './conversational-ai.mjs';
+import {evaluateOwnAi,ownAiUsage,MARIA_CONVERSATION_GUARD,MARIA_FIXED_REPLY_GUARD} from './conversational-ai.mjs';
 import {MARIA_UNDERSTANDING_GUARD} from './maria-understanding.mjs';
 import {MIGUEL_UNDERSTANDING_GUARD} from './miguel-understanding.mjs';
 import {OWN_QUOTE_CLARIFICATION_GUARD} from './own-quote-clarification.mjs';
@@ -300,6 +300,9 @@ export function createBotServer(config,store,transport,engine) {
         communicationGuard:'private-routing-and-media-work-v2',requestedContactGuard:'explicit-technician-contact-before-intake-v1',confirmationRecipient:config.tesaOperations?.enabled?config.tesaOperations.groupJid:questionRecipients(config,'disponibilidad-y-tecnico')[0],operationalConfirmationRecipients:config.tesaOperations?.enabled?[config.tesaOperations.groupJid]:questionRecipients(config,'disponibilidad-y-tecnico'),chiefRecipient:SANDRA,operatorRouting:config.tesaOperations?.enabled?'tesa-group-case-operations-20261008':config.operatorRouting||'sandra',privateHistoricalOperatorRouting:config.operatorRouting||'sandra',operatorRoutingGuard:'scoped-new-question-fanout-and-exact-line-answer-v1',operatorRoutingActive:operatorRoutingActive(config),chiefDocumentGuard:'fixed-chief-encrypted-hash-and-idempotency-v1',internalConversationGuard:'verified-internal-per-line-v2',chiefStatusGuard:'exact-directed-status-and-active-mode-v2',quotationQuestionGuard:'scoped-price-followup-and-existing-question-v1',internalConversationEnabled:Boolean(config.chiefOnly),customerResponsesEnabled:config.enabled,
         literalReceptionGuard:config.company==='fumigacion'?MARIA_LITERAL_RECEPTION_GUARD:null,stagedGreetingGuard:config.company==='fumigacion'?MARIA_STAGED_GREETING_GUARD:null,intakeRequestedTimingGuard:config.company==='fumigacion'?MARIA_INTAKE_TIMING_GUARD:null,savedPendingCustomerGuard:config.company==='fumigacion'?MARIA_SAVED_PENDING_CUSTOMER_GUARD:null,
         socialGreetingGuard:'literal-pure-social-greeting-before-semantic-review-v1',httpBodyDecodingGuard:HTTP_BODY_DECODING_GUARD,webhookBodyLimitBytes:config.company==='fumigacion'?FUMIGACION_WEBHOOK_BODY_LIMIT:20000,mariaDimensionsGuard:config.company==='fumigacion'?MARIA_DIMENSIONS_GUARD:null,mariaLiteralServiceContextGuard:config.company==='fumigacion'?MARIA_LITERAL_SERVICE_CONTEXT_GUARD:null,mariaConversationGuard:config.company==='fumigacion'?MARIA_CONVERSATION_GUARD:null,mariaOperationalContinuationGuard:config.company==='fumigacion'?MARIA_PROGRAM_OPERATIONAL_CONTINUATION_GUARD:null,internalRoutingGuard:'exact-historical-question-and-no-cross-bot-dialogue-v1',retiredRecipientGuard:'current-route-no-ready-diego-send-v1',
+        fixedReplyCompositionGuard:config.company==='fumigacion'?MARIA_FIXED_REPLY_GUARD:null,
+        attentionFailureGuard:config.company==='fumigacion'?MARIA_ATTENTION_FAILURE_GUARD:null,
+        earlyDeliveryGuard:config.company==='fumigacion'?MARIA_EARLY_DELIVERY_GUARD:null,
         customerIntakeEnabled:config.enabled,businessWritesEnabled:registrationStatus(config,store).enabled,capabilityDisclosure:'runtime-mode-and-own-registration-status-v2',chiefReadOnlyGuard:CHIEF_READ_ONLY_GUARD,mariaAutonomousIntakeGuard:config.company==='fumigacion'?MARIA_AUTONOMOUS_INTAKE_GUARD:null,postServiceContinuityGuard:config.company==='fumigacion'?MARIA_AFTER_SERVICE_CONTINUITY_GUARD:null,customerCourtesyGuard:'gratitude-only-without-intake-or-ownership-v1',customerAdviserGuard:config.company==='fumigacion'?ADVISER_TONE_GUARD:null,historyProtocolGuard:config.company==='fumigacion'?MARIA_HISTORY_PROTOCOL_GUARD:null,incidentalPetsGuard:config.company==='fumigacion'?MARIA_INCIDENTAL_PETS_GUARD:null,operationalConfirmationGuard:config.company==='fumigacion'?MARIA_PROGRAM_OPERATIONAL_CONFIRMATION_GUARD:null,
         commonAnswerGuard:config.company==='fumigacion'?'approved-source-context-and-complete-topics-v1':null,pendingFollowupGuard:config.company==='fumigacion'?'punctuation-only-own-pending-case-without-repeat-v1':null,approvedCustomerAnswerDocuments:store.approvedCustomerAnswers().length,customerActivity:customerActivity(store,config),
         controlVisitGuard:config.company==='fumigacion'?'requested-control-antecedent-before-intake-v1':null,intakePestGuard:config.company==='fumigacion'?'literal-additive-pests-and-own-source-union-v1':null,propertyScopeGuard:config.company==='fumigacion'?'single-apartment-address-and-explicit-special-scope-v1':null,

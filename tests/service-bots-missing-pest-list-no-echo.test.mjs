@@ -30,9 +30,9 @@ test('only the exact deterministic missing-pest and neighborhood list is classif
 for(const mode of ['normal','unapproved-fact','failed-provider'])test('the supplied rooms and municipality stay retained while '+mode+' composition asks only the two missing facts without an echo',async()=>{
  const f=fixture(mode);try{
   await f.turn('Buenas tardes, ¿qué precio tiene fumigar un apartamento?');const r=await f.turn('Tiene dos habitaciones y queda en Itagüí.');
-  assert.equal(r.original,list);assert.equal(r.composed,list);assert.deepEqual(f.requests.at(-1).replyContract.verifiedLiteralFacts,[]);assert.equal(r.state.slots.location,'itagui');assert.ok(r.state.slots.rooms);assert.equal(r.state.intakeSources.location.sourceId,r.e.id);assert.equal(r.state.intakeSources.rooms.sourceId,r.e.id);
+  assert.equal(r.original,list);assert.equal(r.composed,list);assert.equal(f.requests.length,0,'the complete literal intake never calls a stylistic provider');assert.equal(r.state.slots.location,'itagui');assert.ok(r.state.slots.rooms);assert.equal(r.state.intakeSources.location.sourceId,r.e.id);assert.equal(r.state.intakeSources.rooms.sourceId,r.e.id);
   assert.doesNotMatch(r.composed,/La ubicación|Ya tengo|Me indicas|dos habitaciones|itagui|Hola|soy María|hora|agendad|registrad|\$/i);assert.equal(f.s.db.prepare('SELECT COUNT(*) n FROM outbox WHERE internal=1').get().n,0);
-  if(mode!=='normal')assert.ok(f.s.db.prepare("SELECT 1 FROM audit WHERE action='AI_CONTEXTUAL_REPLY_FALLBACK'").get());
+  assert.ok(f.s.db.prepare("SELECT 1 FROM audit WHERE action='AI_FIXED_REPLY_RETAINED'").get());
  }finally{f.s.close();}
 });
 
@@ -49,7 +49,7 @@ test('an existing wording reservation with the old echoes remains byte-for-byte 
 for(const mode of ['normal','quote-unapproved-fact','failed-provider'])test('a verified quotation after fragmented intake keeps price and continuation without a fact preface: '+mode,async()=>{
  const f=fixture(mode);try{
   await f.turn('Buenas tardes, ¿qué precio tiene fumigar un apartamento?');await f.turn('Tiene dos habitaciones y queda en Itagüí.');await f.turn('Barrio San Pío');const r=await f.turn('Son cucarachas.');
-  assert.equal(r.composed,r.original);assert.match(r.composed,/\$129\.000 COP/);assert.match(r.composed,/¿Deseas continuar con esta cotización\?/);assert.doesNotMatch(r.composed,/Me indicas|El inmueble|La ubicación|Ya tengo|Hola|soy María|registrad|agendad|reservad/i);assert.deepEqual(f.requests.at(-1).replyContract.verifiedLiteralFacts,[]);assert.ok(f.requests.at(-1).replyContract.factualAnchors.includes('runtime-quotation-price-and-scope'));
+  assert.equal(r.composed,r.original);assert.match(r.composed,/\$129\.000 COP/);assert.match(r.composed,/¿Deseas continuar con esta cotización\?/);assert.doesNotMatch(r.composed,/Me indicas|El inmueble|La ubicación|Ya tengo|Hola|soy María|registrad|agendad|reservad/i);assert.equal(f.requests.length,0,'verified quotation retains its exact factual text without a style call');
   assert.equal(f.s.priceReplyReference(r.row).priceCop,129000);assert.equal(f.s.priceReplyStillValid(r.row),true);assert.equal(r.state.quotedPrice.priceCop,129000);assert.notEqual(r.state.quotedPrice.accepted,true);assert.equal(r.state.programIntake,undefined);assert.equal(f.s.db.prepare("SELECT COUNT(*) n FROM meta WHERE key LIKE 'maria-registration:%'").get().n,0);
  }finally{f.s.close();}
 });

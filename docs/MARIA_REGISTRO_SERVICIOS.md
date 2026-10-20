@@ -1,5 +1,13 @@
 # Registro propio de servicios nuevos de María
 
+## Correcciones de continuidad 20/oct/2026 — pendientes de instalación
+
+La aceptación inicial de cotización admite un horario literal con abreviaturas «a. m./p. m.»; las cabeceras de aceptación y el formulario por líneas conservan nombre, dirección y horario. Esto abre o continúa la captura de datos, nunca sustituye la confirmación nueva de un resumen entregado ni modifica la gramática de confirmación final del backend. Fechas u horas ambiguas siguen pidiendo aclaración. No hay nuevas credenciales, PRUEBA o escrituras reales de este candidato.
+
+El resumen incluye también la fecha y hora canónicas derivadas de la fuente nativa del horario. Si el cliente vuelve a decir «mañana» después de medianoche y cambia la fecha, requiere un resumen nuevo y otra confirmación. Repetir la preferencia el mismo día no genera otro resumen; confirmar después de medianoche sin cambiar el horario conserva la fecha original.
+
+Guardias locales: `own-price-timed-consent-before-separate-summary-confirmation-v2`, `own-prompted-name-address-and-complete-native-timing-line-v3` y `own-native-preference-and-canonical-summary-schedule-v2`. Estado propio20/oct16:18Z: SAVED=1 histórico, PENDING/SENDING/UNCERTAIN/REVIEW=0. No atribuir órdenes del personal a Mariángel ni tomar pruebas aisladas como nuevas ventas. Los fallos, fuentes y comprobaciones están en `.tmp/maria-first-message-20261020/`; estado general y límites al inicio de `BOTS_MARIA_MIGUEL.md`.
+
 ## Continuación 19/oct/2026 — comprobación comercial y corrección manual
 
 Ver la directriz nueva de autonomía de cuatro bots en `BOTS_MARIA_MIGUEL.md` y `.tmp/four-advisers-autonomy-20261019/checkpoint-private.json`. Las auditorías BLUE/RED comprobaron fuente, horario y órdenes actuales, pero el lector propio no expone `confirmacionComercial`; PROGRAMADO no permite inferir CONFIRMADO. Una orden aceptada se marcó CONFIRMADO con fuente WhatsApp y referencias nativas, y se corrigió su inicio16:00→16:30 en la sesión humana existente. El lector posterior verificó fin17:30/duración60, tarifa125000 y técnico/cliente/dirección/servicio intactos; otras11órdenes no cambiaron. No hay cobertura de pagos por ese lector. Fue una corrección manual autorizada, no una alta o venta autónoma del bot. Registro borrado anterior conservado; cero nuevas órdenes, seguimientos o liberaciones de chats en esta continuación. Las demás diferencias de precio/alcance/facturación e identidades pendientes no se resolvieron por inferencia.

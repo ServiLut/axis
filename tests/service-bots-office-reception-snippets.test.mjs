@@ -28,7 +28,7 @@ test('two selected missing fields retain the existing clear numbered text and gr
  const expected='Para cotizarte, cuéntame:\n1. Qué plaga deseas tratar o si buscas prevención.\n2. El municipio y barrio o vereda donde necesitas el servicio.';
  assert.equal(formatOfficeReceptionRequests([pest,location]),expected);
  const text=adviserReply('fumigacion',{reply:firstBody([pest,location]),state:{slots:{}}},{firstReply:true});
- assert.equal(text,'Hola, soy María Ángel.\n\n'+expected);assert.equal(mariaOrdinaryIntakeReply(text),true);
+ assert.equal(text,'Hola, soy María Ángel. Gracias por escribirnos 😊 Con gusto te ayudo.\n\n'+expected);assert.equal(mariaOrdinaryIntakeReply(text),true);
  assert.doesNotMatch(text,/inmueble|habitaciones|servicio confirmado|técnico|source|Excel|RESPUESTAS/);
 });
 
@@ -36,7 +36,7 @@ test('one selected missing field stays brief and does not acquire an unrelated s
  const expected='Para cotizarte, cuéntame el municipio y barrio o vereda donde necesitas el servicio.';
  assert.equal(formatOfficeReceptionRequests([location]),expected);
  const text=adviserReply('fumigacion',{reply:firstBody([location]),state:{slots:{service:'cucarachas',site:'apartamento',rooms:'dos habitaciones'}}},{firstReply:true});
- assert.equal(text,'Hola, soy María Ángel.\n\n'+expected);assert.equal(mariaOrdinaryIntakeReply(text),true);
+ assert.equal(text,'Hola, soy María Ángel. Gracias por escribirnos 😊 Con gusto te ayudo.\n\n'+expected);assert.equal(mariaOrdinaryIntakeReply(text),true);
  assert.doesNotMatch(text,/plaga|inmueble|habitaciones|ya tengo|ya conservé|2\./);
 });
 
@@ -85,7 +85,7 @@ test('the actual Engine retains known pest/property/rooms and requests only the 
 test('the selected short mattress request is formatted without reintroducing explicitly excluded furniture',async()=>{
  const item='Cuántos colchones están afectados.';
  const text=adviserReply('fumigacion',{reply:firstBody([item]),state:{slots:{service:'chinches',site:'apartamento',location:'itagui'}}},{firstReply:true});
- assert.equal(text,'Hola, soy María Ángel.\n\nPara cotizarte, cuéntame cuántos colchones están afectados.');
+ assert.equal(text,'Hola, soy María Ángel. Gracias por escribirnos 😊 Con gusto te ayudo.\n\nPara cotizarte, cuéntame cuántos colchones están afectados.');
  assert.equal(mariaOrdinaryIntakeReply(text),true);assert.doesNotMatch(text,/muebles|habitaciones|metros|Te ayudo con|•/);
  const f=engineFixture();try{
   const result=await f.turn('Buenas tardes, quiero cotizar chinches en un apartamento de Itagüí. No hay otros muebles afectados.');

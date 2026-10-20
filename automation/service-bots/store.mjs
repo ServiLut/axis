@@ -7,6 +7,12 @@ import {validatePriceCatalog,selectPrice,quotationInquiry} from './prices.mjs';
 import {supersededBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH,selectBusinessPrice,priceScheduleValidAt} from './business-prices.mjs';
 import {customerQuestionKey,technicalAvailabilityQuestion} from './technical-scope.mjs';
 
+export const MARIA_EARLY_DELIVERY_GUARD='own-fum-single-sending-exact-mid-early-delivery-v1';
+const earlyDeliveryWindow=60000,earlyDeliveryLimit=8;
+const nativeReceiptMid=mid=>typeof mid==='string'&&/^[A-Za-z0-9_-]{8,100}$/.test(mid);
+const earlyDeliveryKey=id=>'early-delivery:'+createHash('sha256').update(id).digest('hex');
+const recentSend=(startedAt,now)=>Number.isSafeInteger(startedAt)&&startedAt<=now&&now-startedAt<earlyDeliveryWindow;
+
 export class Store {
   constructor(path, company, key) {
     if(path!==':memory:') mkdirSync(dirname(path),{recursive:true,mode:0o700});
@@ -152,22 +158,67 @@ export class Store {
       this.audit('FIRST_REPLY_ORDER_REVIEW',e.id,{caseId:row.case_id,firstBotOutboxPreserved:record.firstOutboxId,reason:record.attentionOrderingReview,creatorCreditWritten:false});
     }
   }
-  delivery(mid,line,state) {
-    return this.tx(()=>{
-      const row=this.db.prepare('SELECT * FROM outbox WHERE mid=? AND line=?').get(mid,line);
-      if(!row||!['DELIVERED','READ'].includes(state)||!['SENDING','ACCEPTED','DELIVERED','READ'].includes(row.state))return 0;
+  #applyDelivery(row,state,observedAt) {
+      const {mid,line}=row;
       const deliveryKey='first-delivery:'+row.id;
-      this.db.prepare('INSERT OR IGNORE INTO meta(key,value) VALUES(?,?)').run(deliveryKey,this.seal({verifiedAt:Date.now(),mid,line,state,timestampPrecision:'second'}));
+      this.db.prepare('INSERT OR IGNORE INTO meta(key,value) VALUES(?,?)').run(deliveryKey,this.seal({verifiedAt:observedAt,mid,line,state,timestampPrecision:'second'}));
       if(row.state==='READ'||row.state===state)return 0;
       this.db.prepare('UPDATE outbox SET state=?,updated=? WHERE id=?').run(state,Date.now(),row.id);
       const attribution=row.case_id&&this.caseAuthorship(row.case_id);
       if(attribution&&attribution.firstOutboxId===row.id&&attribution.state==='DELIVERY_PENDING'){
         const {state:oldState,...record}=attribution;
-        record.deliveryVerifiedAt=Date.now();record.deliveryState=state;
+        record.deliveryVerifiedAt=observedAt;record.deliveryState=state;
         this.db.prepare('UPDATE case_authorship SET state=?,body=? WHERE case_id=?').run(record.firstReplyEligible?'BOT_FIRST_REPLY_VERIFIED':'FIRST_REPLY_REVIEW',this.seal(record),row.case_id);
         this.audit('FIRST_BOT_REPLY_DELIVERY_VERIFIED',row.id,{caseId:row.case_id,firstReplyEligible:record.firstReplyEligible,priorReadByStaff:'UNVERIFIED',creatorCreditWritten:false});
       }
       return 1;
+  }
+  #earlyDeliveryBuffer(row,now) {
+    const stored=this.db.prepare('SELECT value FROM meta WHERE key=?').get(earlyDeliveryKey(row.id));
+    if(!stored)return {guard:MARIA_EARLY_DELIVERY_GUARD,company:this.company,outboxId:row.id,line:row.line,startedAt:row.updated,receipts:[]};
+    let buffer;try{buffer=this.open(stored.value);}catch{return null;}
+    if(buffer?.guard!==MARIA_EARLY_DELIVERY_GUARD||buffer.company!==this.company||buffer.outboxId!==row.id||buffer.line!==row.line||buffer.startedAt!==row.updated||!Array.isArray(buffer.receipts)||buffer.receipts.length>earlyDeliveryLimit)return null;
+    const mids=new Set();
+    for(const receipt of buffer.receipts){
+      if(!nativeReceiptMid(receipt?.mid)||receipt.line!==row.line||mids.has(receipt.mid)||!['DELIVERED','READ'].includes(receipt.state)||!Number.isSafeInteger(receipt.observedAt)||receipt.observedAt<buffer.startedAt||receipt.observedAt>now||
+        (receipt.state==='READ'? !Number.isSafeInteger(receipt.readObservedAt)||receipt.readObservedAt<receipt.observedAt||receipt.readObservedAt>now:receipt.readObservedAt!==null))return null;
+      mids.add(receipt.mid);
+    }
+    return buffer;
+  }
+  delivery(mid,line,state) {
+    return this.tx(()=>{
+      if(!['DELIVERED','READ'].includes(state))return 0;
+      const row=this.db.prepare('SELECT * FROM outbox WHERE mid=? AND line=?').get(mid,line),now=Date.now();
+      if(row)return ['SENDING','ACCEPTED','DELIVERED','READ'].includes(row.state)?this.#applyDelivery(row,state,now):0;
+      // This is only a candidate tied to one short, durable send reservation.
+      // It becomes delivery proof only after that send returns the exact MID.
+      if(this.company!=='fumigacion'||!nativeReceiptMid(mid))return 0;
+      const sending=this.db.prepare("SELECT * FROM outbox WHERE line=? AND state='SENDING' LIMIT 2").all(line);
+      if(sending.length!==1||sending[0].mid!==null||!recentSend(sending[0].updated,now))return 0;
+      const candidate=sending[0],buffer=this.#earlyDeliveryBuffer(candidate,now);if(!buffer)return 0;
+      let receipt=buffer.receipts.find(r=>r.mid===mid);
+      if(!receipt){
+        if(buffer.receipts.length===earlyDeliveryLimit)return 0;
+        receipt={mid,line,state,observedAt:now,readObservedAt:state==='READ'?now:null};buffer.receipts.push(receipt);
+      }else if(state==='READ'){receipt.state='READ';receipt.readObservedAt??=now;}
+      this.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(earlyDeliveryKey(candidate.id),this.seal(buffer));
+      return 0;
+    });
+  }
+  reconcileEarlyDelivery(outboxId,mid,line,startedAt) {
+    if(this.company!=='fumigacion'||!nativeReceiptMid(mid))return [];
+    return this.tx(()=>{
+      const row=this.db.prepare('SELECT * FROM outbox WHERE id=?').get(outboxId),now=Date.now();
+      if(!row||row.mid!==mid||row.line!==line||!['ACCEPTED','DELIVERED','READ'].includes(row.state)||!recentSend(startedAt,now))return [];
+      if(this.db.prepare('SELECT id FROM outbox WHERE mid=? AND line=? LIMIT 2').all(mid,line).length!==1)return [];
+      const buffer=this.#earlyDeliveryBuffer({...row,updated:startedAt},now),receipt=buffer?.receipts.find(r=>r.mid===mid&&r.line===line);
+      if(!receipt)return [];
+      const observations=receipt.state==='READ'&&receipt.readObservedAt>receipt.observedAt?[{state:'DELIVERED',observedAt:receipt.observedAt},{state:'READ',observedAt:receipt.readObservedAt}]:[{state:receipt.state,observedAt:receipt.observedAt}];
+      for(const observation of observations){this.#applyDelivery(row,observation.state,observation.observedAt);if(row.state!=='READ')row.state=observation.state;}
+      this.db.prepare('DELETE FROM meta WHERE key=?').run(earlyDeliveryKey(outboxId));
+      this.audit('EARLY_DELIVERY_RECONCILED',outboxId,{guard:MARIA_EARLY_DELIVERY_GUARD,line,mid,observations,creatorCreditWritten:false});
+      return observations;
     });
   }
   conversationContext(phone,at,limit=20,sourceId=null) {

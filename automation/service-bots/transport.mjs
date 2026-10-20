@@ -8,7 +8,7 @@ import {selectPrice,verifyPriceSource} from './prices.mjs';
 import {understandOwnCustomer,composeOwnReply,ownReplyTextAllowed,probeOwnAi} from './conversational-ai.mjs';
 import {drainProgramRegistrations,acceptsOrdinaryQuotation,savedServiceReviewStillValid} from './maria-program.mjs';
 import {routeCaseQuestion} from './engine.mjs';
-import {initializeInactivityFollowup,queueInactivityFollowups,inactivityDeliveryValid,recordResponseTiming} from './inactivity-followup.mjs';
+import {initializeInactivityFollowup,queueInactivityFollowups,inactivityDeliveryValid,recordResponseTiming,recordDeliveryTiming} from './inactivity-followup.mjs';
 import {tesaCaseAnswers} from './tesa-operations.mjs';
 import {drainTesaGroup,tesaCustomerReplyStillValid,unregisteredTesaReplyValid,schedulingReplyValid,schedulingProofForBackend,refreshTesaMembership} from './tesa-transport.mjs';
 import {chiefTesaTestSendEntry,chiefTesaTestHash,CHIEF_TESA_TEST_DELIVERY_GUARD} from './chief-tesa-test.mjs';
@@ -25,6 +25,7 @@ import {publicEventAllowed,publicOutboxAllowed,publicOperationAllowed,publicResp
 
 export const MARIA_HISTORY_PROTOCOL_GUARD='own-preactivation-synchronization-only-complete-history-v1';
 export const READ_SUPERVISION_GUARD='own-blue-empty-read-receipts-without-human-authorship-v1';
+export const MARIA_ATTENTION_FAILURE_GUARD='own-fum-native-attention-failure-blocks-output-without-human-hold-v1';
 
 const historyStart=Date.parse('2000-01-01T00:00:00.000Z');
 const historyObject=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
@@ -580,7 +581,11 @@ export async function flushOutbox(store,config,transport){
       }catch(error){
         store.db.prepare("UPDATE outbox SET state='ATTENTION_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id);
         const reasonCode=/^[A-Z][A-Z0-9_]{0,99}$/.test(error?.message??'')?error.message:'ATTENTION_CHECK_FAILED';
-        store.hold(o.phone,'attention-review:'+o.id,true);store.audit('NATIVE_ATTENTION_UNVERIFIED',o.id,{attemptedSend:false,reasonCode});suppressed++;continue;
+        // Failed verification blocks this output, without claiming a person took
+        // over. Only a new source may prepare another reply and revalidate it;
+        // old review rows and any existing human hold remain unchanged.
+        if(config.company!=='fumigacion')store.hold(o.phone,'attention-review:'+o.id,true);
+        store.audit('NATIVE_ATTENTION_UNVERIFIED',o.id,{attemptedSend:false,reasonCode,...(config.company==='fumigacion'?{guard:MARIA_ATTENTION_FAILURE_GUARD,humanHoldChanged:false,reviewedOutboxRetried:false}:{})});suppressed++;continue;
       }
     }
     const staffPending=store.db.prepare("SELECT id FROM events WHERE phone=? AND from_me=1 AND state='PENDING'").get(o.phone);
@@ -630,7 +635,9 @@ export async function flushOutbox(store,config,transport){
     if(!publicOutboxAllowed(store,config,o))continue;
     const latest=store.conversation(o.phone);
     if(!o.internal&&(latest?.hold||latest?.revision!==o.revision))continue;
-    if(!store.db.prepare("UPDATE outbox SET state='SENDING',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id).changes)continue;
+    const sendStartedAt=Date.now();
+    if(!store.db.prepare("UPDATE outbox SET state='SENDING',updated=? WHERE id=? AND state='READY'").run(sendStartedAt,o.id).changes)continue;
+    let acceptedMid=null;
     try {
       const mid=await transport.send(o,text);
       store.tx(()=>{
@@ -638,8 +645,14 @@ export async function flushOutbox(store,config,transport){
         store.db.prepare("UPDATE outbox SET mid=?,state='ACCEPTED',updated=? WHERE id=?").run(mid,sentAt,o.id);
         store.recordFirstBotReply(o,mid,config.bot,sentAt);
         if(config.company==='fumigacion')recordResponseTiming(store,o,sentAt);
-      });accepted++;
+      });accepted++;acceptedMid=mid;
     } catch {store.db.prepare("UPDATE outbox SET state='UNCERTAIN',updated=? WHERE id=?").run(Date.now(),o.id);uncertain++;}
+    // Bookkeeping after a successful commit must never turn that accepted
+    // send into UNCERTAIN or authorize a retry. No startup sweep adopts ACKs.
+    if(config.company==='fumigacion'&&acceptedMid){
+      try{for(const receipt of store.reconcileEarlyDelivery(o.id,acceptedMid,o.line,sendStartedAt))recordDeliveryTiming(store,acceptedMid,o.line,receipt.state,receipt.observedAt);}
+      catch{store.audit('EARLY_DELIVERY_RECONCILIATION_REVIEW',o.id,{line:o.line,acceptedSendPreserved:true,retried:false});}
+    }
   }
   return {accepted,suppressed,uncertain};
 }

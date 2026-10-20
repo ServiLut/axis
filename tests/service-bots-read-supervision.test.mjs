@@ -95,7 +95,7 @@ test('unknown bodies, mutations and malformed timestamps retain attention review
   ]){
     const f=fixture(t);f.prepare();f.current=[receipt('SYNTHETIC_UNCERTAIN_SOURCE',patch)];
     await flushOutbox(f.store,f.config,f.transport);
-    assert.equal(f.sent,0,JSON.stringify(patch));assert.equal(f.out().state,'ATTENTION_REVIEW',JSON.stringify(patch));assert.equal(f.store.conversation(PHONE).hold,1);
+    assert.equal(f.sent,0,JSON.stringify(patch));assert.equal(f.out().state,'ATTENTION_REVIEW',JSON.stringify(patch));assert.equal(f.store.conversation(PHONE).hold,0);
     const audit=f.store.db.prepare("SELECT detail FROM audit WHERE action='NATIVE_ATTENTION_UNVERIFIED'").get();
     assert.equal(f.store.open(audit.detail).reasonCode,'ATTENTION_SOURCE_OUTSIDE_SCOPE');
   }
@@ -122,7 +122,7 @@ test('identity, complete pagination and provider failures remain blocking despit
   ];
   for(const response of cases){
     const f=fixture(t);f.prepare();f.current=Array.from({length:51},(_,i)=>receipt('SYNTHETIC_CURRENT_'+String(i).padStart(3,'0')));f.response=response;
-    await flushOutbox(f.store,f.config,f.transport);assert.equal(f.sent,0);assert.equal(f.out().state,'ATTENTION_REVIEW');assert.equal(f.store.conversation(PHONE).hold,1);
+    await flushOutbox(f.store,f.config,f.transport);assert.equal(f.sent,0);assert.equal(f.out().state,'ATTENTION_REVIEW');assert.equal(f.store.conversation(PHONE).hold,0);
   }
 });
 
