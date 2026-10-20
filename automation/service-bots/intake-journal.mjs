@@ -61,14 +61,16 @@ export function recordIntakeWebhook(store,config,body,{authenticated=false,verif
  if(!authenticated||!line||(!bindingPending&&(verifiedBinding?.ownerVerified!==true||verifiedBinding.phone!==line.phone||verifiedBinding.instance!==line.instance))||!Number.isFinite(receivedAt))throw Error('INTAKE_JOURNAL_VERIFIED_INGRESS_REQUIRED');
  if(!exists(store))throw Error('INTAKE_JOURNAL_NOT_INITIALIZED');
  const event=String(body.event??'').toLowerCase().replaceAll('_','.');
- if(!['messages.upsert','messages.update','messages.delete'].includes(event))return {recorded:0,duplicates:0,excludedGroups:0,unsupportedEvent:true};
- const result={recorded:0,duplicates:0,excludedGroups:0,unlinkedObservations:0};
+ if(!['messages.upsert','messages.update','messages.delete'].includes(event))return {recorded:0,duplicates:0,excludedGroups:0,excludedNonPrivateAddresses:0,unsupportedEvent:true};
+ const result={recorded:0,duplicates:0,excludedGroups:0,excludedNonPrivateAddresses:0,unlinkedObservations:0};
  return store.tx(()=>{
   for(const raw of providerRows(body)){
    const nativeKey=raw.key??{id:raw.keyId??raw.id,remoteJid:raw.remoteJid,remoteJidAlt:raw.remoteJidAlt,fromMe:raw.fromMe};
    const parsed=content(raw),revoked=parsed.protocol&&(parsed.protocol.type===0||parsed.protocol.type==='REVOKE');
    const key=revoked&&parsed.protocol.key?parsed.protocol.key:nativeKey;
-   if([nativeKey.remoteJid,nativeKey.remoteJidAlt,key.remoteJid,key.remoteJidAlt].some(j=>j?.endsWith('@g.us')||j?.endsWith('@broadcast'))){result.excludedGroups++;continue;}
+   const addresses=[nativeKey.remoteJid,nativeKey.remoteJidAlt,key.remoteJid,key.remoteJidAlt];
+   if(addresses.some(j=>j?.endsWith('@g.us'))){result.excludedGroups++;continue;}
+   if(addresses.some(j=>j?.endsWith('@broadcast')||j?.endsWith('@newsletter'))){result.excludedNonPrivateAddresses++;continue;}
    if(typeof key.id!=='string'||!key.id.trim()||key.id.length>200)continue;
    const sourceKey=hash(stable([config.company,line.phone,line.instance,key.id]));
    const prior=store.db.prepare('SELECT row_id,body FROM intake_journal WHERE source_key=? AND original=1').get(sourceKey),original=prior?store.open(prior.body):null;

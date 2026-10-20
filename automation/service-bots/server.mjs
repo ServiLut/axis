@@ -411,7 +411,11 @@ export function createBotServer(config,store,transport,engine) {
       }
       if(req.url==='/webhook'){
         // Group delivery metadata belongs to the separate native group proof path.
-        const privateRows=(Array.isArray(body.data)?body.data:[body.data]).filter(row=>!row?.key?.remoteJid?.endsWith('@g.us'));
+        // Status/broadcast/newsletter callbacks are not private customer intake.
+        const privateRows=(Array.isArray(body.data)?body.data:[body.data]).filter(row=>{
+          const addresses=[row?.key?.remoteJid,row?.key?.remoteJidAlt];
+          return !addresses.some(value=>typeof value==='string'&&(value.endsWith('@g.us')||value.endsWith('@broadcast')||value.endsWith('@newsletter')));
+        });
         let accepted=0,duplicates=0,deliveryUpdates=0;
         const own=config.lines.find(l=>l.instance===body.instance);if(!own)return reply(400,{error:'INSTANCE_OUTSIDE_SCOPE'});
         const journalBody={...body,data:privateRows};

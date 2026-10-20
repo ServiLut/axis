@@ -53,6 +53,13 @@ test('webhook byte cap, administrative cap, authentication and own instance rema
  assert.equal((await post('/status','x'.repeat(20001),admin)).status,413);
  assert.equal((await post('/webhook',{instance:'foreign-instance',event:'messages.upsert',providerMetadata:'x'.repeat(64000),data:{}})).status,400);assert.equal(intakeJournalStatus(s,c).originals,0);
 }));
+test('status and newsletter callbacks receive a fast acknowledgement without creating customer work',()=>fixture('fumigacion',async({s,c,post})=>{
+ for(const [id,remoteJid] of [['STATUS_CALLBACK_01','status@broadcast'],['NEWSLETTER_CALLBACK_01','120363001@newsletter']]){
+  const body={instance:c.lines[0].instance,event:'MESSAGES_UPSERT',data:{key:{id,remoteJid,fromMe:false},messageTimestamp:Math.floor(Date.now()/1000),message:{conversation:'Provider metadata'}}};
+  const response=await post('/webhook',body);assert.equal(response.status,202);const result=await response.json();assert.equal(result.accepted,0);assert.equal(result.duplicates,0);
+ }
+ assert.equal(intakeJournalStatus(s,c).originals,0);assert.equal(s.db.prepare('SELECT COUNT(*) n FROM events').get().n,0);assert.equal(s.db.prepare('SELECT COUNT(*) n FROM outbox').get().n,0);
+}));
 test('Servicio Tecnico keeps its existing provider envelope byte limit',()=>fixture('servicio-tecnico',async({s,c,post})=>{
  assert.equal((await post('/webhook','x'.repeat(20001))).status,413);assert.equal(intakeJournalStatus(s,c).originals,0);
 }));

@@ -131,9 +131,14 @@ test('imported historical pending questions create no outbound messages and cann
 test('a call event remains observed and never implies an agreement or abandonment',()=>{
   const d=customerDecision('fumigacion',{slots:{},asked:[]},event({kind:'call',text:''}));assert.equal(d.observed,true);assert.equal(d.reply,undefined);assert.equal(d.question,undefined);
 });
-test('provider webhook rejects unresolved LIDs and groups and retains exact quote IDs',()=>{
+test('provider webhook accepts only direct message upserts, treats updates as delivery state, and retains exact quote IDs',()=>{
   const c=config();const source={event:'messages.upsert',instance:c.lines[0].instance,data:{key:{id:'PROVIDERMSG',remoteJid:DIEGO+'@s.whatsapp.net',fromMe:false},messageTimestamp:Math.floor(Date.now()/1000),message:{extendedTextMessage:{text:'Hoy a las 3',contextInfo:{stanzaId:'EXACTQUOTE'}}}}};
-  assert.equal(decodeWebhook(source,c).events[0].event.quotedId,'EXACTQUOTE');for(const jid of ['120363001@g.us','123456@lid'])assert.equal(decodeWebhook({...source,data:{...source.data,key:{...source.data.key,remoteJid:jid}}},c).events.length,0);assert.equal(decodeWebhook({...source,instance:'abogados'},c).events.length,0);
+  assert.equal(decodeWebhook(source,c).events[0].event.quotedId,'EXACTQUOTE');
+  assert.equal(decodeWebhook({...source,event:'MESSAGES_UPSERT'},c).events[0].event.quotedId,'EXACTQUOTE');
+  for(const jid of ['120363001@g.us','123456@lid','status@broadcast','120363001@newsletter'])assert.equal(decodeWebhook({...source,data:{...source.data,key:{...source.data.key,remoteJid:jid}}},c).events.length,0);
+  assert.equal(decodeWebhook({...source,instance:'abogados'},c).events.length,0);
+  const update=decodeWebhook({instance:c.lines[0].instance,event:'MESSAGES_UPDATE',data:{key:{id:'PROVIDERMSG'},update:{status:'READ'}}},c);
+  assert.equal(update.events.length,0);assert.deepEqual(update.deliveries,[{instance:c.lines[0].instance,owner:c.lines[0].phone,mid:'PROVIDERMSG',state:'READ'}]);
 });
 test('HTTP boundary separates webhook and administration credentials and verifies owner before ingestion',async()=>{
   const f=fixture();const control=randomBytes(32).toString('base64url'),webhook=randomBytes(32).toString('base64url');f.config.authHash=createHash('sha256').update(control).digest('hex');f.config.webhookHash=createHash('sha256').update(webhook).digest('hex');let verified=0;
