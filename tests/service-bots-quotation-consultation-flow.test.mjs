@@ -5,7 +5,7 @@ import {Store} from '../automation/service-bots/store.mjs';
 import {Engine,extractSlots} from '../automation/service-bots/engine.mjs';
 import {BUSINESSES,CURRENT_OPERATOR_ROUTING,HILARY} from '../automation/service-bots/config.mjs';
 import {TESA_GROUP_JID,TESA_GROUP_SUBJECT,TESA_BOT_PHONES} from '../automation/service-bots/tesa-config.mjs';
-import {approvedBusinessPriceSchedule} from '../automation/service-bots/business-prices.mjs';
+import {approvedBusinessPriceSchedule,selectBusinessPrice} from '../automation/service-bots/business-prices.mjs';
 import {composeOwnReply} from '../automation/service-bots/conversational-ai.mjs';
 import {aiConfiguration} from '../automation/service-bots/ai-settings.mjs';
 
@@ -56,7 +56,25 @@ test('a real staff intervention preserves the existing consultation and prevents
  }finally{f.s.close();}
 });
 
-test('written floor counts stay literal; alternatives, third-party uncertainty and negatives are not selected',()=>{
+test('written floor counts stay literal and unresolved floor scope cannot enable an ordinary price',()=>{
  assert.equal(extractSlots('Casa de dos pisos','fumigacion').floors,'dos pisos');
- for(const text of ['No son dos pisos','Quizás dos pisos','Son dos o tres pisos','Son 2-3 pisos','Son 2 pisos y 3 pisos'])assert.equal(extractSlots(text,'fumigacion').floors,undefined,text);
+ assert.equal(extractSlots('No son dos pisos','fumigacion').floors,undefined);
+ for(const scope of ['Quizás dos pisos','Son dos o tres pisos','Son 2-3 pisos','Son 2 pisos y 3 pisos']){
+  const slots=extractSlots('Cucarachas en casa de 2 habitaciones en Medellín. '+scope,'fumigacion');
+  assert.ok(slots.floors,scope);assert.equal(selectBusinessPrice(slots).entry,undefined,scope);
+ }
+ for(const scope of ['un piso','uno piso','1 piso']){
+  const slots=extractSlots('Cucarachas en casa de 2 habitaciones en Medellín, de '+scope,'fumigacion');
+  assert.equal(selectBusinessPrice(slots).entry?.priceCop,129000,scope);
+ }
+});
+
+test('an unresolved alternative floor count is presented to TESA without silently quoting a one-floor table',async()=>{
+ for(const scope of ['2 o 3 pisos','dos o tres pisos','dos pisos y tres pisos']){
+  const f=fixture();try{
+   const e=await f.turn('Cucarachas en casa de 2 habitaciones en Medellín, de '+scope),text=f.text(e),state=f.s.conversation(e.phone).state;
+   assert.match(text,/consultando el valor/);assert.doesNotMatch(text,/\$|129[ .]?000/);assert.equal(state.quotedPrice,undefined);
+   const out=f.s.db.prepare('SELECT body FROM tesa_outbox').get();assert.ok(out);assert.ok(f.s.open(out.body).includes(scope));
+  }finally{f.s.close();}
+ }
 });

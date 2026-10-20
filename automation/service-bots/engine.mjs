@@ -416,10 +416,17 @@ export function extractSlots(text,company) {
     slots.affectedFurniture=literalAffectedFurniture(text);
     slots.roomScale=/\b(?:habitaciones?|cuartos?|piezas?)\s*\(?\s*pequen[oa]s?\b/.test(t)?'pequeños':/\b(?:habitaciones?|cuartos?|piezas?)\s*\(?\s*grandes?\b/.test(t)?'grandes':undefined;
     slots.siteScale=/\b(?:apartamento|apto|casa|local)\s+pequen[oa]\b/.test(t)?'pequeño':/\b(?:apartamento|apto|casa|local)\s+grande\b/.test(t)?'grande':undefined;
-    const floors=affirmedIntakeMatches(text,/\b(?:\d{1,2}(?:er|ro|do|to)?|un|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+(?:pisos?|niveles?)\b/iu);
+    const floorPattern=/\b(?:\d{1,2}(?:er|ro|do|to)?|un|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+(?:pisos?|niveles?)\b/iu;
+    const floors=affirmedIntakeMatches(text,floorPattern),floorMentions=[...text.matchAll(new RegExp(floorPattern.source,'giu'))];
     // A literal written count must reach the consultation as written. Do not
     // select an endpoint from an alternative or treat a floor as an address.
-    slots.floors=new Set(floors.map(normalize)).size===1&&!/\b(?:\d{1,2}|un|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s*(?:o|a|[-–/])\s*(?:\d{1,2}|un|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+(?:pisos?|niveles?)\b/iu.test(text)?floors[0]:undefined;
+    const floorRange=text.match(/\b(?:\d{1,2}|un|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s*(?:o|a|[-–/])\s*(?:\d{1,2}|un|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+(?:pisos?|niveles?)\b/iu)?.[0];
+    const uncertainFloor=floorMentions.length&&/\b(?:quizas|tal vez|posiblemente|no se|si fuera|si son)\b/.test(t);
+    const floorSpan=floorMentions.length?text.slice(floorMentions[0].index,floorMentions.at(-1).index+floorMentions.at(-1)[0].length):'';
+    // Preserve unresolved scope instead of erasing it and accidentally making
+    // a multi-floor home eligible for the ordinary table. No endpoint of a
+    // range is treated as a confirmed count.
+    slots.floors=floorRange||new Set(floors.map(normalize)).size>1?floorRange||floorSpan:uncertainFloor?'Pisos por aclarar: '+text.trim():floors[0];
     slots.patio=/\b(?:no (?:tiene|hay|tenemos)|sin) patio\b/.test(t)?'sin patio':/\bpatio\b/.test(t)?'patio':undefined;
     slots.treatmentScope=/\b(?:solo|solamente)\s+(?:el )?interior\b/.test(t)?'solo interior':/\b(?:solo|solamente)\s+(?:en )?(?:la )?cocina\b/.test(t)?'solo cocina':undefined;
     slots.rooms=affirmedIntakeMatches(text,literalRoomPattern)[0];
