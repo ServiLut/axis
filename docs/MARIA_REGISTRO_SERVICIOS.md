@@ -1,5 +1,11 @@
 # Registro propio de servicios nuevos de María
 
+## Consulta de precio específico — corrección instalada20/oct18:43Z
+
+Runtime `ac5d39f`, DONE3s,3193/3193 pruebas. Ante falta de tarifa aplicable, María consulta el valor/alcance a TESA y lo explica al cliente; no rebaja una solicitud de varias plagas/pisos a una tarifa más estrecha. Conserva datos completos y medida literal sin asumir m². Formato «valor total» y conjunto de plagas en distinto orden ya admitidos bajo respuesta humana nativa citada del mismo caso; no se relajan entrega, identidad, fuente, vigencia ni atención humana. Ver estado, fuentes y límites al inicio de `BOTS_MARIA_MIGUEL.md` y `.tmp/maria-quotation-gap-20261020/checkpoint-private.json`.
+
+Una cotización específica recibida de TESA no se convierte en la tabla general ni habilita por sí sola un DTO ordinario: su aceptación conserva revisión de registro. No hubo altas, correcciones, pagos, pruebas reales, devoluciones de chats, replays ni cambios de accesos en este trabajo. SAVED ordinario sigue1 histórico. El caso reportado fue retomado por un asesor y quedó protegido. Próxima cotización real y retorno/entrega nuevos pendientes de comprobación.
+
 ## Correcciones de continuidad 20/oct/2026 — instaladas y verificadas16:39Z
 
 Runtime propio `0de26b4`, Dokploy DONE6s, gate integrado3169/3169 y readback de guardias/alcance exactos. Ambas líneas permanecen habilitadas, horario del cliente sin técnico, credenciales y vencimiento originales, PRUEBA/TESA/preventivo OFF. Ver fuentes y límites al inicio de `BOTS_MARIA_MIGUEL.md`. SAVED sigue en1 histórico; la instalación no acredita una nueva venta o agenda real.
