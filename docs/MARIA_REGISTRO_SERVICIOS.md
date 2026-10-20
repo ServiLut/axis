@@ -1,12 +1,14 @@
 # Registro propio de servicios nuevos de María
 
-## Correcciones de continuidad 20/oct/2026 — pendientes de instalación
+## Correcciones de continuidad 20/oct/2026 — instaladas y verificadas16:39Z
+
+Runtime propio `0de26b4`, Dokploy DONE6s, gate integrado3169/3169 y readback de guardias/alcance exactos. Ambas líneas permanecen habilitadas, horario del cliente sin técnico, credenciales y vencimiento originales, PRUEBA/TESA/preventivo OFF. Ver fuentes y límites al inicio de `BOTS_MARIA_MIGUEL.md`. SAVED sigue en1 histórico; la instalación no acredita una nueva venta o agenda real.
 
 La aceptación inicial de cotización admite un horario literal con abreviaturas «a. m./p. m.»; las cabeceras de aceptación y el formulario por líneas conservan nombre, dirección y horario. Esto abre o continúa la captura de datos, nunca sustituye la confirmación nueva de un resumen entregado ni modifica la gramática de confirmación final del backend. Fechas u horas ambiguas siguen pidiendo aclaración. No hay nuevas credenciales, PRUEBA o escrituras reales de este candidato.
 
 El resumen incluye también la fecha y hora canónicas derivadas de la fuente nativa del horario. Si el cliente vuelve a decir «mañana» después de medianoche y cambia la fecha, requiere un resumen nuevo y otra confirmación. Repetir la preferencia el mismo día no genera otro resumen; confirmar después de medianoche sin cambiar el horario conserva la fecha original.
 
-Guardias locales: `own-price-timed-consent-before-separate-summary-confirmation-v2`, `own-prompted-name-address-and-complete-native-timing-line-v3` y `own-native-preference-and-canonical-summary-schedule-v2`. Estado propio20/oct16:18Z: SAVED=1 histórico, PENDING/SENDING/UNCERTAIN/REVIEW=0. No atribuir órdenes del personal a Mariángel ni tomar pruebas aisladas como nuevas ventas. Los fallos, fuentes y comprobaciones están en `.tmp/maria-first-message-20261020/`; estado general y límites al inicio de `BOTS_MARIA_MIGUEL.md`.
+Guardias instaladas: `own-price-timed-consent-before-separate-summary-confirmation-v2`, `own-prompted-name-address-and-complete-native-timing-line-v3` y `own-native-preference-and-canonical-summary-schedule-v2`. Estado propio20/oct16:18Z: SAVED=1 histórico, PENDING/SENDING/UNCERTAIN/REVIEW=0. No atribuir órdenes del personal a Mariángel ni tomar pruebas aisladas como nuevas ventas. Los fallos, fuentes y comprobaciones están en `.tmp/maria-first-message-20261020/`; estado general y límites al inicio de `BOTS_MARIA_MIGUEL.md`.
 
 ## Continuación 19/oct/2026 — comprobación comercial y corrección manual
 
