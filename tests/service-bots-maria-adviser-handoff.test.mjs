@@ -76,7 +76,10 @@ test('a legacy generic-review question is supported only when its exact original
 test('workflow diagnosis is source bound and read only and never grants permission to contact',async()=>{
  const f=fixture();try{
   const e=await f.turn('Quiero la garantía del servicio.'),before=JSON.stringify(f.store.db.prepare('SELECT * FROM conversations').all()),count=f.store.db.prepare('SELECT COUNT(*) n FROM outbox').get().n;
+  f.store.audit('NATIVE_ATTENTION_UNVERIFIED',e.id+':reply',{reasonCode:'ATTENTION_COVERAGE_UNVERIFIED',attemptedSend:false,humanHoldChanged:false});
+  f.store.audit('HUMAN_TAKEOVER','OTHER_PERSON',{phone:'573001111111',text:'PRIVATE_OTHER_PERSON'});
   const result=reviewMariaWorkflow(f.store,f.config,{company:'fumigacion',line:e.line,contacts:[{phone:e.phone,sourceId:e.id}]});assert.equal(result.readOnly,true);assert.equal(result.results[0].afterService.kind,'warranty');assert.equal(result.results[0].contactPermissionGranted,false);assert.equal(result.results[0].questions.length,1);
+  assert.equal(result.results[0].attention.recent[0].reasonCode,'ATTENTION_COVERAGE_UNVERIFIED');assert.doesNotMatch(JSON.stringify(result),/PRIVATE_OTHER_PERSON|OTHER_PERSON|573001111111/);
   assert.equal(JSON.stringify(f.store.db.prepare('SELECT * FROM conversations').all()),before);assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM outbox').get().n,count);
   assert.equal(reviewMariaWorkflow(f.store,f.config,{company:'fumigacion',line:BUSINESSES.fumigacion.phones[1],contacts:[{phone:e.phone,sourceId:e.id}]}).results[0].found,false);
   assert.throws(()=>reviewMariaWorkflow(f.store,f.config,{company:'servicio-tecnico',line:e.line,contacts:[{phone:e.phone,sourceId:e.id}]}));
