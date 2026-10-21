@@ -63,6 +63,16 @@ test('a real takeover, unquoted response, different operator or non-customer-fac
   }finally{f.store.close();}
  }
 });
+test('a legacy generic-review question is supported only when its exact original native source is a warranty claim',async()=>{
+ for(const warranty of [true,false]){
+  const f=fixture();try{
+   const first=await f.turn(warranty?'Quiero la garantía del servicio.':'Quiero saber qué garantía tiene un servicio nuevo.'),q=f.store.db.prepare('SELECT * FROM questions LIMIT 1').get();assert.ok(q);
+   f.store.db.prepare('UPDATE questions SET topic=? WHERE id=?').run('revision:'+first.id,q.id);f.store.db.prepare("UPDATE outbox SET mid=?,state='READ' WHERE id=?").run('LEGACY_QUESTION_MID',q.outbox_id);
+   await f.turn('Para el cliente: Necesito confirmar la fecha del servicio.',{phone:SANDRA,quotedId:'LEGACY_QUESTION_MID'});
+   assert.equal(f.store.db.prepare("SELECT COUNT(*) n FROM outbox WHERE id LIKE 'chief-case-answer:%'").get().n,warranty?1:0);
+  }finally{f.store.close();}
+ }
+});
 test('workflow diagnosis is source bound and read only and never grants permission to contact',async()=>{
  const f=fixture();try{
   const e=await f.turn('Quiero la garantía del servicio.'),before=JSON.stringify(f.store.db.prepare('SELECT * FROM conversations').all()),count=f.store.db.prepare('SELECT COUNT(*) n FROM outbox').get().n;

@@ -1,4 +1,5 @@
 import {BUSINESSES,knownInternalRecipient} from './config.mjs';
+import {ownQuoteOutboxId} from './maria-program.mjs';
 export const MARIA_WORKFLOW_REVIEW_GUARD='own-source-bound-quotation-registration-and-adviser-workflow-readonly-v1';
 export function reviewMariaWorkflow(store,config,body){
  if(config.company!=='fumigacion'||store.company!=='fumigacion')throw Error('OWN_WORKFLOW_SCOPE_REQUIRED');
@@ -9,7 +10,7 @@ export function reviewMariaWorkflow(store,config,body){
   const c=store.conversation(phone),s=c?.state;
   if(!c||c.line!==body.line)return {sourceId,found:true,currentLineMatches:false};
   const q=store.db.prepare('SELECT q.id,q.topic,q.state,q.body,o.line,o.state delivery,o.mid FROM questions q LEFT JOIN outbox o ON o.id=q.outbox_id WHERE q.phone=? AND q.case_id=? ORDER BY q.rowid').all(phone,s.caseId).map(r=>({id:r.id,topic:r.topic,state:r.state,sourceId:store.open(r.body).source,line:r.line,delivery:r.delivery,mid:r.mid}));
-  const quoteId=s.quotedPrice?.replyId||(s.quotedPrice?.sourceId?s.quotedPrice.sourceId+':reply':null),quote=quoteId&&store.db.prepare('SELECT id,line,state,mid FROM outbox WHERE id=? AND phone=? AND line=? AND internal=0').get(quoteId,phone,body.line);
+  const quoteId=s.quotedPrice&&ownQuoteOutboxId(store,s,phone,body.line),quote=quoteId&&store.db.prepare('SELECT id,line,state,mid FROM outbox WHERE id=? AND phone=? AND line=? AND internal=0').get(quoteId,phone,body.line);
   const saved=store.db.prepare('SELECT value FROM meta WHERE key=?').get('maria-registration:'+s.caseId),entry=saved&&store.open(saved.value);
   return {sourceId,found:true,currentLineMatches:true,localHumanHold:Boolean(c.hold),localRevision:c.revision,caseId:s.caseId,sourceProcessingState:row.state,lastHandledSourceId:s.lastHandledSourceId??null,awaitingHumanReview:Boolean(s.awaitingHumanReview),closed:Boolean(s.closed),afterService:s.requestedAfterServiceReview?{kind:s.requestedAfterServiceReview.kind,sourceId:s.requestedAfterServiceReview.sourceId,activeKind:s.requestedAfterServiceReview.warrantySource?.kind||s.requestedAfterServiceReview.activeRequest?.kind}:null,adviserRequest:s.requestedHumanAssistance??null,quotation:{present:Boolean(s.quotedPrice),accepted:Boolean(s.quotedPrice?.accepted),sourceId:s.quotedPrice?.sourceId??null,outbox:quote?{...quote}:null},registration:{stage:s.programIntake?.stage??null,hasName:Boolean(s.programIntake?.customerName),hasAddress:Boolean(s.programIntake?.address),hasRequestedTiming:Boolean(s.slots?.preference),requestedFields:s.programIntake?.requestedFields??[],entryState:entry?.status??null,reviewReason:entry?.reason??null},pendingKinds:q.filter(v=>['PENDING','ANSWER_REVIEW','LEGACY_PENDING'].includes(v.state)).map(v=>v.topic),questions:q,fullNativeHistoryVerified:false,contactPermissionGranted:false};
  });

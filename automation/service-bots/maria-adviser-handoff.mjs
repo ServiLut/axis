@@ -1,7 +1,8 @@
 import {BUSINESSES,SANDRA,knownInternalRecipient,normalize,publicTextSafe,outboundRecipientAllowed} from './config.mjs';
 import {publicEventAllowed,publicResponseWindow} from './public-response-window.mjs';
+import {literalOwnAfterServiceRequest} from './after-service.mjs';
 
-export const MARIA_ADVISER_HANDOFF_GUARD='own-explicit-adviser-before-registration-and-exact-chief-customer-answer-v1';
+export const MARIA_ADVISER_HANDOFF_GUARD='own-explicit-adviser-before-registration-and-exact-chief-customer-answer-v2';
 const nativeText=e=>e?.kind==='text'&&e.fromMe===false&&!e.forwarded&&!e.quotedId&&typeof e.text==='string'&&e.text.length<=1500;
 export function explicitMariaAdviserRequest(e){
  if(!nativeText(e)||/["“”«»]|https?:|www\./i.test(e.text))return false;
@@ -13,7 +14,11 @@ export function explicitMariaAdviserRequest(e){
 // customer-facing text while replying to the exact delivered own question.
 // Other comments remain internal case knowledge, without inferred promises.
 export function queueMariaChiefCustomerAnswer(store,config,question,event){
- if(config.company!=='fumigacion'||!config.enabled||event.phone!==SANDRA||event.fromMe!==false||event.forwarded||event.kind!=='text'||!event.quotedId||!['adviser-assistance','warranty-review','service-followup'].includes(question.topic))return null;
+ if(config.company!=='fumigacion'||!config.enabled||event.phone!==SANDRA||event.fromMe!==false||event.forwarded||event.kind!=='text'||!event.quotedId)return null;
+ if(!['adviser-assistance','warranty-review','service-followup'].includes(question.topic)){
+  const body=store.open(question.body),source=store.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(body.source,question.phone,event.line),native=source&&store.open(source.body);
+  if(question.topic!=='revision:'+body.source||literalOwnAfterServiceRequest(native)?.kind!=='warranty')return null;
+ }
  const match=event.text.match(/^\s*(?:para el cliente|respuesta (?:al|para el) cliente)\s*:\s*([\s\S]+)$/iu);
  const text=match?.[1]?.trim();if(!text||text.length>1500||!publicTextSafe(text)||!outboundRecipientAllowed(config,question.phone)||knownInternalRecipient(question.phone))return null;
  const conv=store.conversation(question.phone),source=store.db.prepare('SELECT * FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(event.id,SANDRA,event.line);
