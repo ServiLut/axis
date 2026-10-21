@@ -18,6 +18,8 @@ export function nativeTrialBinding(c,phone,line,at=Date.now()){
 export function nativeTrialCustomerTurn(c,e){
  return !e.fromMe&&!e.forwarded&&!e.quotedId&&Boolean(nativeTrialBinding(c,e.phone,e.line,e.at))&&!(e.phone===CHIEF&&/^(?:mar[ií]an?\s*[aá]ngel|mari[aá]ngel|bot)[,:\s]/i.test(e.text??''));
 }
+export function nativeTrialPhoneBinding(c,phone){const b=c.nativeLiveTrial?.bindings?.find(v=>v.phone===phone);return b&&nativeTrialBinding(c,phone,b.line)?b:null;}
+export function nativeTrialAttentionStartsAt(c,phone){return nativeTrialPhoneBinding(c,phone)?Math.max(c.activatedAt,c.nativeLiveTrial.startsAt):c.activatedAt;}
 export function nativeTrialForeignHistoryAllowed(s,c,phone,line){
  if(!nativeTrialBinding(c,phone,line)||!s?.db)return false;
  const cut=c.nativeLiveTrial.startsAt;
@@ -40,4 +42,4 @@ export function nativeTrialPayload(c,p){
  if(!sources.length||sources.some(s=>('phone' in s&&(s.phone!==p.phone||s.line!==p.line))||!Number.isFinite(Date.parse(s.at))||Date.parse(s.at)<profile.startsAt||Date.parse(s.at)>=profile.expiresAt)||[p.quote.deliveredAt,p.summaryConfirmation.deliveredAt].some(at=>!Number.isFinite(Date.parse(at))||Date.parse(at)<profile.startsAt||Date.parse(at)>=profile.expiresAt))throw Error('OWN_NATIVE_TRIAL_FRESH_SOURCES_REQUIRED');
  return {profileId:profile.id,request:p};
 }
-export function nativeTrialStatus(c){const p=c.nativeLiveTrial;return {guard:NATIVE_LIVE_TRIAL_GUARD,configured:Boolean(p),enabled:Boolean(p&&Date.now()>=p.startsAt&&Date.now()<p.expiresAt),profileId:p?.id??null,startsAt:p?new Date(p.startsAt).toISOString():null,expiresAt:p?new Date(p.expiresAt).toISOString():null,recordClass:'PRUEBA',ordinaryCustomerHistoryChanged:false,maximumRecords:2,technicianAssignment:false,payments:false};}
+export function nativeTrialStatus(c){const p=c.nativeLiveTrial;return {guard:NATIVE_LIVE_TRIAL_GUARD,configured:Boolean(p),enabled:Boolean(p&&Date.now()>=p.startsAt&&Date.now()<p.expiresAt),profileId:p?.id??null,startsAt:p?new Date(p.startsAt).toISOString():null,expiresAt:p?new Date(p.expiresAt).toISOString():null,recordClass:'PRUEBA',ordinaryCustomerHistoryChanged:false,maximumRecords:2,technicianAssignment:false,payments:false,attentionWindow:'fresh-native-test-only; prior-history-preserved-not-certified'};}

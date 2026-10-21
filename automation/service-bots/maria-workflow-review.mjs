@@ -1,4 +1,5 @@
 import {BUSINESSES,knownInternalRecipient} from './config.mjs';
+import {nativeTrialBinding} from './native-live-trial.mjs';
 import {ownQuoteOutboxId} from './maria-program.mjs';
 export const MARIA_WORKFLOW_REVIEW_GUARD='own-source-bound-quotation-registration-and-adviser-workflow-readonly-v2';
 const attentionActions=new Set(['HUMAN_TAKEOVER','EXPLICIT_RELEASE','NATIVE_PRIOR_ATTENTION_BLOCKED_REPLY','NATIVE_ATTENTION_UNVERIFIED','NATIVE_PRE_RELEASE_ATTENTION_PRESERVED','STAFF_TAKEOVER_AT_INGESTION']);
@@ -18,10 +19,11 @@ function attentionDiagnostics(store,phone){
 }
 export function reviewMariaWorkflow(store,config,body){
  if(config.company!=='fumigacion'||store.company!=='fumigacion')throw Error('OWN_WORKFLOW_SCOPE_REQUIRED');
- if(!body||Object.keys(body).sort().join(',')!=='company,contacts,line'||body.company!=='fumigacion'||!BUSINESSES.fumigacion.phones.includes(body.line)||!Array.isArray(body.contacts)||!body.contacts.length||body.contacts.length>4||body.contacts.some(v=>!v||Object.keys(v).sort().join(',')!=='phone,sourceId'||!/^57\d{10}$/.test(v.phone)||knownInternalRecipient(v.phone)||!/^[A-Za-z0-9_-]{8,100}$/.test(v.sourceId)))throw Error('OWN_WORKFLOW_SOURCE_SCOPE_REQUIRED');
+ if(!body||Object.keys(body).sort().join(',')!=='company,contacts,line'||body.company!=='fumigacion'||!BUSINESSES.fumigacion.phones.includes(body.line)||!Array.isArray(body.contacts)||!body.contacts.length||body.contacts.length>4||body.contacts.some(v=>!v||Object.keys(v).sort().join(',')!=='phone,sourceId'||!/^57\d{10}$/.test(v.phone)||knownInternalRecipient(v.phone)&&!nativeTrialBinding(config,v.phone,body.line)||!/^[A-Za-z0-9_-]{8,100}$/.test(v.sourceId)))throw Error('OWN_WORKFLOW_SOURCE_SCOPE_REQUIRED');
  const results=body.contacts.map(({phone,sourceId})=>{
   const row=store.db.prepare('SELECT * FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(sourceId,phone,body.line),event=row&&store.open(row.body);
   if(!event||event.id!==row.id||event.phone!==row.phone||event.line!==row.line||event.at!==row.at||event.fromMe!==false)return {sourceId,found:false};
+  if(knownInternalRecipient(phone)&&!nativeTrialBinding(config,phone,body.line,event.at))return {sourceId,found:false};
   const c=store.conversation(phone),s=c?.state;
   if(!c||c.line!==body.line)return {sourceId,found:true,currentLineMatches:false};
   const q=store.db.prepare('SELECT q.id,q.topic,q.state,q.body,o.line,o.state delivery,o.mid FROM questions q LEFT JOIN outbox o ON o.id=q.outbox_id WHERE q.phone=? AND q.case_id=? ORDER BY q.rowid').all(phone,s.caseId).map(r=>({id:r.id,topic:r.topic,state:r.state,sourceId:store.open(r.body).source,line:r.line,delivery:r.delivery,mid:r.mid}));

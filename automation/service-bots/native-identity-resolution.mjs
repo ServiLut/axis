@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
 import {knownInternalRecipient,internalRecipients} from './config.mjs';
+import {nativeTrialPhoneBinding} from './native-live-trial.mjs';
 import {FUMIGACION_BLUE,FUMIGACION_RED,DUAL_LINE_SCOPE_VERSION,operationalLineAllowed,operationalLineStartsAt} from './line-scope.mjs';
 
 export const NATIVE_IDENTITY_RESOLUTION_GUARD='own-blue-prospective-native-explicit-lid-pair-readonly-v1';
@@ -150,7 +151,7 @@ const recordHash=record=>hash({id:record.id??null,instanceId:record.instanceId??
 // above. Only delivery status progression is excluded; native keys and message
 // bodies are never normalized, supplied with a phone, or rewritten.
 const immutableRecordHash=record=>hash({id:record.id??null,instanceId:record.instanceId??null,key:record.key,messageTimestamp:timestamp(record),message:record.message,contextInfo:record.contextInfo??null});
-const blockedPhone=(config,phone)=>knownInternalRecipient(phone)||internalRecipients(config).includes(phone)||config.lines.some(line=>line.phone===phone);
+const blockedPhone=(config,phone)=>(knownInternalRecipient(phone)||internalRecipients(config).includes(phone))&&!nativeTrialPhoneBinding(config,phone)||config.lines.some(line=>line.phone===phone);
 
 /**
  * Inspect an original authenticated callback and one native cache page only.

@@ -1,4 +1,4 @@
-import {foreignLineSources,nativeTrialBinding,nativeTrialCustomerTurn} from './native-live-trial.mjs';
+import {foreignLineSources,nativeTrialBinding,nativeTrialCustomerTurn,nativeTrialAttentionStartsAt,nativeTrialPhoneBinding} from './native-live-trial.mjs';
 import {createHash} from 'node:crypto';
 import {officeReceptionReplyStillValid} from './office-customer-replies.mjs';
 import {explicitNewService} from './after-service.mjs';
@@ -90,7 +90,7 @@ async function knownNativeLidWindow(transport,store,phone,since,through,{outgoin
   const c=transport.config,sources=[],checks=[];
   if(store.company!==c.company)throw Error('STORED_NATIVE_IDENTITY_SCOPE_REQUIRED');
   for(const line of operationalLines(c)){
-    const anchors=listStoredNativeIdentitySources(store,c,{phone,line:line.phone,since:c.activatedAt,through});
+    const anchors=listStoredNativeIdentitySources(store,c,{phone,line:line.phone,since:nativeTrialAttentionStartsAt(c,phone),through});
     const lids=[...new Set(anchors.map(source=>source.lid))];
     for(const lid of lids){
       const anchor=anchors.find(source=>source.lid===lid);
@@ -311,13 +311,14 @@ export class Transport {
   }
   async currentAttention(phone,{store=null}={}) {
     const c=this.config;if(!/^57\d{10}$/.test(phone)||!Number.isFinite(c.activatedAt))throw new Error('ATTENTION_SCOPE_REQUIRED');
+    const since=nativeTrialAttentionStartsAt(c,phone);
     const through=Date.now(),sources=new Map(),checks=[];
     for(const line of operationalLines(c)){
       await this.verifyLine(line.phone);
       for(const addressField of ['remoteJid','remoteJidAlt']){
         let expectedTotal=null,read=0;
         for(let page=1;page<=2;page++){
-          const data=await this.request(line,'/chat/findMessages/'+encodeURIComponent(line.instance),{where:{key:{[addressField]:phone+'@s.whatsapp.net',fromMe:true},messageTimestamp:{gte:new Date(c.activatedAt).toISOString(),lte:new Date(through).toISOString()}},offset:50,page});
+          const data=await this.request(line,'/chat/findMessages/'+encodeURIComponent(line.instance),{where:{key:{[addressField]:phone+'@s.whatsapp.net',fromMe:true},messageTimestamp:{gte:new Date(since).toISOString(),lte:new Date(through).toISOString()}},offset:50,page});
           const result=data.messages;
           if(!result||!Number.isSafeInteger(result.total)||result.total<0||result.total>100||!Array.isArray(result.records)||result.records.length>50||(expectedTotal!==null&&expectedTotal!==result.total))throw new Error('ATTENTION_COVERAGE_UNVERIFIED');
           expectedTotal=result.total;read+=result.records.length;
@@ -326,7 +327,7 @@ export class Transport {
             if(key?.[addressField]!==pn||key.fromMe!==true||!key.id||!ownAddress(key.remoteJid)||key.remoteJidAlt!=null&&key.remoteJidAlt!==''&&!ownAddress(key.remoteJidAlt))throw new Error('ATTENTION_SOURCE_OUTSIDE_SCOPE');
             if(r.messageTimestamp==null&&isolatedReadReceipt(c,line,r))continue;
             const at=Number(r.messageTimestamp)*1000;
-            if(!Number.isFinite(at)||at<c.activatedAt||at>through)throw new Error('ATTENTION_SOURCE_OUTSIDE_SCOPE');
+            if(!Number.isFinite(at)||at<since||at>through)throw new Error('ATTENTION_SOURCE_OUTSIDE_SCOPE');
             const message=r.message?.ephemeralMessage?.message??r.message??{};
             const text=message.conversation??message.extendedTextMessage?.text??'';
             const written=typeof text==='string'&&text.trim().length>0;
@@ -342,8 +343,8 @@ export class Transport {
         checks.push({line:line.phone,addressField,total:expectedTotal,read});
       }
     }
-    const lids=await knownNativeLidWindow(this,store,phone,c.activatedAt,through,{outgoing:true});for(const source of lids.sources){const old=sources.get(source.line+':'+source.id);if(old&&old.at!==source.at)throw Error('ATTENTION_SOURCE_CONFLICT');sources.set(source.line+':'+source.id,source);}checks.push(...lids.checks);
-    return {sources:[...sources.values()],checks,through,complete:true,coverage:operationalCoverage(c),scope:assertOperationalLineScope(c)?'authorized-own-blue-line-and-explicit-phone-alternatives; red-attention-not-read; written-or-media-outgoing':'own-two-lines-and-explicit-phone-alternatives; written-or-media-outgoing'};
+    const lids=await knownNativeLidWindow(this,store,phone,since,through,{outgoing:true});for(const source of lids.sources){const old=sources.get(source.line+':'+source.id);if(old&&old.at!==source.at)throw Error('ATTENTION_SOURCE_CONFLICT');sources.set(source.line+':'+source.id,source);}checks.push(...lids.checks);
+    return {sources:[...sources.values()],checks,through,complete:true,coverage:operationalCoverage(c),scope:nativeTrialPhoneBinding(c,phone)?'fresh-native-test-only; prior-history-preserved-not-certified':assertOperationalLineScope(c)?'authorized-own-blue-line-and-explicit-phone-alternatives; red-attention-not-read; written-or-media-outgoing':'own-two-lines-and-explicit-phone-alternatives; written-or-media-outgoing'};
   }
   async programContext(phone) {
     const c=this.config;
@@ -420,7 +421,7 @@ export async function drain(store,config,transport,engine) {
     }
     const conversation=store.conversation(e.phone),superseded=!e.fromMe&&(!knownInternalRecipient(e.phone)||nativeTrialCustomerTurn(config,e))&&(e.at<conversation?.at||row.revision<conversation?.revision);
     if(superseded){await engine.process(e);continue;}
-    if(config.historyCheckRequired&&!e.fromMe&&(!knownInternalRecipient(e.phone)||nativeTrialCustomerTurn(config,e))){
+    if(config.historyCheckRequired&&!e.fromMe&&!nativeTrialCustomerTurn(config,e)&&!knownInternalRecipient(e.phone)){
       const checked=store.priorHistory(e.phone);
       if(checked?.cutoff!==config.activatedAt||((transport instanceof Transport||assertOperationalLineScope(config))&&checked.guardVersion!==operationalHistoryGuard(config))){
         try{store.savePriorHistory(e.phone,await transport.priorHistory(e.phone),e.id);}

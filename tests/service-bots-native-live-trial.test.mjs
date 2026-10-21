@@ -4,6 +4,8 @@ import {createSummaryDataFixture} from './fixtures/maria-summary-data-flow.mjs';
 import {drainProgramRegistrations,registrationStatus} from '../automation/service-bots/maria-program.mjs';
 import {projectClientRequestedSchedule} from '../automation/service-bots/client-requested-schedule.mjs';
 import {parseChiefCommand} from '../automation/service-bots/chief-actions.mjs';
+import {Transport} from '../automation/service-bots/transport.mjs';
+import {nativeTrialAttentionStartsAt} from '../automation/service-bots/native-live-trial.mjs';
 const START=Date.parse('2026-10-16T21:20:00Z'),id='5578d28c-3174-42f9-a976-ecaa16da035c',BLUE='573126944997',RED='573126938721',CHIEF='573016803926';
 const profile=()=>({version:1,id,source:'direct-user-own-two-line-e2e-20261021',startsAt:new Date(START).toISOString(),expiresAt:new Date(START+3600000).toISOString(),bindings:[{line:BLUE,phone:'573000007384'},{line:RED,phone:CHIEF}]});
 test('default off; trial must be fixed-company, two own lines, separate phones and bounded expiry',()=>{assert.equal(nativeTrialConfig({},'fumigacion',{}),null);for(const change of [p=>p.bindings.pop(),p=>p.bindings[1].phone=p.bindings[0].phone,p=>p.expiresAt=new Date(START+7200001).toISOString(),p=>p.extra=true]){const p=profile();change(p);assert.throws(()=>nativeTrialConfig({BOT_NATIVE_LIVE_TRIAL_JSON:JSON.stringify(p)},'fumigacion',{enabled:true,startsAt:START,expiresAt:START+86400000}));}});
@@ -21,3 +23,10 @@ for(const [line,phone,color] of [[BLUE,'573000007384','Azul'],[RED,CHIEF,'Roja']
  }finally{f.store.close();}
 });
 test('a verified chief typo and an unlinked yes ask for context, never approve an uncertain rewrite',()=>{const p=parseChiefCommand({phone:CHIEF,line:BLUE,fromMe:false,forwarded:false,kind:'text',text:'marian angel, sí',at:START},{company:'fumigacion',lines:[{phone:BLUE}]});assert.equal(p.action,'unsupported');assert.equal(p.params.reason,'SHORT_UNLINKED_ANSWER');});
+test('a native trial retains fresh staff evidence, declares its window and restores ordinary history scope after expiry',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:START+3000});const f=createSummaryDataFixture(v=>t.mock.timers.setTime(v));t.mock.timers.setTime(START+3000);f.config.nativeLiveTrial=nativeTrialConfig({BOT_NATIVE_LIVE_TRIAL_JSON:JSON.stringify(profile())},'fumigacion',f.config.mariaProgram);
+ try{const tr=new Transport(f.config),calls=[];tr.verifyLine=async()=>{};tr.request=async(line,_path,body)=>{calls.push(body);const present=line.phone===BLUE&&body.where.key.remoteJid;return {messages:{total:present?1:0,records:present?[{key:{id:'NATIVE_NEW_MANUAL',remoteJid:CHIEF+'@s.whatsapp.net',fromMe:true},messageTimestamp:(START+1000)/1000,message:{conversation:'Atención humana nueva'}}]:[]}};};
+ const r=await tr.currentAttention(CHIEF);assert.equal(r.complete,true);assert.match(r.scope,/prior-history-preserved-not-certified/);assert.equal(r.sources.length,1);assert.equal(r.sources[0].id,'NATIVE_NEW_MANUAL');assert.ok(calls.every(q=>q.where.messageTimestamp.gte===new Date(START).toISOString()));assert.equal(nativeTrialAttentionStartsAt(f.config,'573000000002'),f.config.activatedAt);
+ t.mock.timers.setTime(START+3600001);assert.equal(nativeTrialAttentionStartsAt(f.config,CHIEF),f.config.activatedAt);
+ }finally{f.store.close();}
+});
