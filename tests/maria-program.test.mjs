@@ -168,6 +168,25 @@ test('native field changed or customer new turn prevents write even with stored 
 test('uncertain write is recovered only through same receipt, never a second POST registration',async()=>{
  const f=fixture();try{await f.ready();let writeCalls=0,lookups=0,payload;const t=transport(f,async(url,opts)=>{if(url.endsWith('/receipt')){lookups++;const body=JSON.parse(opts.body);assert.equal(body.acceptanceId,payload.quote.acceptanceId);return {ok:true,json:async()=>receipt(payload)};}writeCalls++;payload=JSON.parse(opts.body);throw Error('connection lost after commit');});await drainProgramRegistrations(f.store,f.config,t);assert.equal(registrationStatus(f.config,f.store).uncertain,1);assert.equal(f.store.db.prepare("SELECT COUNT(*) n FROM outbox WHERE id LIKE 'program:%'").get().n,0);await drainProgramRegistrations(f.store,f.config,t);assert.equal(writeCalls,1);assert.equal(lookups,1);assert.equal(registrationStatus(f.config,f.store).saved,1);}finally{f.store.close();}
 });
+
+test('a rejected registration keeps the closed cause, checks its receipt and never asks for confirmation again',async()=>{
+ const f=fixture();try{
+  const stages=await f.ready();let writes=0,lookups=0;
+  const t=transport(f,async(url,opts)=>{
+   if(url.endsWith('/receipt')){lookups++;return {ok:true,json:async()=>({company:'FUMIGACION',tenantId:MARIA_TENANT,companyId:MARIA_COMPANY,advisorMembershipId:actorId,persisted:false})};}
+   writes++;return {ok:false,status:409,json:async()=>({message:'Identidad retirada; requiere revisión',debug:'never retain raw backend content'})};
+  });
+  await drainProgramRegistrations(f.store,f.config,t);assert.equal(registrationStatus(f.config,f.store).uncertain,1);
+  await drainProgramRegistrations(f.store,f.config,t);assert.equal(registrationStatus(f.config,f.store).review,1);assert.equal(writes,1);assert.equal(lookups,1);
+  const stored=f.store.db.prepare("SELECT value FROM meta WHERE key LIKE 'maria-registration:%'").get(),entry=f.store.open(stored.value);
+  assert.deepEqual(entry.writeFailure,{httpStatus:409,code:'RETIRED_CUSTOMER_IDENTITY'});assert.doesNotMatch(JSON.stringify(entry),/never retain raw backend content/);
+  const out=f.store.db.prepare("SELECT body FROM outbox WHERE id=?").get('program:'+entry.payload.caseId+':review'),text=f.store.open(out.body);
+  assert.match(text,/No pude comprobar que el servicio quedara registrado/);assert.doesNotMatch(text,/pendiente de confirmación|(?:confirma|confirmes)\s+(?:si|los|tus)/i);
+  const questions=f.store.db.prepare("SELECT body FROM outbox WHERE internal=1").all().map(r=>f.store.open(r.body));
+  assert.ok(questions.some(x=>/cliente ya confirmó sus datos/.test(x)&&/identidad retirada/.test(x)));
+  await drainProgramRegistrations(f.store,f.config,t);assert.equal(writes,1);
+ }finally{f.store.close();}
+});
 test('cross-company or wrong creator receipt cannot confirm registration',async()=>{
  const f=fixture();try{await f.ready();const t=transport(f,async(url,opts)=>({ok:true,json:async()=>({...receipt(JSON.parse(opts.body)),advisorMembershipId:'e62d789d-79ed-465c-8457-1551c62a9a09'})}));await drainProgramRegistrations(f.store,f.config,t);assert.equal(registrationStatus(f.config,f.store).saved,0);assert.equal(registrationStatus(f.config,f.store).uncertain,1);assert.equal(f.store.db.prepare("SELECT COUNT(*) n FROM outbox WHERE id LIKE 'program:%'").get().n,0);}finally{f.store.close();}
 });

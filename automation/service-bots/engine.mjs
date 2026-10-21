@@ -7,6 +7,7 @@ import {directedNonserviceTurn,unscopedInitialImageReply} from './directed-nonse
 import {selectPrice,priceText,quotationInquiry,specialQuotation,currentPriceEntries} from './prices.mjs';
 import {adviserReply} from './adviser-tone.mjs';
 import {selectOfficeReceptionReply,saveOfficeReceptionReference} from './office-customer-replies.mjs';
+import {sharedOfficeSelectedReply} from './shared-office-quick-replies.mjs';
 import {literalIntakeTiming} from './intake-timing.mjs';
 import {literalGreetingText,literalGreetingReplyProof} from './literal-reception.mjs';
 import {CONVERSATIONAL_AI_GUARD,MIGUEL_CONVERSATIONAL_AI_GUARD,conversationalAiGuard} from './ai-settings.mjs';
@@ -1334,12 +1335,15 @@ export class Engine {
       if(decision.reply){
         const office=selectOfficeReceptionReply(c.company,decision,{approvedAnswer:Boolean(faq?.answer)});
         decision.reply=adviserReply(c.company,decision,{firstReply:!conv.state.lastHandledSourceId&&!decision.state.pendingFaqQuestion,approvedAnswer:Boolean(faq?.answer)});
+        const sharedOffice=sharedOfficeSelectedReply(c.company,decision,decision.reply,{approvedAnswer:Boolean(faq?.answer)});
+        if(sharedOffice)decision.reply=sharedOffice.text;
         if(!decision.review&&!decision.question&&!selectedPrice&&!faq?.answer){
           const proof=literalGreetingReplyProof(c,e,decision.state,decision.reply);
           if(proof){decision.state.literalGreetingReply=proof;s.saveConversation(e.phone,decision.state);}
         }
         if(!publicTextSafe(decision.reply))throw new Error('EXTERNAL_TEXT_REJECTED');
         s.queue(e.id+':reply',e.phone,e.line,decision.reply,false,conv.revision,decision.courtesy?null:caseState.caseId);
+        if(sharedOffice)s.audit('SHARED_QUICK_REPLY_SELECTED',e.id,{guard:sharedOffice.guard,version:sharedOffice.version,referenceIds:sharedOffice.ids,caseId:caseState.caseId,line:e.line,adapted:true,delivered:false,businessWritten:false});
         if(office&&decision.reply===office.text){
           saveOfficeReceptionReference(s,e,caseState.caseId,office);
           s.audit('OWN_OFFICE_RECEPTION_SELECTED',e.id,{guard:office.guard,version:office.version,catalogIds:office.catalogIds,ranges:office.ranges,reviewPreserved:true,businessWritten:false});

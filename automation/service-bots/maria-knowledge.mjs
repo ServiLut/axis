@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {BUSINESS_PRICE_HASH,approvedBusinessPriceSchedule} from './business-prices.mjs';
 import {chiefConversationRules} from './chief-actions.mjs';
+import {sharedOfficeReferenceContext,sharedOfficeModelContext} from './shared-office-quick-replies.mjs';
 
 export const MARIA_KNOWLEDGE_GUARD='own-approved-rule-sources-current-quotation-and-context-v2';
 // These instructions summarize existing approved runtime controls. They do not
@@ -17,7 +18,7 @@ const rules=[
  {id:'tone-and-privacy',source:'user-checkpoint-20261006',text:'Mensajes breves, cálidos y respetuosos. Reconocer datos ya aportados cuando ayude a continuar sin repetirlos en cada turno. Comunicar sólo el resultado pertinente o un dato necesario, sin destinatarios ni pasos internos, presión comercial o promesas de resultado.'}
 ];
 const scopedPriceExamples=[{scope:'one-mattress-and-one-sofa-only',mattresses:1,furnitureLiteral:'un sofá',totalCop:115000,source:{questionId:'3EB05EE7B26D69356F2E0F',answerId:'3EB0BF43EE714C64495EBF',answer:'ASI ES',delegationSource:'direct-user-chat-20261016-ask-3043332213-for-current-prices'},generalFurnitureTariffApproved:false,ordinaryRegistrationEnabled:false,otherFurnitureTypesPending:true}];
-const compiled={company:'FUMIGACION',guard:MARIA_KNOWLEDGE_GUARD,rules,priceScheduleHash:BUSINESS_PRICE_HASH,scopedPriceExamples};
+const compiled={company:'FUMIGACION',guard:MARIA_KNOWLEDGE_GUARD,rules,priceScheduleHash:BUSINESS_PRICE_HASH,scopedPriceExamples,sharedOfficeQuickReplies:sharedOfficeReferenceContext()};
 export const MARIA_KNOWLEDGE_HASH=createHash('sha256').update(JSON.stringify(compiled)).digest('hex');
 
 export function mariaKnowledgeDocument(){
@@ -52,6 +53,7 @@ export function mariaModelKnowledge(config,store,phase,row){
  const selected=phase==='understand'?rules.filter(r=>['same-case','human-priority','post-service','tone-and-privacy'].includes(r.id)):rules;
  const result={company:'FUMIGACION',guard:MARIA_KNOWLEDGE_GUARD,version:MARIA_KNOWLEDGE_HASH,
   approvedRules:structuredClone(selected),complete:false,pendingKnowledgeMustNotBeInvented:true};
+ result.sharedOfficeQuickReplies=sharedOfficeModelContext();
  const communication=chiefConversationRules(store,config);
  result.chiefConversationRules=communication;
  // These sourced rules affect communication only. Static factual controls,

@@ -109,3 +109,13 @@ for(const line of BUSINESSES.fumigacion.phones)test('the current client-calendar
   await drainProgramRegistrations(f.store,f.config,transport);assert.equal(creates,1);
  }finally{f.store.close();}
 });
+
+test('already sent the facts gets one focused confirmation hint without losing the delivered summary or creating an order',async t=>{
+ const start=Date.parse('2026-10-16T21:20:00Z');t.mock.timers.enable({apis:['Date'],now:start});const f=createSummaryDataFixture(at=>t.mock.timers.setTime(at));
+ try{
+  const {facts}=await f.summary();f.deliver(facts);const summaryMid=f.store.db.prepare('SELECT mid FROM outbox WHERE id=?').get(facts.id+':reply').mid;
+  const reminder=await f.turn('Ya te los envié.');assert.match(f.deliver(reminder),/ya tengo tus datos.*confirmes/s);assert.equal(f.entry(reminder),undefined);assert.equal(f.state(reminder).programIntake.promptId,facts.id+':reply');
+  const again=await f.turn('Ya te los envié.');assert.equal(f.reply(again),undefined);assert.equal(f.entry(again),undefined);
+  const yes=await f.turn('Sí, confirmo que los datos son correctos.');assert.ok(f.entry(yes));assert.equal(f.entry(yes).payload.summaryConfirmation.mid,summaryMid);
+ }finally{f.store.close();}
+});

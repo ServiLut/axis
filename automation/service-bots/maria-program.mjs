@@ -60,7 +60,15 @@ export function restoreProgramSetup(c,s){
 }
 async function request(c,path,body,fetcher){
  const p=c.mariaProgram;const r=await fetcher(p.url+path,{method:'POST',redirect:'error',headers:{Authorization:'Bearer '+p.token,'Content-Type':'application/json'},signal:AbortSignal.timeout(15000),body:JSON.stringify(body)});
- if(!r.ok){const error=Error('PROGRAM_REQUEST_REJECTED');error.status=r.status;throw error;}
+ if(!r.ok){
+  const error=Error('PROGRAM_REQUEST_REJECTED');error.status=r.status;error.failureCode='HTTP_REJECTED';
+  // Retain a closed diagnostic code, never a raw response, URL or credential.
+  try{const b=await r.json(),m=typeof b?.message==='string'?normalize(b.message):'';
+   if(m==='identidad retirada; requiere revision')error.failureCode='RETIRED_CUSTOMER_IDENTITY';
+   else if(m==='nombre diferente al registro; requiere revision')error.failureCode='CUSTOMER_NAME_CONFLICT';
+  }catch{}
+  throw error;
+ }
  const result=await r.json();return result?.success===true&&result.data&&typeof result.data==='object'?result.data:result;
 }
 function ownScope(c,r){return r?.company==='FUMIGACION'&&r.tenantId===MARIA_TENANT&&r.companyId===MARIA_COMPANY&&r.advisorMembershipId===c.mariaProgram.actorId;}
@@ -353,7 +361,7 @@ function literalAddress(text,prompted){
  if(streets.length>1)return null;
  if(!/^(?:calle|carrera|cra|cr|cl|cll|avenida|av|diagonal|transversal|dg|tv)\b.*\d.*\d/i.test(address)&&!(/^(?:vereda|finca)\b/i.test(address)&&address.split(/\s+/).length>=4))return null;return address;
 }
-const registrationPreface=/^(?:(?:aqui|ahi) (?:te |se )?lo (?:mande|envie|mando|envio|comparti)|ya (?:te |se )?lo (?:mande|envie|comparti)|(?:te |se )?lo (?:mande|envie|comparti) (?:arriba|antes)|estos son mis datos)\b/;
+const registrationPreface=/^(?:(?:aqui|ahi) (?:te |se )?(?:lo|los|la|las) (?:mande|envie|mando|envio|comparti)|ya (?:te |se )?(?:lo|los|la|las) (?:mande|envie|comparti)|(?:te |se )?(?:lo|los|la|las) (?:mande|envie|comparti) (?:arriba|antes)|estos son mis datos)\b/;
 function registrationSourcePreface(text){const t=normalize(text),match=t.match(registrationPreface);return Boolean(match&&/^[.!¡, ]*$/.test(t.slice(match[0].length)));}
 const correctionFieldReference=text=>/^(?:(?:mi|el) nombre(?: completo)?|(?:mi|la) direccion(?: completa)?|(?:mi|el) apellido|(?:mis|los) datos|(?:ese|este|el) dato|(?:esta|estan|es|son) (?:mal|incorrect[oa]s?|equivocad[oa]s?))[.! ]*$/.test(normalize(text));
 const directNameCorrection=text=>/^(?:corrijo|rectifico)\s+(?:(?:mi|el)\s+)?nombre(?: completo)?\s*:\s*[\p{L}'’ -]{1,160}[.! ]*$/iu.test(text.trim());
@@ -872,7 +880,16 @@ export function registrationTurn(s,c,previous,e,decision,{literalSlots=null}={})
   pi.stage='confirm';pi.promptId=e.id+':reply';pi.preview=preview;
   return {state,reply:ordinarySummaryText(preview)};
  }
- if(!preprovided&&(!prompt||!confirms(e.text)))return {state,observed:true,observedState:'PROGRAM_SUMMARY_CONFIRMATION_PENDING'};
+ if(!preprovided&&(!prompt||!confirms(e.text))){
+  // A customer's reminder that the facts were already sent is not acceptance.
+  // Explain the actual missing step once, without repeating the whole form or
+  // replacing the original, delivered summary used for later confirmation.
+  if(prompt&&registrationSourcePreface(e.text)&&pi.confirmationHelpSummaryMid!==prompt.mid&&ownSummaryDataProof(s,state,e,prompt,preview)){
+   pi.confirmationHelpSummaryMid=prompt.mid;
+   return {state,reply:'Sí, ya tengo tus datos. Sólo falta que confirmes si el resumen es correcto para registrar el servicio.'};
+  }
+  return {state,observed:true,observedState:'PROGRAM_SUMMARY_CONFIRMATION_PENDING'};
+ }
  if(!preprovided&&JSON.stringify(pi.preview)!==JSON.stringify(preview))return {state,observed:true,observedState:'PROGRAM_SUMMARY_REVIEW'};
  const summaryConfirmation=(confirmsOrdinarySummaryData(e.text)||clientSchedule&&confirms(e.text))?ownSummaryDataProof(s,state,e,prompt,preview):null;
  if((confirmsOrdinarySummaryData(e.text)||clientSchedule)&&!summaryConfirmation)return {state,observed:true,observedState:'PROGRAM_SUMMARY_CONFIRMATION_PENDING'};
@@ -1045,8 +1062,10 @@ function review(s,c,key,entry,reason,notify=true){s.tx(()=>{
  // A new technical exception goes to direction once, with its own persisted question.
  // A takeover itself needs no duplicate notification or customer interruption.
  if(notify&&conv&&!conv.hold&&conv.state.caseId===p.caseId){
-  s.questionToRecipients({phone:p.phone,line:p.line,caseId:p.caseId,topic:'program-registration-review',conditions:{caseId:p.caseId,requestHash:entry.requestHash},recipients:questionRecipients(c,'program-registration-review'),source:p.sourceId,text:c.name+': solicitud aceptada del contacto '+p.phone+', precio $'+p.quote.priceCop+'. El guardado necesita revisión ('+reason+'); no se reintentó la escritura. No hay horario ni pago confirmados. ¿Cómo debemos continuar con este registro?'});
-  s.queue('program:'+p.caseId+':review',p.phone,p.line,'Gracias. Tu solicitud queda pendiente de confirmación.',false,conv.revision,p.caseId);
+  const diagnostic=entry.writeFailure?.code==='RETIRED_CUSTOMER_IDENTITY'?' El sistema rechazó una identidad retirada.':entry.writeFailure?.code==='CUSTOMER_NAME_CONFLICT'?' El nombre no coincide con la ficha existente.':'';
+  const timing=p.clientSchedule&&p.slots.preference?' Horario confirmado por el cliente: '+p.slots.preference+'; registro de agenda sin comprobar.':' El horario sigue pendiente.';
+  s.questionToRecipients({phone:p.phone,line:p.line,caseId:p.caseId,topic:'program-registration-review',conditions:{caseId:p.caseId,requestHash:entry.requestHash},recipients:questionRecipients(c,'program-registration-review'),source:p.sourceId,text:c.name+': solicitud aceptada del contacto '+p.phone+', precio $'+p.quote.priceCop+'. El cliente ya confirmó sus datos. No pude comprobar el registro ('+reason+').'+diagnostic+timing+' No se reintentó la escritura ni se comprobó pago. Acción: revisar la ficha y el recibo de este caso antes de registrar, para evitar duplicados.'});
+  s.queue('program:'+p.caseId+':review',p.phone,p.line,'Gracias por confirmar. No pude comprobar que el servicio quedara registrado. Conservé tus datos y dejé la solicitud para revisión.',false,conv.revision,p.caseId);
  }
 });}
 const schedulingPrefix='maria-scheduling-review:';
@@ -1231,7 +1250,7 @@ export async function drainProgramRegistrations(s,c,t,routeQuestion=null){
   if(!publicRegistrationAllowed(s,c,entry)){deferred++;continue;}
   s.tx(()=>{entry={...entry,status:'SENDING',attemptedAt:Date.now()};put(s,row.key,entry);s.audit('OWN_SERVICE_REGISTRATION_RESERVED',entry.payload.sourceId,{caseId:entry.payload.caseId,requestHash:entry.requestHash});});
   try{const r=await request(c,'',entry.payload,t.fetcher);if(!receiptValid(c,entry,r))throw Error('PROGRAM_RECEIPT_MISMATCH');saved(s,c,row.key,entry,r,routeQuestion);persisted++;}
-  catch{put(s,row.key,{...entry,status:'UNCERTAIN'});s.audit('OWN_REGISTRATION_WRITE_UNCERTAIN',entry.payload.sourceId,{caseId:entry.payload.caseId,writeRetried:false});}
+  catch(error){const writeFailure={httpStatus:Number.isInteger(error?.status)?error.status:null,code:['RETIRED_CUSTOMER_IDENTITY','CUSTOMER_NAME_CONFLICT','HTTP_REJECTED'].includes(error?.failureCode)?error.failureCode:'RESPONSE_NOT_VERIFIED'};put(s,row.key,{...entry,status:'UNCERTAIN',writeFailure});s.audit('OWN_REGISTRATION_WRITE_UNCERTAIN',entry.payload.sourceId,{caseId:entry.payload.caseId,...writeFailure,writeRetried:false});}
  }
  const schedulingEscalated=reviewSavedSchedulingRoutes(s,c);
  return {enabled:true,persisted,reviewed,deferred,schedulingEscalated};
