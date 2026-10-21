@@ -90,7 +90,7 @@ test('a complete native multiline form progresses from quotation through summary
  try{
   const quote=await f.turn('Tengo cucarachas en apartamento de dos habitaciones en Itagüí.');assert.match(f.deliver(quote),/129\.000/);f.deliver(await f.turn('Sí'));
   const facts=await f.turn('Laura Gómez Martínez\nCra 44 # 83-20 (interior 402) donde la señora Marina\n17/10/26 8 am');
-  assert.match(f.reply(facts),/Ya conservé tu nombre y dirección/);assert.match(f.reply(facts),/año completo/);assert.equal(f.state(facts).programIntake.customerName,'Laura Gómez Martínez');assert.match(f.state(facts).programIntake.address,/interior 402/);f.deliver(facts);
+  assert.match(f.reply(facts),/Confirmas que estos datos/);assert.doesNotMatch(f.reply(facts),/año completo/);assert.equal(f.state(facts).programIntake.customerName,'Laura Gómez Martínez');assert.match(f.state(facts).programIntake.address,/interior 402/);f.deliver(facts);
   const timing=await f.turn('17/10/2026 8 am');assert.match(f.reply(timing),/Confirmas que estos datos/);assert.doesNotMatch(f.reply(timing),/compárteme|nombre completo|dirección completa/);f.deliver(timing);
   const final=await f.turn('Sí, confirmo que los datos son correctos.');assert.ok(f.entry(final));let writes=0;
   const result=await drainProgramRegistrations(f.store,f.config,f.transport(async(_url,opts)=>{writes++;return {ok:true,json:async()=>f.receipt(JSON.parse(opts.body))};}));assert.equal(writes,1);assert.equal(result.persisted,1);assert.equal(f.entry(final).status,'SAVED');
@@ -101,8 +101,8 @@ for(const line of BUSINESSES.fumigacion.phones)test('the current client-calendar
  f.config.lines.sort((a,b)=>(a.phone===line?-1:1));f.config.staffPlanning={enabled:true,mode:'internal-staff-assignment',startsAt:start-5000};f.config.clientRequestedSchedule={enabled:true,startsAt:start-1000,guard:MARIA_CLIENT_SCHEDULE_GUARD};
  try{
   const quote=await f.turn('Tengo cucarachas en apartamento de dos habitaciones en Itagüí.');f.deliver(quote);f.deliver(await f.turn('Sí'));
-  const fields=await f.turn('Laura Gómez Martínez\nCra 44 # 83-20 (interior 402) donde la señora Marina\n17/10/26 8 am');assert.match(f.deliver(fields),/año completo/);assert.equal(f.entry(fields),undefined);
-  const timing=await f.turn('17/10/2026 8 am');assert.match(f.deliver(timing),/Horario solicitado: 17\/10\/2026 8 am/);assert.equal(f.entry(timing),undefined);
+  const fields=await f.turn('Laura Gómez Martínez\nCra 44 # 83-20 (interior 402) donde la señora Marina\n17/10/26 8 am');assert.match(f.deliver(fields),/17\/10\/2026 a las 8:00 a\. m\./);assert.doesNotMatch(f.reply(fields),/año completo/);assert.equal(f.entry(fields),undefined);
+  const timing=await f.turn('17/10/2026 8 am');assert.match(f.deliver(timing),/Horario solicitado: 17\/10\/2026 a las 8:00 a\. m\./);assert.equal(f.entry(timing),undefined);
   const final=await f.turn('Sí, confirmo que los datos son correctos.');assert.ok(f.entry(final));let creates=0;
   const transport=f.transport(async(_url,opts)=>{creates++;const p=JSON.parse(opts.body),projection=projectClientRequestedSchedule(p.slots.preference,p.sources.preference.at,p.sources.acceptance.at),{complete,...calendar}=projection;assert.equal(complete,true);return {ok:true,json:async()=>({...f.receipt(p),state:'PROGRAMADO',scheduled:true,schedulingKind:'client-requested-without-technician',schedule:{...calendar,preferenceSourceId:p.sources.preference.id,preferenceSourceAt:p.sources.preference.at,summaryMid:p.summaryConfirmation.mid,acceptanceId:p.quote.acceptanceId,verifiedCurrentFields:true}})};});
   assert.equal((await drainProgramRegistrations(f.store,f.config,transport)).persisted,1);assert.equal(creates,1);assert.equal(f.entry(final).status,'SAVED');assert.equal(f.entry(final).receipt.schedule.startAt,'2026-10-17T13:00:00.000Z');assert.equal(f.entry(final).receipt.schedule.technicianId,null);

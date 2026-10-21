@@ -1,3 +1,5 @@
+import {foreignLineSources,nativeTrialPayload,nativeTrialBinding} from './native-live-trial.mjs';
+import {mariaNaturalRequestedTiming} from './maria-requested-timing.mjs';
 import {createHash} from 'node:crypto';
 import {normalize,questionRecipients,SANDRA} from './config.mjs';
 import {BUSINESS_PRICE_HASH,LEGACY_BUSINESS_PRICE_HASH,BUSINESS_PRICE_CUTOVER_AT,businessPriceHashAt,selectBusinessPrice} from './business-prices.mjs';
@@ -59,7 +61,7 @@ export function restoreProgramSetup(c,s){
  const saved=get(s,setupKey);if(saved)c.mariaProgram=validated({...saved,startsAt:iso(saved.startsAt),expiresAt:iso(saved.expiresAt)},c.company);
 }
 async function request(c,path,body,fetcher){
- const p=c.mariaProgram;const r=await fetcher(p.url+path,{method:'POST',redirect:'error',headers:{Authorization:'Bearer '+p.token,'Content-Type':'application/json'},signal:AbortSignal.timeout(15000),body:JSON.stringify(body)});
+ const p=c.mariaProgram,trial=path===''?nativeTrialPayload(c,body):null;if(trial){path='/native-trial';body=trial;}const r=await fetcher(p.url+path,{method:'POST',redirect:'error',headers:{Authorization:'Bearer '+p.token,'Content-Type':'application/json'},signal:AbortSignal.timeout(15000),body:JSON.stringify(body)});
  if(!r.ok){
   const error=Error('PROGRAM_REQUEST_REJECTED');error.status=r.status;error.failureCode='HTTP_REJECTED';
   // Retain a closed diagnostic code, never a raw response, URL or credential.
@@ -73,7 +75,7 @@ async function request(c,path,body,fetcher){
 }
 function ownScope(c,r){return r?.company==='FUMIGACION'&&r.tenantId===MARIA_TENANT&&r.companyId===MARIA_COMPANY&&r.advisorMembershipId===c.mariaProgram.actorId;}
 export async function programFollowupEligible(c,s,transport,phone){
- if(!programEnabled(c)||!/^57[0-9]{10}$/.test(phone))return false;
+ if(!programEnabled(c)||c.nativeLiveTrial?.bindings?.some(b=>b.phone===phone)||!/^57[0-9]{10}$/.test(phone))return false;
  try{
   const r=await request(c,'/customer-status',{phone},transport.fetcher);
   return programEnabled(c)&&ownScope(c,r)&&r.phone===phone&&r.complete===true&&r.eligibleForFollowup===true;
@@ -92,13 +94,13 @@ export async function installProgramSetup(c,s,body,fetcher){
 }
 export function registrationStatus(c,s){
  const entries=c.company==='fumigacion'?s.db.prepare('SELECT value FROM meta WHERE key LIKE ?').all(prefix+'%').map(r=>s.open(r.value)):[];
- const states=Object.fromEntries(['PENDING','SENDING','UNCERTAIN','SAVED','REVIEW'].map(state=>[state,entries.filter(entry=>entry.status===state).length]));
+ const states=Object.fromEntries(['PENDING','SENDING','UNCERTAIN','SAVED','REVIEW'].map(state=>[state,entries.filter(entry=>entry.status===state&&entry.recordClass!=='PRUEBA').length]));
  const safeReason=reason=>['CASE_CHANGED_BEFORE_WRITE','NATIVE_CONTEXT_NOT_VERIFIED','UNCERTAIN_WRITE_NOT_FOUND','UNCERTAIN_RECEIPT_REQUIRES_REVIEW','OPERATIONAL_LINE_SCOPE_REVIEW'].includes(reason)?reason:'OTHER_REVIEW';
  const reviewed=entries.filter(entry=>entry.status==='REVIEW').sort((a,b)=>(Number(b.reviewAt)||0)-(Number(a.reviewAt)||0));
  const reasons=new Map();for(const entry of reviewed){const reason=safeReason(entry.reason);reasons.set(reason,(reasons.get(reason)||0)+1);}
  const own=c.company==='fumigacion';
  const clientRequestedSchedule={configured:own&&c.clientRequestedSchedule?.enabled===true,enabled:programEnabled(c)&&clientRequestedScheduleEnabled(c,Date.now()),guard:own?MARIA_CLIENT_SCHEDULE_GUARD:null,startsAt:own&&Number.isSafeInteger(c.clientRequestedSchedule?.startsAt)?iso(c.clientRequestedSchedule.startsAt):null,expiresAt:own&&Number.isSafeInteger(c.mariaProgram?.expiresAt)?iso(c.mariaProgram.expiresAt):null,technicianAssignment:false};
- return {guard:own?MARIA_PROGRAM_GUARD:null,pipelineGuard:own?MARIA_PROGRAM_PIPELINE_GUARD:null,formBatchGuard:own?MARIA_PROGRAM_FORM_BATCH_GUARD:null,literalFieldsGuard:own?MARIA_PROGRAM_LITERAL_FIELDS_GUARD:null,acceptanceTimingGuard:own?MARIA_PROGRAM_TIMED_ACCEPTANCE_GUARD:null,requestedTimingGuard:own?MARIA_PROGRAM_REQUESTED_TIMING_GUARD:null,petPresenceGuard:own?MARIA_PROGRAM_PET_PRESENCE_GUARD:null,schedulingReviewGuard:own?MARIA_PROGRAM_SCHEDULING_REVIEW_GUARD:null,operationalCoverage:operationalCoverage(c),configured:own&&c.mariaProgram?.enabled===true,enabled:programEnabled(c),company:own?'FUMIGACION':'S.TECNICO',tenantId:own&&c.mariaProgram?.enabled?MARIA_TENANT:null,companyId:own&&c.mariaProgram?.enabled?MARIA_COMPANY:null,advisorMembershipId:own?c.mariaProgram?.actorId||null:null,registrationKind:own?'new-service-pending-scheduling':null,prepared:states.PENDING,states,saved:states.SAVED,uncertain:states.UNCERTAIN+states.SENDING,review:states.REVIEW,lastReviewReason:reviewed.length?safeReason(reviewed[0].reason):null,reviewReasons:[...reasons].sort(([a],[b])=>a.localeCompare(b)).map(([reason,count])=>({reason,count})),scheduled:false,clientRequestedSchedule,paymentsEnabled:false,fullyAutonomous:false};
+ return {guard:own?MARIA_PROGRAM_GUARD:null,pipelineGuard:own?MARIA_PROGRAM_PIPELINE_GUARD:null,formBatchGuard:own?MARIA_PROGRAM_FORM_BATCH_GUARD:null,literalFieldsGuard:own?MARIA_PROGRAM_LITERAL_FIELDS_GUARD:null,acceptanceTimingGuard:own?MARIA_PROGRAM_TIMED_ACCEPTANCE_GUARD:null,requestedTimingGuard:own?MARIA_PROGRAM_REQUESTED_TIMING_GUARD:null,petPresenceGuard:own?MARIA_PROGRAM_PET_PRESENCE_GUARD:null,schedulingReviewGuard:own?MARIA_PROGRAM_SCHEDULING_REVIEW_GUARD:null,operationalCoverage:operationalCoverage(c),configured:own&&c.mariaProgram?.enabled===true,enabled:programEnabled(c),company:own?'FUMIGACION':'S.TECNICO',tenantId:own&&c.mariaProgram?.enabled?MARIA_TENANT:null,companyId:own&&c.mariaProgram?.enabled?MARIA_COMPANY:null,advisorMembershipId:own?c.mariaProgram?.actorId||null:null,registrationKind:own?'new-service-pending-scheduling':null,prepared:states.PENDING,states,saved:states.SAVED,trialSaved:entries.filter(e=>e.status==='SAVED'&&e.recordClass==='PRUEBA').length,uncertain:states.UNCERTAIN+states.SENDING,review:states.REVIEW,lastReviewReason:reviewed.length?safeReason(reviewed[0].reason):null,reviewReasons:[...reasons].sort(([a],[b])=>a.localeCompare(b)).map(([reason,count])=>({reason,count})),scheduled:false,clientRequestedSchedule,paymentsEnabled:false,fullyAutonomous:false};
 }
 // Only an affirmative from the customer is authority to create an ordinary,
 // unscheduled order. Courtesy, a preference or a quoted third-party "yes" alone
@@ -198,8 +200,9 @@ function legacyOrdinarySummaryText(preview){
 function previousOrdinarySummaryText(preview){
  return ['Revisa los datos de tu solicitud:','','• Servicio: '+preview.service,'• Valor: $'+preview.priceCop.toLocaleString('es-CO'),'• Nombre: '+preview.customerName,'• Dirección: '+preview.address,'• Municipio: '+preview.municipality,...(preview.preference?['• Preferencia solicitada: '+preview.preference]:[]),...(preview.petPresence?['• Mascotas informadas: '+preview.petPresence]:[]),'','El horario sigue pendiente de coordinación.','','¿Confirmas que estos datos son correctos?'].join('\n');
 }
-function ordinarySummaryText(preview){
- return ['Revisa los datos de tu solicitud:','','• Servicio: '+preview.service,...(preview.site?['• Inmueble informado: '+preview.site]:[]),...(preview.mattresses?['• Colchones informados: '+preview.mattresses]:[]),...(preview.rooms?['• Habitaciones informadas: '+preview.rooms]:[]),...(preview.area?['• Área informada: '+preview.area]:[]),'• Valor: $'+preview.priceCop.toLocaleString('es-CO'),'• Nombre: '+preview.customerName,'• Dirección: '+preview.address,'• Municipio: '+preview.municipality,...(preview.preference?[(preview.clientSchedule?'• Horario solicitado: ':'• Preferencia solicitada: ')+preview.preference]:[]),...(preview.petPresence?['• Mascotas informadas: '+preview.petPresence]:[]),'',preview.clientSchedule?'Registraré el servicio en este horario, sin técnico asignado.':'El horario sigue pendiente de coordinación.','','¿Confirmas que estos datos son correctos?'].join('\n');
+function scheduleDisplay(p){const [y,m,d]=p.requestedDate.split('-'),[h,min]=p.requestedTime.split(':');return d+'/'+m+'/'+y+' a las '+((+h%12)||12)+':'+min+' '+(+h<12?'a. m.':'p. m.');}
+function ordinarySummaryText(preview,resolved=true){
+ return ['Revisa los datos de tu solicitud:','','• Servicio: '+preview.service,...(preview.site?['• Inmueble informado: '+preview.site]:[]),...(preview.mattresses?['• Colchones informados: '+preview.mattresses]:[]),...(preview.rooms?['• Habitaciones informadas: '+preview.rooms]:[]),...(preview.area?['• Área informada: '+preview.area]:[]),'• Valor: $'+preview.priceCop.toLocaleString('es-CO'),'• Nombre: '+preview.customerName,'• Dirección: '+preview.address,'• Municipio: '+preview.municipality,...(preview.preference?[(preview.clientSchedule?'• Horario solicitado: ':'• Preferencia solicitada: ')+(resolved&&preview.clientSchedule&&preview.requestedSchedule?scheduleDisplay(preview.requestedSchedule):preview.preference)]:[]),...(preview.petPresence?['• Mascotas informadas: '+preview.petPresence]:[]),'',preview.clientSchedule?'Registraré el servicio en este horario, sin técnico asignado.':'El horario sigue pendiente de coordinación.','','¿Confirmas que estos datos son correctos?'].join('\n');
 }
 function ownSummarySourceProjection(s,state,e,anchor,original,ref,field,value,literalSlots){
  const direct=source=>source?.kind==='text'&&source.fromMe===false&&!source.forwarded&&!source.quotedId&&source.phone===e.phone&&source.line===e.line&&source.at>=anchor.at&&source.at<=e.at&&!/["“”]|\b(?:dijo|dice|comento|comentaron|segun|mi vecin[oa]|su vecin[oa]|un tercero)\b/.test(normalize(source.text));
@@ -237,7 +240,7 @@ function ownSummaryScope(s,state,e,own,literalSlots){
  return scope;
 }
 function ownSummaryDataProof(s,state,e,prompt,preview){
- if(!prompt||e.quotedId||e.forwarded||e.fromMe||e.kind!=='text'||prompt.phone!==e.phone||prompt.line!==e.line||prompt.case_id!==state.caseId||prompt.internal!==0||!['DELIVERED','READ'].includes(prompt.state)||typeof prompt.mid!=='string'||prompt.mid===state.quotedPrice?.mid||![ordinarySummaryText(preview),previousOrdinarySummaryText(preview),legacyOrdinarySummaryText(preview)].includes(s.open(prompt.body)))return null;
+ if(!prompt||e.quotedId||e.forwarded||e.fromMe||e.kind!=='text'||prompt.phone!==e.phone||prompt.line!==e.line||prompt.case_id!==state.caseId||prompt.internal!==0||!['DELIVERED','READ'].includes(prompt.state)||typeof prompt.mid!=='string'||prompt.mid===state.quotedPrice?.mid||![ordinarySummaryText(preview),ordinarySummaryText(preview,false),previousOrdinarySummaryText(preview),legacyOrdinarySummaryText(preview)].includes(s.open(prompt.body)))return null;
  const proof=get(s,'first-delivery:'+prompt.id),promptSourceId=prompt.id?.endsWith(':reply')?prompt.id.slice(0,-6):null;
  const origin=promptSourceId&&s.db.prepare('SELECT rowid,at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(promptSourceId,e.phone,e.line),current=s.db.prepare('SELECT rowid FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(e.id,e.phone,e.line);
  if(!origin||!current||origin.rowid>=current.rowid||origin.at>e.at||proof?.mid!==prompt.mid||proof.line!==e.line||!['DELIVERED','READ'].includes(proof.state)||!Number.isSafeInteger(proof.verifiedAt)||proof.verifiedAt<prompt.created||proof.verifiedAt>Date.now()+5000||e.at<Math.floor(proof.verifiedAt/1000)*1000)return null;
@@ -282,7 +285,7 @@ export function literalIntakeTextWithoutRegistrationFields(text){
 const calendarWeekdays=['domingo','lunes','martes','miercoles','jueves','viernes','sabado'];
 const calendarMonths=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 const calendarDay='(?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)';
-const calendarDate='(?:el\\s+)?(?:'+calendarDay+'\\s+)?(?:\\d{1,2}\\s+de\\s+[\\p{L}]+(?:\\s+(?:de|del)\\s+\\d{4})?|\\d{1,2}/\\d{1,2}(?:/\\d{4})?)';
+const calendarDate='(?:el\\s+)?(?:'+calendarDay+'\\s+)?(?:\\d{1,2}\\s+de\\s+[\\p{L}]+(?:\\s+(?:de|del)\\s+\\d{4})?|\\d{1,2}/\\d{1,2}(?:/\\d{2}(?:\\d{2})?)?)';
 const calendarTime='(?:\\s+(?:(?:a las?\\s+)?\\d{1,2}(?::\\d{2})?(?:\\s*[ap]\\.?\\s*m\\.?)?|(?:en|por) la (?:mañana|manana|tarde|noche)))?';
 const calendarWhole=new RegExp('^(?:(?:me equivoqu[eé]|corrijo)[, ]+)?(?:(?:para|prefiero|preferir[ií]a|quiero|quisiera|lo necesito|lo quiero|ser[ií]a|puede ser|me queda bien|me sirve)\\s+)?('+calendarDate+calendarTime+')(?:[,;.!]?\\s+(?:por favor|gracias|muchas gracias))*[.!]?$','iu');
 // Recognition normalization only: values and sources below retain the exact
@@ -312,11 +315,12 @@ function timingProjection(text){
 function calendarPreference(raw,at){
  const match=raw.match(calendarWhole);if(!match)return null;
  const value=match[1].trim().replace(/(?<![ap]\.\s?m)[.!]+$/i,'');
+ if(mariaNaturalRequestedTiming(value,iso(at)).fechaSolicitada)return {value};
  const folded=normalize(value).replace(/\b([ap])\.\s*m\.?/g,'$1m');
- const parts=folded.match(/^(?:el )?(?:(domingo|lunes|martes|miercoles|jueves|viernes|sabado) )?(?:(\d{1,2}) de ([a-z]+)(?: (?:de|del) (\d{4}))?|(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?)(.*)$/);
+ const parts=folded.match(/^(?:el )?(?:(domingo|lunes|martes|miercoles|jueves|viernes|sabado) )?(?:(\d{1,2}) de ([a-z]+)(?: (?:de|del) (\d{2}(?:\d{2})?))?|(\d{1,2})\/(\d{1,2})(?:\/(\d{2}(?:\d{2})?))?)(.*)$/);
  if(!parts||!Number.isSafeInteger(at)||at<=0)return {issue:'invalid-date'};
  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Bogota',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(at));
- const year=Number(parts[4]||parts[7]||today.slice(0,4)),month=parts[3]?calendarMonths.indexOf(parts[3])+1:Number(parts[6]),day=Number(parts[2]||parts[5]);
+ const writtenYear=parts[4]||parts[7],year=writtenYear?(writtenYear.length===2?2000+Number(writtenYear):Number(writtenYear)):Number(today.slice(0,4)),month=parts[3]?calendarMonths.indexOf(parts[3])+1:Number(parts[6]),day=Number(parts[2]||parts[5]);
  const date=new Date(Date.UTC(year,month-1,day));
  if(year<2000||year>2099||month<1||month>12||date.getUTCFullYear()!==year||date.getUTCMonth()!==month-1||date.getUTCDate()!==day)return {issue:'invalid-date'};
  if(parts[1]&&calendarWeekdays[date.getUTCDay()]!==parts[1])return {issue:'weekday-mismatch'};
@@ -339,6 +343,8 @@ export function literalProgramPreference(text,at=Date.now()){
  const raw=timingProjection(text),calendar=calendarPreference(raw,at);
  if(calendar)return calendar.issue?null:calendar.value;
  if(/^(?:en|por) la (?:mañana|manana|tarde|noche)[.! ]*$/i.test(raw))return raw.replace(/[.! ]+$/g,'');
+ const natural=/^(?:(?:para|prefiero|quiero|quisiera|lo necesito|lo quiero|me sirve)\s+)?(?:(?:el|este|proximo|próximo)\s+)?(?:hoy|mañana|manana|pasado mañana|pasado manana|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)(?:\s+(?:de\s+)?(?:la\s+)?(?:(?:pr[oó]xima|otra|siguiente)\s+semana|semana\s+que\s+viene))?(?:\s+(?:a las?\s+)?(?:\d{1,2}(?::\d{2})?(?:\s*[ap]\.?\s*m\.?)?|(?:una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce))(?:\s+(?:de|en|por) la (?:mañana|manana|tarde|noche))?)?(?:[,.! ]+(?:por favor|gracias|muchas gracias))*[.! ]*$/iu.test(raw);
+ if(natural&&!standaloneRelativePreference(raw)&&mariaNaturalRequestedTiming(raw,iso(at)).fechaSolicitada)return raw.trim();
  const standalone=standaloneRelativePreference(raw);
  if(!standalone&&!acceptsOrdinaryQuotation(raw))return null;
  // Keep punctuation in a. m./p. m. as literal source text, rather than cutting
@@ -499,7 +505,7 @@ function caseNativePreferenceParts(s,c,state,e){
  for(const row of rows){
   const native=s.open(row.body);
   if(native.id!==row.id||native.at!==row.at||native.phone!==e.phone||native.line!==e.line||native.fromMe!==false||native.forwarded||native.quotedId||native.kind!=='text'||typeof native.text!=='string'||/\b(?:psicologos|abogados|miguel angel|servicio tecnico|otra solicitud|otro servicio|otro inmueble)\b/.test(normalize(native.text)))continue;
-  const nativeSource={...source(native),phone:native.phone,line:native.line,fromMe:false,forwarded:false},day=nativePreferenceDate(native.text,iso(native.at)),hour=nativePreferenceTime(native.text,iso(native.at));
+  const nativeSource={...source(native),phone:native.phone,line:native.line,fromMe:false,forwarded:false},day=nativePreferenceDate(native.text,iso(native.at)),hour=nativePreferenceTime(native.text,iso(native.at),day??date?.value);
   if(day)date={value:day,source:nativeSource,position:row.rowid};
   if(hour)time={value:hour,source:nativeSource,position:row.rowid};
   // A later malformed fragment cannot silently leave a previous complete
@@ -546,7 +552,7 @@ function staffPlanningRecord(s,entry){
 }
 function staffPlanningSavedText(entry){
  const p=entry.payload;
- if(p.clientSchedule?.guard===MARIA_CLIENT_SCHEDULE_GUARD&&clientRequestedScheduleReceiptMatches(p,entry.receipt))return ['Tu servicio quedó confirmado y programado.','','• Servicio: '+p.slots.service,'• Valor aceptado: $'+p.quote.priceCop.toLocaleString('es-CO'),'• Nombre: '+p.customerName,'• Dirección: '+p.address,'• Municipio: '+p.municipality,'• Horario: '+p.slots.preference,'','El equipo interno se encargará de asignar el técnico y la ruta.'].join('\n');
+ if(p.clientSchedule?.guard===MARIA_CLIENT_SCHEDULE_GUARD&&clientRequestedScheduleReceiptMatches(p,entry.receipt))return ['¡Listo! Tu servicio quedó confirmado y programado.','','• Servicio: '+p.slots.service,'• Valor aceptado: $'+p.quote.priceCop.toLocaleString('es-CO'),'• Nombre: '+p.customerName,'• Dirección: '+p.address,'• Municipio: '+p.municipality,'• Horario: '+scheduleDisplay(entry.receipt.schedule),'','El equipo interno se encargará de asignar el técnico y la ruta. Gracias por confiar en nosotros.'].join('\n');
  return ['Tu solicitud quedó aceptada y registrada.','','• Servicio: '+p.slots.service,'• Valor aceptado: $'+p.quote.priceCop.toLocaleString('es-CO'),'• Nombre: '+p.customerName,'• Dirección: '+p.address,'• Municipio: '+p.municipality,'• Horario solicitado: '+p.slots.preference,'','El equipo interno se encargará de asignar el técnico y la ruta. Este registro conserva el horario solicitado; la disponibilidad se confirma por separado.'].join('\n');
 }
 export function ownStaffPlanningReceipt(s,c,request){const entry=ownRegisteredReceiptForPresentation(s,c,request);return entry&&staffPlanningRecord(s,entry)?entry:null;}
@@ -625,7 +631,7 @@ export function ordinaryRegistrationDataQuestion(text){
 // A customer's pause during data collection is neither a cancellation nor a
 // new permission to write. Keep the original accepted quote and sourced facts.
 export function ordinaryProgramDeferralTurn(s,c,state,e){
- if(!programEnabled(c)||!state.programIntake||!state.caseId?.startsWith('fumigacion:')||state.closed||!Number.isSafeInteger(e.at)||e.at<c.mariaProgram.startsAt||!operationalLineAllowed(c,e.line)||c.operationalLineScope&&(e.at<operationalLineStartsAt(c,e.line)||typeof s.hasSourcesOutsideLine!=='function'||s.hasSourcesOutsideLine(e.phone,e.line)))return null;
+ if(!programEnabled(c)||!state.programIntake||!state.caseId?.startsWith('fumigacion:')||state.closed||!Number.isSafeInteger(e.at)||e.at<c.mariaProgram.startsAt||!operationalLineAllowed(c,e.line)||c.operationalLineScope&&(e.at<operationalLineStartsAt(c,e.line)||typeof s.hasSourcesOutsideLine!=='function'||foreignLineSources(s,c,e.phone,e.line)))return null;
  const pi=state.programIntake,marker=state.customerDeferral,requested=customerDeferralRequested(e),active=marker?.guard===CUSTOMER_DEFERRAL_GUARD&&marker.active===true&&marker.caseId===state.caseId&&marker.line===e.line&&e.at>marker.at;
  if(!requested&&!active)return null;
  const conv=s.conversation(e.phone),row=s.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(e.id,e.phone,e.line),native=row&&s.open(row.body),anchor=s.db.prepare('SELECT at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(state.caseId.slice(11),e.phone,e.line);
@@ -668,7 +674,7 @@ export function ordinaryProgramDeferralTurn(s,c,state,e){
 // will be needed. This path grants no acceptance, registration or schedule and
 // deliberately leaves both the review and its original consultation intact.
 export function pendingOrdinaryDataInformationTurn(s,c,state,e){
- if(!programEnabled(c)||!state.awaitingHumanReview||state.programIntake||!state.caseId?.startsWith('fumigacion:')||!Number.isSafeInteger(e.at)||e.at<c.mariaProgram.startsAt||!operationalLineAllowed(c,e.line)||c.operationalLineScope&&(e.at<operationalLineStartsAt(c,e.line)||typeof s.hasSourcesOutsideLine!=='function'||s.hasSourcesOutsideLine(e.phone,e.line)))return null;
+ if(!programEnabled(c)||!state.awaitingHumanReview||state.programIntake||!state.caseId?.startsWith('fumigacion:')||!Number.isSafeInteger(e.at)||e.at<c.mariaProgram.startsAt||!operationalLineAllowed(c,e.line)||c.operationalLineScope&&(e.at<operationalLineStartsAt(c,e.line)||typeof s.hasSourcesOutsideLine!=='function'||foreignLineSources(s,c,e.phone,e.line)))return null;
  if(e.kind!=='text'||e.fromMe!==false||e.forwarded||e.quotedId||!ordinaryRegistrationDataQuestion(e.text)||state.closed||state.customerDeferral?.active||state.requestedAfterServiceReview||state.requestedControlReview||state.requestedDocumentReview||state.requestedProductInquiry||state.pendingFaqQuestion||Object.keys(state).some(k=>k.startsWith('requestedPayment')&&state[k]))return null;
  const conv=s.conversation(e.phone);if(!conv||conv.hold||conv.state.caseId!==state.caseId)return null;
  const first=s.db.prepare('SELECT rowid,body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(state.caseId.slice(11),e.phone,e.line),current=s.db.prepare('SELECT rowid,body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(e.id,e.phone,e.line);
@@ -691,7 +697,7 @@ export function pendingOrdinaryDataInformationTurn(s,c,state,e){
  return {state,reply,questionId:pending.id,topic:pending.topic};
 }
 export function ordinaryDataInformationTurn(s,c,state,e){
- if(!programEnabled(c)||e.at<c.mariaProgram.startsAt||!operationalLineAllowed(c,e.line)||c.operationalLineScope&&e.at<operationalLineStartsAt(c,e.line)||c.operationalLineScope&&(typeof s.hasSourcesOutsideLine!=='function'||s.hasSourcesOutsideLine(e.phone,e.line)))return null;
+ if(!programEnabled(c)||e.at<c.mariaProgram.startsAt||!operationalLineAllowed(c,e.line)||c.operationalLineScope&&e.at<operationalLineStartsAt(c,e.line)||c.operationalLineScope&&(typeof s.hasSourcesOutsideLine!=='function'||foreignLineSources(s,c,e.phone,e.line)))return null;
  if(e.quotedId||e.kind!=='text'||e.fromMe||e.forwarded||state.closed||state.awaitingHumanReview||state.customerDeferral?.active||state.requestedAfterServiceReview||state.requestedControlReview||state.requestedDocumentReview||state.requestedProductInquiry||state.pendingFaqQuestion||Object.keys(state).some(k=>k.startsWith('requestedPayment')&&state[k])||['pending','review','registered','declined'].includes(state.programIntake?.stage))return null;
  const conversation=s.conversation(e.phone);if(!conversation||conversation.hold||conversation.state.caseId!==state.caseId)return null;
  const question=ordinaryRegistrationDataQuestion(e.text),previous=state.registrationInformationRequest;
@@ -751,7 +757,7 @@ export function registrationTurn(s,c,previous,e,decision,{literalSlots=null}={})
   if(!publicEventAllowed(c,current)||!publicEventAllowed(c,anchor))return null;
  }
  if(!operationalLineAllowed(c,e.line)||c.operationalLineScope&&e.at<operationalLineStartsAt(c,e.line))return null;
- if(c.operationalLineScope&&(typeof s.hasSourcesOutsideLine!=='function'||s.hasSourcesOutsideLine(e.phone,e.line)))return null;
+ if(c.operationalLineScope&&(typeof s.hasSourcesOutsideLine!=='function'||foreignLineSources(s,c,e.phone,e.line)))return null;
  const state=decision.state;
  if(state.customerDeferral?.guard===CUSTOMER_DEFERRAL_GUARD&&state.customerDeferral.active===true)return null;
  const information=ordinaryDataInformationTurn(s,c,state,e);if(information)return information;
@@ -830,7 +836,7 @@ export function registrationTurn(s,c,previous,e,decision,{literalSlots=null}={})
    state.slots={...state.slots,preference:corrected};state.intakeSources={...state.intakeSources,preference:{sourceId:e.id,at:e.at,context:'literal-prompted-customer-preference-pending-coordination'}};delete pi.requestedTimingClarification;
   }else{
    pi.stage='details';pi.preview=null;pi.requestedFields=['preference'];pi.promptId=e.id+':reply';
-   return {state,reply:(pi.customerName&&pi.address?'Ya conservé tu nombre y dirección. ':'')+'Para confirmar el horario, escribe la fecha con el año completo y la hora (a. m. o p. m.).'};
+   return {state,reply:(pi.customerName&&pi.address?'Ya conservé tu nombre y dirección. ':'')+'¿Qué día y a qué hora te gustaría recibir el servicio?'};
   }
  }
  const planning=staffPlanningForCase(s,c,state,e);
@@ -840,7 +846,7 @@ export function registrationTurn(s,c,previous,e,decision,{literalSlots=null}={})
   const missing=[...(!pi.customerName?['name']:[]),...(!pi.address?['address']:[])];
   if(pi.promptId&&!prompt&&JSON.stringify(pi.requestedFields||[])===JSON.stringify(missing))return {state,observed:true,observedState:'PROGRAM_FIELDS_DELIVERY_PENDING'};
   pi.stage=!pi.customerName?'name':'address';pi.requestedFields=missing;pi.promptId=e.id+':reply';
-  const requests=[...(!pi.customerName?['Tu nombre completo.']:[]),...(!pi.address?['La dirección completa del servicio, incluido apartamento o interior si aplica.']:[]),...(!state.slots.preference?[clientCalendarIntake?'Qué día y a qué hora necesitas el servicio (a. m. o p. m.).':'Qué día y franja horaria prefieres.']:[])];
+  const requests=[...(!pi.customerName?['Tu nombre completo.']:[]),...(!pi.address?['La dirección completa del servicio, incluido apartamento o interior si aplica.']:[]),...(!state.slots.preference?[clientCalendarIntake?'Qué día y a qué hora necesitas el servicio.':'Qué día y franja horaria prefieres.']:[])];
   return {state,reply:'Para registrar tu solicitud, compárteme:\n'+requests.map((item,i)=>(i+1)+'. '+item).join('\n')+(!state.slots.preference?(clientCalendarIntake?'\n\nCon esos datos prepararé tu confirmación.':'\n\nEl horario queda pendiente de confirmación.'):'')};
  }
  if(prior.stage==='correction'&&!changed)return {state,reply:'¿Cuál es el dato correcto que debemos cambiar?'};
@@ -852,18 +858,18 @@ export function registrationTurn(s,c,previous,e,decision,{literalSlots=null}={})
  const timingParts=clientCalendarIntake?caseNativePreferenceParts(s,c,state,e):null;
  let preference=casePreferenceSource(s,c,state,e);
  if(timingParts&&!timingParts.singleSource){
-  if(!timingParts.complete){pi.stage='details';pi.requestedFields=['preference'];pi.preview=null;pi.promptId=e.id+':reply';return {state,reply:timingParts.missing==='future-time'?'Ese horario ya pasó. ¿Qué fecha y hora nuevas necesitas?':timingParts.missing==='date'?'Ya tengo la hora que me indicaste. ¿Qué día necesitas el servicio?':'Ya tengo el día que me indicaste. Me falta la hora exacta, con a. m. o p. m. ¿A qué hora necesitas el servicio?'};}
+  if(!timingParts.complete){pi.stage='details';pi.requestedFields=['preference'];pi.preview=null;pi.promptId=e.id+':reply';return {state,reply:timingParts.missing==='future-time'?'Ese horario ya pasó. ¿Qué fecha y hora nuevas necesitas?':timingParts.missing==='date'?'Ya tengo la hora que me indicaste. ¿Qué día necesitas el servicio?':'Ya tengo el día. ¿A qué hora exacta te gustaría recibirnos? Puedes decirme, por ejemplo, «a las cuatro de la tarde».'};}
   preference={value:timingParts.preferenceLiteral,parts:timingParts.parts,projection:timingParts};
  }
- if(planning&&!preference){pi.stage='details';pi.requestedFields=['preference'];pi.preview=null;pi.promptId=e.id+':reply';return {state,reply:clientCalendarIntake?(pi.requestedDateLiteral?'Conservé el día «'+pi.requestedDateLiteral+'». Me falta la hora exacta, con a. m. o p. m. ¿A qué hora necesitas el servicio?':'¿Qué día y a qué hora necesitas el servicio? Indícame si es a. m. o p. m.'):'¿Qué día y franja horaria prefieres para el servicio? Lo guardaré como horario solicitado; el equipo interno se encargará de asignar el técnico y la ruta.'};}
+ if(planning&&!preference){pi.stage='details';pi.requestedFields=['preference'];pi.preview=null;pi.promptId=e.id+':reply';return {state,reply:clientCalendarIntake?(pi.requestedDateLiteral?'Conservé el día «'+pi.requestedDateLiteral+'». ¿A qué hora te gustaría recibirnos?':'¿Qué día y a qué hora te gustaría recibirnos?'):'¿Qué día y franja horaria prefieres para el servicio? Lo guardaré como horario solicitado; el equipo interno se encargará de asignar el técnico y la ruta.'};}
  const clientSchedule=Boolean(planning&&clientRequestedScheduleEnabled(c,planning.caseSourceAt)&&preference&&(preference.parts||Date.parse(preference.source.at)>=c.clientRequestedSchedule.startsAt));
  let requestedSchedule;
  if(clientSchedule){
   const requested=preference.parts?preference.projection:projectClientRequestedSchedule(preference.value,preference.source.at,iso(e.at));
   if(!requested.complete){
    pi.stage='details';pi.requestedFields=['preference'];pi.preview=null;pi.promptId=e.id+':reply';
-   const missing=requested.missing==='date'?'Necesito la fecha exacta para programarlo.':requested.missing==='future-time'?'Ese horario ya pasó. Necesito una fecha y hora nuevas.':'Ya tengo el día que indicaste. Me falta la hora exacta, con a. m. o p. m.';
-   return {state,reply:missing+' Escríbeme el día y la hora juntos, por ejemplo: «mañana a las 10 a. m.». Conservaré los demás datos que ya me compartiste.'};
+   const missing=requested.missing==='date'?'Necesito la fecha exacta para programarlo.':requested.missing==='future-time'?'Ese horario ya pasó. Necesito una fecha y hora nuevas.':'Ya tengo el día. Para confirmar la hora exacta, ¿la quieres en la mañana o en la tarde?';
+   return {state,reply:missing+' Conservé los demás datos que ya me compartiste.'};
   }
   // Relative wording can stay identical across Bogotá midnight while its
   // native source refers to another date. A summary confirms that projected
@@ -912,7 +918,7 @@ export function registrationTurn(s,c,previous,e,decision,{literalSlots=null}={})
  s.audit('OWN_SERVICE_REGISTRATION_PREPARED',e.id,{caseId:state.caseId,requestHash:hash,priceCop:own.entry.priceCop,businessWritten:false,summaryOutboxId});
  return {state,observed:true,observedState:'PROGRAM_REGISTRATION_PENDING'};
 }
-function receiptValid(c,entry,r){return ownScope(c,r)&&r.createdById===c.mariaProgram.actorId&&r.phone===entry.payload.phone&&r.persisted===true&&uuid.test(r.orderId||'')&&r.caseId===entry.payload.caseId&&r.acceptanceId===entry.payload.quote.acceptanceId&&r.requestHash===entry.requestHash&&(entry.payload.clientSchedule?clientRequestedScheduleReceiptMatches(entry.payload,r):r.state==='NUEVO'&&r.scheduled===false)&&r.paymentRecorded===false;}
+function receiptValid(c,entry,r){const trial=nativeTrialPayload(c,entry.payload);if(trial?!(r?.recordClass==='PRUEBA'&&r.ordinaryService===false&&r.trialProfileId===trial.profileId):r?.recordClass==='PRUEBA')return false;return ownScope(c,r)&&r.createdById===c.mariaProgram.actorId&&r.phone===entry.payload.phone&&r.persisted===true&&uuid.test(r.orderId||'')&&r.caseId===entry.payload.caseId&&r.acceptanceId===entry.payload.quote.acceptanceId&&r.requestHash===entry.requestHash&&(entry.payload.clientSchedule?clientRequestedScheduleReceiptMatches(entry.payload,r):r.state==='NUEVO'&&r.scheduled===false)&&r.paymentRecorded===false;}
 export function ownRegisteredReceiptForPresentation(s,c,{phone,line,caseId}){
  if(!programEnabled(c))return null;
  const conv=s.conversation(phone),entry=get(s,prefix+caseId),p=entry?.payload;
@@ -977,7 +983,7 @@ function nativeText(r){const m=r.message?.ephemeralMessage?.message??r.message??
 function registrationOperationalScope(s,c,entry){
  const p=entry.payload;if(!operationalLineAllowed(c,p.line))return false;
  if(!c.operationalLineScope)return true;
- if(typeof s.hasSourcesOutsideLine!=='function'||s.hasSourcesOutsideLine(p.phone,p.line))return false;
+ if(typeof s.hasSourcesOutsideLine!=='function'||foreignLineSources(s,c,p.phone,p.line))return false;
  const acceptanceAt=Date.parse(p.sources?.acceptance?.at);
  if(!Number.isFinite(acceptanceAt)||acceptanceAt<operationalLineStartsAt(c,p.line)||p.sources?.acceptance?.line!==p.line)return false;
  return registrationSources(p).every(src=>Boolean(s.db.prepare('SELECT 1 FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(src.id,p.phone,p.line)))&&
@@ -1007,6 +1013,7 @@ async function verifyNative(s,c,t,entry){
   deliveries.push([await nativeMessage(s,t,c,summary.mid,p.phone,p.line),summary]);
   if(confirmsOrdinarySummaryData(p.sources.acceptance.text)){
    const event=s.open(acceptanceRow.body),preview={customerName:p.customerName,address:p.address,municipality:p.municipality,service:p.slots.service,priceCop:p.quote.priceCop,...Object.fromEntries(['site','mattresses','rooms','area'].filter(field=>p.slots[field]!=null).map(field=>[field,String(p.slots[field])])),...(p.slots.preference?{preference:p.slots.preference}:{}),...(p.clientSchedule?{clientSchedule:true}:{}),...(p.petPresence?{petPresence:p.petPresence}:{})};
+   if(p.clientSchedule){const projected=p.preferenceParts?projectNativePreferenceParts(p.preferenceParts,p.sources.acceptance.at):projectClientRequestedSchedule(p.slots.preference,p.sources.preference?.at,p.sources.acceptance.at);if(!projected.complete)throw Error('PROGRAM_SUMMARY_CALENDAR_UNVERIFIED');preview.requestedSchedule={requestedDate:projected.requestedDate,requestedTime:projected.requestedTime};}
    if(JSON.stringify(ownSummaryDataProof(s,state,event,summary,preview))!==JSON.stringify(p.summaryConfirmation))throw Error('PROGRAM_SUMMARY_DELIVERY_UNVERIFIED');
   }
  }else if(entry.confirmationKind!=='price-accepted-with-prior-literal-facts'||!acceptsOrdinaryQuotation(p.sources.acceptance.text)||Date.parse(p.sources.customerName.at)>Date.parse(p.sources.acceptance.at)||Date.parse(p.sources.address.at)>Date.parse(p.sources.acceptance.at))throw Error('PROGRAM_CUSTOMER_CONFIRMATION_UNVERIFIED');
@@ -1179,6 +1186,13 @@ function reviewSavedSchedulingRoutes(s,c){
  return escalated;
 }
 function saved(s,c,key,entry,r,routeQuestion){
+ if(r.recordClass==='PRUEBA'){
+  s.tx(()=>{const p=entry.payload,active=publicRegistrationAllowed(s,c,entry)&&sameCurrent(s,entry)&&registrationOperationalScope(s,c,entry),conv=s.conversation(p.phone);put(s,key,{...entry,status:'SAVED',recordClass:'PRUEBA',receipt:r,savedAt:Date.now()});
+   if(conv?.state.caseId===p.caseId){conv.state.programIntake={...conv.state.programIntake,stage:'registered'};conv.state.programServiceId=r.orderId;conv.state.awaitingHumanReview=false;s.saveConversation(p.phone,conv.state);}
+   s.audit('OWN_NATIVE_TRIAL_SAVED',p.sourceId,{caseId:p.caseId,orderId:r.orderId,profileId:r.trialProfileId,recordClass:'PRUEBA',ordinaryService:false,confirmationSuppressed:!active});
+   if(active)s.queue('program:'+p.caseId+':saved',p.phone,p.line,staffPlanningSavedText({...entry,receipt:r})+'\n\nPRUEBA NO EJECUTAR: registro de ensayo.',false,conv.revision,p.caseId);
+  });return;
+ }
  s.tx(()=>{
   const p=entry.payload,planning=staffPlanningRecord(s,entry),active=publicRegistrationAllowed(s,c,entry)&&sameCurrent(s,entry)&&registrationOperationalScope(s,c,entry)&&(!entry.staffPlanning||Boolean(planning));put(s,key,{...entry,status:'SAVED',receipt:r,savedAt:Date.now()});
   const conv=s.conversation(p.phone);if(conv?.state.caseId===p.caseId){conv.state.programIntake={...conv.state.programIntake,stage:'registered'};conv.state.programServiceId=r.orderId;if(planning)conv.state.staffAssignment={guard:MARIA_STAFF_PLANNING_GUARD,status:'PENDING_INTERNAL_ASSIGNMENT',orderId:r.orderId,receiptHash:entry.requestHash,requestedTiming:planning.requestedTiming,preferenceSourceId:planning.preferenceSourceId};s.saveConversation(p.phone,conv.state);}

@@ -1,3 +1,4 @@
+import {foreignLineSources,nativeTrialCustomerTurn} from './native-live-trial.mjs';
 import { normalize, SANDRA, DIEGO, CURRENT_OPERATOR_ROUTING,TECHNICAL_COORDINATOR,publicTextSafe, internalRecipients,knownInternalRecipient,internalName,questionRecipients } from './config.mjs';
 import {selectCommonAnswer,commonQuestionTopics,faqNeedsPersonalReview,faqTopicLabel} from './faq.mjs';
 import {chiefStatusTopic,chiefStatusReply} from './chief-status.mjs';
@@ -271,7 +272,7 @@ const unreadLinkOnly = text => externalLinks(text).length>0&&!textWithoutLinks(t
 
 function directed(text,name) {
   const t=normalize(text), n=normalize(name);
-  const aliases=n==='maria angel'?'maria angel|mariangel':n;
+  const aliases=n==='maria angel'?'maria angel|marian angel|mariangel':n;
   return new RegExp('^[¿¡ ]*(?:(?:hola|buenos dias|buenas tardes|buenas noches)[, :]+)?(?:'+aliases+'|bot)(?:[, :¿?!]|$)').test(t)&&!new RegExp('^(?:'+aliases+'|bot)\\s+(?:dijo|dice|respondio|comento|me dijo|le dijo)\\b').test(t);
 }
 function shortNameStatus(text,name){
@@ -854,8 +855,9 @@ export class Engine {
         s.noteStaffIntervention(e);s.hold(e.phone,e.id,true);finish('STAFF_TAKEOVER');return;
       }
       const conv=s.conversation(e.phone);
-      const internal=internalRecipients(c).includes(e.phone);
-      if(knownInternalRecipient(e.phone)&&!internal){finish('OBSERVED_INTERNAL_OUTSIDE_SCOPE');return;}
+      const trialCustomer=nativeTrialCustomerTurn(c,e);
+      const internal=internalRecipients(c).includes(e.phone)&&!trialCustomer;
+      if(knownInternalRecipient(e.phone)&&!internal&&!trialCustomer){finish('OBSERVED_INTERNAL_OUTSIDE_SCOPE');return;}
       const ownChiefQuote=internal&&e.quotedId&&s.db.prepare("SELECT id FROM outbox WHERE phone=? AND line=? AND mid=? AND internal=1 AND state IN ('DELIVERED','READ')").get(e.phone,e.line,e.quotedId);
       const chiefPlan=internal&&parseChiefCommand(e,c,{quotedOwn:Boolean(ownChiefQuote)});
       const ownCaseQuestion=chiefPlan?.action==='unsupported'&&ownChiefQuote&&s.db.prepare("SELECT 1 FROM questions q JOIN outbox o ON (o.id=q.outbox_id OR EXISTS(SELECT 1 FROM question_routes r WHERE r.question_id=q.id AND r.outbox_id=o.id AND r.recipient=o.phone AND r.line=o.line)) WHERE o.phone=? AND o.line=? AND o.mid=? AND o.internal=1 AND o.state IN ('DELIVERED','READ') AND q.state IN ('PENDING','ANSWERED','ANSWER_REVIEW')").get(e.phone,e.line,e.quotedId);
@@ -929,14 +931,14 @@ export class Engine {
         // Observe a direct current stop-contact instruction without answering,
         // altering the human hold or changing its intake/payment facts.
         const scope=assertOperationalLineScope(c);
-        if(!scope||operationalLineAllowed(c,e.line)&&e.at>=operationalLineStartsAt(c,e.line)&&!s.hasSourcesOutsideLine(e.phone,e.line)){
+        if(!scope||operationalLineAllowed(c,e.line)&&e.at>=operationalLineStartsAt(c,e.line)&&!foreignLineSources(s,c,e.phone,e.line)){
           const noContact=ownCommercialCustomerTurn(s,c,conv.state,e,{noContactOnly:true});
           if(noContact){s.saveConversation(e.phone,noContact.state);s.audit('OWN_NO_CONTACT_OBSERVED_UNDER_HUMAN_HOLD',e.id,{guard:COMMERCIAL_OBJECTION_GUARD,caseId:noContact.state.caseId,businessWritten:false,humanHoldReleased:false,customerReplyQueued:false});}
         }
         finish('OBSERVED_HUMAN');return;
       }
       const lineScope=assertOperationalLineScope(c);
-      if(lineScope&&(!operationalLineAllowed(c,e.line)||e.at<operationalLineStartsAt(c,e.line)||s.hasSourcesOutsideLine(e.phone,e.line))){
+      if(lineScope&&(!operationalLineAllowed(c,e.line)||e.at<operationalLineStartsAt(c,e.line)||foreignLineSources(s,c,e.phone,e.line))){
         finish('OBSERVED_TEMPORARY_LINE_SCOPE');return;
       }
       const commercialTurn=ownCommercialCustomerTurn(s,c,conv.state,e,{newCase:literalOwnNewService(e),personalPriority:contextNeedsPersonalPriority(e.text,e)||Boolean(afterServiceRequest(e,analysis))});

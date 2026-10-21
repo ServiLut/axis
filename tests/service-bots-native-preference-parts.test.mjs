@@ -60,8 +60,8 @@ for(const change of ['A las 11 am','El domingo 25 de octubre'])test('single-sour
  assert.equal([p.preferenceParts.date.id,p.preferenceParts.time.id].includes(correction.id),true);
 }));
 for(const invalid of ['A las 10','A las 25:00','A las 9:65 am','A las dos','Me sirve a las dos','A las doce de la mañana','Mejor a las 13 de la mañana','Entre las diez y las once de la mañana','No puedo a las diez de la mañana','Si puedo a las dos de la tarde'])test('an ambiguous or invalid later hour cannot retain an older confirmed summary: '+invalid,t=>using(t,async f=>{
- await parts(f);const bad=await f.say(invalid);assert.match(f.reply(bad),/hora exacta/);assert.equal(f.entry(bad),undefined);
- const yes=await f.say('Sí');assert.equal(f.entry(yes),undefined);assert.match(f.reply(yes),/hora exacta/);
+ await parts(f);const bad=await f.say(invalid);assert.match(f.reply(bad),/A qué hora|hora.*mañana o en la tarde/);assert.equal(f.entry(bad),undefined);
+ const yes=await f.say('Sí');assert.equal(f.entry(yes),undefined);assert.match(f.reply(yes),/A qué hora|hora.*mañana o en la tarde/);
  const corrected=await f.say('A las 11 am');assert.match(f.reply(corrected),/11:00 a\. m\./);const final=await f.say('Sí');assert.equal(f.entry(final).payload.preferenceParts.time.id,corrected.id);
 }));
 for(const kind of ['stored-time-text','source-phone','source-line','native-time-text'])test('part provenance is rechecked before any adapter call: '+kind,t=>using(t,async f=>{

@@ -1,3 +1,4 @@
+import {nativeTrialBinding} from './native-live-trial.mjs';
 import {operationalLineAllowed} from './line-scope.mjs';
 import {createHash} from 'node:crypto';
 
@@ -38,7 +39,7 @@ export function nativeSourceBeforeRelease(source,context,release,config,through)
   // Native timestamps have second precision. The whole second must precede
   // the verified return; a source in that same second is still ambiguous.
   const mutationKnown=/^[a-f0-9]{64}$/.test(source.mutationHash??'')&&release?.nativeBaseline?.sources.some(v=>v.id===source.id&&v.line===source.line&&v.at===source.at&&v.mutationHash===source.mutationHash);
-  return Boolean(release&&source.line===context.line&&operationalLineAllowed(config,source.line)&&(source.phone===undefined||source.phone===context.phone)&&((source.edited!==true&&source.kind!=='edited-body-unavailable')||mutationKnown)&&typeof source.id==='string'&&source.id&&Number.isSafeInteger(source.at)&&source.at>=config.activatedAt&&source.at<=through&&source.at+999<release.at);
+  return Boolean(release&&(source.line===context.line||nativeTrialBinding(config,context.phone,context.line)&&source.at<config.nativeLiveTrial.startsAt&&mutationKnown)&&operationalLineAllowed(config,source.line)&&(source.phone===undefined||source.phone===context.phone)&&((source.edited!==true&&source.kind!=='edited-body-unavailable')||mutationKnown)&&typeof source.id==='string'&&source.id&&Number.isSafeInteger(source.at)&&source.at>=config.activatedAt&&source.at<=through&&source.at+999<release.at);
 }
 export function partitionNativeAttention(store,config,context,attention){
   if(!attention?.complete||!Array.isArray(attention.sources))throw Error('NATIVE_ATTENTION_COVERAGE_REQUIRED');

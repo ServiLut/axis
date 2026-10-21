@@ -1,0 +1,23 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {nativeTrialConfig,nativeTrialPayload,nativeTrialBinding,nativeTrialCustomerTurn,nativeTrialForeignHistoryAllowed,NATIVE_LIVE_TRIAL_GUARD} from '../automation/service-bots/native-live-trial.mjs';
+import {createSummaryDataFixture} from './fixtures/maria-summary-data-flow.mjs';
+import {drainProgramRegistrations,registrationStatus} from '../automation/service-bots/maria-program.mjs';
+import {projectClientRequestedSchedule} from '../automation/service-bots/client-requested-schedule.mjs';
+import {parseChiefCommand} from '../automation/service-bots/chief-actions.mjs';
+const START=Date.parse('2026-10-16T21:20:00Z'),id='5578d28c-3174-42f9-a976-ecaa16da035c',BLUE='573126944997',RED='573126938721',CHIEF='573016803926';
+const profile=()=>({version:1,id,source:'direct-user-own-two-line-e2e-20261021',startsAt:new Date(START).toISOString(),expiresAt:new Date(START+3600000).toISOString(),bindings:[{line:BLUE,phone:'573000007384'},{line:RED,phone:CHIEF}]});
+test('default off; trial must be fixed-company, two own lines, separate phones and bounded expiry',()=>{assert.equal(nativeTrialConfig({},'fumigacion',{}),null);for(const change of [p=>p.bindings.pop(),p=>p.bindings[1].phone=p.bindings[0].phone,p=>p.expiresAt=new Date(START+7200001).toISOString(),p=>p.extra=true]){const p=profile();change(p);assert.throws(()=>nativeTrialConfig({BOT_NATIVE_LIVE_TRIAL_JSON:JSON.stringify(p)},'fumigacion',{enabled:true,startsAt:START,expiresAt:START+86400000}));}});
+for(const [line,phone,color] of [[BLUE,'573000007384','Azul'],[RED,CHIEF,'Roja']])test('actual Engine saves the isolated '+color+' native fixture with the same confirmed calendar and separate metrics',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:START});const f=createSummaryDataFixture(v=>t.mock.timers.setTime(v));
+ f.config.nativeLiveTrial=nativeTrialConfig({BOT_NATIVE_LIVE_TRIAL_JSON:JSON.stringify(profile())},'fumigacion',f.config.mariaProgram);f.config.staffPlanning={enabled:true,mode:'internal-staff-assignment',startsAt:START-5000};f.config.clientRequestedSchedule={enabled:true,guard:'own-confirmed-client-time-without-technician-v1',startsAt:START-5000};
+ const say=(text)=>f.turn(text,{phone,line});
+ try{
+  f.deliver(await say('Necesito otro servicio nuevo para cucarachas. Es un apartamento de 2 habitaciones en Itagüí.'));f.deliver(await say('Sí, acepto esa cotización'));
+  const form=await say('Persona Sintética Prueba '+color+'\nCalle de Prueba 0 # 0, PRUEBA NO EJECUTAR\nEl sábado de la próxima semana a las cuatro de la tarde');assert.match(f.deliver(form),/24\/10\/2026 a las 4:00 p\. m\./);
+  const final=await say('Sí, confirmo que los datos son correctos.'),entry=f.entry(final);assert.ok(entry);assert.equal(nativeTrialPayload(f.config,entry.payload).profileId,id);
+  let creates=0;const result=await drainProgramRegistrations(f.store,f.config,f.transport(async(url,opts)=>{assert.match(url,/\/native-trial$/);const wrapper=JSON.parse(opts.body);assert.equal(wrapper.profileId,id);creates++;const p=wrapper.request,{complete,...schedule}=projectClientRequestedSchedule(p.slots.preference,p.sources.preference.at,p.sources.acceptance.at);return {ok:true,json:async()=>({...f.receipt(p),recordClass:'PRUEBA',ordinaryService:false,trialProfileId:id,state:'PROGRAMADO',scheduled:true,schedulingKind:'client-requested-without-technician',schedule:{...schedule,preferenceSourceId:p.sources.preference.id,preferenceSourceAt:p.sources.preference.at,summaryMid:p.summaryConfirmation.mid,acceptanceId:p.quote.acceptanceId,verifiedCurrentFields:true}})};}));
+  assert.equal(result.persisted,1,JSON.stringify({result,creates,entry:f.entry(final)}));assert.equal(creates,1);assert.equal(f.entry(final).recordClass,'PRUEBA');assert.equal(registrationStatus(f.config,f.store).saved,0);assert.equal(registrationStatus(f.config,f.store).trialSaved,1);assert.notEqual(f.state(final).awaitingHumanReview,true);assert.match(f.store.open(f.store.db.prepare("SELECT body FROM outbox WHERE id LIKE 'program:%:saved'").get().body),/PRUEBA NO EJECUTAR/);
+  await drainProgramRegistrations(f.store,f.config,f.transport(async()=>{throw Error('NO_SECOND_WRITE');}));assert.equal(creates,1);
+ }finally{f.store.close();}
+});
+test('a verified chief typo and an unlinked yes ask for context, never approve an uncertain rewrite',()=>{const p=parseChiefCommand({phone:CHIEF,line:BLUE,fromMe:false,forwarded:false,kind:'text',text:'marian angel, sí',at:START},{company:'fumigacion',lines:[{phone:BLUE}]});assert.equal(p.action,'unsupported');assert.equal(p.params.reason,'SHORT_UNLINKED_ANSWER');});

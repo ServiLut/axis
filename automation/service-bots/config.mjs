@@ -1,3 +1,4 @@
+import {nativeTrialConfig} from './native-live-trial.mjs';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import {aiConfiguration} from './ai-settings.mjs';
 import {registrationConfig,staffPlanningConfig} from './maria-program.mjs';
@@ -89,6 +90,7 @@ export function configFromEnv(env = process.env) {
     inactivityFollowupEnabled:company==='fumigacion'&&env.BOT_CUSTOMER_INACTIVITY_FOLLOWUP==='true',
     tesaOperations:tesaConfiguration(env,company,lines,Date.parse(env.BOT_ACTIVATED_AT || '')),
     mariaProgram:registrationConfig(env,company),
+    nativeLiveTrial:nativeTrialConfig(env,company,registrationConfig(env,company)),
     staffPlanning:staffPlanningConfig(env,company,Date.parse(env.BOT_ACTIVATED_AT||'')),
     clientRequestedSchedule:clientRequestedScheduleConfig(env,company,Date.parse(env.BOT_ACTIVATED_AT||'')),
     mariaTestOrder:mariaTestOrderAccessConfig(env,company,registrationConfig(env,company)),

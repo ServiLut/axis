@@ -1,3 +1,4 @@
+import {foreignLineSources,nativeTrialBinding,nativeTrialCustomerTurn} from './native-live-trial.mjs';
 import {createHash} from 'node:crypto';
 import {officeReceptionReplyStillValid} from './office-customer-replies.mjs';
 import {explicitNewService} from './after-service.mjs';
@@ -271,7 +272,7 @@ export class Transport {
     if(!publicOperationAllowed(this.config,{line:row?.line,sourceAt:row?.created,createdAt:row?.created}))throw Error('PUBLIC_RESPONSE_WINDOW_REQUIRED');
     if(!row.internal&&!this.config.enabled)throw new Error('CUSTOMER_GATE_CLOSED');
     if(row.internal&&!internalRecipients(this.config).includes(row.phone))throw new Error('INTERNAL_RECIPIENT_MISMATCH');
-    if(!row.internal&&knownInternalRecipient(row.phone))throw new Error('INTERNAL_ROLE_REQUIRED');
+    if(!row.internal&&knownInternalRecipient(row.phone)&&!nativeTrialBinding(this.config,row.phone,row.line,row.created))throw new Error('INTERNAL_ROLE_REQUIRED');
     if(!row.internal&&!publicTextSafe(text))throw new Error('EXTERNAL_TEXT_REJECTED');
     if(!/^57\d{10}$/.test(row.phone))throw new Error('GROUP_OR_INVALID_RECIPIENT');
     const line=this.config.lines.find(l=>l.phone===row.line);if(!line)throw new Error('LINE_OUTSIDE_COMPANY');
@@ -406,10 +407,10 @@ export async function drain(store,config,transport,engine) {
     if(!publicEventAllowed(config,row))continue;
     const e=store.open(row.body); let analysis={};
     const lineScope=assertOperationalLineScope(config);
-    if(lineScope&&!e.fromMe&&!knownInternalRecipient(e.phone)&&
+    if(lineScope&&!e.fromMe&&(!knownInternalRecipient(e.phone)||nativeTrialCustomerTurn(config,e))&&
       (e.at<operationalLineStartsAt(config,e.line)||
         !operationalLineAllowed(config,e.line)||
-        typeof store.hasSourcesOutsideLine!=='function'||store.hasSourcesOutsideLine(e.phone,e.line))){
+        typeof store.hasSourcesOutsideLine!=='function'||foreignLineSources(store,config,e.phone,e.line))){
       store.db.prepare("UPDATE events SET state='OPERATIONAL_SCOPE_REVIEW' WHERE id=? AND state='PENDING'").run(e.id);
       store.audit('OPERATIONAL_SCOPE_EVENT_BLOCKED',e.id,{line:e.line,coverage:operationalCoverage(config),replayed:false,migrated:false});continue;
     }
@@ -417,17 +418,17 @@ export async function drain(store,config,transport,engine) {
       store.db.prepare("UPDATE events SET state='SUSPENDED_LINE_REVIEW' WHERE id=? AND state='PENDING'").run(e.id);
       store.audit('SUSPENDED_LINE_EVENT_BLOCKED',e.id,{line:e.line,coverage:operationalCoverage(config),replayed:false,migrated:false});continue;
     }
-    const conversation=store.conversation(e.phone),superseded=!e.fromMe&&!knownInternalRecipient(e.phone)&&(e.at<conversation?.at||row.revision<conversation?.revision);
+    const conversation=store.conversation(e.phone),superseded=!e.fromMe&&(!knownInternalRecipient(e.phone)||nativeTrialCustomerTurn(config,e))&&(e.at<conversation?.at||row.revision<conversation?.revision);
     if(superseded){await engine.process(e);continue;}
-    if(config.historyCheckRequired&&!e.fromMe&&!knownInternalRecipient(e.phone)){
+    if(config.historyCheckRequired&&!e.fromMe&&(!knownInternalRecipient(e.phone)||nativeTrialCustomerTurn(config,e))){
       const checked=store.priorHistory(e.phone);
       if(checked?.cutoff!==config.activatedAt||((transport instanceof Transport||assertOperationalLineScope(config))&&checked.guardVersion!==operationalHistoryGuard(config))){
         try{store.savePriorHistory(e.phone,await transport.priorHistory(e.phone),e.id);}
         catch{store.audit('PRIOR_HISTORY_UNVERIFIED',e.id);store.db.prepare("UPDATE events SET state='HISTORY_REVIEW' WHERE id=? AND state='PENDING'").run(e.id);continue;}
       }
     }
-    if(lineScope&&!e.fromMe&&!knownInternalRecipient(e.phone)&&
-      (typeof store.hasSourcesOutsideLine!=='function'||store.hasSourcesOutsideLine(e.phone,e.line))){
+    if(lineScope&&!e.fromMe&&(!knownInternalRecipient(e.phone)||nativeTrialCustomerTurn(config,e))&&
+      (typeof store.hasSourcesOutsideLine!=='function'||foreignLineSources(store,config,e.phone,e.line))){
       store.db.prepare("UPDATE events SET state='OPERATIONAL_SCOPE_REVIEW' WHERE id=? AND state='PENDING'").run(e.id);
       store.audit('OPERATIONAL_SCOPE_CHANGED_BEFORE_MODEL',e.id,{line:e.line,coverage:operationalCoverage(config),replayed:false,migrated:false});continue;
     }
@@ -435,7 +436,7 @@ export async function drain(store,config,transport,engine) {
     const newCase=config.company==='fumigacion'?explicitNewService(e.text):explicitNewTechnicalCase(e.text);
     const intakeStage=store.conversation(e.phone)?.state.programIntake?.stage;
     const ownQuotationAcceptance=config.company==='fumigacion'&&Boolean(conversation?.state.quotedPrice)&&acceptsOrdinaryQuotation(e.text);
-    if(!e.fromMe&&!knownInternalRecipient(e.phone)&&!store.conversation(e.phone)?.hold&&(!store.conversation(e.phone)?.state.awaitingHumanReview||newCase)&&!ownQuotationAcceptance&&!literalGreetingEligible(config,e,conversation?.state)&&!(config.company==='servicio-tecnico'&&technicalIntakeMetaQuestion(e.text))&&!['name','address','details','confirm','correction','pending'].includes(intakeStage)){
+    if(!e.fromMe&&(!knownInternalRecipient(e.phone)||nativeTrialCustomerTurn(config,e))&&!store.conversation(e.phone)?.hold&&(!store.conversation(e.phone)?.state.awaitingHumanReview||newCase)&&!ownQuotationAcceptance&&!literalGreetingEligible(config,e,conversation?.state)&&!(config.company==='servicio-tecnico'&&technicalIntakeMetaQuestion(e.text))&&!['name','address','details','confirm','correction','pending'].includes(intakeStage)){
       // Customer history remains in its company. Observations are explicitly untrusted reference, never policy.
       const knowledge=store.db.prepare('SELECT body FROM knowledge ORDER BY imported DESC LIMIT 10').all().map(k=>store.open(k.body));
       const caseId=newCase?'':store.conversation(e.phone)?.state.caseId||'';
@@ -502,7 +503,7 @@ export async function flushOutbox(store,config,transport){
     if(!publicOutboxAllowed(store,config,o))continue;
     const lineScope=assertOperationalLineScope(config);
     if(lineScope&&(o.created<operationalLineStartsAt(config,o.line)||
-      (!o.internal&&(typeof store.hasSourcesOutsideLine!=='function'||store.hasSourcesOutsideLine(o.phone,o.line))))){
+      (!o.internal&&(typeof store.hasSourcesOutsideLine!=='function'||foreignLineSources(store,config,o.phone,o.line))))){
       if(store.db.prepare("UPDATE outbox SET state='OPERATIONAL_SCOPE_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id).changes){
         store.audit('OPERATIONAL_SCOPE_OUTBOX_BLOCKED',o.id,{line:o.line,coverage:operationalCoverage(config),attemptedSend:false,migrated:false});suppressed++;
       }
@@ -621,7 +622,7 @@ export async function flushOutbox(store,config,transport){
     }
     if(!publicOutboxAllowed(store,config,o))continue;
     if(lineScope&&(o.created<operationalLineStartsAt(config,o.line)||!operationalLineAllowed(config,o.line)||
-      (!o.internal&&(typeof store.hasSourcesOutsideLine!=='function'||store.hasSourcesOutsideLine(o.phone,o.line))))){
+      (!o.internal&&(typeof store.hasSourcesOutsideLine!=='function'||foreignLineSources(store,config,o.phone,o.line))))){
       if(store.db.prepare("UPDATE outbox SET state='OPERATIONAL_SCOPE_REVIEW',updated=? WHERE id=? AND state='READY'").run(Date.now(),o.id).changes){
         store.audit('OPERATIONAL_SCOPE_CHANGED_BEFORE_SEND',o.id,{line:o.line,coverage:operationalCoverage(config),attemptedSend:false,migrated:false});suppressed++;
       }

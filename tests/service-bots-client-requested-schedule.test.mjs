@@ -31,7 +31,7 @@ test('status exposes the separate calendar capability without rewriting legacy s
 }));
 async function prepared(f,confirmation='Sí',preference='El sábado 24 de octubre a las 10 am'){
  const facts=await throughFacts(f),pref=await f.turn(preference),text=f.deliver(pref);
- assert.match(text,/• Horario solicitado: El sábado 24 de octubre a las 10 am/);
+ assert.match(text,/• Horario solicitado: 24\/10\/2026 a las 10:00 a\. m\./);
  assert.match(text,/Registraré el servicio en este horario, sin técnico asignado/);
  assert.doesNotMatch(text,/pendiente de coordinación/);
  assert.equal(f.entry(pref),undefined);
@@ -62,7 +62,7 @@ for(const confirmation of ['Sí','Correcto','Listo','Sí, confirmo que los datos
  assert.equal(saved.receipt.schedule.startAt,'2026-10-24T15:00:00.000Z');
  assert.equal(saved.receipt.schedule.endAt,null);assert.equal(saved.receipt.schedule.technicianId,null);
  const row=f.store.db.prepare('SELECT * FROM outbox WHERE id=?').get('program:'+entry.payload.caseId+':saved'),reply=f.store.open(row.body);
- assert.match(reply,/Tu servicio quedó confirmado y programado/);assert.match(reply,/• Horario: El sábado 24 de octubre a las 10 am/);
+ assert.match(reply,/Tu servicio quedó confirmado y programado/);assert.match(reply,/• Horario: 24\/10\/2026 a las 10:00 a\. m\./);
  assert.doesNotMatch(reply,/pendiente de coordinación|disponibilidad se confirma/);
  assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM tesa_questions').get().n,0);
  assert.notEqual(f.state(final).awaitingHumanReview,true);
@@ -92,7 +92,7 @@ test('disabling the client-calendar flag after preparation prevents a write, ret
  assert.equal(calls,0);assert.equal(f.entry(final).status,'REVIEW');assert.equal(f.entry(final).payload.sources.preference.id,entry.payload.sources.preference.id);
 }));
 test('a calendar without an exact hour asks for clarification and preserves the collected fields',t=>using(t,async f=>{
- await throughFacts(f);const pref=await f.turn('Mañana en la tarde');assert.match(f.reply(pref),/Me falta la hora exacta/);
+ await throughFacts(f);const pref=await f.turn('Mañana en la tarde');assert.match(f.reply(pref),/hora.*mañana o en la tarde|A qué hora/);
  assert.equal(f.state(pref).programIntake.customerName,'Persona Sintética');assert.equal(f.state(pref).programIntake.address,'Calle de Prueba 0 # 0');
  assert.equal(f.entry(pref),undefined);f.deliver(pref);const bare=await f.turn('Sí');assert.equal(f.entry(bare),undefined);
 }));

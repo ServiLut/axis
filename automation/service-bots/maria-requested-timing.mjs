@@ -1,5 +1,5 @@
 // Pure calendar projection mirrored from the Tenaxis API. No I/O or model.
-// Reviewed TypeScript SHA-256: 9231eddce04075e92d97ac2e14e9e891eb938014b2020acf228d89c89eaf814a
+// Reviewed TypeScript SHA-256: 706a9940368ded382821d7055f6e6c1e7ea0c45e72eec7c1ab57e33435605f50
 const months = [
     'enero',
     'febrero',
@@ -181,4 +181,57 @@ export function mariaRequestedTiming(preference, sourceAt) {
     result.fechaSolicitada = dates[0];
     result.horaSolicitada = time;
     return result;
+}
+/** Conversational calendar, always anchored to the original Bogotá message. */
+export function mariaNaturalRequestedTiming(preference, sourceAt) {
+    const empty = { fechaSolicitada: null, horaSolicitada: null, horarioSolicitado: preference?.trim() ? preference : null };
+    if (!preference || preference.length > 500 || !sourceAt || !Number.isFinite(Date.parse(sourceAt)))
+        return empty;
+    let text = normalized(preference);
+    if (/[?¿"“”«»<>]|https?:|\b(?:o|entre|hasta|no|nunca|tampoco|antes|despues|desde|si|quizas|dijo|dice|segun|tal vez)\b/.test(text))
+        return empty;
+    const local = new Date(Date.parse(sourceAt) - 5 * 3600000), today = calendar(local.getUTCFullYear(), local.getUTCMonth() + 1, local.getUTCDate());
+    if (!today)
+        return empty;
+    // A two digit written year belongs to this century, not to the server date.
+    text = text.replace(/\b(\d{1,2}[/.]\d{1,2})[/.](\d{2})\b/g, (_m, date, year) => date + '/' + (2000 + Number(year)));
+    const nextWeek = new RegExp(`\\b(?:(?:el|este|proximo)\\s+)?(${weekdays.join('|')})\\s+(?:de\\s+)?(?:la\\s+)?(?:proxima|otra|siguiente)\\s+semana\\b|\\b(${weekdays.join('|')})\\s+(?:de\\s+)?la\\s+semana\\s+que\\s+viene\\b`, 'g');
+    text = text.replace(nextWeek, (_m, a, b) => {
+        const weekday = weekdays.indexOf(a || b), monday = today.getTime() - ((today.getUTCDay() + 6) % 7) * dayMs;
+        const target = new Date(monday + (7 + (weekday + 6) % 7) * dayMs);
+        return `${target.getUTCDate()}/${target.getUTCMonth() + 1}/${target.getUTCFullYear()}`;
+    });
+    if (/\bsemana\b/.test(text))
+        return empty; // A week without a day is not a booking.
+    const wordHours = { una: 1, uno: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12 };
+    text = text.replace(/\b(una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce)\s+(?:de|en|por)\s+la\s+(manana|tarde|noche|madrugada)\b/g, (_m, h, period) => wordHours[h] + ' ' + (period === 'manana' || period === 'madrugada' ? 'am' : 'pm'));
+    text = text.replace(/\b(\d{1,2})(?::(\d{2}))?\s+(?:de|en|por)\s+la\s+(manana|tarde|noche|madrugada)\b/g, (_m, h, m, period) => h + (m ? ':' + m : '') + ' ' + (period === 'manana' || period === 'madrugada' ? 'am' : 'pm'));
+    text = text.replace(/\b(?:a(?:l| las?)?\s+)?mediodia\b/g, '12 pm').replace(/\b(?:a(?: la| las?)?\s+)?medianoche\b/g, '12 am');
+    // Plain weekday on the current day can mean today; the future-time check is
+    // still applied below and the absolute interpretation is shown to the client.
+    text = text.replace(new RegExp(`\\b(?:el\\s+)?(${weekdays[today.getUTCDay()]})\\b`, 'g'), (m) => /\b(?:este|proximo)\s*$/.test(text.slice(0, text.indexOf(m))) ? m : 'hoy');
+    let parsed = mariaRequestedTiming(text, sourceAt);
+    if (parsed.fechaSolicitada && !parsed.horaSolicitada) {
+        const bare = /\ba las?\s+(\d{1,2})(?![\d:]|\s*[ap]\.?\s*m)(?:\s*(?:por favor|gracias|muchas gracias))?[.! ]*$/i.exec(text);
+        if (bare) {
+            const clock = mariaContextualHour(bare[1], sourceAt, parsed.fechaSolicitada.toISOString().slice(0, 10));
+            if (clock) {
+                text = text.slice(0, bare.index) + 'a las ' + clock + ' horas';
+                parsed = mariaRequestedTiming(text, sourceAt);
+            }
+        }
+    }
+    return { ...parsed, horarioSolicitado: preference };
+}
+/** Infer only a single possible future clock, never an invented work schedule. */
+export function mariaContextualHour(text, sourceAt, requestedDate) {
+    const match = /^(?:a las?\s+)?(\d{1,2})[.! ]*$/.exec(normalized(text));
+    if (!match || !/^\d{4}-\d\d-\d\d$/.test(requestedDate) || !Number.isFinite(Date.parse(sourceAt)))
+        return null;
+    const h = Number(match[1]);
+    if (h > 23)
+        return null;
+    const hours = h === 0 || h > 12 ? [h] : h === 12 ? [0, 12] : [h, h + 12];
+    const possible = hours.filter(hour => Date.parse(requestedDate + 'T' + String(hour).padStart(2, '0') + ':00:00-05:00') >= Date.parse(sourceAt));
+    return possible.length === 1 ? String(possible[0]).padStart(2, '0') + ':00' : null;
 }

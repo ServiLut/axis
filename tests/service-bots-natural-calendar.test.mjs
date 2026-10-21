@@ -1,0 +1,15 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mariaNaturalRequestedTiming as parse,mariaContextualHour} from '../automation/service-bots/maria-requested-timing.mjs';
+import {projectClientRequestedSchedule} from '../automation/service-bots/client-requested-schedule.mjs';
+import {createSummaryDataFixture} from './fixtures/maria-summary-data-flow.mjs';
+const at='2026-10-21T18:00:00.000Z';
+for(const [text,day,time] of [['para el sábado','2026-10-24',null],['el sábado de la próxima semana a las cuatro de la tarde','2026-10-31','16:00'],['viernes de la semana que viene a las 9 am','2026-10-30','09:00'],['hoy a las 4','2026-10-21','16:00'],['22/10/26 8 am','2026-10-22','08:00'],['mañana a las 9 de la mañana','2026-10-22','09:00'],['para el próximo miércoles a las 10 am','2026-10-28','10:00']])test('natural original calendar: '+text,()=>{const r=parse(text,at);assert.equal(r.fechaSolicitada?.toISOString().slice(0,10),day);assert.equal(r.horaSolicitada,time);assert.equal(r.horarioSolicitado,text);});
+test('the same relative phrase changes with its native date, including year boundary',()=>{assert.equal(parse('el sábado a las 10 am','2026-11-04T16:00:00Z').fechaSolicitada.toISOString().slice(0,10),'2026-11-07');assert.equal(parse('el sábado de la próxima semana a las 10 am','2026-12-30T16:00:00Z').fechaSolicitada.toISOString().slice(0,10),'2027-01-09');});
+test('an actual ambiguous clock asks only the meridian, never assumes opening hours',()=>{const r=projectClientRequestedSchedule('mañana a las 4',at);assert.equal(r.missing,'time');assert.equal(r.requestedDate,'2026-10-22');assert.equal(mariaContextualHour('4','2026-10-21T06:00:00Z','2026-10-21'),null);});
+for(const text of ['la próxima semana','sábado o domingo a las 10 am','si puedo el sábado a las 4 pm','mi vecino dijo el sábado a las 4 pm','31/02/26 8 am','el lunes 24/10/2026 a las 10 am','hoy a las 8 am','22/10/202 8 am'])test('does not manufacture a time: '+text,()=>{assert.equal(projectClientRequestedSchedule(text,at).complete,false);});
+test('real Engine takes short year with name/address and resolves its summary before acceptance',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.parse(at)});const f=createSummaryDataFixture(v=>t.mock.timers.setTime(v));
+ f.config.staffPlanning={enabled:true,mode:'internal-staff-assignment',startsAt:Date.parse('2026-10-16T21:19:00Z')};f.config.clientRequestedSchedule={enabled:true,guard:'own-confirmed-client-time-without-technician-v1',startsAt:Date.parse('2026-10-16T21:19:00Z')};
+ try{f.deliver(await f.turn('Cucarachas en apartamento de dos habitaciones en Itagüí.'));f.deliver(await f.turn('Sí, acepto esa cotización'));const facts=await f.turn('Persona Sintética\nCalle de Prueba 0 # 0\n22/10/26 8 am');assert.match(f.deliver(facts),/22\/10\/2026 a las 8:00 a\. m\./);assert.doesNotMatch(f.reply(facts),/año completo/);const yes=await f.turn('Sí');assert.ok(f.entry(yes));assert.equal(f.entry(yes).payload.slots.preference,'22/10/26 8 am');}finally{f.store.close();}
+});

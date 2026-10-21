@@ -1,4 +1,4 @@
-import {mariaRequestedTiming} from './maria-requested-timing.mjs';
+import {mariaNaturalRequestedTiming as mariaRequestedTiming} from './maria-requested-timing.mjs';
 import {projectNativePreferenceParts} from './native-preference-parts.mjs';
 
 export const MARIA_CLIENT_SCHEDULE_GUARD='own-confirmed-client-time-without-technician-v1';
