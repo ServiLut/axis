@@ -66,7 +66,8 @@ async function request(c,path,body,fetcher){
   const error=Error('PROGRAM_REQUEST_REJECTED');error.status=r.status;error.failureCode='HTTP_REJECTED';
   // Retain a closed diagnostic code, never a raw response, URL or credential.
   try{const b=await r.json(),m=typeof b?.message==='string'?normalize(b.message):'';
-   if(m==='identidad retirada; requiere revision')error.failureCode='RETIRED_CUSTOMER_IDENTITY';
+   if(['MARIA_SERIALIZATION_ABORTED','MARIA_UNIQUE_CONFLICT'].includes(b?.code))error.failureCode=b.code;
+   else if(m==='identidad retirada; requiere revision')error.failureCode='RETIRED_CUSTOMER_IDENTITY';
    else if(m==='nombre diferente al registro; requiere revision')error.failureCode='CUSTOMER_NAME_CONFLICT';
   }catch{}
   throw error;
@@ -201,8 +202,11 @@ function previousOrdinarySummaryText(preview){
  return ['Revisa los datos de tu solicitud:','','• Servicio: '+preview.service,'• Valor: $'+preview.priceCop.toLocaleString('es-CO'),'• Nombre: '+preview.customerName,'• Dirección: '+preview.address,'• Municipio: '+preview.municipality,...(preview.preference?['• Preferencia solicitada: '+preview.preference]:[]),...(preview.petPresence?['• Mascotas informadas: '+preview.petPresence]:[]),'','El horario sigue pendiente de coordinación.','','¿Confirmas que estos datos son correctos?'].join('\n');
 }
 function scheduleDisplay(p){const [y,m,d]=p.requestedDate.split('-'),[h,min]=p.requestedTime.split(':');return d+'/'+m+'/'+y+' a las '+((+h%12)||12)+':'+min+' '+(+h<12?'a. m.':'p. m.');}
-function ordinarySummaryText(preview,resolved=true){
+function historicalScopedSummaryText(preview,resolved=true){
  return ['Revisa los datos de tu solicitud:','','• Servicio: '+preview.service,...(preview.site?['• Inmueble informado: '+preview.site]:[]),...(preview.mattresses?['• Colchones informados: '+preview.mattresses]:[]),...(preview.rooms?['• Habitaciones informadas: '+preview.rooms]:[]),...(preview.area?['• Área informada: '+preview.area]:[]),'• Valor: $'+preview.priceCop.toLocaleString('es-CO'),'• Nombre: '+preview.customerName,'• Dirección: '+preview.address,'• Municipio: '+preview.municipality,...(preview.preference?[(preview.clientSchedule?'• Horario solicitado: ':'• Preferencia solicitada: ')+(resolved&&preview.clientSchedule&&preview.requestedSchedule?scheduleDisplay(preview.requestedSchedule):preview.preference)]:[]),...(preview.petPresence?['• Mascotas informadas: '+preview.petPresence]:[]),'',preview.clientSchedule?'Registraré el servicio en este horario, sin técnico asignado.':'El horario sigue pendiente de coordinación.','','¿Confirmas que estos datos son correctos?'].join('\n');
+}
+function ordinarySummaryText(preview,resolved=true){
+ return historicalScopedSummaryText(preview,resolved).replace(/\n\n(?:Registraré el servicio en este horario, sin técnico asignado\.|El horario sigue pendiente de coordinación\.)\n\n/,'\n\n');
 }
 function ownSummarySourceProjection(s,state,e,anchor,original,ref,field,value,literalSlots){
  const direct=source=>source?.kind==='text'&&source.fromMe===false&&!source.forwarded&&!source.quotedId&&source.phone===e.phone&&source.line===e.line&&source.at>=anchor.at&&source.at<=e.at&&!/["“”]|\b(?:dijo|dice|comento|comentaron|segun|mi vecin[oa]|su vecin[oa]|un tercero)\b/.test(normalize(source.text));
@@ -240,7 +244,7 @@ function ownSummaryScope(s,state,e,own,literalSlots){
  return scope;
 }
 function ownSummaryDataProof(s,state,e,prompt,preview){
- if(!prompt||e.quotedId||e.forwarded||e.fromMe||e.kind!=='text'||prompt.phone!==e.phone||prompt.line!==e.line||prompt.case_id!==state.caseId||prompt.internal!==0||!['DELIVERED','READ'].includes(prompt.state)||typeof prompt.mid!=='string'||prompt.mid===state.quotedPrice?.mid||![ordinarySummaryText(preview),ordinarySummaryText(preview,false),previousOrdinarySummaryText(preview),legacyOrdinarySummaryText(preview)].includes(s.open(prompt.body)))return null;
+ if(!prompt||e.quotedId||e.forwarded||e.fromMe||e.kind!=='text'||prompt.phone!==e.phone||prompt.line!==e.line||prompt.case_id!==state.caseId||prompt.internal!==0||!['DELIVERED','READ'].includes(prompt.state)||typeof prompt.mid!=='string'||prompt.mid===state.quotedPrice?.mid||![ordinarySummaryText(preview),ordinarySummaryText(preview,false),historicalScopedSummaryText(preview),historicalScopedSummaryText(preview,false),previousOrdinarySummaryText(preview),legacyOrdinarySummaryText(preview)].includes(s.open(prompt.body)))return null;
  const proof=get(s,'first-delivery:'+prompt.id),promptSourceId=prompt.id?.endsWith(':reply')?prompt.id.slice(0,-6):null;
  const origin=promptSourceId&&s.db.prepare('SELECT rowid,at FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(promptSourceId,e.phone,e.line),current=s.db.prepare('SELECT rowid FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(e.id,e.phone,e.line);
  if(!origin||!current||origin.rowid>=current.rowid||origin.at>e.at||proof?.mid!==prompt.mid||proof.line!==e.line||!['DELIVERED','READ'].includes(proof.state)||!Number.isSafeInteger(proof.verifiedAt)||proof.verifiedAt<prompt.created||proof.verifiedAt>Date.now()+5000||e.at<Math.floor(proof.verifiedAt/1000)*1000)return null;
@@ -552,8 +556,8 @@ function staffPlanningRecord(s,entry){
 }
 function staffPlanningSavedText(entry){
  const p=entry.payload;
- if(p.clientSchedule?.guard===MARIA_CLIENT_SCHEDULE_GUARD&&clientRequestedScheduleReceiptMatches(p,entry.receipt))return ['¡Listo! Tu servicio quedó confirmado y programado.','','• Servicio: '+p.slots.service,'• Valor aceptado: $'+p.quote.priceCop.toLocaleString('es-CO'),'• Nombre: '+p.customerName,'• Dirección: '+p.address,'• Municipio: '+p.municipality,'• Horario: '+scheduleDisplay(entry.receipt.schedule),'','El equipo interno se encargará de asignar el técnico y la ruta. Gracias por confiar en nosotros.'].join('\n');
- return ['Tu solicitud quedó aceptada y registrada.','','• Servicio: '+p.slots.service,'• Valor aceptado: $'+p.quote.priceCop.toLocaleString('es-CO'),'• Nombre: '+p.customerName,'• Dirección: '+p.address,'• Municipio: '+p.municipality,'• Horario solicitado: '+p.slots.preference,'','El equipo interno se encargará de asignar el técnico y la ruta. Este registro conserva el horario solicitado; la disponibilidad se confirma por separado.'].join('\n');
+ if(p.clientSchedule?.guard===MARIA_CLIENT_SCHEDULE_GUARD&&clientRequestedScheduleReceiptMatches(p,entry.receipt))return ['¡Listo! Tu servicio quedó confirmado y programado.','','• Servicio: '+p.slots.service,'• Valor aceptado: $'+p.quote.priceCop.toLocaleString('es-CO'),'• Nombre: '+p.customerName,'• Dirección: '+p.address,'• Municipio: '+p.municipality,'• Horario: '+scheduleDisplay(entry.receipt.schedule),'','Gracias por confiar en nosotros 😊'].join('\n');
+ return ['Tu solicitud quedó aceptada y registrada.','','• Servicio: '+p.slots.service,'• Valor aceptado: $'+p.quote.priceCop.toLocaleString('es-CO'),'• Nombre: '+p.customerName,'• Dirección: '+p.address,'• Municipio: '+p.municipality,'• Horario solicitado: '+p.slots.preference,'','Te confirmaremos el horario de tu visita.'].join('\n');
 }
 export function ownStaffPlanningReceipt(s,c,request){const entry=ownRegisteredReceiptForPresentation(s,c,request);return entry&&staffPlanningRecord(s,entry)?entry:null;}
 export function staffPlanningCustomerTurn(s,c,state,e,{status=false}={}){
@@ -1072,7 +1076,7 @@ function review(s,c,key,entry,reason,notify=true){s.tx(()=>{
   const diagnostic=entry.writeFailure?.code==='RETIRED_CUSTOMER_IDENTITY'?' El sistema rechazó una identidad retirada.':entry.writeFailure?.code==='CUSTOMER_NAME_CONFLICT'?' El nombre no coincide con la ficha existente.':'';
   const timing=p.clientSchedule&&p.slots.preference?' Horario confirmado por el cliente: '+p.slots.preference+'; registro de agenda sin comprobar.':' El horario sigue pendiente.';
   s.questionToRecipients({phone:p.phone,line:p.line,caseId:p.caseId,topic:'program-registration-review',conditions:{caseId:p.caseId,requestHash:entry.requestHash},recipients:questionRecipients(c,'program-registration-review'),source:p.sourceId,text:c.name+': solicitud aceptada del contacto '+p.phone+', precio $'+p.quote.priceCop+'. El cliente ya confirmó sus datos. No pude comprobar el registro ('+reason+').'+diagnostic+timing+' No se reintentó la escritura ni se comprobó pago. Acción: revisar la ficha y el recibo de este caso antes de registrar, para evitar duplicados.'});
-  s.queue('program:'+p.caseId+':review',p.phone,p.line,'Gracias por confirmar. No pude comprobar que el servicio quedara registrado. Conservé tus datos y dejé la solicitud para revisión.',false,conv.revision,p.caseId);
+  s.queue('program:'+p.caseId+':review',p.phone,p.line,'Gracias por confirmar tus datos. Estoy verificando tu reserva.',false,conv.revision,p.caseId);
  }
 });}
 const schedulingPrefix='maria-scheduling-review:';
@@ -1264,7 +1268,7 @@ export async function drainProgramRegistrations(s,c,t,routeQuestion=null){
   if(!publicRegistrationAllowed(s,c,entry)){deferred++;continue;}
   s.tx(()=>{entry={...entry,status:'SENDING',attemptedAt:Date.now()};put(s,row.key,entry);s.audit('OWN_SERVICE_REGISTRATION_RESERVED',entry.payload.sourceId,{caseId:entry.payload.caseId,requestHash:entry.requestHash});});
   try{const r=await request(c,'',entry.payload,t.fetcher);if(!receiptValid(c,entry,r))throw Error('PROGRAM_RECEIPT_MISMATCH');saved(s,c,row.key,entry,r,routeQuestion);persisted++;}
-  catch(error){const writeFailure={httpStatus:Number.isInteger(error?.status)?error.status:null,code:['RETIRED_CUSTOMER_IDENTITY','CUSTOMER_NAME_CONFLICT','HTTP_REJECTED'].includes(error?.failureCode)?error.failureCode:'RESPONSE_NOT_VERIFIED'};put(s,row.key,{...entry,status:'UNCERTAIN',writeFailure});s.audit('OWN_REGISTRATION_WRITE_UNCERTAIN',entry.payload.sourceId,{caseId:entry.payload.caseId,...writeFailure,writeRetried:false});}
+  catch(error){const writeFailure={httpStatus:Number.isInteger(error?.status)?error.status:null,code:['RETIRED_CUSTOMER_IDENTITY','CUSTOMER_NAME_CONFLICT','HTTP_REJECTED','MARIA_SERIALIZATION_ABORTED','MARIA_UNIQUE_CONFLICT'].includes(error?.failureCode)?error.failureCode:'RESPONSE_NOT_VERIFIED'};put(s,row.key,{...entry,status:'UNCERTAIN',writeFailure});s.audit('OWN_REGISTRATION_WRITE_UNCERTAIN',entry.payload.sourceId,{caseId:entry.payload.caseId,...writeFailure,writeRetried:false});}
  }
  const schedulingEscalated=reviewSavedSchedulingRoutes(s,c);
  return {enabled:true,persisted,reviewed,deferred,schedulingEscalated};

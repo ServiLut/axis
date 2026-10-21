@@ -176,7 +176,7 @@ test('a standalone preference supplied during the form stays literal and reaches
   await f.quote();f.deliver(await f.turn('Sí'));
   const timing=await f.turn('Para mañana en la tarde');f.deliver(timing);
   assert.equal(f.s.conversation(timing.phone).state.slots.preference,'mañana en la tarde');
-  const fields=await f.turn('Nombre: Persona Sintética\nDirección: Calle 10 # 20-30');assert.match(f.deliver(fields),/Preferencia solicitada: mañana en la tarde/);assert.match(f.reply(fields),/pendiente de coordinación/);
+  const fields=await f.turn('Nombre: Persona Sintética\nDirección: Calle 10 # 20-30');assert.match(f.deliver(fields),/Preferencia solicitada: mañana en la tarde/);assert.match(f.reply(fields),/Preferencia solicitada/);
   const accepted=await f.turn('Confirmo');
   const row=f.s.db.prepare("SELECT value FROM meta WHERE key LIKE 'maria-registration:%'").get(),entry=row&&f.s.open(row.value);
   assert.equal(entry?.status,'PENDING');assert.equal(entry.payload.slots.preference,'mañana en la tarde');

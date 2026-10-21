@@ -181,7 +181,7 @@ test('a rejected registration keeps the closed cause, checks its receipt and nev
   const stored=f.store.db.prepare("SELECT value FROM meta WHERE key LIKE 'maria-registration:%'").get(),entry=f.store.open(stored.value);
   assert.deepEqual(entry.writeFailure,{httpStatus:409,code:'RETIRED_CUSTOMER_IDENTITY'});assert.doesNotMatch(JSON.stringify(entry),/never retain raw backend content/);
   const out=f.store.db.prepare("SELECT body FROM outbox WHERE id=?").get('program:'+entry.payload.caseId+':review'),text=f.store.open(out.body);
-  assert.match(text,/No pude comprobar que el servicio quedara registrado/);assert.doesNotMatch(text,/pendiente de confirmación|(?:confirma|confirmes)\s+(?:si|los|tus)/i);
+  assert.equal(text,'Gracias por confirmar tus datos. Estoy verificando tu reserva.');assert.doesNotMatch(text,/registr|sistema|revisión|pendiente de confirmación|(?:confirma|confirmes)\s+(?:si|los|tus)/i);
   const questions=f.store.db.prepare("SELECT body FROM outbox WHERE internal=1").all().map(r=>f.store.open(r.body));
   assert.ok(questions.some(x=>/cliente ya confirmó sus datos/.test(x)&&/identidad retirada/.test(x)));
   await drainProgramRegistrations(f.store,f.config,t);assert.equal(writes,1);

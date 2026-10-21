@@ -32,7 +32,7 @@ test('status exposes the separate calendar capability without rewriting legacy s
 async function prepared(f,confirmation='Sí',preference='El sábado 24 de octubre a las 10 am'){
  const facts=await throughFacts(f),pref=await f.turn(preference),text=f.deliver(pref);
  assert.match(text,/• Horario solicitado: 24\/10\/2026 a las 10:00 a\. m\./);
- assert.match(text,/Registraré el servicio en este horario, sin técnico asignado/);
+ assert.doesNotMatch(text,/Registraré|sin técnico|equipo interno|sistema/);
  assert.doesNotMatch(text,/pendiente de coordinación/);
  assert.equal(f.entry(pref),undefined);
  const final=await f.turn(confirmation),entry=f.entry(final);assert.ok(entry);
@@ -63,7 +63,7 @@ for(const confirmation of ['Sí','Correcto','Listo','Sí, confirmo que los datos
  assert.equal(saved.receipt.schedule.endAt,null);assert.equal(saved.receipt.schedule.technicianId,null);
  const row=f.store.db.prepare('SELECT * FROM outbox WHERE id=?').get('program:'+entry.payload.caseId+':saved'),reply=f.store.open(row.body);
  assert.match(reply,/Tu servicio quedó confirmado y programado/);assert.match(reply,/• Horario: 24\/10\/2026 a las 10:00 a\. m\./);
- assert.doesNotMatch(reply,/pendiente de coordinación|disponibilidad se confirma/);
+ assert.doesNotMatch(reply,/pendiente de coordinación|disponibilidad se confirma|equipo interno|asignar el técnico|ruta/);
  assert.equal(f.store.db.prepare('SELECT COUNT(*) n FROM tesa_questions').get().n,0);
  assert.notEqual(f.state(final).awaitingHumanReview,true);
  await drainProgramRegistrations(f.store,f.config,f.transport(async()=>{throw Error('DUPLICATE_CREATE');}));
@@ -98,7 +98,7 @@ test('a calendar without an exact hour asks for clarification and preserves the 
 }));
 test('a legacy case cannot acquire the client-calendar opt-in when the configuration changes later',t=>using(t,async f=>{
  const {quote}=await throughFacts(f);f.config.clientRequestedSchedule.startsAt=quote.at+1000;
- const pref=await f.turn('El sábado 24 de octubre a las 10 am');assert.match(f.deliver(pref),/El horario sigue pendiente de coordinación/);
+ const pref=await f.turn('El sábado 24 de octubre a las 10 am');assert.match(f.deliver(pref),/Preferencia solicitada/);
  const final=await f.turn('Sí, confirmo que los datos son correctos.');assert.equal(f.entry(final).payload.clientSchedule,undefined);
 }));
 test('calendar configuration defaults OFF and rejects other companies and retroactive cutoffs',()=>{
