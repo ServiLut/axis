@@ -1,5 +1,17 @@
 # Registro propio de servicios nuevos de María
 
+## Dos recorridos nativos con horario correcto completados — 21/oct/2026 19:38Z
+
+Prevalece el nuevo apartado de `BOTS_MARIA_MIGUEL.md`. Runtime **fe47584** y Backend **dad6fa4** instalados y verificados. BLUE 4997: «Hoy a las 4» → **PROGRAMADO 21/oct/2026 16:00 Bogotá**; RED 8721: «El sábado de la próxima semana a las cuatro de la tarde» → **PROGRAMADO 31/oct/2026 16:00 Bogotá**. Dos altas reales de base de datos, aisladas y clasificadas **PRUEBA**, por fuentes nativas nuevas de los WhatsApp propios autorizados. Cotización $129.000, datos literales, resumen entregado, confirmación posterior, recibo post-COMMIT, estado comercial CONFIRMADO visible y confirmación WhatsApp exacta con DELIVERY_ACK/READ. Técnico/fin nulos y pago cero; no son ventas ni visitas reales.
+
+Ambos ensayos fueron retirados con baja recuperable de su orden/cliente/dirección, auditoría y consulta separada después del COMMIT. Perfil temporal retirado del ENV fresco de ambas aplicaciones; APIs finales verifican configurado/habilitado false. No renovar ni reabrir. Registro ordinario dual, horario del cliente sin asignación de técnico, accesos y vencimiento originales permanecen activos; campañas, posventa, notas y otros permisos separados no se activaron.
+
+Se corrigieron el límite de 100 filas de la prueba de identidad nativa mediante paginación completa acotada y la colisión de teléfonos ficticios entre ambos ensayos. Los intentos fallidos anteriores y la ficha real retirada se conservaron, sin reintento o restauración. Un caso nativo nuevo completó BLUE después de la corrección, con teléfono ficticio distinto por línea. Las restricciones ordinarias de identidad, unicidad y resultados inciertos siguen vigentes.
+
+El nuevo resumen no expone «Registraré el servicio… sin técnico asignado» ni detalles de ruta/equipo. Tras un recibo válido, el cliente recibe confirmación del servicio y horario más agradecimiento breve. Los problemas de persistencia conservan su consulta interna concreta y no se presentan como una confirmación de guardado. Compatibilidad exacta con resúmenes históricos conservada, sin alterar sus textos o hashes. Gate runtime3329/3329; backend focalizado437/2omitidas y TypeScript correcto. Fuentes y límites completos en el apartado general y `.tmp/maria-warranty-complaint-20261021/native-two-line-e2e/`.
+
+SAVED ordinario sigue **1 histórico**; trialSaved **2** y REVIEW **2** de intentos propios conservados. No presentar esos contadores como nuevas ventas ni borrar preguntas históricas para aparentar cero pendientes. Las dos pruebas actuales sí quedaron guardadas, confirmadas y retiradas con evidencia.
+
 ## Confirmación recibida y guardado no comprobado — instalado 21/oct/2026 17:52Z
 
 Runtime `acea4c5` DONE 4 s; ambas líneas y configuración protegida comprobadas por API. Después de una confirmación válida se conserva el intento y el mismo recibo. Si no se acredita el guardado, el mensaje ya no pide confirmar otra vez: declara el registro sin comprobar, conserva datos y explica una acción de revisión concreta. El horario literal confirmado no se sustituye por «no hay horario». Los errores futuros guardan sólo estado HTTP y diagnóstico cerrado, sin conservar cuerpos remotos; no hay reintento automático de alta.
