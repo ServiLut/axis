@@ -1,5 +1,15 @@
 # Registro propio de servicios nuevos de María
 
+## Derivación a asesor y formulario con fecha abreviada — instalado 21/oct/2026 16:44Z
+
+Runtime `caea43a` DONE 3 s, incluye `c29e45a` DONE 4 s; API propia y ambas líneas OPEN/propietario exacto comprobadas a las 16:44Z. **SAVED permanece en 1 histórico**, sin otra alta comercial acreditada. Configuración de registro/horario del cliente, cortes, actor, empresa, tenant y vencimiento originales intactos. Ver fuentes y límites al inicio de `BOTS_MARIA_MIGUEL.md`.
+
+Se reprodujo que una fecha «20/10/26 8 am» invalidaba todo el formulario solicitado. Ahora se conservan el nombre y la dirección literales y se aclara sólo la fecha con año completo; fecha completa y hora sin «a las» también se reconocen. El resumen conserva la fuente y exige entrega y confirmación posterior. El recorrido sintético de ambas líneas produjo una sola alta local PROGRAMADO con hora exacta y técnico nulo; no es una escritura real de Tenaxis. Gate final 3207/3207, sin omisiones; incluye 20 pruebas del planificador posventa aún local.
+
+«Un asesor» durante la captura de datos se deriva a Sandra antes de repetir el formulario. Datos, cotización y horario se conservan; no libera atención humana ni crea una orden. Una indicación de Sandra citada a la pregunta propia entregada, expresamente encabezada «Para el cliente:», puede comunicarse una vez al cliente/caso/línea correspondientes; no ejecuta cambios de negocio. Las revisiones de garantía no se convierten en ventas, refuerzos cobrados o visitas concedidas.
+
+Diagnóstico productivo de nueve casos: todos conservan hold local; no se devolvieron ni reprodujeron sus fuentes. El registro que quedó incompleto y los demás casos históricos requieren revisión y cruce propios, sin atribuirles el resultado de los ensayos. Primera alta real posterior y primera nueva derivación entregada pendientes. Cero altas, cambios de órdenes/pagos, mensajes de prueba, credenciales o liberaciones de Codex.
+
 ## Garantías y continuidad de atención — instalado 21/oct/2026 16:18Z
 
 Runtime `9be7a4b` instalado, Dokploy DONE 19 s, guardias nuevas verificadas por API16:18:19Z y configuración/accesos originales exactos. La petición personal de garantía, los medios posteriores y «No recibí respuesta» continúan el mismo pendiente, sin abrir otra cotización ni pedir inmueble/plaga nuevamente. La nueva alerta única de demora a Sandra es interna y prospectiva desde21/oct 16:17:59.296Z; no concede cobertura, precio, gratuidad o agenda, ni reproduce fuentes antiguas. Ver fuentes, pruebas y límites al inicio de `BOTS_MARIA_MIGUEL.md` y `.tmp/maria-warranty-complaint-20261021/`.
