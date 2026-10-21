@@ -1,5 +1,13 @@
 # Registro propio de servicios nuevos de María
 
+## Garantías y continuidad de atención — instalado 21/oct/2026 16:18Z
+
+Runtime `9be7a4b` instalado, Dokploy DONE 19 s, guardias nuevas verificadas por API16:18:19Z y configuración/accesos originales exactos. La petición personal de garantía, los medios posteriores y «No recibí respuesta» continúan el mismo pendiente, sin abrir otra cotización ni pedir inmueble/plaga nuevamente. La nueva alerta única de demora a Sandra es interna y prospectiva desde21/oct 16:17:59.296Z; no concede cobertura, precio, gratuidad o agenda, ni reproduce fuentes antiguas. Ver fuentes, pruebas y límites al inicio de `BOTS_MARIA_MIGUEL.md` y `.tmp/maria-warranty-complaint-20261021/`.
+
+El caso real reportado ya tenía intervención escrita y aceptación esta mañana; el programa contiene CITA_VERIFICACION PROGRAMADO 21/oct 11:30 Bogotá. No se alteró esa orden ni se creó otra; la ejecución, el pago y la autoría de esa gestión no están acreditados. Atención local desconocida no se convirtió en libre. Cero mensajes, altas, cambios de negocio o liberaciones de Codex en esta corrección. Gate 3195/3195 aislado incluye 20 pruebas del planificador posventa no instalado; no es evidencia comercial real.
+
+Política humana posventa final: refuerzo 15–20 días después del servicio inicial, al 50 % del pago inicial comprobado; tres meses desde la realización comprobada del refuerzo para un servicio nuevo con su cotización. No programar esa fecha desde una reserva o refuerzo no realizado, ni presentar tareas internas como visitas aceptadas. Planificador local preparado; persistencia, scheduler, cruce de seguimientos anteriores y despacho de servidor siguen pendientes. No se migraron órdenes históricas a partir de esta política.
+
 ## Consulta de precio específico — corrección instalada20/oct18:43Z
 
 Runtime `ac5d39f`, DONE3s,3193/3193 pruebas. Ante falta de tarifa aplicable, María consulta el valor/alcance a TESA y lo explica al cliente; no rebaja una solicitud de varias plagas/pisos a una tarifa más estrecha. Conserva datos completos y medida literal sin asumir m². Formato «valor total» y conjunto de plagas en distinto orden ya admitidos bajo respuesta humana nativa citada del mismo caso; no se relajan entrega, identidad, fuente, vigencia ni atención humana. Ver estado, fuentes y límites al inicio de `BOTS_MARIA_MIGUEL.md` y `.tmp/maria-quotation-gap-20261020/checkpoint-private.json`.
