@@ -2,6 +2,7 @@ import {normalize} from './config.mjs';
 import {semanticFollowup} from './maria-understanding.mjs';
 
 export const AFTER_SERVICE_GUARD='literal-followup-kind-and-first-source-before-new-intake-v1';
+export const MARIA_WARRANTY_CONTINUITY_GUARD='own-personal-warranty-request-media-and-status-without-new-intake-v1';
 export const MARIA_LITERAL_SERVICE_CONTEXT_GUARD='own-affirmed-documents-arrival-schedule-and-product-context-before-intake-v1';
 export const MARIA_INCIDENTAL_PETS_GUARD='own-current-incidental-pet-presence-without-safety-claims-v1';
 function onlyCommercialPetContext(raw){
@@ -100,7 +101,13 @@ export function afterServiceKind(text){
   const verification=affirmed(t,/\b(?:verificacion|verificar|verifiquen|verificaci[oó]n)\b/g)&&
     !/\b(?:precio|cotizacion|pago|transferencia|comprobante|datos|direccion|identidad|disponibilidad)\b/.test(t)&&
     (/^(?:por favor\s+)?verificacion[.!? ]*$/.test(t)||/\b(?:servicio|tratamiento|fumigacion|visita|control de plagas)\b/.test(t));
-  const warranty=affirmed(t,/\bgarantia\b/g)&&
+  // A personal request phrased as "quería saber si..." is not a hypothetical
+  // new sale. Keep the request separate from any decision on warranty coverage.
+  const politeWarranty=[...t.matchAll(/\b(?:queria|quisiera|quiero|necesito|me gustaria) saber si (?:me|nos) (?:pueden|puedes|podrian|podrias) (?:dar|aplicar|reconocer|hacer efectiva|ofrecer)\b[^.!?;]{0,35}\bgarantia\b/g)].some(m=>{
+    const prefix=t.slice(0,m.index).split(/[.!?;,]|\b(?:pero|sino)\b/).at(-1);
+    return !/\b(?:no|nunca|si|quizas|tal vez|en caso de|dijo|dice|dijeron|segun)\b/.test(prefix)&&!/\b(?:si (?:los |les )?contrato|antes de contratar|fumigacion nueva|nuevo servicio)\b/.test(t);
+  });
+  const warranty=politeWarranty||affirmed(t,/\bgarantia\b/g)&&
     (/^(?:por favor\s+)?garantia[.!? ]*$/.test(t)||/\b(?:solicito|solicitamos|solicitar|necesito|necesitamos|requiero|requerimos|pedimos|reclamamos|reclamar|aplicar|hacer efectiva|es por|por la)\b[^.!?]*\bgarantia\b/.test(t));
   const kinds=[reinforcement&&'reinforcement',verification&&'verification',warranty&&'warranty'].filter(Boolean);
   if(!kinds.length)return null;
@@ -139,5 +146,5 @@ export function afterServiceDecision(state,next,e,analysis={}){
     reviewConditions:{kind:active.kind,directCustomerReport:active.directCustomerReport},
     review:'La persona solicita '+label+'. Hay que comprobar el antecedente y el alcance del mismo caso. La solicitud no acredita servicio realizado, cobertura de garantía, gratuidad, precio, horario, técnico ni reserva.'+(ambiguous?' Hay que aclarar cuál de las solicitudes necesita atender.':''),
     reviewQuestion:ambiguous?'¿Qué solicitud y antecedente corresponden a este caso?':'¿Qué antecedente y condiciones verificadas corresponden a esta solicitud de '+label+'?',
-    reply:ambiguous?'Gracias. Revisaremos tu solicitud para confirmar cómo continuar.':'Con gusto. Tu solicitud de '+label+' quedó pendiente de revisión.'};
+    reply:warranty&&!e.forwarded&&/\bcucarachas?\b/.test(plain(e.text))&&/\b(?:siguen|siguieron|continuan|persisten|saliendo)\b/.test(plain(e.text))?'Lamento que las cucarachas sigan apareciendo. Conservo tu solicitud de garantía para revisar el caso.':ambiguous?'Gracias. Revisaremos tu solicitud para confirmar cómo continuar.':'Con gusto. Tu solicitud de '+label+' quedó pendiente de revisión.'};
 }

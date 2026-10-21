@@ -28,6 +28,7 @@ import {explicitNewTechnicalCase,technicalIntakeMetaQuestion,technicalIntakeClar
 import {literalIntakeDimensions,MARIA_DIMENSIONS_GUARD} from './intake-dimensions.mjs';
 import {parseChiefCommand,enqueueChiefCommand} from './chief-actions.mjs';
 import {mariaPendingReviewReply} from './maria-pending-review.mjs';
+import {initializeWarrantyResponseEscalation,queueUnansweredWarrantyAlert} from './warranty-response-escalation.mjs';
 import {literalMariaPartialLocation,literalMariaRoomCount,mariaMediaBurstContinuation,MARIA_BATCH_INTAKE_GUARD} from './maria-batch-intake.mjs';
 import {customerDeferralRequested,customerDeferralResumeEvidence,customerDeferralContinues,customerDeferralAcknowledgement,customerDeclinesAfterDeferral,CUSTOMER_DEFERRAL_GUARD} from './customer-deferral.mjs';
 import {literalTermiteFurnitureScope,termiteFurnitureMention} from './maria-furniture-scope.mjs';
@@ -139,7 +140,9 @@ function pendingCustomerReview(store,config,state,event,{pending=null}={}){
   pending={caseId:state.caseId,phone:event.phone,line:event.line,sourceId:body.source,topic:legacyFollowup?'service-followup':q.topic,state:q.state,caseKind:body.conditions?.kind||originalFollowup?.kind};
  }
  const sources=store.db.prepare('SELECT body FROM events WHERE phone=? AND line=? AND from_me=0 AND rowid>=? AND rowid<=? AND at<=? ORDER BY rowid DESC LIMIT 256').all(event.phone,event.line,first.rowid,current.rowid,event.at).reverse().map(r=>({...store.open(r.body),caseId:state.caseId}));
- return mariaPendingReviewReply({company:config.company,state,event,hold:false,sources,pending,lastReply:state.pendingReviewReply});
+ const result=mariaPendingReviewReply({company:config.company,state,event,hold:false,sources,pending,lastReply:state.pendingReviewReply});
+ if(result?.warrantyResponseDelay)queueUnansweredWarrantyAlert(store,config,state,event,result);
+ return result;
 }
 
 // These exact whole-message requests are meaningful only after an independently
@@ -722,6 +725,13 @@ export function customerDecision(company,state,e,analysis={}) {
     return {state:next,productPurposeClarification:true,reply:asked?(next.slots.dimensions?'Conservé las medidas '+next.slots.dimensions+'. Aún falta aclarar si buscas el servicio o información sobre el producto.':'Conservé los datos. Aún falta aclarar si buscas el servicio o información sobre el producto.'):'¿Buscas un servicio de control de plagas o información sobre el producto?'};
   }
   if(e.kind==='call')return {state:{...next,lastCallEvent:e.id},observed:true};
+  if(company==='fumigacion'&&e.kind!=='text'&&preservedFollowup){
+    const mediaName={image:'la imagen',video:'el video',audio:'el audio',document:'el documento'}[e.kind]||'el archivo';
+    const active=next.requestedAfterServiceReview.warrantySource||next.requestedAfterServiceReview.activeRequest||next.requestedAfterServiceReview;
+    const label={warranty:'garantía',reinforcement:'refuerzo',verification:'verificación','post-service':'servicio anterior','ambiguous-followup':'solicitud'}[active.kind]||'servicio anterior';
+    const reply='Recibí '+mediaName+' para la revisión de tu '+label+'. Conservo lo que ya nos contaste; su contenido aún necesita revisión.';
+    return {...preservedFollowup,afterServiceMediaContinuation:true,specificCustomerQuestionReply:reply,reply};
+  }
   if(e.kind!=='text')return {state:next,review:'El cliente envió '+e.kind+'. El contenido original necesita revisión.',reply:e.kind==='audio'?'Recibí tu audio. Te atenderemos en cuanto revisemos su contenido.':'Recibí el archivo. Revisaremos su contenido para continuar contigo.'};
   if(postServiceDocuments(e.text)&&!faqNeedsPersonalReview(e.text)&&!paymentInquiry(e.text))return {state:{...next,slots:{...state.slots}},reviewTopic:'service-documents',reviewConditions:{kind:'reported-post-service-documents',directCustomerReport:!e.forwarded},review:'La persona solicita documentos de un servicio que relata como realizado. El mensaje no acredita registro, ejecución ni existencia o autorización de documentos; hay que contrastar el servicio y revisar qué soportes pueden entregarse.',reviewQuestion:'¿Qué servicio y soportes autorizados comprobados corresponden a esta solicitud?',reply:'Con gusto. Una asesora continuará contigo para revisar los documentos que necesitas.'};
   if((company!=='fumigacion'&&/\b(?:factura|certificado)\b/.test(t)||/\b(?:seguimiento|posservicio|ya tengo (?:una )?cita|estado de (?:la )?orden)\b/.test(t))&&(company!=='fumigacion'||!contextNeedsPersonalPriority(e.text,e)))return {state:next,review:'El cliente consulta un servicio previo, su estado o un soporte. Hace falta contrastar el registro del programa.',reply:'Gracias. Revisaremos el registro de tu servicio para poder ayudarte.'};
@@ -827,7 +837,7 @@ export function customerDecision(company,state,e,analysis={}) {
 }
 
 export class Engine {
-  constructor(store,config){this.store=store;this.config=config;initializeTesaStore(store);}
+  constructor(store,config){this.store=store;this.config=config;initializeTesaStore(store);initializeWarrantyResponseEscalation(store,config);}
   async process(e,analysis={}) {
     const s=this.store,c=this.config;
     return s.tx(()=>{
@@ -950,7 +960,7 @@ export class Engine {
       const initialSource=!newCase&&!caseState.caseId&&c.company==='fumigacion'?pendingBatch.find(source=>source.line===e.line&&!source.fromMe&&!source.forwarded&&source.kind==='text'&&literalIntakeTextWithoutRegistrationFields(source.text).trim()&&(!/^(?:(?:mi|el) )?(?:nombre(?: completo)?|direccion|correo|telefono|documento|cedula)\s*(?::|=|es\b)/.test(normalize(source.text))||Object.keys(extractSlots(source.text,c.company)).length))?.id:null;
       caseState.caseId ||= reportedOrder || c.company+':'+(initialSource||e.id);
       if(!newCase&&c.company==='fumigacion'&&productInquiry&&!caseState.requestedProductInquiry)caseState.requestedProductInquiry={sourceId:productInquiry.id,at:productInquiry.at,question:productInquiry.text.slice(0,300)};
-      if(!newCase&&c.company==='fumigacion'&&e.kind==='text'&&!e.forwarded&&!e.fromMe&&!caseState.requestedAfterServiceReview){
+      if(!newCase&&c.company==='fumigacion'&&['text','image','video','audio','document'].includes(e.kind)&&!e.forwarded&&!e.fromMe&&!caseState.requestedAfterServiceReview){
         const recovered=ownCaseLiteralFollowup(s,c,caseState,e,e.quotedId||null);
         if(recovered){
           const marker=e.quotedId?{restoredFromQuotedSource:{sourceId:e.id,quotedId:recovered.source.id,at:e.at}}:{restoredFromStoredSource:{sourceId:e.id,originalId:recovered.source.id,at:e.at}};
@@ -1269,7 +1279,7 @@ export class Engine {
           text:c.name+': contacto terminado en '+e.phone.slice(-4)+'. '+decision.review+(decision.pendingQuestion?' Pregunta pendiente: '+questionExcerpt(decision.pendingQuestion)+'.':'')+' Mensaje actual: '+questionExcerpt(e.text)+(context?' Datos de esta solicitud: '+context+'.':'')+' '+(decision.reviewQuestion||'¿Cómo debemos continuar en este caso?')});
         if(request.created&&request.outboxId?.startsWith('tesa-question:')){decision.state.pendingTesaQuestionId=request.id;s.saveConversation(e.phone,decision.state);}
         if(!request.created&&(decision.reviewTopic?.startsWith('missing-intake:')||c.company==='fumigacion'&&decision.reviewTopic==='disponibilidad-y-tecnico'&&decision.reviewConditions?.kind==='reported-existing-schedule'||c.company==='servicio-tecnico'&&['customer-question','special-quotation'].includes(decision.reviewTopic)||['cotizacion-verificada','common-question','service-documents','service-followup','warranty-review','requested-technician-contact','payment-instructions','existing-quotation','unread-link'].includes(decision.reviewTopic))){
-          decision.reply=inheritedPending&&(e.quotedId===restored.sourceId||restored.restoredFromStoredSource?.sourceId===e.id)?'Tu solicitud de garantía sigue pendiente de revisión.':null;
+          decision.reply=decision.afterServiceMediaContinuation?decision.specificCustomerQuestionReply:inheritedPending&&(e.quotedId===restored.sourceId||restored.restoredFromStoredSource?.sourceId===e.id)?'Tu solicitud de garantía sigue pendiente de revisión.':null;
           s.audit('PENDING_CLARIFICATION_REUSED',e.id,{caseId:caseState.caseId,questionId:request.id,topic:decision.reviewTopic,newOutboundCreated:false});
         }
       }

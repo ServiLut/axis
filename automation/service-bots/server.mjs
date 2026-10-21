@@ -29,7 +29,8 @@ import {evaluateOwnAi,ownAiUsage,MARIA_CONVERSATION_GUARD,MARIA_FIXED_REPLY_GUAR
 import {MARIA_UNDERSTANDING_GUARD} from './maria-understanding.mjs';
 import {MIGUEL_UNDERSTANDING_GUARD} from './miguel-understanding.mjs';
 import {OWN_QUOTE_CLARIFICATION_GUARD} from './own-quote-clarification.mjs';
-import {MARIA_LITERAL_SERVICE_CONTEXT_GUARD,MARIA_INCIDENTAL_PETS_GUARD} from './after-service.mjs';
+import {MARIA_LITERAL_SERVICE_CONTEXT_GUARD,MARIA_INCIDENTAL_PETS_GUARD,MARIA_WARRANTY_CONTINUITY_GUARD} from './after-service.mjs';
+import {warrantyResponseEscalationStatus} from './warranty-response-escalation.mjs';
 import {TECHNICAL_INTAKE_CONTINUITY_GUARD} from './technical-intake-continuity.mjs';
 import {restoreOwnAiSetup,installOwnAiSetup} from './ai-setup.mjs';
 import {persistMariaKnowledge,mariaKnowledgeStatus,mariaKnowledgeDocument} from './maria-knowledge.mjs';
@@ -322,7 +323,7 @@ export function createBotServer(config,store,transport,engine) {
         technicalScopeGuard:config.company==='servicio-tecnico'?'literal-painting-scope-before-intake-and-pending-question-v1':null,
         technicalSemanticRoutingGuard:config.company==='servicio-tecnico'?'own-current-technical-intent-before-new-intake-v1':null,
         technicalIntakeContinuityGuard:config.company==='servicio-tecnico'?TECHNICAL_INTAKE_CONTINUITY_GUARD:null,
-        afterServiceKindGuard:config.company==='fumigacion'?'literal-followup-kind-and-first-source-before-new-intake-v1':null,
+        afterServiceKindGuard:config.company==='fumigacion'?'literal-followup-kind-and-first-source-before-new-intake-v1':null,warrantyContinuityGuard:config.company==='fumigacion'?MARIA_WARRANTY_CONTINUITY_GUARD:null,warrantyResponseEscalation:warrantyResponseEscalationStatus(store,config),
         unanswered:store.db.prepare("SELECT COUNT(*) n FROM questions WHERE state IN ('PENDING','LEGACY_PENDING','ANSWER_REVIEW')").get().n,
         knowledge:store.db.prepare('SELECT kind,COUNT(*) n FROM knowledge GROUP BY kind').all(),programConnected:Boolean(config.programContextUrl&&config.programToken)||registrationStatus(config,store).enabled,programContextConnected:Boolean(config.programContextUrl&&config.programToken),aiConfigured:config.conversationalAi?.provider?Boolean(config.conversationalAi.ready):Boolean(config.aiUrl&&config.aiToken),conversationalAi:aiStatus(config),priorHistoryProtection:Boolean(config.historyCheckRequired)});
       if(req.url==='/channel-health'){

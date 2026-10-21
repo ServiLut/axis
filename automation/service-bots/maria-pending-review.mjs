@@ -15,6 +15,7 @@ const priority=text=>/\b(?:cancel\w*|reprogram\w*|reclamo\w*|queja\w*|devolucion
 const instruction=text=>/\b(?:ignora\w*|instrucciones|prompt|finge|asume|actua como|haz de cuenta|responde que|di que|dile que|confirma (?:el descuento|la garantia|el precio|la visita)|no revises|salta\w* (?:la|el) (?:revision|control))\b/.test(norm(text));
 const otherCase=text=>/\b(?:otro (?:caso|servicio|cliente)|otra (?:solicitud|persona|direccion)|nuevo servicio|servicio nuevo|mi vecin[oa]|mi (?:mama|madre|papa|padre|herman[oa]))\b/.test(norm(text));
 const statusText=text=>norm(text).replace(/[^\p{L}\p{N}¿?¡!,. :;\s]/gu,'').replace(/\s+/g,' ').trim().replace(/^[¿¡\s]+/,'');
+const unansweredStatus=text=>/^(?:(?:hola|buenos dias|buen dia|buenas tardes|buenas noches)[,!. ]*)?(?:(?:aun |todavia )?no (?:recibi|he recibido|hemos recibido|recibimos) (?:una |la |su |tu )?respuesta|(?:necesito|necesitamos|requiero|solicito|me urge) (?:una |la |su |tu )?respuesta)(?: por favor)?[.!? ]*$/.test(statusText(text));
 const explicitStatus=text=>/^(?:(?:hola|buenos dias|buen dia|buenas tardes|buenas noches)[,!. ]*)?(?:(?:sigo|seguimos|estoy|estamos|quedo|quedamos)\s+)?(?:muy\s+)?pendientes?(?: de (?:su|tu|una|la) (?:respuesta|confirmacion))?[.!? ]*$/.test(statusText(text))||/^(?:(?:hola|buenos dias|buen dia|buenas tardes|buenas noches)[,!. ]*)?(?:y entonces|entonces|me confirmas(?: por ?fa(?:vor)?)?|tienes respuesta|tienen respuesta|hay respuesta|como va(?: mi solicitud| el servicio)?|que (?:paso|pasa)(?: con mi solicitud)?|(?:aun |todavia )?estoy esperando|(?:sigo|seguimos) a la espera(?: de (?:su|tu|una|la) respuesta)?|(?:me )?puedes? responder(?: por favor)?|no me respondes|sigues ahi)[.!? ]*$/.test(statusText(text));
 const greeting=text=>/^(?:hola|buenos dias|buen dia|buenas tardes|buenas noches)[,.!? ]*$/.test(statusText(text));
 const numberWord=new Map([['un',1],['una',1],['uno',1],['dos',2],['tres',3],['cuatro',4],['cinco',5],['seis',6],['siete',7],['ocho',8],['nueve',9]]);
@@ -101,7 +102,7 @@ export function mariaPendingReviewReply({company,state,event,hold=false,sources=
  if(event.quotedId&&!sources.some(source=>sameIdentity(source,event,state.caseId)&&direct(source)&&(source.id===event.quotedId||source.mid===event.quotedId)))return null;
  const kind=kindFor(state,pending),factualPending=pending.caseKind==='wasp-inspection'?'Para las avispas, la cotización depende del tamaño y la altura del panal y requiere inspección. Aún no tengo un precio confirmado.':pendingText(pending.topic,kind);
  if(!factualPending)return null;
- const facts=literalFacts(event.text),isStatus=explicitStatus(event.text)||greeting(event.text);
+ const facts=literalFacts(event.text),unanswered=unansweredStatus(event.text),isStatus=explicitStatus(event.text)||unanswered||greeting(event.text);
  if(['service-followup','warranty-review'].includes(pending.topic)&&['reinforcement','warranty','verification','requested-control','post-service'].includes(kind)){
   const question=pendingCostVisitQuestion(event);if(question)facts.pendingQuestions=question;
  }
@@ -125,6 +126,7 @@ export function mariaPendingReviewReply({company,state,event,hold=false,sources=
  const fingerprint=hash({topic:pending.topic,pendingSourceId:pending.sourceId,pendingState:pending.state,kind,facts});
  if(prior?.guard===MARIA_PENDING_REVIEW_GUARD&&prior.caseId===state.caseId&&prior.phone===event.phone&&prior.line===event.line&&prior.factsHash===fingerprint&&Number.isSafeInteger(prior.at)&&event.at>=prior.at&&event.at-prior.at<60000&&(!isStatus||prior.reason==='pending-status'))return null;
  const parts=[];
+ if(unanswered&&kind==='warranty')parts.push('Lamento que sigas esperando una respuesta. Conservo tu solicitud de garantía y lo que ya nos contaste.');
  if(greeting(event.text)||/^hola\b/.test(norm(event.text)))parts.push('Hola.');
  if(facts.persistingCockroaches)parts.push('Lamento que el problema con las cucarachas continúe.');
  else if(facts.customerConcern)parts.push('Lamento la experiencia que nos cuentas.');
@@ -143,10 +145,10 @@ export function mariaPendingReviewReply({company,state,event,hold=false,sources=
  else if(question?.visit)parts.push('Aún no tengo confirmadas la visita ni su fecha.');
  // The unresolved fact is explicit even when the internal question is reused.
  // A customer's follow-up never creates another internal question here.
- parts.push(question?factualPending.split('. ')[0].replace(/\.$/,'')+'.':factualPending);
+ parts.push(unanswered&&kind==='warranty'?'Aún no tengo una solución ni una visita confirmadas para tu caso.':question?factualPending.split('. ')[0].replace(/\.$/,'')+'.':factualPending);
  const reply=parts.join(' '),reason=isStatus?'pending-status':question?'pending-cost-visit-question':facts.customerConcern?'pending-customer-concern':facts.persistingCockroaches?'pending-postservice-concern':facts.todayRequested||facts.discountRequested?'pending-additional-request':'pending-new-literal-information';
  const sourceReferences=[...new Map([original,current].map(source=>[source.id,{sourceId:source.id,at:source.at,phone:source.phone,line:source.line,caseId:state.caseId}])).values()];
  const questionAspectKeys=[...new Set([...previousAspects,...currentAspects])].slice(-16);
  const marker={guard:MARIA_PENDING_REVIEW_GUARD,caseId:state.caseId,phone:event.phone,line:event.line,sourceId:event.id,at:event.at,reason,factsHash:fingerprint,replyHash:hash(reply),...(questionAspectKeys.length?{questionAspectScope:aspectScope,questionAspectAt:previousAspects.length?prior.questionAspectAt:event.at,questionAspectKeys}:{})};
- return {guard:MARIA_PENDING_REVIEW_GUARD,reply,reason,sourceReferences,marker,newInternalQuestion:false,businessWritten:false,humanHoldReleased:false};
+ return {guard:MARIA_PENDING_REVIEW_GUARD,reply,reason,sourceReferences,marker,...(unanswered&&kind==='warranty'?{warrantyResponseDelay:{pendingSourceId:pending.sourceId}}:{}),newInternalQuestion:false,businessWritten:false,humanHoldReleased:false};
 }
