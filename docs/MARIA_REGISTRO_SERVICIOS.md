@@ -1,5 +1,11 @@
 # Registro propio de servicios nuevos de María
 
+## Confirmación recibida y guardado no comprobado — instalado 21/oct/2026 17:52Z
+
+Runtime `acea4c5` DONE 4 s; ambas líneas y configuración protegida comprobadas por API. Después de una confirmación válida se conserva el intento y el mismo recibo. Si no se acredita el guardado, el mensaje ya no pide confirmar otra vez: declara el registro sin comprobar, conserva datos y explica una acción de revisión concreta. El horario literal confirmado no se sustituye por «no hay horario». Los errores futuros guardan sólo estado HTTP y diagnóstico cerrado, sin conservar cuerpos remotos; no hay reintento automático de alta.
+
+Prueba propia real: cotización $129.000 y resumen con 23/oct 9 a. m. correctos; el POST seguido de recibo no acreditó una orden y quedó en REVIEW. El lector encontró una única ficha retirada del teléfono propio; no se reactiva, reemplaza ni modifica para forzar el ensayo. SAVED=1 histórico, REVIEW=1 de prueba; no hay nueva venta propia ni alta real en ambas líneas acreditadas. El texto «Ya te los envié» obtiene una sola orientación de confirmación y conserva el MID del resumen original. Gate `tests/*.test.mjs` 3299/3299, con los límites de pruebas indicados al inicio de `BOTS_MARIA_MIGUEL.md`.
+
 ## Derivación a asesor y formulario con fecha abreviada — instalado 21/oct/2026 16:44Z
 
 Runtime `caea43a` DONE 3 s, incluye `c29e45a` DONE 4 s; API propia y ambas líneas OPEN/propietario exacto comprobadas a las 16:44Z. **SAVED permanece en 1 histórico**, sin otra alta comercial acreditada. Configuración de registro/horario del cliente, cortes, actor, empresa, tenant y vencimiento originales intactos. Ver fuentes y límites al inicio de `BOTS_MARIA_MIGUEL.md`.
