@@ -1252,8 +1252,9 @@ export class Engine {
       if(registration)decision=registration;
        if(caseState.customerDeferral?.active===true&&decision.state.customerDeferral?.active===false&&decision.state.customerDeferral.resumedBy?.sourceId===e.id)s.audit('OWN_CUSTOMER_DEFERRAL_RESUMED',e.id,{caseId:caseState.caseId,deferralSourceId:caseState.customerDeferral.sourceId,resumeSourceId:e.id,kind:decision.state.customerDeferral.resumedBy.kind,humanHoldReleased:false,acceptanceGrantedByMarker:false});
       decision.state.lastHandledSourceId=e.id;
-      const firstGreeting=/^[¡! ]*(?:hola\b|buenos dias\b|buen dia\b|buenas tardes\b|buenas noches\b)/.test(normalize(e.text))&&!conv.state.introduced&&decision.reply;
-      const firstOrdinaryIntake=c.company==='fumigacion'&&!conv.state.introduced&&(!conv.state.lastHandledSourceId||firstGreeting)&&decision.reply&&!decision.state.programIntake&&!decision.state.pendingFaqQuestion&&!decision.directedNonservice&&!selectedPrice&&!faq?.answer&&!decision.courtesy&&!decision.review&&!decision.question&&!decision.observed;
+      const freshReception=c.company==='fumigacion'&&newCase&&newCaseSource.id===e.id&&literalOwnNewService(e);
+      const firstGreeting=/^[¡! ]*(?:hola\b|buenos dias\b|buen dia\b|buenas tardes\b|buenas noches\b)/.test(normalize(e.text))&&(!conv.state.introduced||freshReception)&&decision.reply;
+      const firstOrdinaryIntake=c.company==='fumigacion'&&(!conv.state.introduced||freshReception)&&(!conv.state.lastHandledSourceId||firstGreeting||freshReception)&&decision.reply&&!decision.state.programIntake&&!decision.state.pendingFaqQuestion&&!decision.directedNonservice&&!selectedPrice&&!faq?.answer&&!decision.courtesy&&!decision.review&&!decision.question&&!decision.observed;
       if(firstGreeting||firstOrdinaryIntake){
         if(firstOrdinaryIntake){
           const missing=decision.state.slots,requests=[];
@@ -1336,7 +1337,7 @@ export class Engine {
       if(decision.specificCustomerQuestionReply&&decision.reply!==null)decision.reply=decision.specificCustomerQuestionReply;
       if(decision.reply){
         const office=selectOfficeReceptionReply(c.company,decision,{approvedAnswer:Boolean(faq?.answer)});
-        decision.reply=adviserReply(c.company,decision,{firstReply:!conv.state.lastHandledSourceId&&!decision.state.pendingFaqQuestion,approvedAnswer:Boolean(faq?.answer)});
+        decision.reply=adviserReply(c.company,decision,{firstReply:(!conv.state.lastHandledSourceId||freshReception)&&!decision.state.pendingFaqQuestion,approvedAnswer:Boolean(faq?.answer)});
         const sharedOffice=sharedOfficeSelectedReply(c.company,decision,decision.reply,{approvedAnswer:Boolean(faq?.answer)});
         if(sharedOffice)decision.reply=sharedOffice.text;
         if(!decision.review&&!decision.question&&!selectedPrice&&!faq?.answer){
