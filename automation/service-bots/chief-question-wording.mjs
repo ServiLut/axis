@@ -18,8 +18,9 @@ const placeholder=value=>/^(?:cotizacion(?: tecnica)?|solicitud de cotizacion|co
 const labels={service:'Servicio',location:'Municipio',locationContext:'Ubicación indicada',site:'Inmueble',scope:'Alcance indicado',detail:'Detalle indicado'};
 
 function decision(topic,kind){
+ if(topic==='adviser-assistance')return {title:'Atención de asesor solicitada',question:'El cliente pide hablar con una persona. ¿Quién puede contactarlo? Para comunicar una indicación concreta, responde citando este mensaje con «Para el cliente:» y el texto que deba recibir.'};
  if(kind==='ambiguous-followup')return {title:'Solicitud que necesita aclaración',question:'¿Debemos atender una solicitud nueva o revisar el servicio anterior en este caso?'};
- if(topic==='warranty-review'||kind==='warranty'||kind==='warranty-claim')return {title:'Solicitud de garantía',question:'¿Aplica una visita de garantía para este caso?'};
+ if(topic==='warranty-review'||kind==='warranty'||kind==='warranty-claim')return {title:'Solicitud de garantía',question:'¿Aplica una visita de garantía para este caso? Para comunicar una indicación concreta, responde citando este mensaje con «Para el cliente:» y el texto que deba recibir.'};
  if(topic==='service-documents'||topic==='documents-review')return {title:'Documento solicitado',question:'¿Qué documento debemos entregarle para atender su solicitud?'};
  if(topic==='payment-instructions')return {title:'Consulta sobre pago',question:'¿Qué indicación de pago debemos darle para este servicio?'};
  if(topic==='charge-review'||kind==='charge-dispute')return {title:'Cobro por aclarar',question:'¿Qué valor y condición de cobro debemos comunicar para este caso?'};

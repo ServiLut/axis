@@ -35,6 +35,8 @@ import {TECHNICAL_INTAKE_CONTINUITY_GUARD} from './technical-intake-continuity.m
 import {restoreOwnAiSetup,installOwnAiSetup} from './ai-setup.mjs';
 import {persistMariaKnowledge,mariaKnowledgeStatus,mariaKnowledgeDocument} from './maria-knowledge.mjs';
 import {restoreProgramSetup,installProgramSetup,registrationStatus,MARIA_PROGRAM_OPERATIONAL_CONTINUATION_GUARD,MARIA_PROGRAM_OPERATIONAL_CONFIRMATION_GUARD} from './maria-program.mjs';
+import {MARIA_ADVISER_HANDOFF_GUARD} from './maria-adviser-handoff.mjs';
+import {reviewMariaWorkflow,MARIA_WORKFLOW_REVIEW_GUARD} from './maria-workflow-review.mjs';
 import {initializeInactivityFollowup,inactivityStatus,responseTimingStatus,recordDeliveryTiming} from './inactivity-followup.mjs';
 import {initializeTesaStore,tesaStatus,reviewTesaSources,reviewTesaCase,TESA_CASE_REVIEW_GUARD} from './tesa-operations.mjs';
 import {ingestTesaWebhook,refreshTesaMembership,schedulingProofForBackend} from './tesa-transport.mjs';
@@ -323,7 +325,7 @@ export function createBotServer(config,store,transport,engine) {
         technicalScopeGuard:config.company==='servicio-tecnico'?'literal-painting-scope-before-intake-and-pending-question-v1':null,
         technicalSemanticRoutingGuard:config.company==='servicio-tecnico'?'own-current-technical-intent-before-new-intake-v1':null,
         technicalIntakeContinuityGuard:config.company==='servicio-tecnico'?TECHNICAL_INTAKE_CONTINUITY_GUARD:null,
-        afterServiceKindGuard:config.company==='fumigacion'?'literal-followup-kind-and-first-source-before-new-intake-v1':null,warrantyContinuityGuard:config.company==='fumigacion'?MARIA_WARRANTY_CONTINUITY_GUARD:null,warrantyResponseEscalation:warrantyResponseEscalationStatus(store,config),
+        afterServiceKindGuard:config.company==='fumigacion'?'literal-followup-kind-and-first-source-before-new-intake-v1':null,warrantyContinuityGuard:config.company==='fumigacion'?MARIA_WARRANTY_CONTINUITY_GUARD:null,warrantyResponseEscalation:warrantyResponseEscalationStatus(store,config),adviserHandoffGuard:config.company==='fumigacion'?MARIA_ADVISER_HANDOFF_GUARD:null,caseWorkflowReviewGuard:config.company==='fumigacion'?MARIA_WORKFLOW_REVIEW_GUARD:null,
         unanswered:store.db.prepare("SELECT COUNT(*) n FROM questions WHERE state IN ('PENDING','LEGACY_PENDING','ANSWER_REVIEW')").get().n,
         knowledge:store.db.prepare('SELECT kind,COUNT(*) n FROM knowledge GROUP BY kind').all(),programConnected:Boolean(config.programContextUrl&&config.programToken)||registrationStatus(config,store).enabled,programContextConnected:Boolean(config.programContextUrl&&config.programToken),aiConfigured:config.conversationalAi?.provider?Boolean(config.conversationalAi.ready):Boolean(config.aiUrl&&config.aiToken),conversationalAi:aiStatus(config),priorHistoryProtection:Boolean(config.historyCheckRequired)});
       if(req.url==='/channel-health'){
@@ -348,6 +350,10 @@ export function createBotServer(config,store,transport,engine) {
           humanChats:store.db.prepare('SELECT COUNT(*) n FROM conversations WHERE hold=1').get().n,
           questions:store.db.prepare('SELECT state,COUNT(*) n FROM questions GROUP BY state').all(),
           caseAuthorship:store.db.prepare('SELECT state,COUNT(*) n FROM case_authorship GROUP BY state').all()});
+      }
+      if(req.url==='/case-workflow-review'){
+        try{return reply(200,reviewMariaWorkflow(store,config,body));}
+        catch{return reply(400,{error:'OWN_WORKFLOW_SOURCE_SCOPE_REQUIRED'});}
       }
       if(req.url==='/review-contact-attention'){
         try{return reply(200,reviewContactAttention(store,config,body));}

@@ -29,6 +29,7 @@ import {literalIntakeDimensions,MARIA_DIMENSIONS_GUARD} from './intake-dimension
 import {parseChiefCommand,enqueueChiefCommand} from './chief-actions.mjs';
 import {mariaPendingReviewReply} from './maria-pending-review.mjs';
 import {initializeWarrantyResponseEscalation,queueUnansweredWarrantyAlert} from './warranty-response-escalation.mjs';
+import {explicitMariaAdviserRequest,queueMariaChiefCustomerAnswer,MARIA_ADVISER_HANDOFF_GUARD} from './maria-adviser-handoff.mjs';
 import {literalMariaPartialLocation,literalMariaRoomCount,mariaMediaBurstContinuation,MARIA_BATCH_INTAKE_GUARD} from './maria-batch-intake.mjs';
 import {customerDeferralRequested,customerDeferralResumeEvidence,customerDeferralContinues,customerDeferralAcknowledgement,customerDeclinesAfterDeferral,CUSTOMER_DEFERRAL_GUARD} from './customer-deferral.mjs';
 import {literalTermiteFurnitureScope,termiteFurnitureMention} from './maria-furniture-scope.mjs';
@@ -124,13 +125,13 @@ function rememberAdditionalLiteralFields(store,config,state,event){
 }
 
 function pendingCustomerReview(store,config,state,event,{pending=null}={}){
- if(config.company!=='fumigacion'||state.programIntake||!state.caseId?.startsWith('fumigacion:')||store.conversation(event.phone)?.hold)return null;
+ if(config.company!=='fumigacion'||state.programIntake&&!state.requestedHumanAssistance||!state.caseId?.startsWith('fumigacion:')||store.conversation(event.phone)?.hold)return null;
  const first=store.db.prepare('SELECT rowid,body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(state.caseId.slice(11),event.phone,event.line);
  const current=store.db.prepare('SELECT rowid,body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(event.id,event.phone,event.line);
  if(!first||!current||current.rowid<first.rowid)return null;
  const actual=store.open(current.body);if(actual.text!==event.text||actual.at!==event.at||actual.kind!==event.kind||actual.forwarded!==event.forwarded)return null;
  if(!pending){
-  const knownTopics=['service-followup','warranty-review','service-documents','disponibilidad-y-tecnico','cotizacion-verificada','special-quotation','existing-quotation'];
+  const knownTopics=['service-followup','warranty-review','adviser-assistance','service-documents','disponibilidad-y-tecnico','cotizacion-verificada','special-quotation','existing-quotation'];
   const candidates=[...store.db.prepare("SELECT q.* FROM questions q JOIN outbox o ON o.id=q.outbox_id WHERE q.phone=? AND q.case_id=? AND o.line=? AND q.state IN ('PENDING','ANSWER_REVIEW') ORDER BY q.rowid DESC LIMIT 100").all(event.phone,state.caseId,event.line),...store.db.prepare("SELECT * FROM tesa_questions WHERE company='fumigacion' AND customer_phone=? AND case_id=? AND source_line=? AND state IN ('PENDING','ANSWER_REVIEW') ORDER BY rowid DESC LIMIT 100").all(event.phone,state.caseId,event.line)];
   const eligible=candidates.map(q=>({q,body:store.open(q.body)})).filter(({q,body})=>knownTopics.includes(q.topic)||q.topic==='revision:'+body.source&&state.requestedAfterServiceReview?.sourceId===body.source).map(candidate=>({...candidate,source:store.db.prepare('SELECT rowid FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(candidate.body.source,event.phone,event.line)})).filter(x=>x.source&&x.source.rowid>=first.rowid&&x.source.rowid<=current.rowid).sort((a,b)=>b.source.rowid-a.source.rowid);
   const selected=eligible.find(x=>x.q.id===state.pendingTesaQuestionId)||eligible[0];if(!selected)return null;
@@ -890,6 +891,7 @@ export class Engine {
           // Only a verified answer to an exact delivered question becomes case knowledge. No automatic business execution.
           s.db.prepare("UPDATE questions SET answer=?,source_id=?,answer_at=?,valid_until=?,state='ANSWERED' WHERE id=? AND state='PENDING'").run(s.seal(e.text),e.id,e.at,e.at+1800000,quoted.id);
           s.audit('CASE_ANSWER_LEARNED',e.id,{question:quoted.id,caseId:quoted.case_id,role:e.phone===SANDRA?'chief':'coordinator'});
+          queueMariaChiefCustomerAnswer(s,c,quoted,e);
           if(!(c.operatorRouting===CURRENT_OPERATOR_ROUTING&&e.phone===DIEGO))s.queue(e.id+':answer-ack',e.phone,e.line,'Gracias. Guardé tu aclaración para esta solicitud.',true,0);finish('CASE_ANSWER');return;
         }
         const ownQuote=e.quotedId&&s.db.prepare("SELECT id FROM outbox WHERE phone=? AND line=? AND mid=? AND internal=1 AND state IN ('DELIVERED','READ')").get(e.phone,e.line,e.quotedId);
@@ -959,6 +961,16 @@ export class Engine {
       const caseState=newCase?{slots:{},asked:[],introduced:conv.state.introduced,caseId:c.company+':'+newCaseSource.id}:conv.state;
       const initialSource=!newCase&&!caseState.caseId&&c.company==='fumigacion'?pendingBatch.find(source=>source.line===e.line&&!source.fromMe&&!source.forwarded&&source.kind==='text'&&literalIntakeTextWithoutRegistrationFields(source.text).trim()&&(!/^(?:(?:mi|el) )?(?:nombre(?: completo)?|direccion|correo|telefono|documento|cedula)\s*(?::|=|es\b)/.test(normalize(source.text))||Object.keys(extractSlots(source.text,c.company)).length))?.id:null;
       caseState.caseId ||= reportedOrder || c.company+':'+(initialSource||e.id);
+      if(c.company==='fumigacion'&&explicitMariaAdviserRequest(e)){
+        const request=routeCaseQuestion(s,c,{phone:e.phone,line:e.line,caseId:caseState.caseId,topic:'adviser-assistance',conditions:{kind:'customer-requested-adviser'},recipients:[SANDRA],source:e.id,text:'El cliente solicita expresamente atención de una persona. Contactar al cliente y revisar su solicitud, conservando los datos, la cotización y el horario ya aportados.'});
+        const previous=caseState.requestedHumanAssistance;
+        const replyNeeded=!previous||previous.questionId!==request.id||e.at-previous.lastAcknowledgedAt>=60000;
+        caseState.requestedHumanAssistance={guard:MARIA_ADVISER_HANDOFF_GUARD,questionId:request.id,sourceId:previous?.sourceId||e.id,line:e.line,at:previous?.at||e.at,lastAcknowledgedAt:replyNeeded?e.at:previous.lastAcknowledgedAt};
+        caseState.awaitingHumanReview=true;caseState.lastHandledSourceId=e.id;caseState.lastText=e.text;s.saveConversation(e.phone,caseState);
+        if(replyNeeded)s.queue(e.id+':reply',e.phone,e.line,'Claro. Voy a pedir que un asesor te atienda; conservaré la información que ya nos compartiste.',false,conv.revision,caseState.caseId);
+        s.audit('OWN_EXPLICIT_ADVISER_REQUEST_ROUTED',e.id,{guard:MARIA_ADVISER_HANDOFF_GUARD,questionId:request.id,caseId:caseState.caseId,internalQuestionCreated:request.created,recipient:SANDRA,businessWritten:false,humanHoldReleased:false});
+        finish('ADVISER_REQUEST_ROUTED');return;
+      }
       if(!newCase&&c.company==='fumigacion'&&productInquiry&&!caseState.requestedProductInquiry)caseState.requestedProductInquiry={sourceId:productInquiry.id,at:productInquiry.at,question:productInquiry.text.slice(0,300)};
       if(!newCase&&c.company==='fumigacion'&&['text','image','video','audio','document'].includes(e.kind)&&!e.forwarded&&!e.fromMe&&!caseState.requestedAfterServiceReview){
         const recovered=ownCaseLiteralFollowup(s,c,caseState,e,e.quotedId||null);
@@ -1277,6 +1289,10 @@ export class Engine {
         s.audit('CONVERSATION_CONTEXT_REVIEW',e.id,{caseId:caseState.caseId,turns:history.turns.length,storedCoverageComplete:history.completeStoredHistory,fullWhatsAppHistoryRead:false,originalMediaRead:false});
         const request=inheritedPending?{id:inheritedPending.id,state:inheritedPending.state,created:false,valid:false}:routeCaseQuestion(s,c,{phone:e.phone,line:e.line,caseId:caseState.caseId,topic:decision.reviewTopic||'revision:'+e.id,conditions:decision.reviewConditions|| (decision.reviewTopic?{question:normalize(e.text),caseId:caseState.caseId}:{event:e.id,caseId:caseState.caseId}),recipients:questionRecipients(c,decision.reviewTopic||'revision:'+e.id,decision.reviewConditions||{}),source:decision.reviewSource||e.id,
           text:c.name+': contacto terminado en '+e.phone.slice(-4)+'. '+decision.review+(decision.pendingQuestion?' Pregunta pendiente: '+questionExcerpt(decision.pendingQuestion)+'.':'')+' Mensaje actual: '+questionExcerpt(e.text)+(context?' Datos de esta solicitud: '+context+'.':'')+' '+(decision.reviewQuestion||'¿Cómo debemos continuar en este caso?')});
+        if(request.created&&c.company==='fumigacion'&&decision.reviewTopic==='warranty-review'&&decision.reviewConditions?.kind==='warranty'){
+          decision.specificCustomerQuestionReply='Lamento el inconveniente. Voy a pedir que un asesor revise tu solicitud de garantía. Conservé lo que ya nos contaste.';
+          decision.reply=decision.specificCustomerQuestionReply;
+        }
         if(request.created&&request.outboxId?.startsWith('tesa-question:')){decision.state.pendingTesaQuestionId=request.id;s.saveConversation(e.phone,decision.state);}
         if(!request.created&&(decision.reviewTopic?.startsWith('missing-intake:')||c.company==='fumigacion'&&decision.reviewTopic==='disponibilidad-y-tecnico'&&decision.reviewConditions?.kind==='reported-existing-schedule'||c.company==='servicio-tecnico'&&['customer-question','special-quotation'].includes(decision.reviewTopic)||['cotizacion-verificada','common-question','service-documents','service-followup','warranty-review','requested-technician-contact','payment-instructions','existing-quotation','unread-link'].includes(decision.reviewTopic))){
           decision.reply=decision.afterServiceMediaContinuation?decision.specificCustomerQuestionReply:inheritedPending&&(e.quotedId===restored.sourceId||restored.restoredFromStoredSource?.sourceId===e.id)?'Tu solicitud de garantía sigue pendiente de revisión.':null;

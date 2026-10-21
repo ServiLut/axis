@@ -5,7 +5,7 @@ export const MARIA_PENDING_REVIEW_GUARD='own-native-case-pending-quote-consultat
 
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const pendingStates=new Set(['PENDING','ANSWER_REVIEW','REVIEW']);
-const topics=new Set(['service-followup','warranty-review','service-documents','disponibilidad-y-tecnico','cotizacion-verificada','special-quotation','existing-quotation']);
+const topics=new Set(['service-followup','warranty-review','adviser-assistance','service-documents','disponibilidad-y-tecnico','cotizacion-verificada','special-quotation','existing-quotation']);
 const followupKinds=new Set(['reinforcement','warranty','verification','requested-control','post-service','arrival']);
 const norm=text=>normalize(text).replace(/\s+/g,' ').trim();
 const sameIdentity=(source,event,caseId)=>source?.caseId===caseId&&source.phone===event.phone&&source.line===event.line;
@@ -54,6 +54,7 @@ function kindFor(state,pending){
 }
 
 function pendingText(topic,kind){
+ if(topic==='adviser-assistance')return 'Tu solicitud de atención por un asesor sigue pendiente. Conservé la información que ya nos compartiste.';
  if(topic==='service-documents')return 'Tu solicitud de documentos sigue pendiente de revisión. Aún no tengo confirmada su entrega.';
  if(['cotizacion-verificada','special-quotation','existing-quotation'].includes(topic))return 'Estoy consultando el valor y qué incluye el servicio para darte la cotización.';
  if(topic==='disponibilidad-y-tecnico')return 'Aún no tengo confirmados el horario ni el técnico para la visita.';

@@ -275,7 +275,7 @@ const calendarWeekdays=['domingo','lunes','martes','miercoles','jueves','viernes
 const calendarMonths=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 const calendarDay='(?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)';
 const calendarDate='(?:el\\s+)?(?:'+calendarDay+'\\s+)?(?:\\d{1,2}\\s+de\\s+[\\p{L}]+(?:\\s+(?:de|del)\\s+\\d{4})?|\\d{1,2}/\\d{1,2}(?:/\\d{4})?)';
-const calendarTime='(?:\\s+(?:a las?\\s+\\d{1,2}(?::\\d{2})?(?:\\s*[ap]\\.?\\s*m\\.?)?|(?:en|por) la (?:mañana|manana|tarde|noche)))?';
+const calendarTime='(?:\\s+(?:(?:a las?\\s+)?\\d{1,2}(?::\\d{2})?(?:\\s*[ap]\\.?\\s*m\\.?)?|(?:en|por) la (?:mañana|manana|tarde|noche)))?';
 const calendarWhole=new RegExp('^(?:(?:me equivoqu[eé]|corrijo)[, ]+)?(?:(?:para|prefiero|preferir[ií]a|quiero|quisiera|lo necesito|lo quiero|ser[ií]a|puede ser|me queda bien|me sirve)\\s+)?('+calendarDate+calendarTime+')(?:[,;.!]?\\s+(?:por favor|gracias|muchas gracias))*[.!]?$','iu');
 // Recognition normalization only: values and sources below retain the exact
 // customer spelling, punctuation and spacing, including "a las10a.m.".
@@ -313,7 +313,7 @@ function calendarPreference(raw,at){
  if(year<2000||year>2099||month<1||month>12||date.getUTCFullYear()!==year||date.getUTCMonth()!==month-1||date.getUTCDate()!==day)return {issue:'invalid-date'};
  if(parts[1]&&calendarWeekdays[date.getUTCDay()]!==parts[1])return {issue:'weekday-mismatch'};
  const requested=date.toISOString().slice(0,10);if(requested<today)return {issue:'past-date'};
- const clock=parts[8]?.trim().match(/^a las? (\d{1,2})(?::(\d{2}))?(?:\s*([ap])m\.?)?$/);
+ const clock=parts[8]?.trim().match(/^(?:a las? )?(\d{1,2})(?::(\d{2}))?(?:\s*([ap])m\.?)?$/);
  if(clock){
   const hour=Number(clock[1]),minute=Number(clock[2]||0),meridiem=clock[3];
   if(minute>59||meridiem&&(hour<1||hour>12)||!meridiem&&hour>23)return {issue:'invalid-time'};
@@ -368,6 +368,12 @@ function promptedLiteralFields(text,requested,correction=false,at=Date.now()){
   // independently before any summary or scheduled registration is prepared.
   const preference=literalProgramPreference(line,at);
   if(preference){if(values.preferenceLiteral)return {};values.preferenceLiteral=preference;if(nativePreferenceDate(line,iso(at))&&!nativePreferenceTime(line,iso(at)))values.dateLiteral=line;continue;}
+  // A short written year is not part of the backend's confirmed-calendar
+  // contract. Preserve the independent prompted name/address and ask only for
+  // the incomplete timing instead of discarding the whole native form.
+  if(/^(?:(?:fecha|horario)\s*:\s*)?(?:el\s+)?\d{1,2}[/.]\d{1,2}[/.]\d{2}(?:\s+(?:a las?\s+)?\d{1,2}(?::\d{2})?(?:\s*[ap]\.?\s*m\.?)?)?[.! ]*$/iu.test(line)){
+   if(values.timingClarification)return {};values.timingClarification={literal:line,reason:'full-year-required'};continue;
+  }
   if(/^hora\s*:\s*(?:p\s*\.?\s*m\.?\s+o\s+a\s*\.?\s*m\.?|a\s*\.?\s*m\.?\s+o\s+p\s*\.?\s*m\.?)[.! ]*$/iu.test(line)){if(values.ambiguousClock)return {};values.ambiguousClock=true;continue;}
   const labelled=explicitFields(line),name=labelled.name||(requested.includes('name')&&literalName(line,true)),address=labelled.address||(requested.includes('address')&&literalAddress(line,true));
   if(labelled.conflict||(!name&&!address)||(name&&address))return {};
@@ -790,8 +796,9 @@ export function registrationTurn(s,c,previous,e,decision,{literalSlots=null}={})
  }
  const explicit=explicitFields(e.text),requested=pi.requestedFields||(['name','address'].includes(pi.stage)?[pi.stage]:['name','address']);
  const separated=prompt&&!confirms(e.text)?promptedLiteralFields(e.text,requested,pi.stage==='correction',e.at):{};
+ if(separated.timingClarification)pi.requestedTimingClarification={...separated.timingClarification,sourceId:e.id,at:e.at};
  if(separated.dateLiteral){pi.requestedDateLiteral=separated.dateLiteral;pi.requestedDateSource=source(e);}
- if(separated.preferenceLiteral){state.slots={...state.slots,preference:separated.preferenceLiteral};state.intakeSources={...state.intakeSources,preference:{sourceId:e.id,at:e.at,context:'literal-prompted-customer-preference-pending-coordination'}};}
+ if(separated.preferenceLiteral){state.slots={...state.slots,preference:separated.preferenceLiteral};state.intakeSources={...state.intakeSources,preference:{sourceId:e.id,at:e.at,context:'literal-prompted-customer-preference-pending-coordination'}};delete pi.requestedTimingClarification;}
  const name=!unresolved.has('name')&&(explicit.name||separated.name||(!confirms(e.text)&&!mariaIncidentalPetMention(e)&&literalName(e.text,(pi.stage==='name'||pi.stage==='correction'&&!correctionFieldReference(e.text))&&Boolean(prompt)))),address=!unresolved.has('address')&&(explicit.address||separated.address||literalAddress(e.text,(['address','confirm','correction'].includes(pi.stage)||pi.requestedFields?.includes('address'))&&Boolean(prompt)));
  const scopedAddress=address||pi.address;
  if(scopedAddress&&changedAddressScope(scopedAddress,state.slots)){
@@ -807,6 +814,15 @@ export function registrationTurn(s,c,previous,e,decision,{literalSlots=null}={})
   }else{
    pi.stage='correction';pi.requestedFields=['name'];pi.preview=null;pi.promptId=e.id+':reply';
    return {state,reply:'Necesito tu nombre completo correcto para actualizar la solicitud. ¿Me lo compartes?'};
+  }
+ }
+ if(pi.requestedTimingClarification){
+  const corrected=literalProgramPreference(e.text,e.at);
+  if(e.at>pi.requestedTimingClarification.at&&corrected&&nativePreferenceDate(corrected,iso(e.at))){
+   state.slots={...state.slots,preference:corrected};state.intakeSources={...state.intakeSources,preference:{sourceId:e.id,at:e.at,context:'literal-prompted-customer-preference-pending-coordination'}};delete pi.requestedTimingClarification;
+  }else{
+   pi.stage='details';pi.preview=null;pi.requestedFields=['preference'];pi.promptId=e.id+':reply';
+   return {state,reply:(pi.customerName&&pi.address?'Ya conservé tu nombre y dirección. ':'')+'Para confirmar el horario, escribe la fecha con el año completo y la hora (a. m. o p. m.).'};
   }
  }
  const planning=staffPlanningForCase(s,c,state,e);

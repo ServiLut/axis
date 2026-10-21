@@ -260,7 +260,7 @@ export class Store {
       const pending=candidates.find(q=>q.topic!=='customer-question'||quotationInquiry(this.open(q.body).conditions?.question||''));
       if(pending){this.audit('PENDING_CASE_PRICE_QUESTION_REUSED',source,{caseId,topic,questionId:pending.id,newOutboundCreated:false});return {id:pending.id,state:pending.state,created:false,valid:false};}
     }
-    if(topic.startsWith('missing-intake:')||['cotizacion-verificada','special-quotation','disponibilidad-y-cotizacion','disponibilidad-y-tecnico','service-documents','service-followup','warranty-review','requested-technician-contact','payment-instructions','existing-quotation'].includes(topic)){
+    if(topic.startsWith('missing-intake:')||['cotizacion-verificada','special-quotation','disponibilidad-y-cotizacion','disponibilidad-y-tecnico','service-documents','service-followup','warranty-review','adviser-assistance','requested-technician-contact','payment-instructions','existing-quotation'].includes(topic)){
       // Further details are retained in the conversation. A pending question for
       // the same case must not be sent again because its details or route changed.
       const pending=this.db.prepare("SELECT id,state FROM questions WHERE phone=? AND case_id=? AND topic=? AND state IN ('PENDING','ANSWER_REVIEW') ORDER BY rowid LIMIT 1").get(phone,caseId,topic);

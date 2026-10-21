@@ -107,8 +107,9 @@ export function afterServiceKind(text){
     const prefix=t.slice(0,m.index).split(/[.!?;,]|\b(?:pero|sino)\b/).at(-1);
     return !/\b(?:no|nunca|si|quizas|tal vez|en caso de|dijo|dice|dijeron|segun)\b/.test(prefix)&&!/\b(?:si (?:los |les )?contrato|antes de contratar|fumigacion nueva|nuevo servicio)\b/.test(t);
   });
-  const warranty=politeWarranty||affirmed(t,/\bgarantia\b/g)&&
-    (/^(?:por favor\s+)?garantia[.!? ]*$/.test(t)||/\b(?:solicito|solicitamos|solicitar|necesito|necesitamos|requiero|requerimos|pedimos|reclamamos|reclamar|aplicar|hacer efectiva|es por|por la)\b[^.!?]*\bgarantia\b/.test(t));
+  const informationalWarranty=/\b(?:saber|conocer|informacion sobre)\b[^.!?;]{0,70}\bgarantia\b/.test(t);
+  const warranty=politeWarranty||!informationalWarranty&&affirmed(t,/\bgarantia\b/g)&&
+    (/^(?:por favor\s+)?garantia[.!? ]*$/.test(t)||/\b(?:solicito|solicitamos|solicitar|necesito|necesitamos|quiero|queremos|deseo|deseamos|requiero|requerimos|pedimos|reclamamos|reclamar|aplicar|hacer efectiva|es por|por la|realizar|tramitar|activar)\b[^.!?]*\bgarantia\b/.test(t));
   const kinds=[reinforcement&&'reinforcement',verification&&'verification',warranty&&'warranty'].filter(Boolean);
   if(!kinds.length)return null;
   if(affirmed(t,newService))return 'ambiguous-followup';
