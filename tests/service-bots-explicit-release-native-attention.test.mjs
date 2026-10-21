@@ -5,6 +5,7 @@ import {Store} from '../automation/service-bots/store.mjs';
 import {flushOutbox} from '../automation/service-bots/transport.mjs';
 import {initializeInactivityFollowup} from '../automation/service-bots/inactivity-followup.mjs';
 import {BUSINESSES} from '../automation/service-bots/config.mjs';
+import {EXPLICIT_RETURN_BASELINE_GUARD,nativeAttentionMutationHash} from '../automation/service-bots/explicit-return-attention.mjs';
 
 const PHONE='573000001111',OTHER='573000002222',NOW=Date.now(),RELEASE=NOW-5000;
 
@@ -68,6 +69,31 @@ test('an old outgoing source with an edit of unknown time remains blocked after 
     const f=fixture(t);Object.assign(f.sources[0],editedSource);
     assert.equal((await f.run()).accepted,0);assert.equal(f.sent.length,0);assert.equal(f.store.conversation(PHONE).hold,1);
   }
+});
+
+test('an exact edited native source captured before the explicit return does not take over again',async t=>{
+ const f=fixture(t),record={key:{id:f.sources[0].id,fromMe:true,remoteJid:PHONE+'@s.whatsapp.net'},messageTimestamp:f.sources[0].at/1000,message:null,MessageUpdate:[{status:'EDITED'}]};
+ Object.assign(f.sources[0],{edited:true,kind:'edited-body-unavailable',mutationHash:nativeAttentionMutationHash(record)});
+ const baseline={guard:EXPLICIT_RETURN_BASELINE_GUARD,phone:PHONE,sourceId:'VERIFIED_EXPLICIT_CHIEF_RETURN',releasedAt:RELEASE,through:RELEASE-1000,sources:f.sources.map(v=>({...v}))};
+ f.store.db.prepare('INSERT INTO meta(key,value) VALUES(?,?)').run('chief-release-native-baseline:'+PHONE,f.store.seal(baseline));
+ assert.equal((await f.run()).accepted,1);assert.equal(f.store.conversation(PHONE).hold,0);
+});
+
+test('a later mutation, wrong customer or previous return snapshot cannot authorize an edited source',async t=>{
+ for(const mode of ['new-edit','other-phone','old-return']){
+  const f=fixture(t);Object.assign(f.sources[0],{edited:true,kind:'edited-body-unavailable',mutationHash:'a'.repeat(64)});
+  const baseline={guard:EXPLICIT_RETURN_BASELINE_GUARD,phone:mode==='other-phone'?OTHER:PHONE,sourceId:'VERIFIED_EXPLICIT_CHIEF_RETURN',releasedAt:mode==='old-return'?RELEASE-1:RELEASE,through:RELEASE-1000,sources:f.sources.map(v=>({...v,mutationHash:mode==='new-edit'?'b'.repeat(64):v.mutationHash}))};
+  f.store.db.prepare('INSERT INTO meta(key,value) VALUES(?,?)').run('chief-release-native-baseline:'+PHONE,f.store.seal(baseline));
+  assert.equal((await f.run()).accepted,0,mode);assert.equal(f.store.conversation(PHONE).hold,1,mode);
+ }
+});
+
+test('native mutation fingerprint ignores delivery receipts but detects edited body and another edit update',()=>{
+ const record={key:{id:'NATIVE_OLD_EDIT',remoteJid:PHONE+'@s.whatsapp.net',fromMe:true},messageTimestamp:123456,message:null,MessageUpdate:[{status:'EDITED'},{status:'DELIVERY_ACK'}]};
+ const hash=nativeAttentionMutationHash(record);
+ assert.equal(nativeAttentionMutationHash({...record,status:'READ',MessageUpdate:[...record.MessageUpdate,{status:'READ'}]}),hash);
+ assert.notEqual(nativeAttentionMutationHash({...record,message:{conversation:'New body'}}),hash);
+ assert.notEqual(nativeAttentionMutationHash({...record,MessageUpdate:[...record.MessageUpdate,{status:'EDITED'}]}),hash);
 });
 
 test('the last millisecond of the native second must be strictly before the return',async t=>{

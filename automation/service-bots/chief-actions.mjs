@@ -13,6 +13,7 @@ import {executeChiefCustomerSimulation,CHIEF_CUSTOMER_SIMULATION_HOOK_GUARD} fro
 import {parseMariaTestOrderCommand,mariaTestOrderAccessStatus} from './maria-test-order-access.mjs';
 import {parseChiefTesaTestCommand,executeChiefTesaTest,chiefTesaTestStatus} from './chief-tesa-test.mjs';
 import {publicResponseWindow,publicResponseSqlCutoff,publicOperationAllowed,publicEventAllowed,publicLineSqlFilter} from './public-response-window.mjs';
+import {saveExplicitReturnBaseline} from './explicit-return-attention.mjs';
 
 export const CHIEF_ACTIONS_GUARD='own-native-directed-chief-durable-command-and-verified-result-v1';
 export const CHIEF_CONVERSATION_RULE_GUARD='own-native-chief-versioned-conversation-rules-only-v1';
@@ -150,9 +151,16 @@ async function execute(s,c,t,source,plan,now,native){
  if(action==='unsupported')return {state:'NEEDS_CONTEXT',text:unsupportedText(params.reason),data:{reason:params.reason},scope:'own-current-capabilities'};
  if(action==='release-one'){
   const exists=s.db.prepare('SELECT 1 FROM conversations WHERE phone=?').get(params.phone),ownIncoming=s.db.prepare('SELECT body FROM events WHERE phone=? AND from_me=0 ORDER BY rowid DESC LIMIT 100').all(params.phone).some(row=>{const e=s.open(row.body);return e.phone===params.phone&&e.fromMe===false&&!e.forwarded&&c.lines.some(l=>l.phone===e.line)&&operationalLineAllowed(c,e.line)&&Number.isFinite(e.at)&&e.at>=c.activatedAt;});
-  const laterStaff=s.db.prepare('SELECT id,line FROM events WHERE phone=? AND from_me=1 AND at>=? ORDER BY rowid').all(params.phone,source.at).some(e=>!s.db.prepare("SELECT 1 FROM outbox WHERE mid=? AND phone=? AND line=? AND state IN ('ACCEPTED','DELIVERED','READ')").get(e.id,params.phone,e.line));
-  if(!c.enabled||knownInternalRecipient(params.phone)||!exists||!ownIncoming||laterStaff||now-source.at>600000)return {state:'BLOCKED',text:'Sandra, no devolví ese chat: necesito un contacto propio existente y una devolución directa vigente que sea posterior a la última intervención del personal.',data:{released:false},scope:'single-own-existing-contact'};
-  s.hold(params.phone,source.id,false);return {state:'DONE',text:'Sandra, el chat '+params.phone+' quedó devuelto al bot para el próximo mensaje.',data:{released:true,phone:params.phone},scope:'single-own-existing-contact'};
+  const laterStaff=()=>s.db.prepare('SELECT id,line FROM events WHERE phone=? AND from_me=1 AND at>=? ORDER BY rowid').all(params.phone,source.at).some(e=>!s.db.prepare("SELECT 1 FROM outbox WHERE mid=? AND phone=? AND line=? AND state IN ('ACCEPTED','DELIVERED','READ')").get(e.id,params.phone,e.line));
+  if(!c.enabled||knownInternalRecipient(params.phone)||!exists||!ownIncoming||laterStaff()||now-source.at>600000)return {state:'BLOCKED',text:'Sandra, no devolví ese chat: necesito un contacto propio existente y una devolución directa vigente que sea posterior a la última intervención del personal.',data:{released:false},scope:'single-own-existing-contact'};
+  let attention=null;
+  if(typeof t.currentAttention==='function'){
+   try{attention=await t.currentAttention(params.phone,{store:s});if(!attention?.complete||!Array.isArray(attention.sources)||attention.sources.some(v=>v.at+999>=source.at&&!s.db.prepare('SELECT 1 FROM outbox WHERE mid=? AND phone=? AND line=?').get(v.id,params.phone,v.line)))throw Error('NEW_ATTENTION_AFTER_RETURN_COMMAND');}
+   catch{return {state:'BLOCKED',text:'Sandra, no devolví ese chat porque falta comprobar su atención actual o hubo una intervención posterior. Conservé la atención humana.',data:{released:false},scope:'single-own-existing-contact'};}
+  }
+  const pendingStaff=s.db.prepare("SELECT 1 FROM events WHERE phone=? AND from_me=1 AND at>=? AND state='PENDING'").get(params.phone,source.at);
+  if(pendingStaff||laterStaff()||Date.now()-source.at>600000)return {state:'BLOCKED',text:'Sandra, ese chat conserva atención humana porque la comprobación cambió durante la devolución.',data:{released:false},scope:'single-own-existing-contact'};
+  s.tx(()=>{s.hold(params.phone,source.id,false);if(attention)saveExplicitReturnBaseline(s,c,params.phone,source,attention);});return {state:'DONE',text:'Sandra, el chat '+params.phone+' quedó devuelto al bot para el próximo mensaje.',data:{released:true,phone:params.phone},scope:'single-own-existing-contact'};
  }
  if(action==='learn-conversation'){
   if(communicationCategory(params.text)!==params.category)throw Error('CONVERSATION_RULE_SCOPE_UNVERIFIED');

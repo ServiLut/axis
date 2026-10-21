@@ -57,6 +57,19 @@ test('a staff takeover arriving after the chief release instruction remains owne
  const f=fixture();try{const {e}=enqueue(f,'María Ángel, retoma el chat de '+customer);const staff={id:'SYNTHETIC_STAFF_AFTER_CHIEF_RELEASE',phone:customer,line:f.c.lines[0].phone,at:e.at+1000,kind:'text',fromMe:true,forwarded:false,text:'Continuaré atendiendo este caso.'};f.s.enqueue(staff);await f.engine.process(staff);await drainChiefActions(f.s,f.c,f.t);assert.equal(f.s.conversation(customer).hold,1);assert.ok(!f.replies().some(row=>/quedó devuelto|retom[ée]|chat.*activ/i.test(row.text)));}finally{f.s.close();}
 });
 
+test('explicit return records the exact native mutation snapshot and fails closed on new native staff input',async()=>{
+ for(const freshStaff of [false,true]){
+  const f=fixture();try{
+   const {e}=enqueue(f,'María Ángel, retoma el chat de '+customer),at=e.at-10000;
+   const transport={...f.t,currentAttention:async()=>({complete:true,through:Date.now(),sources:[{id:'OLD_EDIT_SOURCE',line:f.c.lines[0].phone,at:freshStaff?e.at:at,edited:true,mutationHash:'a'.repeat(64)}]})};
+   await drainChiefActions(f.s,f.c,transport);
+   assert.equal(f.s.conversation(customer).hold,freshStaff?1:0);
+   const saved=f.s.db.prepare('SELECT value FROM meta WHERE key=?').get('chief-release-native-baseline:'+customer);
+   assert.equal(Boolean(saved),!freshStaff);if(saved)assert.equal(f.s.open(saved.value).sources[0].mutationHash,'a'.repeat(64));
+  }finally{f.s.close();}
+ }
+});
+
 test('a program read returns only after an own read result and never calls the registration or note endpoint',async()=>{
  const f=fixture();try{enqueue(f,'María Ángel, revisa los servicios de hoy en Tenaxis.');assert.equal(f.replies().length,0);await drainChiefActions(f.s,f.c,f.t);assert.equal(f.reads.filter(read=>read.url===f.c.programSupervision.url).length,1);assert.ok(f.reads.every(read=>read.url.startsWith(f.c.programSupervision.url)));assert.equal(f.reads[0].authorization,'Bearer '+f.c.programSupervision.token);assert.ok(f.replies().length===1);assert.equal(reviewChiefActions(f.s,f.c,{afterRow:0,limit:50}).commands[0].status,'DONE');assert.doesNotMatch(f.replies()[0].text,/registré|guardé.*servicio|pago confirmado|30 servicios.*realizados/i);assert.equal(f.s.conversation(customer).hold,1);}finally{f.s.close();}
 });

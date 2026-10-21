@@ -19,7 +19,7 @@ import {drainChiefActions} from './chief-actions.mjs';
 import {decodeWebhook} from './webhook.mjs';
 import {validateEvent} from './config.mjs';
 import {literalGreetingEligible,literalGreetingReplyStillValid} from './literal-reception.mjs';
-import {priorAttentionRelease,nativeSourceBeforeRelease} from './explicit-return-attention.mjs';
+import {priorAttentionRelease,nativeSourceBeforeRelease,nativeAttentionMutationHash} from './explicit-return-attention.mjs';
 import {listStoredNativeIdentitySources,verifyStoredNativeIdentitySource} from './native-identity-resolution.mjs';
 import {publicEventAllowed,publicOutboxAllowed,publicOperationAllowed,publicResponseSqlCutoff,publicLineSqlFilter} from './public-response-window.mjs';
 
@@ -112,7 +112,7 @@ async function knownNativeLidWindow(transport,store,phone,since,through,{outgoin
           if(!outgoing&&key.remoteJidAlt!==pn&&!await verifyStoredNativeIdentitySource(store,c,transport,{id:key.id,phone,line:line.phone,at,fromMe:false,forwarded:false},record))throw Error('STORED_NATIVE_LID_UNPROCESSED_SOURCE');
           if(outgoing){
             const m=record.message?.ephemeralMessage?.message??record.message??{},text=m.conversation??m.extendedTextMessage?.text??'',written=typeof text==='string'&&text.trim(),media=Boolean(m.audioMessage||m.imageMessage||m.videoMessage||m.documentMessage),{edited,deleted}=outgoingMutation(record);
-            if(written||media||edited||deleted)sources.push({id:key.id,line:line.phone,at,kind:media?'media':written?'text':edited?'edited-body-unavailable':'deleted-body-unavailable',...(edited?{edited:true}:{}),...(deleted?{deleted:true}:{})});
+            if(written||media||edited||deleted)sources.push({id:key.id,line:line.phone,at,kind:media?'media':written?'text':edited?'edited-body-unavailable':'deleted-body-unavailable',mutationHash:nativeAttentionMutationHash(record),...(edited?{edited:true}:{}),...(deleted?{deleted:true}:{})});
           }else sources.push({id:key.id,line:line.phone,at});
         }
         if(read===total)break;
@@ -333,7 +333,7 @@ export class Transport {
             // An authenticated outgoing edit with an unavailable body remains
             // attention evidence. Read/delivery updates alone are not authorship.
             const {edited,deleted}=outgoingMutation(r);
-            if(written||media||edited||deleted)sources.set(line.phone+':'+key.id,{id:key.id,line:line.phone,at,kind:media?'media':written?'text':edited?'edited-body-unavailable':'deleted-body-unavailable',...(edited?{edited:true}:{}),...(deleted?{deleted:true}:{})});
+            if(written||media||edited||deleted)sources.set(line.phone+':'+key.id,{id:key.id,line:line.phone,at,kind:media?'media':written?'text':edited?'edited-body-unavailable':'deleted-body-unavailable',mutationHash:nativeAttentionMutationHash(r),...(edited?{edited:true}:{}),...(deleted?{deleted:true}:{})});
           }
           if(read===expectedTotal)break;
           if(!result.records.length||page===2||read>expectedTotal)throw new Error('ATTENTION_COVERAGE_UNVERIFIED');
