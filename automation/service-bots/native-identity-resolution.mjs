@@ -10,7 +10,8 @@ export const NATIVE_IDENTITY_DIAGNOSTIC_CONTENT_KEYS=Object.freeze(['conversatio
 export const NATIVE_IDENTITY_DIAGNOSTIC_CONTENT_PATHS=Object.freeze(['conversation','messageContextInfo','messageContextInfo.deviceListMetadata','messageContextInfo.deviceListMetadataVersion','messageContextInfo.messageSecret','messageContextInfo.deviceListMetadata.senderKeyHash','messageContextInfo.deviceListMetadata.recipientKeyHash','messageContextInfo.deviceListMetadata.senderTimestamp','messageContextInfo.deviceListMetadata.recipientTimestamp','extendedTextMessage','extendedTextMessage.text','extendedTextMessage.contextInfo','deviceSentMessage','deviceSentMessage.message','senderKeyDistributionMessage','ephemeralMessage','ephemeralMessage.message','audioMessage','imageMessage','videoMessage','documentMessage']);
 export const NATIVE_IDENTITY_DIAGNOSTIC_SEMANTIC_FIELDS=Object.freeze(['textMatches','kindMatches','quotedIdsMatch','forwardingMatches']);
 export const NATIVE_IDENTITY_DIAGNOSTIC_VALUE_TYPES=Object.freeze(['absent','null','array','object','string','number','boolean','other']);
-const INSTANCE='cucaracha-azul',PAGE_SIZE=100;
+const INSTANCE='cucaracha-azul',PAGE_SIZE=100,MAX_PAIR_RECORDS=1000;
+export const NATIVE_PAIR_WINDOW_GUARD='own-complete-paginated-native-pair-window-v1';
 // The legacy export/guard remain valid for existing BLUE proofs. RED is only
 // admitted by the separately validated prospective two-line authorization.
 export function nativeIdentityOperationalLine(config,instance){
@@ -28,6 +29,24 @@ const phoneJid=value=>typeof value==='string'&&/^57\d{10}@s\.whatsapp\.net$/.tes
 const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const canonical=value=>Array.isArray(value)?value.map(canonical):object(value)?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
 const hash=value=>createHash('sha256').update(JSON.stringify(canonical(value))??'null').digest('hex');
+async function nativePairWindow(transport,line,lid,since,through){
+ const records=[],seen=new Set();let total=null,pages=0;
+ for(let page=1;page<=MAX_PAIR_RECORDS/PAGE_SIZE;page++){
+  const response=await transport.request(line,'/chat/findMessages/'+encodeURIComponent(line.instance),{where:{key:{remoteJid:lid},messageTimestamp:{gte:new Date(since).toISOString(),lte:new Date(through).toISOString()}},offset:PAGE_SIZE,page}),v=response?.messages;
+  if(!object(v)||!Number.isSafeInteger(v.total)||v.total<0||v.total>MAX_PAIR_RECORDS||total!==null&&v.total!==total||!Array.isArray(v.records)||v.records.length!==Math.min(PAGE_SIZE,v.total-records.length))throw Error('NATIVE_PAIR_WINDOW_INCOMPLETE');
+  total=v.total;pages++;
+  const pageIds=[];
+  for(const row of v.records){const key=row?.key,id=key?.remoteJid+':'+key?.id;if(!nativeMid(key?.id)||seen.has(id))throw Error('NATIVE_PAIR_WINDOW_DUPLICATE');pageIds.push(id);records.push(row);}
+  for(const id of pageIds)seen.add(id);
+  if(records.length===total)return {records,total,pages};
+ }
+ throw Error('NATIVE_PAIR_WINDOW_INCOMPLETE');
+}
+function pairWindowProofValid(proof){
+ const w=proof.nativeWindow;
+ if(w===undefined)return proof.pairSources.length<=PAGE_SIZE;
+ return object(w)&&Object.keys(w).sort().join(',')==='guard,limit,maximum,pages,returned,total'&&w.guard===NATIVE_PAIR_WINDOW_GUARD&&w.limit===PAGE_SIZE&&w.maximum===MAX_PAIR_RECORDS&&Number.isSafeInteger(w.total)&&w.total>PAGE_SIZE&&w.total<=MAX_PAIR_RECORDS&&w.returned===w.total&&w.pages===Math.ceil(w.total/PAGE_SIZE)&&proof.pairSources.length<=w.total;
+}
 export const nativeIdentityEvidenceHash=hash;
 export const nativeIdentityResolutionHash=hash;
 export const NATIVE_MESSAGE_BYTE_EQUIVALENCE_GUARD='three-demonstrated-message-context-byte-fields-v1';
@@ -154,7 +173,8 @@ const immutableRecordHash=record=>hash({id:record.id??null,instanceId:record.ins
 const blockedPhone=(config,phone)=>(knownInternalRecipient(phone)||internalRecipients(config).includes(phone))&&!nativeTrialPhoneBinding(config,phone)||config.lines.some(line=>line.phone===phone);
 
 /**
- * Inspect an original authenticated callback and one native cache page only.
+ * Inspect an original authenticated callback and its complete bounded native
+ * source window. Old proofs keep their original fields and hashes intact.
  * This never adds a fabricated remoteJidAlt, mutates the callback, replays a
  * previous event, releases attention, sends, or writes business/config data.
  * The caller must persist startedAt once and store these proofs separately.
@@ -193,10 +213,7 @@ export async function resolveOwnBlueNativeIdentity(config,transport,originalBody
     const {record,key,at}=candidate,cacheKey=key.remoteJid;let page=pages.get(cacheKey);
     if(!page){
       try{
-        const response=await transport.request(line,'/chat/findMessages/'+encodeURIComponent(line.instance),{where:{key:{remoteJid:key.remoteJid},messageTimestamp:{gte:new Date(sourceStartsAt).toISOString(),lte:new Date(latestByLid.get(cacheKey)).toISOString()}},offset:PAGE_SIZE,page:1});
-        const value=response?.messages;
-        if(!object(value)||!Number.isSafeInteger(value.total)||value.total<0||!Array.isArray(value.records)||value.records.length>PAGE_SIZE||value.total>PAGE_SIZE||value.records.length!==value.total)throw Error('shape');
-        page={records:value.records,total:value.total};
+        page=await nativePairWindow(transport,line,key.remoteJid,sourceStartsAt,latestByLid.get(cacheKey));
       }catch{page={reason:'NATIVE_PAIR_PAGE_UNVERIFIED'};}
       pages.set(cacheKey,page);
     }
@@ -229,7 +246,7 @@ export async function resolveOwnBlueNativeIdentity(config,transport,originalBody
     for(const pair of pairs){if(sourceIds.has(pair.id)&&sourceIds.get(pair.id)!==pair.sourceHash)conflict=true;sourceIds.set(pair.id,pair.sourceHash);}
     if(conflict){fail(key.id,'NATIVE_PAIR_SOURCE_CONFLICT');continue;}
     const pairSources=[...new Map(pairs.map(value=>[value.id,{id:value.id,at:value.at,fromMe:value.fromMe,sourceHash:value.sourceHash,immutableHash:value.immutableHash}])).values()];
-    const proof={guard:NATIVE_IDENTITY_RESOLUTION_GUARD,line:line.phone,instance:line.instance,sourceId:key.id,phone:phones[0],lid:key.remoteJid,sourceAt:at,sourceHash:recordHash(exact[0]),callbackHash:hash(record),messageBodyComparisonGuard:NATIVE_MESSAGE_BYTE_EQUIVALENCE_GUARD,rawMessageBodiesEqual:hash(exact[0].message)===hash(record.message),immutableFingerprintVersion:NATIVE_IDENTITY_STORED_FINGERPRINT_VERSION,sourceImmutableHash:immutableRecordHash(exact[0]),pairSources,owner:{phone:binding.phone,instance:binding.instance,open:true,ownerVerified:true},checkedAt:now,startsAt:startedAt,boundedPage:{page:1,limit:PAGE_SIZE,returned:page.records.length,matchingLid:rows.length},historicalCoverageComplete:false,phoneInferred:false,originalKeyPreserved:true};
+    const proof={guard:NATIVE_IDENTITY_RESOLUTION_GUARD,line:line.phone,instance:line.instance,sourceId:key.id,phone:phones[0],lid:key.remoteJid,sourceAt:at,sourceHash:recordHash(exact[0]),callbackHash:hash(record),messageBodyComparisonGuard:NATIVE_MESSAGE_BYTE_EQUIVALENCE_GUARD,rawMessageBodiesEqual:hash(exact[0].message)===hash(record.message),immutableFingerprintVersion:NATIVE_IDENTITY_STORED_FINGERPRINT_VERSION,sourceImmutableHash:immutableRecordHash(exact[0]),pairSources,owner:{phone:binding.phone,instance:binding.instance,open:true,ownerVerified:true},checkedAt:now,startsAt:startedAt,boundedPage:{page:1,limit:PAGE_SIZE,returned:Math.min(page.records.length,PAGE_SIZE),matchingLid:page.records.slice(0,PAGE_SIZE).filter(r=>r.key?.remoteJid===key.remoteJid).length},...(page.pages>1?{nativeWindow:{guard:NATIVE_PAIR_WINDOW_GUARD,limit:PAGE_SIZE,maximum:MAX_PAIR_RECORDS,pages:page.pages,returned:page.records.length,total:page.total}}:{}),historicalCoverageComplete:false,phoneInferred:false,originalKeyPreserved:true};
     proof.proofHash=hash(proof);
     result.resolutions.push({sourceId:key.id,phone:phones[0],lid:key.remoteJid,line:line.phone,instance:line.instance,proof});
   }
@@ -274,7 +291,7 @@ function processedProof(store,config,expected,now){
   if(!hashString(proofHash)||hash(unsigned)!==proofHash||identity.proofHash!==proofHash||proof.guard!==NATIVE_IDENTITY_RESOLUTION_GUARD||proof.immutableFingerprintVersion!==NATIVE_IDENTITY_STORED_FINGERPRINT_VERSION||!hashString(proof.sourceImmutableHash)||!hashString(proof.sourceHash)||!hashString(proof.callbackHash)||value.callbackHash!==proof.callbackHash||!hashString(value.originalBodyHash)||proof.sourceId!==row.id||proof.phone!==row.phone||proof.line!==row.line||proof.instance!==own.instance||proof.lid!==value.lid||proof.sourceAt!==event.at||proof.startsAt!==startedAt||
     !Number.isSafeInteger(proof.checkedAt)||proof.checkedAt<event.at||proof.checkedAt-event.at>NATIVE_IDENTITY_MAX_AGE_MS||!Number.isSafeInteger(value.recordedAt)||value.recordedAt<proof.checkedAt||value.recordedAt-event.at>NATIVE_IDENTITY_MAX_AGE_MS||value.recordedAt>now||
     proof.owner?.phone!==row.line||proof.owner.instance!==own.instance||proof.owner.open!==true||proof.owner.ownerVerified!==true||proof.phoneInferred!==false||proof.originalKeyPreserved!==true||proof.historicalCoverageComplete!==false||
-    !Array.isArray(proof.pairSources)||!proof.pairSources.length||proof.pairSources.length>PAGE_SIZE||new Set(proof.pairSources.map(pair=>pair.id)).size!==proof.pairSources.length||proof.pairSources.some(pair=>!object(pair)||!nativeMid(pair.id)||!Number.isSafeInteger(pair.at)||pair.at<sourceStartsAt||pair.at>event.at||typeof pair.fromMe!=='boolean'||!hashString(pair.sourceHash)||!hashString(pair.immutableHash)))return null;
+    !Array.isArray(proof.pairSources)||!proof.pairSources.length||!pairWindowProofValid(proof)||new Set(proof.pairSources.map(pair=>pair.id)).size!==proof.pairSources.length||proof.pairSources.some(pair=>!object(pair)||!nativeMid(pair.id)||!Number.isSafeInteger(pair.at)||pair.at<sourceStartsAt||pair.at>event.at||typeof pair.fromMe!=='boolean'||!hashString(pair.sourceHash)||!hashString(pair.immutableHash)))return null;
   return {row,event,value,proof};
 }
 
@@ -329,8 +346,7 @@ export async function verifyStoredNativeIdentitySource(store,config,transport,ex
     const record=matches[0],pn=event.phone+'@s.whatsapp.net';
     if(record.key.remoteJid!==proof.lid||record.key.remoteJidAlt!=null&&record.key.remoteJidAlt!==''&&record.key.remoteJidAlt!==pn||!ownRecord(record,line)||!sameEventBody(record,event)||immutableRecordHash(record)!==proof.sourceImmutableHash||
       nativeRecord!==undefined&&(!object(nativeRecord)||nativeRecord.key?.id!==event.id||!sameEventBody(nativeRecord,event)||immutableRecordHash(nativeRecord)!==proof.sourceImmutableHash))return null;
-    const response=await transport.request(line,'/chat/findMessages/'+encodeURIComponent(line.instance),{where:{key:{remoteJid:proof.lid},messageTimestamp:{gte:new Date(sourceStartsAt).toISOString(),lte:new Date(event.at).toISOString()}},offset:PAGE_SIZE,page:1});
-    const page=response?.messages;if(!object(page)||!Number.isSafeInteger(page.total)||page.total<1||page.total>PAGE_SIZE||!Array.isArray(page.records)||page.records.length!==page.total)return null;
+    const page=await nativePairWindow(transport,line,proof.lid,sourceStartsAt,event.at);if(page.total<1)return null;
     const rows=page.records.filter(row=>row?.key?.remoteJid===proof.lid);
     if(rows.some(row=>phoneJid(row.key?.remoteJidAlt)&&row.key.remoteJidAlt!==pn))return null;
     const current=rows.filter(row=>row.key.id===event.id);if(current.length!==1||!sameEventBody(current[0],event)||immutableRecordHash(current[0])!==proof.sourceImmutableHash)return null;

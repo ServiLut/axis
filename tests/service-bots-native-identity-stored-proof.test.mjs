@@ -62,6 +62,7 @@ test('already processed source older than ingress freshness is verified read-onl
   assert.deepEqual(f.calls.filter(call=>call.kind==='owner').map(call=>call.phone),[FUMIGACION_BLUE,FUMIGACION_BLUE]);
   assert.ok(f.calls.every(call=>call.phone===FUMIGACION_BLUE));assert.equal(f.calls.filter(call=>call.kind==='native').length,2);
 });
+test('an unchanged legacy proof is rechecked across two native pages without rewriting or enqueueing history',async t=>{const f=await fixture(t),oldProof=JSON.stringify(f.meta(proofKey(f.event.id)));f.rows.push(...Array.from({length:99},(_,i)=>({key:{id:'STORED_OLDER_'+i,remoteJid:LID,fromMe:false},messageTimestamp:(SOURCE-2000)/1000,message:{conversation:'Fuente sintética'}})));f.setRequest(async(_line,_route,q)=>{const rows=q.where.key.id?f.rows.filter(r=>r.key.id===q.where.key.id):f.rows;return {messages:{total:rows.length,records:structuredClone(rows.slice((q.page-1)*q.offset,q.page*q.offset))}};});const snapshot=f.snapshot();assert.equal((await f.verify())?.verified,true);assert.equal(JSON.stringify(f.meta(proofKey(f.event.id))),oldProof);assert.equal(f.snapshot(),snapshot);});
 
 test('new immutable fingerprints are explicitly versioned without changing full legacy source-hash meaning',async t=>{
   const f=await fixture(t),proof=f.resolution.resolutions[0].proof;
