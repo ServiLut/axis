@@ -1,5 +1,13 @@
 # Registro propio de servicios nuevos de María
 
+## Ubicación con barrio/unidad y turno aplazado — 23/oct/2026
+
+Runtime **3631372** y Backend **f149775** instalados y guardia propia `own-native-neighborhood-and-residential-access-before-new-registration-v1` comprobada por API. En un turno nativo nuevo desde 23/oct 17:00Z, se piden sólo barrio/sector/vereda y unidad/conjunto/edificio faltantes; un municipio ya comprobado se conserva. La ausencia de unidad puede declararse expresamente. Las fuentes propias forman parte del DTO y del resumen exacto confirmado; barrio/unidad se guardan al crear una dirección nueva. No se actualizan domicilios anteriores de forma automática.
+
+Una cotización anterior puede continuar con una entrada nueva sin reproducir su historia, perder nombre/dirección ni duplicar una escritura. Registros ya preparados o inciertos y resúmenes históricos mantienen sus fuentes. «Mañana le confirmo el día» con cortesía y emoji aplaza la recepción; no equivale a aceptar o pedir otra vez el formulario. El tratamiento/productos de la respuesta rápida sigue pendiente de precisión humana, sin modificación de políticas.
+
+3343 pruebas runtime locales aprobadas; Backend focalizado 554 aprobadas y 2 omitidas, seis suites; compilación de producción sin errores. Recorrido nuevo de ambas líneas con recibo **sintético**, incluida agenda 24/oct 09:00 y una sola escritura local. No hubo otra alta PRUEBA o comercial productiva ni se reabrió el permiso temporal. Fuentes y límites completos en el apartado actual de `BOTS_MARIA_MIGUEL.md` y `.tmp/maria-service-access-20261023/checkpoint-private.json`.
+
 ## Dos recorridos nativos con horario correcto completados — 21/oct/2026 19:38Z
 
 Prevalece el nuevo apartado de `BOTS_MARIA_MIGUEL.md`. Runtime **fe47584** y Backend **dad6fa4** instalados y verificados. BLUE 4997: «Hoy a las 4» → **PROGRAMADO 21/oct/2026 16:00 Bogotá**; RED 8721: «El sábado de la próxima semana a las cuatro de la tarde» → **PROGRAMADO 31/oct/2026 16:00 Bogotá**. Dos altas reales de base de datos, aisladas y clasificadas **PRUEBA**, por fuentes nativas nuevas de los WhatsApp propios autorizados. Cotización $129.000, datos literales, resumen entregado, confirmación posterior, recibo post-COMMIT, estado comercial CONFIRMADO visible y confirmación WhatsApp exacta con DELIVERY_ACK/READ. Técnico/fin nulos y pago cero; no son ventas ni visitas reales.
