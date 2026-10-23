@@ -1,5 +1,13 @@
 # Registro propio de servicios nuevos de María
 
+## Continuidad sin repetir la confirmación — 23/oct/2026 17:50Z
+
+Runtime **e18cfd0**, DONE 3 s, guardia propia de avance y cierre comprobada por API. Formularios entregados no se vuelven a enviar por un «sí» o el mismo dato; los campos y el MID del resumen se conservan. Ráfagas anteriores a la entrega mantienen una sola salida efectiva y requieren una aceptación posterior a la entrega real. Las variantes propias de un resumen idéntico no permiten reutilizar un resumen anterior si cambiaron los datos.
+
+Una confirmación pura adicional durante la escritura preparada conserva el intento original, con revalidación nativa y límite previo de turnos neutrales. No se reemplazan fuentes ni se reintenta un alta incierta. Tras un recibo válido el cierre es breve y las preguntas de horario usan la fecha/hora del recibo; no vuelven a aceptación de cotización o horario pendiente. Cambios y dudas específicas mantienen atención propia, sin ampliar permisos de agenda o pagos.
+
+3361 pruebas locales aprobadas, incluidas 18 regresiones de avance/cierre y entrega única por cola. Ambas líneas probadas con recibos sintéticos; no hubo otro ensayo nativo productivo ni una venta nueva acreditada. Registro ordinario dual, fuentes protegidas, accesos y vencimiento conservados; Backend sin despliegue en este ajuste. Detalles y límites actuales en `BOTS_MARIA_MIGUEL.md` y `.tmp/maria-loop-20261023/checkpoint-private.json`.
+
 ## Ubicación con barrio/unidad y turno aplazado — 23/oct/2026
 
 Runtime **3631372** y Backend **f149775** instalados y guardia propia `own-native-neighborhood-and-residential-access-before-new-registration-v1` comprobada por API. En un turno nativo nuevo desde 23/oct 17:00Z, se piden sólo barrio/sector/vereda y unidad/conjunto/edificio faltantes; un municipio ya comprobado se conserva. La ausencia de unidad puede declararse expresamente. Las fuentes propias forman parte del DTO y del resumen exacto confirmado; barrio/unidad se guardan al crear una dirección nueva. No se actualizan domicilios anteriores de forma automática.
