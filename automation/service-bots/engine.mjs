@@ -6,6 +6,7 @@ import {chiefReadOnlyTopic,chiefReadOnlyReply} from './chief-readonly.mjs';
 import {businessPriceHashAt,selectBusinessPrice} from './business-prices.mjs';
 import {directedNonserviceTurn,unscopedInitialImageReply} from './directed-nonservice.mjs';
 import {selectPrice,priceText,quotationInquiry,specialQuotation,currentPriceEntries} from './prices.mjs';
+import {SERVICE_ACCESS_GUARD,SERVICE_ACCESS_STARTS_AT,serviceAccessOnlyTurn} from './service-access-details.mjs';
 import {adviserReply} from './adviser-tone.mjs';
 import {selectOfficeReceptionReply,saveOfficeReceptionReference} from './office-customer-replies.mjs';
 import {sharedOfficeSelectedReply} from './shared-office-quick-replies.mjs';
@@ -655,6 +656,8 @@ function retainPromptedLocation(state,e){
     sourceCoverageComplete:parts.every(p=>p.sourceId&&p.at!==null),municipalityInferred:false}};
 }
 export function customerDecision(company,state,e,analysis={}) {
+  if(company==='fumigacion'&&e.kind==='text'&&e.fromMe===false&&!e.forwarded&&!e.quotedId&&e.at>=SERVICE_ACCESS_STARTS_AT&&state.programIntake&&['name','address','details','confirm','correction'].includes(state.programIntake.stage)&&!state.awaitingHumanReview&&!state.closed)state={...state,programIntake:{...state.programIntake,accessDetailsGuard:SERVICE_ACCESS_GUARD}};
+  if(company==='fumigacion'&&!state.awaitingHumanReview&&!state.closed&&!state.customerDeferral?.active&&serviceAccessOnlyTurn(state,e))return {state:{...state,slots:{...state.slots},asked:[...(state.asked||[])],lastText:e.text},serviceAccessFacts:true};
   const technicalMeta=company==='servicio-tecnico'&&e.kind==='text'&&!e.forwarded&&!e.fromMe&&!state.requestedTechnicalReview&&!state.technicalPaintingRequest&&technicalIntakeMetaQuestion(e.text);
   if(technicalMeta)return {state:{...state,slots:{...state.slots},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)},technicalIntakeClarification:true,reply:technicalIntakeClarificationReply(technicalMeta,state.slots)};
   // A URL's query punctuation and path are not the sender's question or intake
@@ -1187,7 +1190,7 @@ export class Engine {
       // An affirmative amount without the quotation's delivery proof cannot
       // grant consent or silently issue a replacement quotation either.
       const unverifiedAmountAttempt=currentQuote&&!priceNow&&e.kind==='text'&&e.fromMe===false&&!e.forwarded&&!e.quotedId&&quotationAmountAffirmation(e.text,e.at)!==null;
-      const continuingQuote=!informationalFaq&&!decision.invalidRequestedTiming&&!decision.state.customerDeferral?.active&&!decision.quoteClarification&&!decision.literalServiceContext&&!decision.observed&&c.company==='fumigacion'&&currentQuote&&priceNow?.id===currentQuote.entryId&&priceNow.priceCop===currentQuote.priceCop&&
+      const continuingQuote=!decision.serviceAccessFacts&&!informationalFaq&&!decision.invalidRequestedTiming&&!decision.state.customerDeferral?.active&&!decision.quoteClarification&&!decision.literalServiceContext&&!decision.observed&&c.company==='fumigacion'&&currentQuote&&priceNow?.id===currentQuote.entryId&&priceNow.priceCop===currentQuote.priceCop&&
         ((!decision.review&&!decision.courtesy)||(naturalAcceptance&&(decision.courtesy||decision.reviewTopic==='customer-question')))&&!specialQuotation(textWithoutLinks(literalIntakeTextWithoutRegistrationFields(e.text)),decision.state.slots)&&
         (currentQuote.accepted||naturalAcceptance);
       if(continuingQuote){
@@ -1249,7 +1252,7 @@ export class Engine {
       // must not become a quantity of apartments for quotation scope.
       const literalProgramStage=['name','address','details','confirm','correction'].includes(caseState.programIntake?.stage);
       const registration=informationalFaq||decision.invalidRequestedTiming||decision.quoteClarification||decision.literalServiceContext||decision.quoteEvidenceReview||decision.directedNonservice?null:registrationTurn(s,c,caseState,e,literalProgramStage?{...decision,state:{...decision.state,slots:{...caseState.slots,...(decision.state.slots.preference?{preference:decision.state.slots.preference}:{})}}}:decision,{literalSlots:extractSlots});
-      if(registration)decision=registration;
+      if(registration){if(decision.serviceAccessFacts)s.audit('OWN_SERVICE_ACCESS_COLLECTION',e.id,{observedState:registration.observedState??null,hasReply:Boolean(registration.reply),businessWritten:false});decision=registration;}
        if(caseState.customerDeferral?.active===true&&decision.state.customerDeferral?.active===false&&decision.state.customerDeferral.resumedBy?.sourceId===e.id)s.audit('OWN_CUSTOMER_DEFERRAL_RESUMED',e.id,{caseId:caseState.caseId,deferralSourceId:caseState.customerDeferral.sourceId,resumeSourceId:e.id,kind:decision.state.customerDeferral.resumedBy.kind,humanHoldReleased:false,acceptanceGrantedByMarker:false});
       decision.state.lastHandledSourceId=e.id;
       const freshReception=c.company==='fumigacion'&&newCase&&newCaseSource.id===e.id&&literalOwnNewService(e);

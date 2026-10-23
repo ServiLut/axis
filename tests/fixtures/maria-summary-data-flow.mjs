@@ -3,8 +3,8 @@ import {Store} from '../../automation/service-bots/store.mjs';import {Engine} fr
 import {BUSINESSES} from '../../automation/service-bots/config.mjs';
 import {approvedBusinessPriceSchedule} from '../../automation/service-bots/business-prices.mjs';
 import {MARIA_TENANT,MARIA_COMPANY,registrationHash} from '../../automation/service-bots/maria-program.mjs';
-export function createSummaryDataFixture(setTime){
- const start=Date.parse('2026-10-16T21:20:00.000Z'),actorId='7508385b-536e-4aa2-8137-d734dfc900ef',orderId='85c47fc8-5314-4f68-a8d6-dde112640f5d';setTime(start);
+export function createSummaryDataFixture(setTime,options={}){
+ const start=options.start??Date.parse('2026-10-16T21:20:00.000Z'),actorId='7508385b-536e-4aa2-8137-d734dfc900ef',orderId='85c47fc8-5314-4f68-a8d6-dde112640f5d';setTime(start);
  const store=new Store(':memory:','fumigacion',randomBytes(32));store.importKnowledge(approvedBusinessPriceSchedule());
  const config={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,activatedAt:start-60000,lines:BUSINESSES.fumigacion.phones.map((phone,i)=>({phone,instance:'summary-fixture-'+i})),mariaProgram:{enabled:true,url:'https://tenaxis-backend-0zeuja.servilutioncrm.cloud/integrations/maria-service-registration',token:'synthetic_local_only_'.padEnd(43,'x'),actorId,tenantId:MARIA_TENANT,companyId:MARIA_COMPANY,startsAt:start-60000,expiresAt:Date.parse('2026-11-07T16:56:52.680Z')}};
  const engine=new Engine(store,config);let n=0;

@@ -18,7 +18,8 @@ export function customerDeferralRequested(event){
  const modifier='(?: (?:con calma|un poco|bien|primero|antes|con mi (?:pareja|espos[oa]|familia))){0,2}';
  const notice='(?:(?:luego|despues|mas tarde) (?:te|les|le|los) aviso|(?:te|les|le|los) aviso(?: (?:luego|despues|mas tarde))?)';
  const ending='(?: (?:y )?(?:'+notice+'|muchas gracias|gracias)){0,2}';
- return new RegExp('^'+courtesy+interest+pause+'(?:'+consider+modifier+ending+'|'+notice+')$').test(text);
+ const dateLater='(?:(?:manana|luego|despues|mas tarde|el lunes|el martes|el miercoles|el jueves|el viernes|el sabado|el domingo) (?:te|le|les) confirmo (?:el dia|la fecha|el horario)|(?:te|le|les) confirmo (?:el dia|la fecha|el horario) (?:manana|luego|despues|mas tarde))';
+ return new RegExp('^'+courtesy+interest+pause+'(?:'+consider+modifier+ending+'|'+notice+'|'+dateLater+'(?: (?:muchas gracias|gracias)(?: por la informacion)?)?)$').test(text);
 }
 
 /** Literal facts are supplied by the existing source-scoped intake parser. */
