@@ -27,6 +27,7 @@ export const MARIA_PROGRAM_TIMED_ACCEPTANCE_GUARD='own-price-timed-consent-befor
 export const MARIA_PROGRAM_REQUESTED_TIMING_GUARD='own-native-preference-and-canonical-summary-schedule-v2';
 export const MARIA_PROGRAM_PET_PRESENCE_GUARD='own-confirmed-native-incidental-pet-observation-v1';
 export const MARIA_PROGRAM_SCHEDULING_REVIEW_GUARD='own-saved-service-durable-scheduling-exception-without-resend-v1';
+export const MARIA_PROGRAM_PROGRESS_GUARD='own-delivered-missing-fields-once-and-receipt-bound-completion-v1';
 export const MARIA_STAFF_PLANNING_GUARD='own-prospective-accepted-request-literal-preference-staff-assignment-v1';
 export const MARIA_TENANT='9ffea9df-1e06-4590-acec-0e5cde715ba9';
 export const MARIA_COMPANY='35a19d89-15d1-4c32-8353-3471b6d9f0ff';
@@ -102,7 +103,7 @@ export function registrationStatus(c,s){
  const reasons=new Map();for(const entry of reviewed){const reason=safeReason(entry.reason);reasons.set(reason,(reasons.get(reason)||0)+1);}
  const own=c.company==='fumigacion';
  const clientRequestedSchedule={configured:own&&c.clientRequestedSchedule?.enabled===true,enabled:programEnabled(c)&&clientRequestedScheduleEnabled(c,Date.now()),guard:own?MARIA_CLIENT_SCHEDULE_GUARD:null,startsAt:own&&Number.isSafeInteger(c.clientRequestedSchedule?.startsAt)?iso(c.clientRequestedSchedule.startsAt):null,expiresAt:own&&Number.isSafeInteger(c.mariaProgram?.expiresAt)?iso(c.mariaProgram.expiresAt):null,technicianAssignment:false};
- return {guard:own?MARIA_PROGRAM_GUARD:null,serviceAccessGuard:own?SERVICE_ACCESS_GUARD:null,serviceAccessStartsAt:own?iso(SERVICE_ACCESS_STARTS_AT):null,pipelineGuard:own?MARIA_PROGRAM_PIPELINE_GUARD:null,formBatchGuard:own?MARIA_PROGRAM_FORM_BATCH_GUARD:null,literalFieldsGuard:own?MARIA_PROGRAM_LITERAL_FIELDS_GUARD:null,acceptanceTimingGuard:own?MARIA_PROGRAM_TIMED_ACCEPTANCE_GUARD:null,requestedTimingGuard:own?MARIA_PROGRAM_REQUESTED_TIMING_GUARD:null,petPresenceGuard:own?MARIA_PROGRAM_PET_PRESENCE_GUARD:null,schedulingReviewGuard:own?MARIA_PROGRAM_SCHEDULING_REVIEW_GUARD:null,operationalCoverage:operationalCoverage(c),configured:own&&c.mariaProgram?.enabled===true,enabled:programEnabled(c),company:own?'FUMIGACION':'S.TECNICO',tenantId:own&&c.mariaProgram?.enabled?MARIA_TENANT:null,companyId:own&&c.mariaProgram?.enabled?MARIA_COMPANY:null,advisorMembershipId:own?c.mariaProgram?.actorId||null:null,registrationKind:own?'new-service-pending-scheduling':null,prepared:states.PENDING,states,saved:states.SAVED,trialSaved:entries.filter(e=>e.status==='SAVED'&&e.recordClass==='PRUEBA').length,uncertain:states.UNCERTAIN+states.SENDING,review:states.REVIEW,lastReviewReason:reviewed.length?safeReason(reviewed[0].reason):null,reviewReasons:[...reasons].sort(([a],[b])=>a.localeCompare(b)).map(([reason,count])=>({reason,count})),scheduled:false,clientRequestedSchedule,paymentsEnabled:false,fullyAutonomous:false};
+ return {guard:own?MARIA_PROGRAM_GUARD:null,serviceAccessGuard:own?SERVICE_ACCESS_GUARD:null,serviceAccessStartsAt:own?iso(SERVICE_ACCESS_STARTS_AT):null,progressGuard:own?MARIA_PROGRAM_PROGRESS_GUARD:null,pipelineGuard:own?MARIA_PROGRAM_PIPELINE_GUARD:null,formBatchGuard:own?MARIA_PROGRAM_FORM_BATCH_GUARD:null,literalFieldsGuard:own?MARIA_PROGRAM_LITERAL_FIELDS_GUARD:null,acceptanceTimingGuard:own?MARIA_PROGRAM_TIMED_ACCEPTANCE_GUARD:null,requestedTimingGuard:own?MARIA_PROGRAM_REQUESTED_TIMING_GUARD:null,petPresenceGuard:own?MARIA_PROGRAM_PET_PRESENCE_GUARD:null,schedulingReviewGuard:own?MARIA_PROGRAM_SCHEDULING_REVIEW_GUARD:null,operationalCoverage:operationalCoverage(c),configured:own&&c.mariaProgram?.enabled===true,enabled:programEnabled(c),company:own?'FUMIGACION':'S.TECNICO',tenantId:own&&c.mariaProgram?.enabled?MARIA_TENANT:null,companyId:own&&c.mariaProgram?.enabled?MARIA_COMPANY:null,advisorMembershipId:own?c.mariaProgram?.actorId||null:null,registrationKind:own?'new-service-pending-scheduling':null,prepared:states.PENDING,states,saved:states.SAVED,trialSaved:entries.filter(e=>e.status==='SAVED'&&e.recordClass==='PRUEBA').length,uncertain:states.UNCERTAIN+states.SENDING,review:states.REVIEW,lastReviewReason:reviewed.length?safeReason(reviewed[0].reason):null,reviewReasons:[...reasons].sort(([a],[b])=>a.localeCompare(b)).map(([reason,count])=>({reason,count})),scheduled:false,clientRequestedSchedule,paymentsEnabled:false,fullyAutonomous:false};
 }
 // Only an affirmative from the customer is authority to create an ordinary,
 // unscheduled order. Courtesy, a preference or a quoted third-party "yes" alone
@@ -375,6 +376,15 @@ function literalAddress(text,prompted){
 }
 const registrationPreface=/^(?:(?:aqui|ahi) (?:te |se )?(?:lo|los|la|las) (?:mande|envie|mando|envio|comparti)|ya (?:te |se )?(?:lo|los|la|las) (?:mande|envie|comparti)|(?:te |se )?(?:lo|los|la|las) (?:mande|envie|comparti) (?:arriba|antes)|estos son mis datos)\b/;
 function registrationSourcePreface(text){const t=normalize(text),match=t.match(registrationPreface);return Boolean(match&&/^[.!¡, ]*$/.test(t.slice(match[0].length)));}
+export function registrationRepeatAcknowledgement(state,e){
+ if(e.kind!=='text'||e.fromMe||e.forwarded||e.quotedId||/[?¿]/.test(e.text))return false;
+ return confirms(e.text)||neutralCourtesy(e.text)||registrationSourcePreface(e.text)||[state.programIntake?.nameSource,state.programIntake?.addressSource].some(src=>src?.text===e.text);
+}
+function closingAcknowledgement(text){
+ if(typeof text!=='string'||text.length>200||/[?¿]|https?:|["“”«»]/i.test(text))return false;
+ const t=normalize(text).replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim();
+ return /^(?:si|listo|perfecto|correcto|confirmo|acepto|ok|okay|de acuerdo|esta bien|si confirmo|si acepto|si correcto|si esta bien|todo correcto|ya (?:te |le |les )?confirme|ya confirme (?:los datos|el servicio))(?: (?:gracias|muchas gracias|por favor))*$/.test(t)||confirmsOrdinarySummaryData(text);
+}
 const correctionFieldReference=text=>/^(?:(?:mi|el) nombre(?: completo)?|(?:mi|la) direccion(?: completa)?|(?:mi|el) apellido|(?:mis|los) datos|(?:ese|este|el) dato|(?:esta|estan|es|son) (?:mal|incorrect[oa]s?|equivocad[oa]s?))[.! ]*$/.test(normalize(text));
 const directNameCorrection=text=>/^(?:corrijo|rectifico)\s+(?:(?:mi|el)\s+)?nombre(?: completo)?\s*:\s*[\p{L}'’ -]{1,160}[.! ]*$/iu.test(text.trim());
 function promptedLiteralFields(text,requested,correction=false,at=Date.now()){
@@ -563,17 +573,35 @@ function staffPlanningSavedText(entry){
 }
 export function ownStaffPlanningReceipt(s,c,request){const entry=ownRegisteredReceiptForPresentation(s,c,request);return entry&&staffPlanningRecord(s,entry)?entry:null;}
 export function staffPlanningCustomerTurn(s,c,state,e,{status=false}={}){
- if(state.awaitingHumanReview||state.closed||state.requestedAfterServiceReview||state.requestedControlReview||state.requestedDocumentReview||state.requestedProductInquiry||state.requestedProgramCancellationReview||e.kind!=='text'||e.fromMe||e.forwarded||e.quotedId)return null;
+ if(state.closed||state.requestedAfterServiceReview||state.requestedControlReview||state.requestedDocumentReview||state.requestedProductInquiry||state.requestedProgramCancellationReview||e.kind!=='text'||e.fromMe||e.forwarded||e.quotedId)return null;
  const entry=ownStaffPlanningReceipt(s,c,{phone:e.phone,line:e.line,caseId:state.caseId});if(!entry)return null;
  const nativeRow=s.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(e.id,e.phone,e.line),native=nativeRow&&s.open(nativeRow.body);if(!native||native.text!==e.text||native.at!==e.at||native.forwarded||native.quotedId||native.kind!=='text')return null;
  const preference=literalProgramPreference(e.text,e.at);
- if(!status&&!preference&&!acceptsOrdinaryQuotation(e.text))return null;
+ const plain=normalize(e.text).replace(/^[¿¡\s]+|[?!.¡\s]+$/g,'').replace(/\s+/g,' ').trim();
+ const knownFacts=[entry.payload.sources.customerName,entry.payload.sources.address].some(src=>src?.text===e.text);
+ const acknowledgement=!preference&&!/[?¿]/.test(e.text)&&(closingAcknowledgement(e.text)||neutralCourtesy(e.text)||registrationSourcePreface(e.text)||knownFacts||/^ya (?:esta|quedo) confirmado(?: gracias)?$/.test(plain));
+ const scheduled=entry.payload.clientSchedule?.guard===MARIA_CLIENT_SCHEDULE_GUARD&&clientRequestedScheduleReceiptMatches(entry.payload,entry.receipt);
+ const receiptQuestion=scheduled&&/^(?:ya (?:quedo|esta)(?: (?:mi|el) servicio)? (?:confirmado|programado|agendado)|(?:mi|el) servicio (?:ya )?(?:quedo|esta) confirmado|(?:para )?que dia(?: y (?:a )?que hora)? (?:quedo|esta)(?: (?:mi|el) servicio)?|(?:para )?cuando (?:quedo|esta)(?: (?:mi|el) servicio)?|a que hora (?:quedo|esta)(?: (?:mi|el) servicio)?|(?:me )?confirmas (?:el horario|la fecha|mi servicio))$/.test(plain);
+ if(!status&&!receiptQuestion&&!preference&&!acknowledgement)return null;
  if(preference&&normalize(preference)!==normalize(entry.payload.slots.preference)){
   const alert=queueOwnSavedServiceReview(s,c,entry,{motive:'scheduling-unconfirmed',sourceId:e.id,text:'María Ángel · cambio de horario solicitado. El contacto terminado en '+e.phone.slice(-4)+' indicó una preferencia distinta para su solicitud registrada. Preferencia original: '+entry.payload.slots.preference+'. Nueva petición literal: '+e.text+'. No modifiqué la orden ni confirmé disponibilidad. ¿Cómo debemos atender este cambio?'});
   if(alert?.queued)state.awaitingHumanReview=true;
-  return {state,reply:'Recibí tu nueva preferencia de horario. La solicitud sigue registrada; el cambio y su disponibilidad necesitan revisión del equipo interno.'};
+  return {state,reply:'Recibí tu solicitud de cambio de horario. Te confirmaremos si es posible.'};
  }
- return {state,reply:staffPlanningSavedText(entry)};
+ if(acknowledgement){
+  // The immutable receipt closes intake. A second "sí" is never another
+  // quotation acceptance or a reason to repeat the saved summary.
+  if(state.registrationClosingAcknowledgement===entry.requestHash){
+   const prior=state.registrationClosingReplyId&&s.db.prepare("SELECT body FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND internal=0 AND state='READY'").get(state.registrationClosingReplyId,e.phone,e.line,state.caseId);
+   if(!prior)return {state,observed:true,observedState:'OWN_REGISTERED_ACKNOWLEDGEMENT_OBSERVED'};
+   state.registrationClosingReplyId=e.id+':reply';return {state,reply:s.open(prior.body)};
+  }
+  state.registrationClosingAcknowledgement=entry.requestHash;
+  state.registrationClosingReplyId=e.id+':reply';
+  const initial=s.db.prepare("SELECT state FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND internal=0").get('program:'+state.caseId+':saved',e.phone,e.line,state.caseId);
+  return {state,reply:scheduled&&initial?.state==='READY'?'¡Listo! Tu servicio está confirmado para el '+scheduleDisplay(entry.receipt.schedule):'Con gusto 😊'};
+ }
+ return {state,reply:scheduled?'Sí, tu servicio está confirmado para el '+scheduleDisplay(entry.receipt.schedule):'Tu solicitud está registrada. Te confirmaremos el horario de la visita.'};
 }
 function caseLiteralFields(s,c,state,e){
  const firstId=state.caseId?.startsWith(c.company+':')?state.caseId.slice(c.company.length+1):state.quotedPrice?.sourceId;
@@ -779,7 +807,15 @@ export function registrationTurn(s,c,previous,e,decision,{literalSlots=null}={})
  const prior=state.programIntake||{stage:'name',originalQuoteAcceptanceId:own.q.acceptanceSource,...(accessCandidate?{accessDetailsGuard:SERVICE_ACCESS_GUARD}:{}),...(info?.quoteOutboxId===own.row.id?{customerName:info.customerName,nameSource:info.nameSource,address:info.address,addressSource:info.addressSource}:{})};
  if(['pending','review','declined'].includes(prior.stage))return {state,observed:true,observedState:'PROGRAM_REGISTRATION_PENDING'};
  if(prior.stage==='registered')return null;
- const pi={...prior},prompt=pi.promptId&&s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND state IN ('DELIVERED','READ')").get(pi.promptId,e.phone,e.line),batchFields=promptedBatchFields(s,c,previous,e,pi,prompt);
+ const pi={...prior};let prompt=pi.promptId&&s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND state IN ('DELIVERED','READ')").get(pi.promptId,e.phone,e.line);
+ if(!prompt&&pi.stage==='confirm'&&pi.summaryDeliveryCandidates?.length){
+  const current=pi.promptId&&s.db.prepare('SELECT body FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND internal=0').get(pi.promptId,e.phone,e.line,state.caseId);
+  for(const id of pi.summaryDeliveryCandidates.slice(-8).reverse()){
+   const candidate=s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND internal=0 AND state IN ('DELIVERED','READ') AND mid IS NOT NULL").get(id,e.phone,e.line,state.caseId);
+   if(current&&candidate&&s.open(candidate.body)===s.open(current.body)){prompt=candidate;pi.promptId=candidate.id;break;}
+  }
+ }
+ const batchFields=promptedBatchFields(s,c,previous,e,pi,prompt);
  if(decision.courtesy&&!confirms(e.text)&&!batchFields.some(fact=>fact.name||fact.address))return null;
  state.programIntake=pi;
  const candidateRequested=pi.requestedFields||(['name','address'].includes(pi.stage)?[pi.stage]:['name','address']),candidateExplicit=explicitFields(e.text),candidateSeparated=prompt&&!confirms(e.text)?promptedLiteralFields(e.text,candidateRequested,pi.stage==='correction',e.at):{};
@@ -852,10 +888,21 @@ export function registrationTurn(s,c,previous,e,decision,{literalSlots=null}={})
  const accessDetails=pi.accessDetailsGuard===SERVICE_ACCESS_GUARD?ownServiceAccessDetails(s,state,e):null;
  if(!pi.customerName||!pi.address||accessDetails&&!accessDetails.complete){
   const missing=[...(!pi.customerName?['name']:[]),...(!pi.address?['address']:[]),...(accessDetails?.missing||[])];
-  if(pi.promptId&&!prompt&&JSON.stringify(pi.requestedFields||[])===JSON.stringify(missing))return {state,observed:true,observedState:'PROGRAM_FIELDS_DELIVERY_PENDING'};
-  pi.stage=!pi.customerName?'name':'address';pi.requestedFields=missing;pi.promptId=e.id+':reply';
+   if(pi.promptId&&!prompt&&JSON.stringify(pi.requestedFields||[])===JSON.stringify(missing)){
+    const waiting=s.db.prepare("SELECT state FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND internal=0").get(pi.promptId,e.phone,e.line,state.caseId);
+    if(waiting?.state!=='READY'||!registrationRepeatAcknowledgement(previous,e))return {state,observed:true,observedState:'PROGRAM_FIELDS_DELIVERY_PENDING'};
+   }
+   if(prompt&&registrationSourcePreface(e.text)&&pi.fieldHelpPromptId!==prompt.id){
+    pi.fieldHelpPromptId=prompt.id;
+    return {state,reply:'Para continuar, necesito '+[...(!pi.customerName?['tu nombre completo']:[]),...(!pi.address?['la dirección completa']:[]),...(accessDetails?.missing.length?['los datos de barrio y unidad que faltan']:[])].join(' y ')+'. Puedes enviarlos aquí.'};
+   }
   const requests=[...(!pi.customerName?['Tu nombre completo.']:[]),...(!pi.address?['La dirección completa del servicio, incluido apartamento o interior si aplica.']:[]),...(!state.slots.location?['El municipio del servicio.']:[]),...serviceAccessRequests(accessDetails),...(!state.slots.preference?[clientCalendarIntake?'Qué día y a qué hora necesitas el servicio.':'Qué día y franja horaria prefieres.']:[])];
-  return {state,reply:'Para registrar tu solicitud, compárteme:\n'+requests.map((item,i)=>(i+1)+'. '+item).join('\n')+(!state.slots.preference?(clientCalendarIntake?'\n\nCon esos datos prepararé tu confirmación.':'\n\nEl horario queda pendiente de confirmación.'):'')};
+   const reply='Para registrar tu solicitud, compárteme:\n'+requests.map((item,i)=>(i+1)+'. '+item).join('\n')+(!state.slots.preference?(clientCalendarIntake?'\n\nCon esos datos prepararé tu confirmación.':'\n\nEl horario queda pendiente de confirmación.'):'');
+   // Keep the original delivered prompt and its source. New literal facts
+   // advance the request; acknowledgements without progress do not resend it.
+   if(!changed&&registrationRepeatAcknowledgement(previous,e)&&prompt&&s.open(prompt.body)===reply)return {state,observed:true,observedState:'PROGRAM_FIELDS_ALREADY_REQUESTED'};
+   pi.stage=!pi.customerName?'name':'address';pi.requestedFields=missing;pi.promptId=e.id+':reply';
+   return {state,reply};
  }
  if(prior.stage==='correction'&&!changed)return {state,reply:'¿Cuál es el dato correcto que debemos cambiar?'};
  // If the customer already supplied both literal facts before accepting the
@@ -890,8 +937,12 @@ export function registrationTurn(s,c,previous,e,decision,{literalSlots=null}={})
  const scope=legacyPreview?{}:ownSummaryScope(s,state,e,own,literalSlots);
  if(!scope)return {state,observed:true,observedState:'PROGRAM_SUMMARY_SCOPE_SOURCE_UNVERIFIED'};
  const preview={...basePreview,...scope};
+  if(prior.stage==='confirm'&&!prompt&&registrationRepeatAcknowledgement(previous,e)){
+   const waiting=pi.promptId&&s.db.prepare("SELECT body FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND internal=0 AND state='READY'").get(pi.promptId,e.phone,e.line,state.caseId);
+   if(waiting&&!changed&&JSON.stringify(pi.preview)===JSON.stringify(preview)){pi.summaryDeliveryCandidates=[...new Set([...(pi.summaryDeliveryCandidates||[]),pi.promptId])].slice(-8);pi.promptId=e.id+':reply';return {state,reply:s.open(waiting.body)};}
+  }
  if(!preprovided&&(prior.stage!=='confirm'||changed||JSON.stringify(pi.preview)!==JSON.stringify(preview))){
-  pi.stage='confirm';pi.promptId=e.id+':reply';pi.preview=preview;
+   pi.stage='confirm';pi.promptId=e.id+':reply';pi.preview=preview;delete pi.summaryDeliveryCandidates;
   return {state,reply:ordinarySummaryText(preview)};
  }
  if(!preprovided&&(!prompt||!confirms(e.text))){
@@ -1001,7 +1052,7 @@ const neutralCourtesy=text=>/^(?:gracias|muchas gracias|mil gracias|muy amable|g
 function storedCourtesy(s,p,id){
  const row=s.db.prepare("SELECT * FROM events WHERE id=? AND phone=? AND line=? AND from_me=0 AND state NOT IN ('PENDING','PROCESSING')").get(id,p.phone,p.line);
  if(!row)return null;const event=s.open(row.body);
- return event.kind==='text'&&!event.fromMe&&!event.forwarded&&event.at>Date.parse(p.sources.acceptance.at)&&neutralCourtesy(event.text)?event:null;
+ return event.kind==='text'&&!event.fromMe&&!event.forwarded&&!event.quotedId&&event.at>Date.parse(p.sources.acceptance.at)&&(neutralCourtesy(event.text)||closingAcknowledgement(event.text))?event:null;
 }
 async function verifyNative(s,c,t,entry){
  if(!registrationOperationalScope(s,c,entry))throw Error('OPERATIONAL_LINE_SCOPE_REVIEW');

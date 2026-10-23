@@ -17,7 +17,7 @@ import {ownIntent,mariaLiteralSlotAllowed} from './maria-understanding.mjs';
 import {ownMiguelIntent,miguelLiteralSlotAllowed} from './miguel-understanding.mjs';
 import {literalPaintingRequest} from './technical-scope.mjs';
 import {afterServiceKind,afterServiceRequest,afterServiceDecision,explicitNewService,mariaLiteralServiceContext,literalOwnAfterServiceRequest,MARIA_LITERAL_SERVICE_CONTEXT_GUARD,mariaIncidentalPetMention} from './after-service.mjs';
-import {programEnabled,registrationQuoteReady,registrationTurn,acceptsOrdinaryQuotation,acceptsExplicitOrdinaryQuotation,acceptsOwnQuotedAmount,quotationAmountAffirmation,literalIntakeTextWithoutRegistrationFields,literalProgramPreference,calendarProgramPreferenceIssue,prepareRegisteredTesaContinuation,registeredTesaConfirmation,ownRegisteredReceiptForPresentation,ownSavedPendingOperation,queueOwnSavedServiceReview,ownQuoteOutboxId,ownDeliveredQuoteEntry,ordinaryDataInformationTurn,pendingOrdinaryDataInformationTurn,pendingMattressScopeFactsTurn,ordinaryProgramDeferralTurn,ownStaffPlanningReceipt,staffPlanningCustomerTurn} from './maria-program.mjs';
+import {programEnabled,registrationQuoteReady,registrationTurn,registrationRepeatAcknowledgement,acceptsOrdinaryQuotation,acceptsExplicitOrdinaryQuotation,acceptsOwnQuotedAmount,quotationAmountAffirmation,literalIntakeTextWithoutRegistrationFields,literalProgramPreference,calendarProgramPreferenceIssue,prepareRegisteredTesaContinuation,registeredTesaConfirmation,ownRegisteredReceiptForPresentation,ownSavedPendingOperation,queueOwnSavedServiceReview,ownQuoteOutboxId,ownDeliveredQuoteEntry,ordinaryDataInformationTurn,pendingOrdinaryDataInformationTurn,pendingMattressScopeFactsTurn,ordinaryProgramDeferralTurn,ownStaffPlanningReceipt,staffPlanningCustomerTurn} from './maria-program.mjs';
 import {prepareMariaUnregisteredTesaPlan,mariaCaseQuoteCustomerTurn} from './maria-tesa-unregistered.mjs';
 import {prepareOwnSchedulingPlan,ownSchedulingCustomerTurn} from './maria-own-order-scheduling.mjs';
 import {createHash} from 'node:crypto';
@@ -1058,8 +1058,8 @@ export class Engine {
           finish(media.suppressed?'OBSERVED_MEDIA_BURST':'MEDIA_CONTEXT_CONTINUED');return;
         }
       }
-      const staffStatus=!caseState.awaitingHumanReview&&ownPendingCustomerKind(e)==='status'&&staffPlanningCustomerTurn(s,c,caseState,e,{status:true});
-      if(staffStatus){staffStatus.state.lastHandledSourceId=e.id;staffStatus.state.lastText=e.text;s.saveConversation(e.phone,staffStatus.state);s.queue(e.id+':reply',e.phone,e.line,staffStatus.reply,false,conv.revision,caseState.caseId);finish('OWN_STAFF_ASSIGNMENT_PENDING_STATUS');return;}
+      const staffStatus=staffPlanningCustomerTurn(s,c,caseState,e,{status:ownPendingCustomerKind(e)==='status'});
+      if(staffStatus){staffStatus.state.lastHandledSourceId=e.id;staffStatus.state.lastText=e.text;s.saveConversation(e.phone,staffStatus.state);if(staffStatus.reply)s.queue(e.id+':reply',e.phone,e.line,staffStatus.reply,false,conv.revision,caseState.caseId);finish(staffStatus.observedState||'OWN_REGISTERED_CUSTOMER_TURN');return;}
       if(caseState.awaitingHumanReview&&!caseQuoteTurn){
         const scopeFacts=pendingMattressScopeFactsTurn(s,c,caseState,e);
         if(scopeFacts){
@@ -1190,7 +1190,7 @@ export class Engine {
       // An affirmative amount without the quotation's delivery proof cannot
       // grant consent or silently issue a replacement quotation either.
       const unverifiedAmountAttempt=currentQuote&&!priceNow&&e.kind==='text'&&e.fromMe===false&&!e.forwarded&&!e.quotedId&&quotationAmountAffirmation(e.text,e.at)!==null;
-      const continuingQuote=!decision.serviceAccessFacts&&!informationalFaq&&!decision.invalidRequestedTiming&&!decision.state.customerDeferral?.active&&!decision.quoteClarification&&!decision.literalServiceContext&&!decision.observed&&c.company==='fumigacion'&&currentQuote&&priceNow?.id===currentQuote.entryId&&priceNow.priceCop===currentQuote.priceCop&&
+      const continuingQuote=!ownStaffPlanningReceipt(s,c,{phone:e.phone,line:e.line,caseId:caseState.caseId})&&!decision.serviceAccessFacts&&!informationalFaq&&!decision.invalidRequestedTiming&&!decision.state.customerDeferral?.active&&!decision.quoteClarification&&!decision.literalServiceContext&&!decision.observed&&c.company==='fumigacion'&&currentQuote&&priceNow?.id===currentQuote.entryId&&priceNow.priceCop===currentQuote.priceCop&&
         ((!decision.review&&!decision.courtesy)||(naturalAcceptance&&(decision.courtesy||decision.reviewTopic==='customer-question')))&&!specialQuotation(textWithoutLinks(literalIntakeTextWithoutRegistrationFields(e.text)),decision.state.slots)&&
         (currentQuote.accepted||naturalAcceptance);
       if(continuingQuote){
@@ -1251,8 +1251,15 @@ export class Engine {
       // descriptions. In particular a street number before "apartamento"
       // must not become a quantity of apartments for quotation scope.
       const literalProgramStage=['name','address','details','confirm','correction'].includes(caseState.programIntake?.stage);
+      const priorProgramPrompt=caseState.programIntake?.promptId,repeatProgramAcknowledgement=registrationRepeatAcknowledgement(caseState,e);
       const registration=informationalFaq||decision.invalidRequestedTiming||decision.quoteClarification||decision.literalServiceContext||decision.quoteEvidenceReview||decision.directedNonservice?null:registrationTurn(s,c,caseState,e,literalProgramStage?{...decision,state:{...decision.state,slots:{...caseState.slots,...(decision.state.slots.preference?{preference:decision.state.slots.preference}:{})}}}:decision,{literalSlots:extractSlots});
-      if(registration){if(decision.serviceAccessFacts)s.audit('OWN_SERVICE_ACCESS_COLLECTION',e.id,{observedState:registration.observedState??null,hasReply:Boolean(registration.reply),businessWritten:false});decision=registration;}
+      if(registration){
+        if(registration.reply&&repeatProgramAcknowledgement&&priorProgramPrompt&&['name','address','details','correction'].includes(registration.state.programIntake?.stage)){
+          const priorPrompt=s.db.prepare("SELECT body FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND internal=0 AND state IN ('DELIVERED','READ')").get(priorProgramPrompt,e.phone,e.line,caseState.caseId);
+          if(priorPrompt&&s.open(priorPrompt.body)===registration.reply){registration.state.programIntake.promptId=priorProgramPrompt;registration.reply=null;registration.observed=true;registration.observedState='PROGRAM_FIELDS_ALREADY_REQUESTED';}
+        }
+        if(decision.serviceAccessFacts)s.audit('OWN_SERVICE_ACCESS_COLLECTION',e.id,{observedState:registration.observedState??null,hasReply:Boolean(registration.reply),businessWritten:false});decision=registration;
+      }
        if(caseState.customerDeferral?.active===true&&decision.state.customerDeferral?.active===false&&decision.state.customerDeferral.resumedBy?.sourceId===e.id)s.audit('OWN_CUSTOMER_DEFERRAL_RESUMED',e.id,{caseId:caseState.caseId,deferralSourceId:caseState.customerDeferral.sourceId,resumeSourceId:e.id,kind:decision.state.customerDeferral.resumedBy.kind,humanHoldReleased:false,acceptanceGrantedByMarker:false});
       decision.state.lastHandledSourceId=e.id;
       const freshReception=c.company==='fumigacion'&&newCase&&newCaseSource.id===e.id&&literalOwnNewService(e);
