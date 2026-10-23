@@ -8,7 +8,7 @@ function direct(event){return event?.kind==='text'&&event.fromMe===false&&!event
 /** A direct deferral supplies neither acceptance nor a request to be nudged. */
 export function customerDeferralRequested(event){
  if(!direct(event)||event.text.length>240)return false;
- const text=normalize(event.text).replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim();
+ const text=normalize(event.text).replace(/[\s🙂😊🙏👍☺️]+$/u,'').replace(/[.!¡,;]+/g,' ').replace(/\s+/g,' ').trim();
  const courtesy='(?:(?:muchas gracias|mil gracias|gracias) )?';
  // Interest is not acceptance. Keep this finite first-person grammar separate
  // from no-contact, cancellation, reported speech and personal-priority turns.
@@ -20,6 +20,9 @@ export function customerDeferralRequested(event){
  const ending='(?: (?:y )?(?:'+notice+'|muchas gracias|gracias)){0,2}';
  const dateLater='(?:(?:manana|luego|despues|mas tarde|el lunes|el martes|el miercoles|el jueves|el viernes|el sabado|el domingo) (?:te|le|les) confirmo (?:el dia|la fecha|el horario)|(?:te|le|les) confirmo (?:el dia|la fecha|el horario) (?:manana|luego|despues|mas tarde))';
  return new RegExp('^'+courtesy+interest+pause+'(?:'+consider+modifier+ending+'|'+notice+'|'+dateLater+'(?: (?:muchas gracias|gracias)(?: por la informacion)?)?)$').test(text);
+}
+export function customerDeferralReply(event){
+ return customerDeferralRequested(event)&&/\bconfirmo (?:el dia|la fecha|el horario)\b/.test(normalize(event.text))?'Con gusto 😊 Cuando tengas el día definido, me escribes y continuamos con los datos que ya compartiste.':'Claro, puedes pensarlo con calma. Si te surge alguna duda, aquí estoy.';
 }
 
 /** Literal facts are supplied by the existing source-scoped intake parser. */

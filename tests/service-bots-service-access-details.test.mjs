@@ -23,7 +23,7 @@ for(const line of ['573126944997','573126938721'])test('new '+line+' intake reta
 }));
 test('the screenshot postponement is not acceptance and does not launch a form',t=>using(t,async f=>{
  f.deliver(await f.turn('Quiero cotizar cucarachas en apartamento de 60 m2 con 3 habitaciones en Bello.'));
- const e=await f.turn('Mañana le confirmo el día, muchas gracias por la información');assert.equal(f.state(e).customerDeferral.active,true);assert.doesNotMatch(f.reply(e),/nombre|dirección|compárteme|¿Confirmas/);assert.equal(f.state(e).programIntake,undefined);
+ const e=await f.turn('Mañana le confirmo el día, muchas gracias por la información 🙂');assert.equal(f.state(e).customerDeferral.active,true);assert.match(f.reply(e),/Cuando tengas el día definido/);assert.doesNotMatch(f.reply(e),/nombre|dirección|compárteme|¿Confirmas/);assert.equal(f.state(e).programIntake,undefined);
 }));
 test('a new turn on an earlier quotation reuses its sourced access facts without replay or repeated fields',t=>using(t,async f=>{
  const quote=await f.turn('Cucarachas en apartamento de 3 habitaciones en Bello, barrio Niquía, unidad Los Arces');f.deliver(quote);f.deliver(await f.turn('Sí'));

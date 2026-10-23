@@ -12,7 +12,7 @@ import {partitionNativeAttention} from './explicit-return-attention.mjs';
 import {currentMariaLocationProjection} from './current-location-projection.mjs';
 import {SERVICE_ACCESS_GUARD,SERVICE_ACCESS_STARTS_AT,ownServiceAccessDetails,serviceAccessRequests,serviceAccessSummary,serviceAccessPayload} from './service-access-details.mjs';
 import {MARIA_BATCH_INTAKE_GUARD} from './maria-batch-intake.mjs';
-import {CUSTOMER_DEFERRAL_GUARD,customerDeferralRequested,customerDeferralResumeEvidence,customerDeclinesAfterDeferral} from './customer-deferral.mjs';
+import {CUSTOMER_DEFERRAL_GUARD,customerDeferralRequested,customerDeferralReply,customerDeferralResumeEvidence,customerDeclinesAfterDeferral} from './customer-deferral.mjs';
 import {MARIA_CLIENT_SCHEDULE_GUARD,clientRequestedScheduleEnabled,projectClientRequestedSchedule,clientRequestedScheduleReceiptMatches} from './client-requested-schedule.mjs';
 import {MARIA_PREFERENCE_PARTS_GUARD,nativePreferenceDate,nativePreferenceTime,projectNativePreferenceParts} from './native-preference-parts.mjs';
 import {publicResponseWindow,publicOperationAllowed,publicEventAllowed} from './public-response-window.mjs';
@@ -652,7 +652,7 @@ export function ordinaryProgramDeferralTurn(s,c,state,e){
  if(!['name','address','details','confirm','correction'].includes(pi.stage))return null;
  if(requested){
   state.customerDeferral={guard:CUSTOMER_DEFERRAL_GUARD,active:true,caseId:state.caseId,line:e.line,sourceId:e.id,at:e.at,registrationStage:pi.stage,...(marker?.sourceId&&marker.sourceId!==e.id?{previousSources:[...(marker.previousSources||[]),{sourceId:marker.sourceId,at:marker.at}].slice(-10)}:{})};
-  return {state,kind:'collection-deferred',reply:'Claro, puedes pensarlo con calma. Si te surge alguna duda, aquí estoy.'};
+  return {state,kind:'collection-deferred',reply:customerDeferralReply(e)};
  }
  if(e.kind!=='text'||e.fromMe||e.forwarded||e.quotedId)return null;
  let resumedBy=customerDeferralResumeEvidence(e),resumedFields=null;
