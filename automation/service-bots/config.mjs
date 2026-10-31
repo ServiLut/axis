@@ -8,6 +8,7 @@ import {assertOperationalLineScope,operationalLineAllowed,operationalLineStartsA
 import {mariaTestOrderAccessConfig} from './maria-test-order-access.mjs';
 import {CHIEF_TESA_TEST_CYCLE} from './chief-tesa-test.mjs';
 import {publicResponseWindowConfig} from './public-response-window.mjs';
+import {modoDesdeEntorno} from './maria-agente-sombra.mjs';
 
 export const BUSINESSES = Object.freeze({
   fumigacion: { name: 'FUMIGACION', bot: 'María Ángel', phones: ['573126944997','573126938721'] },
@@ -95,7 +96,15 @@ export function configFromEnv(env = process.env) {
     clientRequestedSchedule:clientRequestedScheduleConfig(env,company,Date.parse(env.BOT_ACTIVATED_AT||'')),
     mariaTestOrder:mariaTestOrderAccessConfig(env,company,registrationConfig(env,company)),
     chiefTesaTest:chiefTesaTestConfiguration(env,company,mariaTestOrderAccessConfig(env,company,registrationConfig(env,company)),Date.parse(env.BOT_ACTIVATED_AT||'')),
-    conversationalAi:aiConfiguration(env,company) };
+    conversationalAi:aiConfiguration(env,company),
+    // Nueva Maria: apagada por defecto; sombra propone sin enviar.
+    mariaAgente:mariaAgenteMode(env,company) };
+}
+function mariaAgenteMode(env,company){
+  const mode=modoDesdeEntorno(env);
+  if(mode!=='apagado'&&company!=='fumigacion')throw Error('MARIA_AGENTE_OWN_COMPANY_REQUIRED');
+  if(mode==='activo')throw Error('MARIA_AGENTE_ACTIVE_NOT_ENABLED');
+  return mode;
 }
 
 export function authorized(header, hash) {

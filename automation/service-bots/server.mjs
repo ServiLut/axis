@@ -35,6 +35,7 @@ import {warrantyResponseEscalationStatus} from './warranty-response-escalation.m
 import {TECHNICAL_INTAKE_CONTINUITY_GUARD} from './technical-intake-continuity.mjs';
 import {restoreOwnAiSetup,installOwnAiSetup} from './ai-setup.mjs';
 import {persistMariaKnowledge,mariaKnowledgeStatus,mariaKnowledgeDocument} from './maria-knowledge.mjs';
+import {listarSombra} from './maria-agente-sombra.mjs';
 import {restoreProgramSetup,installProgramSetup,registrationStatus,MARIA_PROGRAM_OPERATIONAL_CONTINUATION_GUARD,MARIA_PROGRAM_OPERATIONAL_CONFIRMATION_GUARD} from './maria-program.mjs';
 import {MARIA_ADVISER_HANDOFF_GUARD} from './maria-adviser-handoff.mjs';
 import {reviewMariaWorkflow,MARIA_WORKFLOW_REVIEW_GUARD} from './maria-workflow-review.mjs';
@@ -297,6 +298,11 @@ export function createBotServer(config,store,transport,engine) {
         settingUpAi=true;try{return reply(200,await evaluateOwnAi(config,store,transport.fetcher,body.caseIds));}finally{settingUpAi=false;}
       }
       if(req.url==='/ai-knowledge')return config.company==='fumigacion'?reply(200,{status:mariaKnowledgeStatus(config,store),document:mariaKnowledgeDocument()}):reply(403,{error:'MARIA_KNOWLEDGE_OWN_SCOPE'});
+      if(req.url==='/maria-agente/sombra'){
+        if(config.company!=='fumigacion')return reply(403,{error:'MARIA_AGENTE_OWN_SCOPE'});
+        const limite=Number.isSafeInteger(body?.limite)?body.limite:50;
+        return reply(200,{modo:config.mariaAgente,enviado:false,propuestas:listarSombra(store,{limite})});
+      }
       if(req.url==='/review-chief-actions'){
         if(config.company!=='fumigacion')return reply(403,{error:'OWN_MARIA_CHIEF_ACTIONS_REQUIRED'});
         if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(key=>!['afterRow','limit'].includes(key))||body.afterRow!==undefined&&(!Number.isSafeInteger(body.afterRow)||body.afterRow<0)||body.limit!==undefined&&(!Number.isSafeInteger(body.limit)||body.limit<1||body.limit>50))return reply(400,{error:'OWN_CHIEF_REVIEW_CLOSED_BOUNDS_REQUIRED'});

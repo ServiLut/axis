@@ -6,7 +6,8 @@ import {explicitNewTechnicalCase,technicalIntakeMetaQuestion} from './technical-
 import { SANDRA, DIEGO, HILARY, CURRENT_OPERATOR_ROUTING, publicTextSafe, normalize,internalRecipients,knownInternalRecipient,chiefReplyRestrictionActive,outboundRecipientAllowed } from './config.mjs';
 import {parseChiefDocument} from './chief-document.mjs';
 import {selectPrice,verifyPriceSource} from './prices.mjs';
-import {understandOwnCustomer,composeOwnReply,ownReplyTextAllowed,probeOwnAi} from './conversational-ai.mjs';
+import {understandOwnCustomer,composeOwnReply,ownReplyTextAllowed,probeOwnAi,minimizeAiText} from './conversational-ai.mjs';
+import {colaSombra} from './maria-agente-sombra.mjs';
 import {drainProgramRegistrations,acceptsOrdinaryQuotation,savedServiceReviewStillValid} from './maria-program.mjs';
 import {routeCaseQuestion} from './engine.mjs';
 import {initializeInactivityFollowup,queueInactivityFollowups,inactivityDeliveryValid,recordResponseTiming,recordDeliveryTiming} from './inactivity-followup.mjs';
@@ -404,6 +405,7 @@ export async function drain(store,config,transport,engine) {
   const publicCut=publicResponseSqlCutoff(config);
   const eventFilter=publicLineSqlFilter(config,{lineColumn:'line',sourceAtColumn:'at',createdAtColumn:'received_at'});
   const pending=store.db.prepare("SELECT body,revision,line,at,received_at FROM events WHERE state='PENDING' AND (?=1 OR phone IN (?,?,?)) AND (?=0 OR phone=?) AND (?<0 OR (at>=? AND received_at>=?)) AND ("+eventFilter.sql+") ORDER BY from_me DESC,at,rowid LIMIT ?").all(Number(config.enabled),SANDRA,DIEGO,HILARY,Number(chiefReplyRestrictionActive(config)),SANDRA,publicCut,publicCut,publicCut,...eventFilter.params,fastMaria?1:30);
+  const shadowEligible=[];
   for(const row of pending) {
     if(!publicEventAllowed(config,row))continue;
     const e=store.open(row.body); let analysis={};
@@ -452,8 +454,12 @@ export async function drain(store,config,transport,engine) {
     }
     if(!publicEventAllowed(config,row))continue;
     await engine.process(e,analysis);
+    // Retencion previa a este mensaje; una escalada de este turno permite comparar la sombra.
+    if(config.mariaAgente==='sombra'&&!e.fromMe&&!knownInternalRecipient(e.phone))shadowEligible.push({e,humanBefore:Boolean(conversation?.hold||conversation?.state?.awaitingHumanReview)});
   }
   const after=await flushOutbox(store,config,transport);
+  // Solo propuestas, despues de la respuesta actual, sin outbox ni Tenaxis.
+  for(const {e,humanBefore} of shadowEligible)if(!colaSombra.encolar({config,store,evento:e,fetcher:transport.fetcher,esInterno:knownInternalRecipient,minimizar:minimizeAiText,atencionHumanaPrevia:humanBefore}))store.audit('MARIA_AGENTE_SOMBRA_FILA_LLENA',e.id);
   // Deliver active client replies before the chief's potentially slower reads.
   // The durable consumer runs outside the Engine transaction and uses the
   // existing authenticated outbox for its checked results.
