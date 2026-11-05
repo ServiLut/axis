@@ -99,17 +99,33 @@ export class Store {
     // Read lineage before refreshing scoped history. A later blue message
     // cannot erase a red source, shared MID or uncertain delivery.
     if(typeof line!=='string'||!/^57\d{10}$/.test(line))return true;
+    const memory=conversationMemoryBoundary(this,phone),since=memory?Math.floor(memory.at/1000)*1000:null;
+    if(memory&&!memory.lines.includes(line))return true;
+    // A direct personal-memory reset archives only its two named own lines.
+    // Receipt rows remain intact; fresh cross-line or unresolved sends still
+    // require review. Ordinary contacts retain the complete lineage checks.
+    const activeEvents=memory?' AND (e.rowid>? AND e.at>=? OR e.line IS NULL OR e.line NOT IN (?,?))':'',eventArgs=memory?[memory.afterEventRow,since,...memory.lines]:[];
+    const activeSources=memory?' AND (e.rowid>? AND e.at>=? OR x.line IS NULL OR x.line NOT IN (?,?))':'',sourceArgs=memory?[memory.afterEventRow,since,...memory.lines]:[];
+    const activeConversation=memory?' AND (revision>? AND at>=? OR line IS NULL OR line NOT IN (?,?))':'',conversationArgs=memory?[memory.revision,since,...memory.lines]:[];
+    const activeOutputs=memory?" AND (rowid>? OR created>=? OR state IS NULL OR state IN ('UNCERTAIN','ACCEPTED','SENDING') OR line IS NULL OR line NOT IN (?,?))":'',outputArgs=memory?[memory.afterOutboxRow,since,...memory.lines]:[];
+    const activeQuestions=memory?" AND (q.state IS NULL OR q.state<>'CANCELLED_MEMORY_RESET' OR q.outbox_id IS NOT NULL AND (o.line IS NULL OR o.line NOT IN (?,?)))":'',questionArgs=memory?[...memory.lines]:[];
+    const activeRoutes=memory?" AND (q.state IS NULL OR q.state<>'CANCELLED_MEMORY_RESET' OR r.line IS NULL OR r.line NOT IN (?,?))":'';
     const outside='(line IS NULL OR line<>?)';
-    if(this.db.prepare('SELECT 1 FROM events WHERE phone=? AND '+outside+' LIMIT 1').get(phone,line)||
-      this.db.prepare('SELECT 1 FROM event_sources x JOIN events e ON e.id=x.event_id WHERE e.phone=? AND (x.line IS NULL OR x.line<>?) LIMIT 1').get(phone,line)||
-      this.db.prepare('SELECT 1 FROM conversations WHERE phone=? AND '+outside+' LIMIT 1').get(phone,line)||
-      this.db.prepare('SELECT 1 FROM outbox WHERE phone=? AND internal=0 AND '+outside+' LIMIT 1').get(phone,line)||
-      this.db.prepare('SELECT 1 FROM questions q LEFT JOIN outbox o ON o.id=q.outbox_id WHERE q.phone=? AND (o.line IS NULL OR o.line<>?) LIMIT 1').get(phone,line)||
-      this.db.prepare('SELECT 1 FROM question_routes r JOIN questions q ON q.id=r.question_id WHERE q.phone=? AND (r.line IS NULL OR r.line<>?) LIMIT 1').get(phone,line))return true;
+    if(this.db.prepare('SELECT 1 FROM events e WHERE phone=? AND (e.line IS NULL OR e.line<>?)'+activeEvents+' LIMIT 1').get(phone,line,...eventArgs)||
+      this.db.prepare('SELECT 1 FROM event_sources x JOIN events e ON e.id=x.event_id WHERE e.phone=? AND (x.line IS NULL OR x.line<>?)'+activeSources+' LIMIT 1').get(phone,line,...sourceArgs)||
+      this.db.prepare('SELECT 1 FROM conversations WHERE phone=? AND '+outside+activeConversation+' LIMIT 1').get(phone,line,...conversationArgs)||
+      this.db.prepare('SELECT 1 FROM outbox WHERE phone=? AND internal=0 AND '+outside+activeOutputs+' LIMIT 1').get(phone,line,...outputArgs)||
+      this.db.prepare('SELECT 1 FROM questions q LEFT JOIN outbox o ON o.id=q.outbox_id WHERE q.phone=? AND (o.line IS NULL OR o.line<>?)'+activeQuestions+' LIMIT 1').get(phone,line,...questionArgs)||
+      this.db.prepare('SELECT 1 FROM question_routes r JOIN questions q ON q.id=r.question_id WHERE q.phone=? AND (r.line IS NULL OR r.line<>?)'+activeRoutes+' LIMIT 1').get(phone,line,...questionArgs))return true;
     if(this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='tesa_questions'").get()&&
-      this.db.prepare('SELECT 1 FROM tesa_questions WHERE customer_phone=? AND (source_line IS NULL OR source_line<>?) LIMIT 1').get(phone,line))return true;
+      this.db.prepare('SELECT 1 FROM tesa_questions WHERE customer_phone=? AND (source_line IS NULL OR source_line<>?)'+(memory?" AND (state IS NULL OR state<>'CANCELLED_MEMORY_RESET' OR source_line IS NULL OR source_line NOT IN (?,?))":'')+' LIMIT 1').get(phone,line,...questionArgs))return true;
     const prior=this.priorHistory(phone);
     if(prior&&!Array.isArray(prior.checks))return true;
+    if(memory&&prior){
+      const archived=Number.isSafeInteger(prior.cutoff)&&prior.cutoff>=0&&prior.cutoff<memory.at&&prior.checks.every(check=>check&&memory.lines.includes(check.line)&&Number.isInteger(check.total)&&check.total>=0&&(check.total===0&&check.lastAt==null||Number.isSafeInteger(check.lastAt)&&check.lastAt>=0&&check.lastAt<prior.cutoff&&check.lastAt+999<memory.at));
+      if(!archived)return true;
+      return false;
+    }
     return Boolean(prior?.checks.some(check=>!check||!Number.isInteger(check.total)||check.total<0||check.total>0&&check.line!==line));
   }
   savePriorHistory(phone,check,source) {

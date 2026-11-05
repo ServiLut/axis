@@ -3,7 +3,10 @@ import {Store} from '../automation/service-bots/store.mjs';
 import {resetUserTestMemory,conversationMemoryBoundary} from '../automation/service-bots/conversation-memory-reset.mjs';
 import {initializeTesaStore} from '../automation/service-bots/tesa-operations.mjs';
 import {priorAttentionRelease,nativeSourceBeforeRelease} from '../automation/service-bots/explicit-return-attention.mjs';
-import {flushOutbox} from '../automation/service-bots/transport.mjs';
+import {drain,flushOutbox} from '../automation/service-bots/transport.mjs';
+import {Engine} from '../automation/service-bots/engine.mjs';
+import {BUSINESSES} from '../automation/service-bots/config.mjs';
+import {DUAL_LINE_SCOPE_VERSION,DUAL_LINE_AUTHORIZATION_SOURCE,operationalHistoryGuard} from '../automation/service-bots/line-scope.mjs';
 const P='573000098765',OTHER='573000098764',B='573126944997',R='573126938721',SRC='direct-user-memory-reset-synthetic-authorized-both-lines-v1';
 const now=Date.parse('2026-11-05T18:00:00.000Z');
 function event(id,at=now-20000,line=B,phone=P,fromMe=false){return{id,phone,line,at,fromMe,kind:'text',text:'Cucarachas'};}
@@ -61,3 +64,81 @@ test('stale snapshots, copied old cases and post-reset old-revision queues canno
 });
 test('a same-second new message remains eligible and visible after a millisecond reset',t=>{const s=fixture(t);t.mock.timers.tick(500);reset(s);s.enqueue(event('SAMESECOND001',now,R));assert.equal(s.db.prepare('SELECT state FROM events WHERE id=?').get('SAMESECOND001').state,'PENDING');assert.deepEqual(s.customerTurnBatch(P,'SAMESECOND001',null).map(v=>v.id),['SAMESECOND001']);assert.equal(s.conversationContext(P,Date.now(),20,'SAMESECOND001').turns.length,1);});
 test('late human messages and mutations are never absorbed as old test history',t=>{const s=fixture(t);reset(s);s.enqueue({...event('OLDMID000001',now-19000,B,P,true),edited:true});assert.equal(s.conversation(P).hold,1);});
+
+function dualMemoryFixture(t){
+ const s=fixture(t),config={company:'fumigacion',...BUSINESSES.fumigacion,enabled:true,chiefOnly:true,activatedAt:now-86400000,publicResponseStartsAt:now-60000,historyCheckRequired:true,responseTargetMs:3000,
+  lines:[{phone:B,instance:'cucaracha-azul'},{phone:R,instance:'cucaracha-roja'}],operationalLineScope:{company:'fumigacion',version:DUAL_LINE_SCOPE_VERSION,authorizationSource:DUAL_LINE_AUTHORIZATION_SOURCE,activeLines:[B,R],suspendedLines:[],authorizedAt:new Date(now-50000).toISOString(),lineStartsAt:{[B]:new Date(now-50000).toISOString(),[R]:new Date(now-40000).toISOString()}}};
+ s.enqueue(event('OLDREDSOURCE1',now-10000,R));s.db.prepare("UPDATE events SET state='DONE' WHERE phone=?").run(P);
+ s.queue('old-red-output',P,R,'Oferta roja anterior',false,s.conversation(P).revision,'fumigacion:OLDREDSOURCE1');s.db.prepare("UPDATE outbox SET state='DELIVERED',mid='OLDREDMID001',created=?,updated=? WHERE id='old-red-output'").run(now-9000,now-9000);
+ s.savePriorHistory(P,{cutoff:config.activatedAt,checkedAt:now-5000,priorOutgoing:true,guardVersion:operationalHistoryGuard(config),checks:[{line:B,total:2,lastAt:config.activatedAt-1000},{line:R,total:1,lastAt:config.activatedAt-2000}]},'OLDREDSOURCE1');
+ initializeTesaStore(s);
+ // A cancelled private question may never have reached an outbox at all.
+ s.db.prepare("INSERT INTO questions(id,phone,case_id,state) VALUES('old-unrouted',?,'fumigacion:OLDREDSOURCE1','PENDING')").run(P);
+ s.queue('old-question-route','573016803926',B,'Pregunta anterior',true,0);
+ s.db.prepare("INSERT INTO questions(id,phone,case_id,state,outbox_id) VALUES('old-routed',?,'fumigacion:OLDREDSOURCE1','PENDING','old-question-route')").run(P);
+ s.db.prepare("INSERT INTO question_routes(question_id,recipient,line,outbox_id) VALUES('old-routed','573016803926',?,'old-question-route')").run(B);
+ s.db.prepare("INSERT INTO tesa_questions(id,company,case_id,customer_phone,topic,conditions_hash,group_jid,source_line,sender_line,body,state,outbox_id) VALUES('old-tesa','fumigacion','fumigacion:OLDREDSOURCE1',?,'topic','hash','group',?,?,?,'PENDING','old-tesa-output')").run(P,R,R,s.seal({source:'OLDREDSOURCE1'}));
+ reset(s,{releaseHumanHold:true});return {s,config,engine:new Engine(s,config)};
+}
+function memoryTransport(sent){return {verifyLine:async()=>{},understand:async()=>({}),currentAttention:async()=>({complete:true,sources:[],checks:[],through:Date.now()}),send:async(row,text)=>{sent.push({id:row.id,line:row.line,text});return 'SYNTHETIC_MEMORY_MID_'+sent.length;}};}
+
+for(const line of [B,R])test('the first fresh '+line.slice(-4)+' turn passes drain, Engine and flush after explicitly archived dual-line memory',async t=>{
+ const {s,config,engine}=dualMemoryFixture(t),priorRows=s.db.prepare('SELECT * FROM events WHERE phone=? ORDER BY rowid').all(P),oldRead=s.db.prepare("SELECT * FROM outbox WHERE id='old-output'").get(),oldDelivered=s.db.prepare("SELECT * FROM outbox WHERE id='old-red-output'").get(),sent=[];
+ assert.equal(s.hasSourcesOutsideLine(P,line),false);t.mock.timers.tick(2000);const e=event('FRESHMEMORY001',Date.now(),line);s.enqueue(e);
+ await drain(s,config,memoryTransport(sent),engine);
+ assert.equal(sent.length,1);assert.equal(sent[0].line,line);assert.equal(sent[0].id,e.id+':reply');assert.doesNotMatch(sent[0].text,/999|Oferta anterior|Oferta roja anterior/);
+ assert.notEqual(s.db.prepare('SELECT state FROM events WHERE id=?').get(e.id).state,'OPERATIONAL_SCOPE_REVIEW');assert.equal(s.db.prepare('SELECT state FROM outbox WHERE id=?').get(e.id+':reply').state,'ACCEPTED');
+ assert.deepEqual(s.db.prepare('SELECT * FROM events WHERE phone=? AND id<>? ORDER BY rowid').all(P,e.id),priorRows);assert.deepEqual(s.db.prepare("SELECT * FROM outbox WHERE id='old-output'").get(),oldRead);assert.deepEqual(s.db.prepare("SELECT * FROM outbox WHERE id='old-red-output'").get(),oldDelivered);
+});
+
+test('a fresh source on the other line still blocks a second line after a personal-memory reset',async t=>{
+ const {s,config,engine}=dualMemoryFixture(t),sent=[],transport=memoryTransport(sent);t.mock.timers.tick(2000);s.enqueue(event('FRESHRED001',Date.now(),R));await drain(s,config,transport,engine);assert.equal(sent.length,1);
+ t.mock.timers.tick(2000);s.enqueue(event('FRESHBLUE001',Date.now(),B));await drain(s,config,transport,engine);assert.equal(sent.length,1);assert.equal(s.hasSourcesOutsideLine(P,B),true);assert.equal(s.db.prepare('SELECT state FROM events WHERE id=?').get('FRESHBLUE001').state,'OPERATIONAL_SCOPE_REVIEW');
+});
+
+test('fresh cross-line evidence arriving after Engine still stops its ready reply at flush',async t=>{
+ const {s,config,engine}=dualMemoryFixture(t),sent=[];t.mock.timers.tick(2000);const e=event('ENGINEFRESH001',Date.now(),R);s.enqueue(e);await engine.process(e);assert.equal(s.db.prepare('SELECT state FROM outbox WHERE id=?').get(e.id+':reply').state,'READY');
+ t.mock.timers.tick(2000);s.enqueue(event('NEWFOREIGN001',Date.now(),B));await flushOutbox(s,config,memoryTransport(sent));assert.deepEqual(sent,[]);assert.equal(s.db.prepare('SELECT state FROM outbox WHERE id=?').get(e.id+':reply').state,'OPERATIONAL_SCOPE_REVIEW');
+});
+
+for(const state of ['UNCERTAIN','ACCEPTED','SENDING'])test('an archived foreign '+state+' receipt is preserved and still blocks a fresh send',async t=>{
+ const {s,config,engine}=dualMemoryFixture(t);s.db.prepare('UPDATE outbox SET state=? WHERE id=?').run(state,'old-output');const old=s.db.prepare("SELECT * FROM outbox WHERE id='old-output'").get(),sent=[];
+ t.mock.timers.tick(2000);s.enqueue(event('NEWBLOCKED001',Date.now(),R));await drain(s,config,memoryTransport(sent),engine);assert.deepEqual(sent,[]);assert.equal(s.hasSourcesOutsideLine(P,R),true);assert.deepEqual(s.db.prepare("SELECT * FROM outbox WHERE id='old-output'").get(),old);assert.equal(s.db.prepare('SELECT state FROM events WHERE id=?').get('NEWBLOCKED001').state,'OPERATIONAL_SCOPE_REVIEW');
+});
+
+test('only questions cancelled by the explicit reset lose their previous-line blocking role',t=>{
+ const {s}=dualMemoryFixture(t);assert.equal(s.hasSourcesOutsideLine(P,B),false);assert.equal(s.hasSourcesOutsideLine(P,R),false);
+ for(const [table,id] of [['questions','old-unrouted'],['questions','old-routed'],['tesa_questions','old-tesa']]){s.db.prepare('UPDATE '+table+" SET state='ANSWERED' WHERE id=?").run(id);assert.equal(s.hasSourcesOutsideLine(P,id==='old-tesa'?B:R),true);s.db.prepare('UPDATE '+table+" SET state='CANCELLED_MEMORY_RESET' WHERE id=?").run(id);}
+ assert.equal(s.hasSourcesOutsideLine(P,R),false);
+});
+
+test('malformed, unknown-line or not-wholly-old prior-history checks cannot be exempted by a memory reset',t=>{
+ const {s}=dualMemoryFixture(t),prior=s.priorHistory(P);assert.equal(s.hasSourcesOutsideLine(P,R),false);
+ for(const patch of [{cutoff:now+1},{checks:null},{checks:[null]},{checks:[{line:B,total:1}]},{checks:[{line:B,total:1,lastAt:now}]},{checks:[{line:B,total:-1,lastAt:now-20000}]},{checks:[{line:'573000099999',total:1,lastAt:prior.cutoff-1000}]}]){
+  s.db.prepare('UPDATE meta SET value=? WHERE key=?').run(s.seal({...prior,...patch}),'prior-history:'+P);assert.equal(s.hasSourcesOutsideLine(P,R),true);
+ }
+ s.db.prepare('UPDATE meta SET value=? WHERE key=?').run(s.seal(prior),'prior-history:'+P);assert.equal(s.hasSourcesOutsideLine(P,R),false);
+});
+
+test('unknown output, private-question or legacy TESA question states remain foreign evidence after reset',t=>{
+ const s=fixture(t);reset(s);assert.equal(s.hasSourcesOutsideLine(P,R),false);
+ s.db.prepare("UPDATE outbox SET state=NULL WHERE id='old-output'").run();const unknownOutput=s.db.prepare("SELECT * FROM outbox WHERE id='old-output'").get();assert.equal(s.hasSourcesOutsideLine(P,R),true);assert.deepEqual(s.db.prepare("SELECT * FROM outbox WHERE id='old-output'").get(),unknownOutput);s.db.prepare("UPDATE outbox SET state='READ' WHERE id='old-output'").run();assert.equal(s.hasSourcesOutsideLine(P,R),false);
+ s.db.prepare('INSERT INTO questions(id,phone,case_id,state) VALUES(?,?,?,NULL)').run('fresh-unknown-question',P,'unverified-case');assert.equal(s.hasSourcesOutsideLine(P,R),true);
+ s.db.prepare("UPDATE questions SET state='PENDING' WHERE id=?").run('fresh-unknown-question');assert.equal(s.hasSourcesOutsideLine(P,R),true);
+ s.db.prepare("UPDATE questions SET state='CANCELLED_MEMORY_RESET' WHERE id=?").run('fresh-unknown-question');assert.equal(s.hasSourcesOutsideLine(P,R),false);
+ // Older local tables can lack the current schema's NOT NULL constraint.
+ s.db.exec('CREATE TABLE tesa_questions(id TEXT,customer_phone TEXT,source_line TEXT,state TEXT)');s.db.prepare('INSERT INTO tesa_questions VALUES(?,?,?,NULL)').run('legacy-null-tesa',P,B);assert.equal(s.hasSourcesOutsideLine(P,R),true);
+ s.db.prepare("UPDATE tesa_questions SET state='PENDING'").run();assert.equal(s.hasSourcesOutsideLine(P,R),true);s.db.prepare("UPDATE tesa_questions SET state='CANCELLED_MEMORY_RESET'").run();assert.equal(s.hasSourcesOutsideLine(P,R),false);
+});
+
+test('a cancelled marker never exempts missing, unknown or third-line question routes',t=>{
+ const s=fixture(t),foreign='573000099999';reset(s);
+ s.db.prepare("INSERT INTO questions(id,phone,case_id,state) VALUES('cancelled-q',?,'old-case','CANCELLED_MEMORY_RESET')").run(P);assert.equal(s.hasSourcesOutsideLine(P,R),false);
+ s.db.prepare("UPDATE questions SET outbox_id='missing-route' WHERE id='cancelled-q'").run();assert.equal(s.hasSourcesOutsideLine(P,R),true);
+ s.queue('missing-route','573016803926',foreign,'Pregunta antigua',true,0);assert.equal(s.hasSourcesOutsideLine(P,R),true);
+ s.db.prepare("UPDATE outbox SET line=NULL WHERE id='missing-route'").run();assert.equal(s.hasSourcesOutsideLine(P,R),true);s.db.prepare("UPDATE outbox SET line=? WHERE id='missing-route'").run(B);assert.equal(s.hasSourcesOutsideLine(P,R),false);
+ s.db.prepare("INSERT INTO question_routes(question_id,recipient,line,outbox_id) VALUES('cancelled-q','573016803926',?,'missing-route')").run(foreign);assert.equal(s.hasSourcesOutsideLine(P,R),true);
+ s.db.prepare("UPDATE question_routes SET line=NULL").run();assert.equal(s.hasSourcesOutsideLine(P,R),true);s.db.prepare('UPDATE question_routes SET line=?').run(B);assert.equal(s.hasSourcesOutsideLine(P,R),false);
+ s.db.exec('CREATE TABLE tesa_questions(id TEXT,customer_phone TEXT,source_line TEXT,state TEXT)');s.db.prepare("INSERT INTO tesa_questions VALUES('cancelled-tesa',?,?,'CANCELLED_MEMORY_RESET')").run(P,foreign);assert.equal(s.hasSourcesOutsideLine(P,R),true);
+ s.db.prepare('UPDATE tesa_questions SET source_line=NULL').run();assert.equal(s.hasSourcesOutsideLine(P,R),true);s.db.prepare('UPDATE tesa_questions SET source_line=?').run(B);assert.equal(s.hasSourcesOutsideLine(P,R),false);
+});
