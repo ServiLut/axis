@@ -1,3 +1,4 @@
+import {conversationMemoryBoundary,assertMemoryCaseCurrent} from './conversation-memory-reset.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { randomBytes, createCipheriv, createDecipheriv, createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
@@ -6,6 +7,9 @@ import {validateApprovedAnswers,selectCommonAnswer} from './faq.mjs';
 import {validatePriceCatalog,selectPrice,quotationInquiry} from './prices.mjs';
 import {supersededBusinessPriceSchedule,LEGACY_BUSINESS_PRICE_HASH,selectBusinessPrice,priceScheduleValidAt} from './business-prices.mjs';
 import {customerQuestionKey,technicalAvailabilityQuestion} from './technical-scope.mjs';
+
+const conversationMemoryEpochs=new WeakMap();
+const mutatedMemoryEvent=e=>['edited-body-unavailable','deleted','revoked','protocol'].includes(e.kind)||['edited','isEdited','deleted','isDeleted','revoked','isRevoked'].some(k=>e[k]===true);
 
 export const MARIA_EARLY_DELIVERY_GUARD='own-fum-single-sending-exact-mid-early-delivery-v1';
 const earlyDeliveryWindow=60000,earlyDeliveryLimit=8;
@@ -57,11 +61,18 @@ export class Store {
     return this.tx(()=>{
       const existing=this.db.prepare('SELECT body FROM events WHERE id=?').get(e.id);
       if(existing){const before=this.open(existing.body);if(JSON.stringify({...before,line:null})!==JSON.stringify({...e,line:null}))throw new Error('EVENT_ID_CONFLICT');this.db.prepare('INSERT OR IGNORE INTO event_sources VALUES(?,?)').run(e.id,e.line);return {duplicate:true};}
+      const boundary=conversationMemoryBoundary(this,e.phone);
+      if(boundary&&e.at+999<boundary.at&&!mutatedMemoryEvent(e)&&(!e.fromMe||this.db.prepare('SELECT 1 FROM outbox WHERE mid=? AND phone=? AND line=?').get(e.id,e.phone,e.line))){
+        this.db.prepare("INSERT INTO events(id,phone,at,line,from_me,body,state,revision,received_at) VALUES(?,?,?,?,?,?,'OBSERVED_BEFORE_MEMORY_RESET',0,?)").run(e.id,e.phone,e.at,e.line,Number(e.fromMe),this.seal(e),Date.now());
+        this.db.prepare('INSERT INTO event_sources VALUES(?,?)').run(e.id,e.line);
+        return {duplicate:false,observedBeforeMemoryReset:true};
+      }
       this.db.prepare('INSERT OR IGNORE INTO conversations(phone,line,body) VALUES(?,?,?)').run(e.phone,e.line,this.seal({slots:{},asked:[],lastText:''}));
       if(!e.fromMe)this.db.prepare('UPDATE conversations SET revision=revision+CASE WHEN ?>=at THEN 1 ELSE 0 END,at=MAX(at,?),line=CASE WHEN ?>=at THEN ? ELSE line END WHERE phone=?').run(e.at,e.at,e.at,e.line,e.phone);
       const revision=this.conversation(e.phone).revision;
       this.db.prepare('INSERT INTO events(id,phone,at,line,from_me,body,revision,received_at) VALUES(?,?,?,?,?,?,?,?)').run(e.id,e.phone,e.at,e.line,Number(e.fromMe),this.seal(e),revision,Date.now());
       this.db.prepare('INSERT INTO event_sources VALUES(?,?)').run(e.id,e.line);
+      if(boundary&&e.fromMe&&mutatedMemoryEvent(e)){this.noteStaffIntervention(e);this.hold(e.phone,e.id,true);}
       if(e.fromMe&&!this.db.prepare('SELECT 1 FROM outbox WHERE mid=? AND phone=? AND line=?').get(e.id,e.phone,e.line)&&!this.db.prepare("SELECT 1 FROM outbox WHERE phone=? AND state='SENDING'").get(e.phone)){
         // Freeze the customer's prepared replies as soon as authenticated staff
         // activity is received, before the next worker cycle. Exact bot echoes
@@ -73,9 +84,13 @@ export class Store {
     });
   }
   conversation(phone) {
-    const r=this.db.prepare('SELECT * FROM conversations WHERE phone=?').get(phone);return r?{...r,state:this.open(r.body)}:null;
+    const r=this.db.prepare('SELECT * FROM conversations WHERE phone=?').get(phone);if(!r)return null;const state=this.open(r.body);conversationMemoryEpochs.set(state,conversationMemoryBoundary(this,phone)?.source??null);return {...r,state};
   }
-  saveConversation(phone,state) {this.db.prepare('UPDATE conversations SET body=? WHERE phone=?').run(this.seal(state),phone);}
+  saveConversation(phone,state) {
+    const b=conversationMemoryBoundary(this,phone);
+    if(b){if(conversationMemoryEpochs.has(state)&&conversationMemoryEpochs.get(state)!==b.source)throw Error('MEMORY_RESET_STALE_STATE');if(state.caseId)assertMemoryCaseCurrent(this,phone,state.caseId);else if(!conversationMemoryEpochs.has(state))throw Error('MEMORY_RESET_STALE_STATE');}
+    this.db.prepare('UPDATE conversations SET body=? WHERE phone=?').run(this.seal(state),phone);
+  }
   priorHistory(phone) {
     const row=this.db.prepare('SELECT value FROM meta WHERE key=?').get('prior-history:'+phone);
     return row?this.open(row.value):null;
@@ -118,6 +133,7 @@ export class Store {
     this.audit(value?'HUMAN_TAKEOVER':'EXPLICIT_RELEASE',source,{phone});
   }
   queue(id,phone,line,text,internal,revision,caseId=null) {
+    const memory=conversationMemoryBoundary(this,phone);if(memory&&!internal){const current=this.conversation(phone);if(!current||revision!==current.revision||revision<=memory.revision)return false;if(caseId)assertMemoryCaseCurrent(this,phone,caseId);}
     const r=this.db.prepare('SELECT body FROM outbox WHERE id=?').get(id);
     if(r){if(this.open(r.body)!==text)throw new Error('OUTBOX_ID_CONFLICT');return false;}
     this.db.prepare('INSERT INTO outbox(id,phone,line,body,internal,revision,created,updated,case_id) VALUES(?,?,?,?,?,?,?,?,?)').run(id,phone,line,this.seal(text),Number(internal),revision,Date.now(),Date.now(),internal?null:caseId);return true;
@@ -223,28 +239,31 @@ export class Store {
   }
   conversationContext(phone,at,limit=20,sourceId=null) {
     if(!Number.isSafeInteger(limit)||limit<1||limit>40)throw new Error('CONTEXT_LIMIT_REQUIRED');
-    const conv=this.conversation(phone);
+    const conv=this.conversation(phone),boundary=conversationMemoryBoundary(this,phone),afterEvent=boundary?.afterEventRow??0,afterOutbox=boundary?.afterOutboxRow??0,since=boundary?Math.floor(boundary.at/1000)*1000:Number.MIN_SAFE_INTEGER;
     const source=sourceId&&this.db.prepare('SELECT rowid,received_at FROM events WHERE id=? AND phone=?').get(sourceId,phone);
     if(sourceId&&!source)throw new Error('CONTEXT_SOURCE_SCOPE_REQUIRED');
     const throughRow=source?.rowid??Number.MAX_SAFE_INTEGER,throughTime=source?.received_at??at;
-    const events=this.db.prepare('SELECT id,line,at,from_me,body,state FROM events WHERE phone=? AND at<=? AND rowid<=? ORDER BY at DESC,rowid DESC LIMIT ?').all(phone,at,throughRow,limit);
-    const replies=this.db.prepare("SELECT id,line,body,mid,state,created,case_id FROM outbox WHERE phone=? AND internal=0 AND created<=? AND state IN ('ACCEPTED','DELIVERED','READ') ORDER BY created DESC,rowid DESC LIMIT ?").all(phone,throughTime,limit);
-    const own=new Set(replies.filter(r=>r.mid).map(r=>r.line+':'+r.mid));
+    const events=this.db.prepare('SELECT id,line,at,from_me,body,state FROM events WHERE phone=? AND at<=? AND rowid<=? AND rowid>? AND at>=? ORDER BY at DESC,rowid DESC LIMIT ?').all(phone,at,throughRow,afterEvent,since,limit);
+    const replies=this.db.prepare("SELECT id,line,body,mid,state,created,case_id FROM outbox WHERE phone=? AND internal=0 AND created<=? AND rowid>? AND created>=? AND state IN ('ACCEPTED','DELIVERED','READ') ORDER BY created DESC,rowid DESC LIMIT ?").all(phone,throughTime,afterOutbox,since,limit);
+    const own=new Set(this.db.prepare("SELECT line,mid FROM outbox WHERE phone=? AND internal=0 AND mid IS NOT NULL AND state IN ('ACCEPTED','DELIVERED','READ')").all(phone).map(r=>r.line+':'+r.mid));
     const turns=events.filter(e=>!(e.from_me&&own.has(e.line+':'+e.id))).map(e=>({sourceId:e.id,line:e.line,at:e.at,role:e.from_me?'outbound-author-unverified':'customer',kind:this.open(e.body).kind,text:this.open(e.body).text,processingState:e.state}));
     turns.push(...replies.map(r=>({sourceId:r.id,providerMessageId:r.mid,line:r.line,at:r.created,role:'bot',text:this.open(r.body),delivery:r.state,caseId:r.case_id??null})));
     turns.sort((a,b)=>a.at-b.at||a.sourceId.localeCompare(b.sourceId));
-    const totalEvents=this.db.prepare('SELECT COUNT(*) n FROM events WHERE phone=? AND at<=? AND rowid<=?').get(phone,at,throughRow).n;
-    const totalReplies=this.db.prepare("SELECT COUNT(*) n FROM outbox WHERE phone=? AND internal=0 AND created<=? AND state IN ('ACCEPTED','DELIVERED','READ')").get(phone,throughTime).n;
-    return {company:this.company,phone,caseId:conv?.state.caseId??null,scope:'same-company-contact; previous-case-boundaries-may-be-unverified',turns,completeStoredHistory:totalEvents<=limit&&totalReplies<=limit,fullWhatsAppHistoryRead:false,mediaOriginalsIncluded:false,referencesAreUntrusted:true};
+    const totalEvents=this.db.prepare('SELECT COUNT(*) n FROM events WHERE phone=? AND at<=? AND rowid<=? AND rowid>? AND at>=?').get(phone,at,throughRow,afterEvent,since).n;
+    const totalReplies=this.db.prepare("SELECT COUNT(*) n FROM outbox WHERE phone=? AND internal=0 AND created<=? AND rowid>? AND created>=? AND state IN ('ACCEPTED','DELIVERED','READ')").get(phone,throughTime,afterOutbox,since).n;
+    return {company:this.company,phone,caseId:conv?.state.caseId??null,scope:boundary?'same-company-contact; explicit-user-test-memory-boundary':'same-company-contact; previous-case-boundaries-may-be-unverified',...(boundary?{memoryResetAt:boundary.at}:{}),turns,completeStoredHistory:totalEvents<=limit&&totalReplies<=limit,fullWhatsAppHistoryRead:false,mediaOriginalsIncluded:false,referencesAreUntrusted:true};
   }
   customerTurnBatch(phone,sourceId,previousSourceId){
+    const boundary=conversationMemoryBoundary(this,phone),after=boundary?.afterEventRow??0,since=boundary?Math.floor(boundary.at/1000)*1000:Number.MIN_SAFE_INTEGER;
     const current=this.db.prepare('SELECT rowid,at FROM events WHERE id=? AND phone=? AND from_me=0').get(sourceId,phone);
     if(!current)throw new Error('CUSTOMER_SOURCE_SCOPE_REQUIRED');
+    if(current.rowid<=after||current.at<since)return [];
     const previous=previousSourceId&&this.db.prepare('SELECT rowid FROM events WHERE id=? AND phone=? AND from_me=0').get(previousSourceId,phone);
-    if(!previous||previous.rowid>=current.rowid)return this.db.prepare("SELECT body FROM events WHERE phone=? AND from_me=0 AND rowid<=? AND at BETWEEN ? AND ? AND state IN ('PENDING','OBSERVED_SUPERSEDED') ORDER BY at,rowid LIMIT 40").all(phone,current.rowid,current.at-600000,current.at).map(r=>this.open(r.body));
-    return this.db.prepare("SELECT body FROM events WHERE phone=? AND from_me=0 AND rowid>? AND rowid<=? AND at<=? AND state IN ('PENDING','OBSERVED_SUPERSEDED') ORDER BY at,rowid LIMIT 40").all(phone,previous.rowid,current.rowid,current.at).map(r=>this.open(r.body));
+    if(!previous||previous.rowid>=current.rowid)return this.db.prepare("SELECT body FROM events WHERE phone=? AND from_me=0 AND rowid<=? AND rowid>? AND at BETWEEN ? AND ? AND state IN ('PENDING','OBSERVED_SUPERSEDED') ORDER BY at,rowid LIMIT 40").all(phone,current.rowid,after,Math.max(since,current.at-600000),current.at).map(r=>this.open(r.body));
+    return this.db.prepare("SELECT body FROM events WHERE phone=? AND from_me=0 AND rowid>? AND rowid<=? AND at<=? AND at>=? AND state IN ('PENDING','OBSERVED_SUPERSEDED') ORDER BY at,rowid LIMIT 40").all(phone,Math.max(after,previous.rowid),current.rowid,current.at,since).map(r=>this.open(r.body));
   }
   question({phone,line,caseId,topic,conditions,recipient,text,source}) {
+    assertMemoryCaseCurrent(this,phone,caseId);
     if(this.company==='servicio-tecnico'&&(topic==='customer-question'||topic==='special-quotation'&&conditions?.kind==='technical-painting')){
       const question=customerQuestionKey(conditions?.question||'');
       const candidates=this.db.prepare("SELECT id,state,topic,body FROM questions WHERE phone=? AND case_id=? AND state IN ('PENDING','ANSWER_REVIEW') AND topic='customer-question' ORDER BY rowid").all(phone,caseId);

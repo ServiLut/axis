@@ -1,3 +1,4 @@
+import {assertMemoryCaseCurrent} from './conversation-memory-reset.mjs';
 import {createHash} from 'node:crypto';
 import {BUSINESSES,SANDRA,normalize,questionRecipients} from './config.mjs';
 import {getTesaConfig} from './tesa-config.mjs';
@@ -97,6 +98,7 @@ export function prepareTesaQuestion(store,config,request){
  const {phone,line,caseId,topic,conditions={},source,text}=request||{};
  if(!/^57\d{10}$/.test(phone||'')||typeof caseId!=='string'||!caseId||caseId.length>160||typeof topic!=='string'||!BUSINESSES[store.company].phones.includes(line))throw Error('TESA_CASE_SCOPE_REQUIRED');
  return atomic(store,()=>{
+  assertMemoryCaseCurrent(store,phone,caseId);
   // Existing private questions retain their destinations, sources and delivery.
   const prior=pendingPrivateQuestion(store,{phone,caseId,topic,conditions});
   if(prior)return {...stateResult(prior,false,store),valid:false,privateQuestionPreserved:true};
