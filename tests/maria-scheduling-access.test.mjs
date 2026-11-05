@@ -18,7 +18,7 @@ test('write and proof credentials cannot reuse any current runtime, registration
 }finally{f.s.close();}}});
 
 test('wrong actor, endpoint, company, expanded expiry, future start and extra capability fields are rejected',()=>{const f=fixture();try{
- for(const patch of [{actorId:'other'},{url:MARIA_SCHEDULING_URL+'/other'},{expiresAt:f.body.expiresAt+1},{expiresAt:f.body.expiresAt-1},{startsAt:f.c.mariaProgram.startsAt-1},{startsAt:f.now+1},{startsAt:f.body.expiresAt},{operation:'reprogram'},{tenantId:'other'}])assert.throws(()=>installOwnSchedulingAccess(f.c,f.s,{...f.body,...patch},f.now),JSON.stringify(patch));
+ for(const patch of [{actorId:'other'},{url:MARIA_SCHEDULING_URL+'/other'},{expiresAt:f.body.expiresAt+1},{startsAt:f.c.mariaProgram.startsAt-1},{startsAt:f.now+1},{startsAt:f.body.expiresAt},{operation:'reprogram'},{tenantId:'other'}])assert.throws(()=>installOwnSchedulingAccess(f.c,f.s,{...f.body,...patch},f.now),JSON.stringify(patch));
  assert.throws(()=>installOwnSchedulingAccess({...f.c,company:'servicio-tecnico'},f.s,f.body,f.now));assert.equal(f.s.db.prepare("SELECT COUNT(*) n FROM meta WHERE key='maria-own-order-scheduling-access'").get().n,0);
 }finally{f.s.close();}});
 
@@ -31,4 +31,30 @@ test('expired, not-yet-active, disabled, changed-actor or shortened-parent acces
 test('foreign store and tampered sealed access cannot install or restore scheduling permissions',()=>{const f=fixture();try{
  f.s.company='servicio-tecnico';assert.throws(()=>installOwnSchedulingAccess(f.c,f.s,f.body,f.now));assert.throws(()=>restoreOwnSchedulingAccess(f.c,f.s));f.s.company='fumigacion';installOwnSchedulingAccess(f.c,f.s,f.body,f.now);
  const row=f.s.db.prepare("SELECT value FROM meta WHERE key='maria-own-order-scheduling-access'").get(),value=f.s.open(row.value);f.s.db.prepare("UPDATE meta SET value=? WHERE key='maria-own-order-scheduling-access'").run(f.s.seal({...value,url:'https://other.example'}));assert.throws(()=>restoreOwnSchedulingAccess({...f.c,ownOrderScheduling:undefined},f.s));
+}finally{f.s.close();}});
+
+// Renewal changes the parent deadline only. Stored child authority remains finite.
+test('renewed parent restores the exact older child and rejects proofs at the child expiry',()=>{const f=fixture();try{
+ installOwnSchedulingAccess(f.c,f.s,f.body,f.now);const original=structuredClone(f.c.ownOrderScheduling);
+ const sealedBefore=f.s.db.prepare("SELECT value FROM meta WHERE key='maria-own-order-scheduling-access'").get().value;
+ const renewed={...f.c,mariaProgram:{...f.c.mariaProgram,expiresAt:f.body.expiresAt+30*86400000},ownOrderScheduling:undefined};
+ restoreOwnSchedulingAccess(renewed,f.s);assert.deepEqual(renewed.ownOrderScheduling,original);
+ assert.equal(f.s.db.prepare("SELECT value FROM meta WHERE key='maria-own-order-scheduling-access'").get().value,sealedBefore);
+ assert.equal(ownSchedulingProofAuthorized(renewed,'Bearer '+f.body.proofToken,f.now),true);
+ for(const at of [f.body.expiresAt,f.body.expiresAt+1])assert.equal(ownSchedulingProofAuthorized(renewed,'Bearer '+f.body.proofToken,at),false);
+ const status=ownSchedulingAccessStatus(renewed,f.now);assert.equal(status.expiresAt,new Date(f.body.expiresAt).toISOString());assert.equal(status.otherOrdersEnabled,false);assert.equal(status.reprogrammingEnabled,false);assert.equal(status.paymentsEnabled,false);
+}finally{f.s.close();}});
+test('a shorter child grant stays bounded by its own earlier expiry',()=>{const f=fixture();try{
+ const shorter={...f.body,expiresAt:f.body.expiresAt-1};installOwnSchedulingAccess(f.c,f.s,shorter,f.now);
+ assert.equal(ownSchedulingEnabled(f.c,shorter.expiresAt),false);assert.equal(ownSchedulingEnabled(f.c,shorter.expiresAt-1),true);
+ assert.throws(()=>installOwnSchedulingAccess(f.c,f.s,{...shorter,expiresAt:f.c.mariaProgram.expiresAt+1},f.now));
+}finally{f.s.close();}});
+
+test('a malformed parent window cannot authorize or restore a shorter child',()=>{const f=fixture();try{
+ installOwnSchedulingAccess(f.c,f.s,f.body,f.now);
+ for(const field of ['startsAt','expiresAt'])for(const value of [NaN,Infinity,undefined,String(f.c.mariaProgram[field])]){
+  const changed={...f.c,mariaProgram:{...f.c.mariaProgram,[field]:value}};
+  assert.equal(ownSchedulingProofAuthorized(changed,'Bearer '+f.body.proofToken,f.now),false);
+  assert.throws(()=>restoreOwnSchedulingAccess({...changed,ownOrderScheduling:undefined},f.s));
+ }
 }finally{f.s.close();}});

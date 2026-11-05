@@ -53,3 +53,10 @@ test('old offered, pending, uncertain, saved and review records remain unchanged
   assert.deepEqual(await drainOwnScheduling(f.s,f.c,transport,{verifyProof:forbidden}),{enabled:false,processed:0});const status=ownSchedulingStatus(f.s,f.c);assert.equal(status.configured,true);assert.equal(status.enabled,false);assert.deepEqual(status.states,{OFFERED:1,PENDING:1,SENDING:1,UNCERTAIN:1,SAVED:1,REVIEW:1});assert.equal(calls,0);assert.deepEqual(f.snapshot(),before);assert.deepEqual(state,{caseId:plan.caseId,pendingOwnScheduling:{schedulingKey:key}});
  }finally{f.s.close();}
 });
+
+test('parent renewal preserves staff-planning disablement and the stored November child expiry',t=>{const f=fixture(t);try{
+ f.activate();const original=structuredClone(f.c.ownOrderScheduling),before=f.snapshot();
+ const renewed={...f.c,mariaProgram:{...f.c.mariaProgram,expiresAt:f.body.expiresAt+30*86400000},ownOrderScheduling:undefined};
+ restoreOwnSchedulingAccess(renewed,f.s);assert.deepEqual(renewed.ownOrderScheduling,original);assert.deepEqual(f.snapshot(),before);
+ assert.equal(ownSchedulingAccessStatus(renewed,now).configured,true);assert.equal(ownSchedulingEnabled(renewed,now),false);assert.equal(ownSchedulingProofAuthorized(renewed,'Bearer '+f.body.proofToken,now),false);
+}finally{f.s.close();}});

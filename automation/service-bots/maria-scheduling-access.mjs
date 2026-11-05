@@ -9,7 +9,7 @@ const keys='actorId,expiresAt,proofToken,startsAt,token,url';
 const forbiddenHashes=c=>[c.authHash,c.webhookHash,c.mariaProgram?.token?sha(c.mariaProgram.token):null,c.programSupervision?.token?sha(c.programSupervision.token):null,c.retentionNoteAccess?.token?sha(c.retentionNoteAccess.token):null,c.retentionProofAccess?.tokenHash].filter(Boolean);
 function checked(c,b){
  const p=c.mariaProgram;
- if(c.company!=='fumigacion'||p?.enabled!==true||!b||Object.keys(b).sort().join(',')!==keys||b.actorId!==p.actorId||b.url!==MARIA_SCHEDULING_URL||!Number.isSafeInteger(b.startsAt)||!Number.isSafeInteger(b.expiresAt)||b.startsAt<p.startsAt||b.expiresAt!==p.expiresAt||b.startsAt>=b.expiresAt||! /^[A-Za-z0-9_-]{43,128}$/.test(b.token??'')||! /^[a-f0-9]{64}$/.test(b.proofToken??'')||forbiddenHashes(c).includes(sha(b.token))||forbiddenHashes(c).includes(b.proofToken)||sha(b.token)===b.proofToken)throw Error('OWN_SEPARATE_FIRST_SCHEDULING_ACCESS_REQUIRED');
+ if(c.company!=='fumigacion'||p?.enabled!==true||!Number.isSafeInteger(p.startsAt)||!Number.isSafeInteger(p.expiresAt)||!b||Object.keys(b).sort().join(',')!==keys||b.actorId!==p.actorId||b.url!==MARIA_SCHEDULING_URL||!Number.isSafeInteger(b.startsAt)||!Number.isSafeInteger(b.expiresAt)||b.startsAt<p.startsAt||b.expiresAt>p.expiresAt||b.startsAt>=b.expiresAt||! /^[A-Za-z0-9_-]{43,128}$/.test(b.token??'')||! /^[a-f0-9]{64}$/.test(b.proofToken??'')||forbiddenHashes(c).includes(sha(b.token))||forbiddenHashes(c).includes(b.proofToken)||sha(b.token)===b.proofToken)throw Error('OWN_SEPARATE_FIRST_SCHEDULING_ACCESS_REQUIRED');
  return {...b};
 }
 export function restoreOwnSchedulingAccess(c,s){
