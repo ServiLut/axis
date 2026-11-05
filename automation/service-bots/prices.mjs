@@ -2,7 +2,7 @@ import {createHash} from 'node:crypto';
 import {normalize} from './config.mjs';
 import {validateBusinessPriceSchedule,selectBusinessPrice,verifyBusinessPriceEntry,BUSINESS_PRICE_HASH,LEGACY_BUSINESS_PRICE_HASH,businessPriceHashAt,priceScheduleValidAt} from './business-prices.mjs';
 import {specialPropertyScope} from './property-scope.mjs';
-import {operationalLines} from './line-scope.mjs';
+import {operationalLines,operationalLineAllowed} from './line-scope.mjs';
 
 export const PRICE_AUTHORITY='direct-user-chat-20261005-common-quotes-special-cases-and-human-priority';
 const fields=new Set(['service','site','location','locationDetails','area','rooms','roomScale','siteScale','treatmentScope','floors','patio']);
@@ -71,10 +71,17 @@ export function selectPrice(slots,catalogs,preferredId=null,options={}){
 export function priceText(entry){return 'Con gusto. '+(entry.category==='chinches'?'El tratamiento de '+entry.mattresses+' '+(entry.mattresses===1?'colchón':'colchones'):'El servicio')+' tiene un valor de $'+new Intl.NumberFormat('es-CO').format(entry.priceCop)+' COP. ¿Deseas continuar con esta cotización?';}
 export function priceBodyHash(text){return createHash('sha256').update(text).digest('hex');}
 export async function verifyPriceSource(entry,transport,options={}){
+ const {line:outLine,...priceOptions}=options;
  if(entry?.source?.type==='direct_user_approved_schedule'){
   if(transport.config.company!=='fumigacion')throw Error('PRICE_OWN_LINE_REQUIRED');
-  verifyBusinessPriceEntry(entry,options);
-  for(const line of operationalLines(transport.config))await transport.verifyLine(line.phone);
+  verifyBusinessPriceEntry(entry,priceOptions);
+  // A direct approved table is independent of another channel's connection.
+  // Customer delivery still verifies its own exact, authorized sending line;
+  // administrative checks without a delivery line keep their existing scope.
+  if(outLine!==undefined){
+   if(typeof outLine!=='string'||!operationalLineAllowed(transport.config,outLine))throw Error('PRICE_OWN_LINE_REQUIRED');
+   await transport.verifyLine(outLine);
+  }else for(const line of operationalLines(transport.config))await transport.verifyLine(line.phone);
   return true;
  }
  const line=transport.config.lines.find(l=>l.phone===entry.source.line);if(!line||transport.config.company!=='fumigacion')throw Error('PRICE_OWN_LINE_REQUIRED');

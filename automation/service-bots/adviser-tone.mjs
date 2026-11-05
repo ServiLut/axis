@@ -3,6 +3,7 @@
 import {currentIntakeTimingAcknowledgement} from './intake-timing.mjs';
 import {officeReceptionRequestValues,formatOfficeReceptionRequests,officeReceptionDeclineText} from './office-reception-snippets.mjs';
 import {selectOfficeReceptionReply} from './office-customer-replies.mjs';
+import {boundedFollowupText} from './maria-bounded-followup.mjs';
 export const ADVISER_TONE_GUARD='warm-identified-maria-first-intake-and-current-requested-timing-v4';
 const firstIntakeWelcome='Gracias por escribirnos 😊 Con gusto te ayudo.';
 const ordinaryIntakeQuestions=new Set([
@@ -26,6 +27,8 @@ export function mariaOrdinaryIntakeReply(text){
  if(typeof text!=='string')return false;
  const body=text.replace(/^(?:Hola|Buen día|Buenas tardes|Buenas noches), soy María Ángel\.\s+/,'').replace(/^Gracias por escribirnos 😊 Con gusto te ayudo\.\s+/,'').replace(/^Entiendo que lo necesitas [^\n.!?]+\.\s+/,'').replace(/^Gracias por escribirnos 😊 Con gusto te ayudo\.\s+/,'').replace(/^Te ayudo con la cotización\. /,'');
  if(ordinaryIntakeQuestions.has(body))return true;
+ // Bounded follow-ups and the quoted service explanation are fixed texts too.
+ if(boundedFollowupText(body))return true;
  const title='Para cotizarte, cuéntame';
  if(!body.startsWith(title))return false;
  const rest=body.slice(title.length);

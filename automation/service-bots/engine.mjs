@@ -37,6 +37,7 @@ import {literalMariaPartialLocation,literalMariaRoomCount,mariaMediaBurstContinu
 import {customerDeferralRequested,customerDeferralReply,customerDeferralResumeEvidence,customerDeferralContinues,customerDeferralAcknowledgement,customerDeclinesAfterDeferral,CUSTOMER_DEFERRAL_GUARD} from './customer-deferral.mjs';
 import {literalTermiteFurnitureScope,termiteFurnitureMention} from './maria-furniture-scope.mjs';
 import {ownCommercialCustomerTurn,COMMERCIAL_OBJECTION_GUARD} from './commercial-objections.mjs';
+import {MARIA_BOUNDED_FOLLOWUP_GUARD,MARIA_SERVICE_CONTENT_GUARD,followupVariant,numberConfirmation,splitNumberUnit,bareNumber,unitOnly,serviceContentKey,serviceContentText,serviceContentQuestion} from './maria-bounded-followup.mjs';
 
 export const MARIA_AUTONOMOUS_INTAKE_GUARD='literal-ordinary-intake-without-staff-delegation-v1';
 export const MARIA_AFTER_SERVICE_CONTINUITY_GUARD='own-same-case-stored-or-quoted-postservice-context-and-priority-preservation-v2';
@@ -655,7 +656,52 @@ function retainPromptedLocation(state,e){
     sources:parts.filter(p=>p.sourceId&&p.at!==null).map(({sourceId,at})=>({sourceId,at})),
     sourceCoverageComplete:parts.every(p=>p.sourceId&&p.at!==null),municipalityInferred:false}};
 }
-export function customerDecision(company,state,e,analysis={}) {
+// --- Repregunta limitada (5/11/2026): evita los bucles vistos en las líneas reales.
+// Total clarifications per pending field (number confirmations, split
+// number/unit, bed-or-crib and rephrasings share it); reset when the field changes.
+export const MARIA_FOLLOWUP_CLARIFICATION_LIMIT=3;
+const BED_OR_CRIB_TEXT='Para esa cama o cuna, ¿cuántos colchones necesitas tratar? Confirma también si te refieres a la estructura.';
+function mariaBoundedFollowup(state,next,missing,e,t,contributed,legacyText){
+  const reasked=state.followupBudget?.missing===missing&&Array.isArray(state.followupBudget.numbers)?state.followupBudget.numbers:[];
+  const used=state.followupBudget?.missing===missing?state.followupBudget.used:0;
+  const n=bareNumber(t),previousBare=bareNumber(normalize(state.lastText??''));
+  const guard={guard:MARIA_BOUNDED_FOLLOWUP_GUARD,missing};
+  const furniture=!(missing==='mattresses'&&furnitureExclusionForPresentation(next,e));
+  const variant=i=>followupVariant(missing,i,{locationDetails:Boolean(next.slots.locationDetails),furniture});
+  // Choose the first candidate that differs from the previous follow-up text.
+  const distinct=(kind,candidates)=>{const list=candidates.filter(Boolean);const reply=list.find(c=>c!==state.lastFollowupText)??list[0];next.lastFollowupText=reply;return {state:next,boundedFollowup:{...guard,kind},reply};};
+  const spend=(kind,candidates,numbers=reasked)=>{next.followupBudget={missing,used:used+1,numbers};return distinct(kind,candidates);};
+  const bedOrCrib=missing==='mattresses'&&/^(?:un[ao]?|[1-9]\d?)\s+(?:cuna|cama)[.! ]*$/.test(t);
+  // A turn that adds a new fact, or asks the price, keeps the established exact
+  // question (no echo); the same question is never sent more than three times.
+  const same=state.sameQuestion?.missing===missing?state.sameQuestion.count:0;
+  if(!bedOrCrib&&(contributed.length||quotationInquiry(e.text))&&same<3){next.sameQuestion={missing,count:same+1};return distinct('progress',[legacyText,variant(0),variant(1)]);}
+  // Every clarification below spends the same budget; when it is exhausted the
+  // case goes to the existing staff review instead of looping.
+  if(used>=MARIA_FOLLOWUP_CLARIFICATION_LIMIT)return null;
+  if(bedOrCrib)return spend('bed-or-crib',[BED_OR_CRIB_TEXT,variant(0),variant(1)]);
+  // "5" + "colchones" sent as two quick messages is one answer, not a failure.
+  if(previousBare&&unitOnly(t)&&['size','mattresses'].includes(missing))
+    return spend('split-number-unit',[splitNumberUnit(previousBare,t.replace(/[.! ]+$/,''))]);
+  // Each new bare number gets one specific confirmation of that number.
+  if(n&&['size','mattresses'].includes(missing)&&!reasked.includes(n))
+    return spend('number-confirmation',[numberConfirmation(missing,n,{furniture})],[...reasked,n].slice(-8));
+  // Other unreadable answers: different helpful wordings, never the same text
+  // twice in a row.
+  const fails=state.followupFails?.missing===missing?state.followupFails.count:0;
+  next.followupFails={missing,count:fails+1};
+  return spend('rephrase-'+Math.min(fails,1),[variant(fails),variant(fails+1),legacyText]);
+}
+// "¿Qué consta / qué incluye?" después de una cotización: explicar el servicio, no repetir el precio.
+// Pure pre-check only. process() must still prove the same delivered, valid
+// quotation for the current scope (see SERVICE_CONTENT_QUOTE_CHECK) or fall back.
+function mariaQuotedServiceContent(state,e,t){
+  if(!state.quotedPrice||state.quotedPrice.accepted||state.awaitingHumanReview||state.programIntake||state.closed||state.customerDeferral?.active||state.requestedAfterServiceReview||state.requestedControlReview||state.requestedDocumentReview||e.kind!=='text'||e.fromMe||e.forwarded||!serviceContentQuestion(t)||contextNeedsPersonalPriority(e.text,e))return null;
+  const key=serviceContentKey(normalize(state.slots?.service));
+  if(!key||!Number.isSafeInteger(state.quotedPrice.priceCop))return null;
+  return {state:{...state,slots:{...state.slots},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)},serviceContentAnswer:{guard:MARIA_SERVICE_CONTENT_GUARD,service:key},reply:serviceContentText(key,state.quotedPrice.priceCop)};
+}
+export function customerDecision(company,state,e,analysis={},options={}) {
   if(company==='fumigacion'&&e.kind==='text'&&e.fromMe===false&&!e.forwarded&&!e.quotedId&&e.at>=SERVICE_ACCESS_STARTS_AT&&state.programIntake&&['name','address','details','confirm','correction'].includes(state.programIntake.stage)&&!state.awaitingHumanReview&&!state.closed)state={...state,programIntake:{...state.programIntake,accessDetailsGuard:SERVICE_ACCESS_GUARD}};
   if(company==='fumigacion'&&!state.awaitingHumanReview&&!state.closed&&!state.customerDeferral?.active&&serviceAccessOnlyTurn(state,e))return {state:{...state,slots:{...state.slots},asked:[...(state.asked||[])],lastText:e.text},serviceAccessFacts:true};
   const technicalMeta=company==='servicio-tecnico'&&e.kind==='text'&&!e.forwarded&&!e.fromMe&&!state.requestedTechnicalReview&&!state.technicalPaintingRequest&&technicalIntakeMetaQuestion(e.text);
@@ -674,6 +720,8 @@ export function customerDecision(company,state,e,analysis={}) {
   if(e.kind==='text'&&!e.forwarded&&(state.introduced||state.initialIntakeAllRequested||state.asked?.length||company==='fumigacion'&&state.customerDeferral?.active)&&literalGreetingText(e.text))return {state:{...state,slots:{...state.slots},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)},courtesy:true,greeting:true,reply:/buenas noches/.test(normalize(e.text))?'Buenas noches.':/buenas tardes/.test(normalize(e.text))?'Buenas tardes.':/buen(?:os dias| dia)/.test(normalize(e.text))?'Buen día.':'Hola.'};
   const validity=company==='fumigacion'&&mariaQuotationValidityTurn(state,e);
   if(validity)return validity;
+  const serviceContent=company==='fumigacion'&&!options.skipServiceContent&&mariaQuotedServiceContent(state,e,normalize(textWithoutLinks(e.text)).replace(/^[¿¡\s]+/,'').trim());
+  if(serviceContent)return serviceContent;
   const currentLiteralContext=company==='fumigacion'&&mariaLiteralServiceContext(e);
   if(currentLiteralContext&&!contextNeedsPersonalPriority(e.text,e))return {...mariaLiteralContextDecision(state,e,currentLiteralContext),literalServiceContext:true};
   const literalText=textWithoutLinks(company==='fumigacion'?literalIntakeTextWithoutRegistrationFields(e.text):e.text).trim(),t=normalize(literalText);
@@ -829,10 +877,20 @@ export function customerDecision(company,state,e,analysis={}) {
     return {state:literalIntakeTurn(e,company)?next:{...next,slots:{...state.slots}},reviewTopic:!e.forwarded&&quotationInquiry(e.text)?'cotizacion-verificada':'customer-question',review:'La persona hizo una pregunta concreta. Hace falta revisar sus antecedentes y confirmar la respuesta para este servicio.',reviewQuestion:'¿Qué respuesta verificada corresponde a esta pregunta?',reply:'Recibí tu pregunta. Tu solicitud sigue pendiente de confirmación.'};
   if(missing==='size'&&dimensions)return {state:next,dimensionsClarification:true,reply:dimensions.explicitMetricUnits?'Conservé las medidas '+dimensions.literal+'. ¿Cuántos metros cuadrados en total necesitas tratar?':'Conservé las medidas '+dimensions.literal+'. ¿Son largo por ancho en metros y corresponden al espacio que necesitas tratar?'};
   if(!missing&&nonResidentialDimensions)return {state:next,reviewTopic:'special-quotation',reviewConditions:{kind:'literal-special-property-dimensions',guard:MARIA_DIMENSIONS_GUARD},review:'La persona indicó un inmueble no residencial y sus dimensiones literales. No se calculó superficie ni hay precio aprobado; necesita alcance y cotización propios del mismo caso.',reviewQuestion:'¿Qué alcance y cotización propios corresponden a este inmueble y las medidas indicadas?',reply:'Conservé las medidas '+dimensions.literal+'. La cotización de este inmueble necesita verificar su alcance.'};
-  if(missing&&!next.asked.includes(missing)){next.asked.push(missing);return {state:next,reply:company==='fumigacion'&&missing==='location'&&next.slots.locationDetails?'¿En qué municipio necesitas el servicio? Ya conservé la ubicación que me indicaste.':questions[missing]};}
+  if(missing&&!next.asked.includes(missing)){next.asked.push(missing);const reply=company==='fumigacion'&&missing==='location'&&next.slots.locationDetails?'¿En qué municipio necesitas el servicio? Ya conservé la ubicación que me indicaste.':questions[missing];if(company==='fumigacion')next.lastFollowupText=reply;return {state:next,reply};}
   if(missing){
-    if(company==='fumigacion'&&missing==='mattresses'&&/^(?:un[ao]?|[1-9]\d?)\s+(?:cuna|cama)[.! ]*$/.test(t))return {state:next,reply:'Para esa cama o cuna, ¿cuántos colchones necesitas tratar? Confirma también si te refieres a la estructura.'};
-    if(company==='fumigacion')return {state:next,reply:missing==='location'&&next.slots.locationDetails?'Me falta confirmar el municipio para cotizarte; ya conservé la ubicación que me indicaste.':missing==='mattresses'&&!furnitureExclusionForPresentation(next,e)?'Para cotizar esa cama, confirma cuántos colchones están afectados y si también hay chinches en la base u otros muebles.':questions[missing]};
+    if(company==='fumigacion'){
+      // Never send the same intake question in a loop (real lines, 4/11/2026).
+      // A turn that adds a fact keeps the exact established question unless it
+      // was the immediately previous message; an unreadable answer gets a
+      // number confirmation or a different helpful wording; after two such
+      // wordings the case goes to staff instead of repeating.
+      const contributed=[...Object.keys(literal).filter(k=>literal[k]),...Object.keys(understood).filter(k=>understood[k])];
+      if(next.slots.locationDetails&&JSON.stringify(next.slots.locationDetails)!==JSON.stringify(state.slots?.locationDetails))contributed.push('locationDetails');
+      const legacyText=missing==='location'&&next.slots.locationDetails?'Me falta confirmar el municipio para cotizarte; ya conservé la ubicación que me indicaste.':missing==='mattresses'&&!furnitureExclusionForPresentation(next,e)?'Para cotizar esa cama, confirma cuántos colchones están afectados y si también hay chinches en la base u otros muebles.':questions[missing];
+      const followup=mariaBoundedFollowup(state,next,missing,e,t,contributed,legacyText);
+      if(followup)return followup;
+    }
     const names={service:'la plaga o el servicio solicitado',site:'el tipo de inmueble',size:'las habitaciones o metros cuadrados del lugar',mattresses:'los colchones y muebles afectados',detail:'la falla del equipo',location:'el municipio y barrio'};
     return {state:next,reviewTopic:'missing-intake:'+missing,reviewConditions:{missing},review:'Ya preguntamos por '+names[missing]+', pero la respuesta no permite confirmarlo.',reviewQuestion:'¿Qué dato podemos confirmar sobre '+names[missing]+' para esta solicitud?',reply:'Gracias. Revisaremos los detalles que nos compartiste para continuar.'};
   }
@@ -1132,20 +1190,20 @@ export class Engine {
       }else if(productClarification){
         decision=customerDecision(c.company,caseState,e,analysis);
       }else if(literalContextSource){
-        decision=customerDecision(c.company,caseState,{...e,id:literalContextSource.id,at:literalContextSource.at,text:literalContextSource.text,forwarded:literalContextSource.forwarded},analysis);
+        decision=customerDecision(c.company,caseState,{...e,id:literalContextSource.id,at:literalContextSource.at,text:literalContextSource.text,forwarded:literalContextSource.forwarded},analysis,{skipServiceContent:true});
         if(decision.review)decision.reviewSource=literalContextSource.id;
         decision.state.lastText=e.text;
       }else if(quoteClarification){
         decision=quoteClarification.decision;
         s.audit('OWN_QUOTATION_CLARIFICATION',e.id,{guard:OWN_QUOTE_CLARIFICATION_GUARD,caseId:caseState.caseId,quotationSource:quoteClarification.quotationSource,quotationMid:quoteClarification.quotationMid,entryId:quoteClarification.entry.id,priceCop:quoteClarification.entry.priceCop,businessWritten:false});
       }else if(documentSource){
-        decision=customerDecision(c.company,caseState,{...e,text:documentSource.text,forwarded:documentSource.forwarded},analysis);
+        decision=customerDecision(c.company,caseState,{...e,text:documentSource.text,forwarded:documentSource.forwarded},analysis,{skipServiceContent:true});
         decision.reviewSource=documentSource.id;decision.pendingQuestion=documentSource.text;decision.state.lastText=e.text;
       }else if(followupSource){
-        decision=customerDecision(c.company,caseState,{...e,id:followupSource.id,at:followupSource.at,text:followupSource.text,forwarded:followupSource.forwarded},analysis);
+        decision=customerDecision(c.company,caseState,{...e,id:followupSource.id,at:followupSource.at,text:followupSource.text,forwarded:followupSource.forwarded},analysis,{skipServiceContent:true});
         decision.state.lastText=e.text;
       }else if(controlSource){
-        decision=customerDecision(c.company,caseState,{...e,id:controlSource.id,at:controlSource.at,text:controlSource.text,forwarded:controlSource.forwarded},analysis);
+        decision=customerDecision(c.company,caseState,{...e,id:controlSource.id,at:controlSource.at,text:controlSource.text,forwarded:controlSource.forwarded},analysis,{skipServiceContent:true});
         decision.reviewSource=controlSource.id;decision.state.lastText=e.text;
       }else if(directedPurpose&&!pendingQuestion&&!priorFaq){
         decision=directedPurpose;
@@ -1165,6 +1223,15 @@ export class Engine {
       let selectedPrice=quoteClarification?.entry||null;
       const currentQuote=caseState.quotedPrice;
       const priceNow=currentQuote&&ownDeliveredQuoteEntry(s,caseState,e.phone,e.line,decision.state.slots)?.entry;
+      // SERVICE_CONTENT_QUOTE_CHECK: the explanation may repeat only the same
+      // delivered, still-valid approved quotation for the unchanged scope;
+      // otherwise the ordinary decision is computed without it.
+      if(decision.serviceContentAnswer){
+        const sameQuote=currentQuote&&!currentQuote.accepted&&priceNow?.id===currentQuote.entryId&&priceNow.priceCop===currentQuote.priceCop&&priceNow.source?.type==='direct_user_approved_schedule';
+        const delivered=sameQuote&&s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND state IN ('DELIVERED','READ')").get(ownQuoteOutboxId(s,decision.state,e.phone,e.line),e.phone,e.line,caseState.caseId);
+        if(delivered&&s.priceReplyStillValid(delivered))s.audit('MARIA_QUOTED_SERVICE_CONTENT',e.id,{guard:MARIA_SERVICE_CONTENT_GUARD,caseId:caseState.caseId,service:decision.serviceContentAnswer.service,quotationOutboxId:delivered.id,entryId:currentQuote.entryId,priceCop:currentQuote.priceCop,replacementQuoteIssued:false,businessWritten:false});
+        else decision=customerDecision(c.company,caseState,e,analysis,{skipServiceContent:true});
+      }
       const incidentalPetNote=c.company==='fumigacion'&&mariaIncidentalPetMention(e);
       const pureIncidentalPetNote=incidentalPetNote&&!normalize(incidentalPetNote.classificationText).replace(/[.!¡,;\s]+/g,'');
       if(pureIncidentalPetNote&&currentQuote&&priceNow?.id===currentQuote.entryId&&priceNow.priceCop===currentQuote.priceCop&&priceNow.source?.type==='direct_user_approved_schedule'&&!caseState.requestedAfterServiceReview&&!caseState.requestedControlReview&&!caseState.requestedDocumentReview&&!decision.review&&(!decision.question||decision.question.topic==='cotizacion-verificada')){

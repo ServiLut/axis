@@ -618,7 +618,7 @@ export async function flushOutbox(store,config,transport){
       try{
         if(!store.priceReplyStillValid(o))throw Error('PRICE_REVIEW');
         const ref=store.priceReplyReference(o),version=store.priceReplyVersion(o),entry=selectPrice(ref.context,store.approvedPriceCatalogs(),ref.entryId,version??{}).entry;
-        await verifyPriceSource(entry,transport,version??{});
+        await verifyPriceSource(entry,transport,{...(version??{}),line:o.line});
         // Source verification awaits the provider. Staff may intervene during
         // that read; recheck the persisted hold and revision afterwards.
         const latest=store.conversation(o.phone);
