@@ -54,6 +54,24 @@ function count(value){
  return m?(words[m[1]]??Number(m[1])):null;
 }
 function squareArea(value){const m=normalize(value).match(/^(\d{1,5}(?:[.,]\d{1,2})?)\s*(?:m(?:ts?)?\s*(?:2|²)|m(?:ts?)?\.?\s*cuadrados?|metros?\s*cuadrados?)$/);return m?Number(m[1].replace(',','.')):null;}
+// Mixed services need both size and mattress facts for human review. Automatic
+// combined quotations stay disabled until the registration backend supports them.
+const SIZE_PESTS={cucarachas:'cucarachas',ratas:'roedores',ratones:'roedores',roedores:'roedores',raton:'roedores',rata:'roedores',comejen:'comejen'};
+export function mixedServiceParts(service){
+ const t=normalize(service??'');
+ if(!t.includes('chinche'))return null;
+ const parts=t.split(/\s*(?:,|\+|&|\by\b|\be\b|\btambien\b)\s*/).map(p=>p.trim()).filter(Boolean);
+ if(parts.length<2)return null;
+ const kinds=new Set();
+ for(const p of parts){
+  if(/^chinches?$/.test(p))kinds.add('chinches');
+  else if(Object.hasOwn(SIZE_PESTS,p))kinds.add(SIZE_PESTS[p]);
+  else return null;
+ }
+ if(kinds.size!==2||!kinds.has('chinches'))return null;
+ const sized=[...kinds].find(k=>k!=='chinches');
+ return {sized,parts:[sized,'chinches']};
+}
 export function selectBusinessPrice(slots,{scheduleHash=BUSINESS_PRICE_HASH}={}){
  const schedule=schedules.get(scheduleHash);if(!schedule)return {reason:'BUSINESS_PRICE_VERSION_REVIEW'};
  if(specialPropertyScope(Object.values(slots).join(' '),slots))return {reason:'BUSINESS_SPECIAL_PROPERTY_REVIEW'};

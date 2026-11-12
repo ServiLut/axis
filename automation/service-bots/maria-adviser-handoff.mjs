@@ -15,7 +15,8 @@ export function explicitMariaAdviserRequest(e){
 // Other comments remain internal case knowledge, without inferred promises.
 export function queueMariaChiefCustomerAnswer(store,config,question,event){
  if(config.company!=='fumigacion'||!config.enabled||event.phone!==SANDRA||event.fromMe!==false||event.forwarded||event.kind!=='text'||!event.quotedId)return null;
- if(!['adviser-assistance','warranty-review','service-followup'].includes(question.topic)){
+ // 12/11/2026: la jefe decide los descuentos; su «Para el cliente: …» se transmite.
+ if(!['adviser-assistance','warranty-review','service-followup','commercial-discount-review','commercial-discount-scope-change'].includes(question.topic)){
   const body=store.open(question.body),source=store.db.prepare('SELECT body FROM events WHERE id=? AND phone=? AND line=? AND from_me=0').get(body.source,question.phone,event.line),native=source&&store.open(source.body);
   if(question.topic!=='revision:'+body.source||literalOwnAfterServiceRequest(native)?.kind!=='warranty')return null;
  }

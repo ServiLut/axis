@@ -34,7 +34,7 @@ export const internalRecipients = config => [SANDRA,DIEGO,
   ...(config.company==='servicio-tecnico'&&config.operatorRouting===CURRENT_OPERATOR_ROUTING?[TECHNICAL_COORDINATOR]:[])];
 export const internalName = phone => phone===SANDRA?'Sandra':phone===HILARY?'Hilary':phone===DIEGO?'Diego':phone===TECHNICAL_COORDINATOR?'Coordinación':'Personal';
 export function questionRecipients(config,topic,conditions={}) {
-  const operational=['cotizacion-verificada','special-quotation','disponibilidad-y-cotizacion','disponibilidad-y-tecnico','service-followup','requested-technician-contact','existing-quotation'];
+  const operational=['cotizacion-verificada','special-quotation','disponibilidad-y-cotizacion','disponibilidad-y-tecnico','service-followup','requested-technician-contact','existing-quotation','commercial-discount-accepted'];
   if(!operatorRoutingActive(config)||!operational.includes(topic)&&!topic.startsWith('missing-intake:'))return [SANDRA];
   if(config.operatorRouting===CURRENT_OPERATOR_ROUTING){
     if(!BUSINESSES[config.company])return [SANDRA];

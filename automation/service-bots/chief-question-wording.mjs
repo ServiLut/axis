@@ -58,6 +58,9 @@ function eventInScope(store,row,request){
 
 /** Read-only adapter. A missing or inconsistent source keeps the old fallback. */
 export function ownMariaChiefQuestionText(store,config,request,extractLiteralFacts){
+ // Discount questions keep their own text: the chief must see the service,
+ // total, the 10 % and the discounted total (política de la usuaria, 12/11/2026).
+ if(['commercial-discount-review','commercial-discount-scope-change'].includes(request?.topic))return null;
  try{return ownSourceText(store,config,request,extractLiteralFacts);}catch{return null;}
 }
 function ownSourceText(store,config,request,extractLiteralFacts){

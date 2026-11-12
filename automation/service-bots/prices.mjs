@@ -10,7 +10,8 @@ const counts={un:1,una:1,uno:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho
 export function numericCount(value){const t=normalize(value).match(/^(\d{1,4}|un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)(?:er|ro|do|to)?\b/);return t?(counts[t[1]]??Number(t[1])):null;}
 export function quotationInquiry(text){
  const t=normalize(text);
- return !/\b(?:garantia|productos?|segur\w*|toxic\w*|pago|pague|abono|cuenta|refuerzo|descuento|ya me|me cotizaron)\b/.test(t)&&/\b(?:cotiz\w*|precio|valor|cuanto (?:(?:me|nos|les) )?(?:cuesta|vale|cobran)|costo)\b/.test(t);
+ // 12/11/2026: "¿cuánto es?", "¿cuánto me sale?", "¿cuánto sería?" también preguntan el precio.
+ return !/\b(?:garantia|productos?|segur\w*|toxic\w*|pago|pague|abono|cuenta|refuerzo|descuento|ya me|me cotizaron)\b/.test(t)&&(/\b(?:cotiz\w*|precio|valor|cuanto (?:(?:me|nos|les) )?(?:cuesta|vale|cobran)|costo)\b/.test(t)||/^[¿\s]*(?:y\s+)?(?:entonces\s+)?cuanto\s+(?:(?:me|nos|les)\s+)?(?:es|seria|sale|saldria|queda|quedaria|costaria|vale eso|cuesta eso|cobrarian)(?:\s+(?:todo|en total|el servicio|la fumigacion|eso))?[\s?.!]*$/.test(t));
 }
 export function specialQuotation(text,slots={}){
  return specialPropertyScope(text,slots);
@@ -68,7 +69,30 @@ export function selectPrice(slots,catalogs,preferredId=null,options={}){
  if(new Set(matches.map(e=>e.priceCop)).size!==1)return {reason:'CONFLICTING_REVIEWED_PRICES'};
  return {entry:matches[0],sourceIds:matches.map(e=>e.source.quoteId)};
 }
-export function priceText(entry){return 'Con gusto. '+(entry.category==='chinches'?'El tratamiento de '+entry.mattresses+' '+(entry.mattresses===1?'colchón':'colchones'):'El servicio')+' tiene un valor de $'+new Intl.NumberFormat('es-CO').format(entry.priceCop)+' COP. ¿Deseas continuar con esta cotización?';}
+const cop=n=>'$'+new Intl.NumberFormat('es-CO').format(n);
+const COMPONENT_LABEL={cucarachas:'Control de cucarachas',roedores:'Control de roedores',comejen:'Control de comején'};
+function componentLine(c){
+ if(c.category==='chinches')return '• Tratamiento de chinches ('+c.mattresses+' '+(c.mattresses===1?'colchón':'colchones')+'): '+cop(c.priceCop);
+ return '• '+(COMPONENT_LABEL[c.category]||'Servicio')+' ('+c.roomsBand+' '+(c.roomsBand===1?'habitación':'habitaciones')+' o hasta '+c.areaBand[1]+' m²): '+cop(c.priceCop);
+}
+export function priceText(entry){
+ if(entry.category==='mixto'&&Array.isArray(entry.components))return 'Con gusto. Esta es tu cotización:\n'+entry.components.map(componentLine).join('\n')+'\nTotal: '+cop(entry.priceCop)+' COP. ¿Deseas continuar con esta cotización?';
+ return 'Con gusto. '+(entry.category==='chinches'?'El tratamiento de '+entry.mattresses+' '+(entry.mattresses===1?'colchón':'colchones'):'El servicio')+' tiene un valor de $'+new Intl.NumberFormat('es-CO').format(entry.priceCop)+' COP. ¿Deseas continuar con esta cotización?';}
+// Reminder for the same unaccepted quote; same amount, words that answer what
+// the client actually wrote (availability, price again, or anything else).
+// Two variants per intent; `avoid` is the previous reminder so consecutive
+// messages differ without leaving the intent (revisión de Codex, 12/11).
+export function priceReminderText(entry,customerText='',avoid=null){
+ const t=normalize(customerText??''),total=(entry.category==='mixto'?'total ':''),v=cop(entry.priceCop)+' COP';
+ const variants=/\b(?:disponib\w*|horario|agenda\w*|cuando (?:pueden|podrian|vienen|vendrian|seria|puede)|que dias?|para cuando|que dia)\b/.test(t)
+  ?['Con gusto te agendamos. Para hacerlo, confírmame la cotización de '+v+' respondiendo «sí» y te pido los datos y el día que prefieres.',
+    'Claro que sí. En cuanto me confirmes la cotización de '+v+' con un «sí», te pido los datos y coordinamos el día y la hora del servicio.']
+  :/\b(?:cuanto|precio|valor|vale|cuesta|sale|cobran)\b/.test(t)
+  ?['Claro. El valor '+total+'sigue siendo '+v+'. Si te parece bien, respóndeme «sí» y te pido los datos para agendar el servicio.',priceText(entry)]
+  :['Tu cotización '+total+'es de '+v+'. Si te parece bien, respóndeme «sí» y te pido los datos para agendar el servicio.',
+    'Quedo atenta. Cuando quieras continuar con la cotización de '+v+', respóndeme «sí» y te pido los datos.'];
+ return variants.find(x=>x!==avoid)??variants[0];
+}
 export function priceBodyHash(text){return createHash('sha256').update(text).digest('hex');}
 export async function verifyPriceSource(entry,transport,options={}){
  const {line:outLine,...priceOptions}=options;

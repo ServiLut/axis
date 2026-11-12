@@ -3,9 +3,9 @@ import { normalize, SANDRA, DIEGO, CURRENT_OPERATOR_ROUTING,TECHNICAL_COORDINATO
 import {selectCommonAnswer,commonQuestionTopics,faqNeedsPersonalReview,faqTopicLabel} from './faq.mjs';
 import {chiefStatusTopic,chiefStatusReply} from './chief-status.mjs';
 import {chiefReadOnlyTopic,chiefReadOnlyReply} from './chief-readonly.mjs';
-import {businessPriceHashAt,selectBusinessPrice} from './business-prices.mjs';
+import {businessPriceHashAt,selectBusinessPrice,mixedServiceParts} from './business-prices.mjs';
 import {directedNonserviceTurn,unscopedInitialImageReply} from './directed-nonservice.mjs';
-import {selectPrice,priceText,quotationInquiry,specialQuotation,currentPriceEntries} from './prices.mjs';
+import {selectPrice,priceText,priceReminderText,quotationInquiry,specialQuotation,currentPriceEntries} from './prices.mjs';
 import {SERVICE_ACCESS_GUARD,SERVICE_ACCESS_STARTS_AT,serviceAccessOnlyTurn} from './service-access-details.mjs';
 import {adviserReply} from './adviser-tone.mjs';
 import {selectOfficeReceptionReply,saveOfficeReceptionReference} from './office-customer-replies.mjs';
@@ -37,7 +37,7 @@ import {literalMariaPartialLocation,literalMariaRoomCount,mariaMediaBurstContinu
 import {customerDeferralRequested,customerDeferralReply,customerDeferralResumeEvidence,customerDeferralContinues,customerDeferralAcknowledgement,customerDeclinesAfterDeferral,CUSTOMER_DEFERRAL_GUARD} from './customer-deferral.mjs';
 import {literalTermiteFurnitureScope,termiteFurnitureMention} from './maria-furniture-scope.mjs';
 import {ownCommercialCustomerTurn,COMMERCIAL_OBJECTION_GUARD} from './commercial-objections.mjs';
-import {MARIA_BOUNDED_FOLLOWUP_GUARD,MARIA_SERVICE_CONTENT_GUARD,followupVariant,numberConfirmation,splitNumberUnit,bareNumber,unitOnly,serviceContentKey,serviceContentText,serviceContentQuestion} from './maria-bounded-followup.mjs';
+import {MARIA_BOUNDED_FOLLOWUP_GUARD,MARIA_SERVICE_CONTENT_GUARD,followupVariant,numberConfirmation,splitNumberUnit,bareNumber,unitOnly,serviceContentKey,serviceContentText,serviceContentQuestion,serviceAreaQuestion,acceptsColloquialQuotation,serviceContentWithDiscountStatus,discountStatusText} from './maria-bounded-followup.mjs';
 
 export const MARIA_AUTONOMOUS_INTAKE_GUARD='literal-ordinary-intake-without-staff-delegation-v1';
 export const MARIA_AFTER_SERVICE_CONTINUITY_GUARD='own-same-case-stored-or-quoted-postservice-context-and-priority-preservation-v2';
@@ -693,13 +693,27 @@ function mariaBoundedFollowup(state,next,missing,e,t,contributed,legacyText){
   return spend('rephrase-'+Math.min(fails,1),[variant(fails),variant(fails+1),legacyText]);
 }
 // "¿Qué consta / qué incluye?" después de una cotización: explicar el servicio, no repetir el precio.
+// Política de la usuaria (12/11/2026): la consulta de descuento del caso es el
+// marcador persistente; mientras exista, la tabla no se reofrece ni se registra.
+function ownDiscountQuestion(s,phone,caseId){return caseId?s.db.prepare("SELECT * FROM questions WHERE phone=? AND case_id=? AND topic IN ('commercial-discount-review','commercial-discount-scope-change') ORDER BY rowid DESC LIMIT 1").get(phone,caseId)||null:null;}
+function discountCommunicated(s,question){return ['DELIVERED','READ'].includes(s.db.prepare("SELECT state FROM outbox WHERE id=?").get('chief-case-answer:'+question.id+':v1')?.state);}
+function sameDiscountScope(s,question,slots,priceCop){
+  const conditions=s.open(question.body)?.conditions;
+  const fields=['service','site','location','rooms','area','mattresses','affectedFurniture','dimensions','roomScale','siteScale','treatmentScope','floors','patio'];
+  return conditions?.kind==='scope-changed-after-discount-request'&&conditions.newTablePriceCop===priceCop&&fields.every(key=>normalize(String(conditions.slots?.[key]??''))===normalize(String(slots[key]??'')));
+}
 // Pure pre-check only. process() must still prove the same delivered, valid
 // quotation for the current scope (see SERVICE_CONTENT_QUOTE_CHECK) or fall back.
 function mariaQuotedServiceContent(state,e,t){
-  if(!state.quotedPrice||state.quotedPrice.accepted||state.awaitingHumanReview||state.programIntake||state.closed||state.customerDeferral?.active||state.requestedAfterServiceReview||state.requestedControlReview||state.requestedDocumentReview||e.kind!=='text'||e.fromMe||e.forwarded||!serviceContentQuestion(t)||contextNeedsPersonalPriority(e.text,e))return null;
-  const key=serviceContentKey(normalize(state.slots?.service));
-  if(!key||!Number.isSafeInteger(state.quotedPrice.priceCop))return null;
-  return {state:{...state,slots:{...state.slots},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)},serviceContentAnswer:{guard:MARIA_SERVICE_CONTENT_GUARD,service:key},reply:serviceContentText(key,state.quotedPrice.priceCop)};
+  const area=serviceAreaQuestion(t);
+  if(!state.quotedPrice||state.quotedPrice.accepted||state.awaitingHumanReview||state.programIntake||state.closed||state.customerDeferral?.active||state.requestedAfterServiceReview||state.requestedControlReview||state.requestedDocumentReview||e.kind!=='text'||e.fromMe||e.forwarded||!serviceContentQuestion(t)&&!area||contextNeedsPersonalPriority(e.text,e))return null;
+  const mixed=mixedServiceParts(state.slots?.service);
+  const key=mixed?mixed.parts:serviceContentKey(normalize(state.slots?.service));
+  // "Toda el área" comes only from the cockroach quick reply; bed bugs alone are
+  // quoted per mattress, so an area question there keeps its ordinary route.
+  const keys=Array.isArray(key)?key:[key];
+  if(!key||!Number.isSafeInteger(state.quotedPrice.priceCop)||area&&(!keys.includes('cucarachas')||keys.some(k=>!['cucarachas','chinches'].includes(k))))return null;
+  return {state:{...state,slots:{...state.slots},asked:[...(state.asked||[])],lastText:e.text.slice(0,900)},serviceContentAnswer:{guard:MARIA_SERVICE_CONTENT_GUARD,service:Array.isArray(key)?key.join('+'):key,...(area?{area}:{})},reply:serviceContentText(key,state.quotedPrice.priceCop,{area})};
 }
 export function customerDecision(company,state,e,analysis={},options={}) {
   if(company==='fumigacion'&&e.kind==='text'&&e.fromMe===false&&!e.forwarded&&!e.quotedId&&e.at>=SERVICE_ACCESS_STARTS_AT&&state.programIntake&&['name','address','details','confirm','correction'].includes(state.programIntake.stage)&&!state.awaitingHumanReview&&!state.closed)state={...state,programIntake:{...state.programIntake,accessDetailsGuard:SERVICE_ACCESS_GUARD}};
@@ -868,7 +882,10 @@ export function customerDecision(company,state,e,analysis={},options={}) {
   const mattressService=company==='fumigacion'&&normalize(next.slots.service).includes('chinches');
   const dimensions=company==='fumigacion'&&literalIntakeDimensions(next.slots.dimensions);
   const nonResidentialDimensions=dimensions?.explicitMetricUnits&&!['casa','apartamento'].includes(normalize(next.slots.site));
-  const fields=company==='fumigacion'?['service','site',mattressService?'mattresses':'size','location']:['service','detail','location'];
+  // Mixed services (chinches + a size-priced pest) need BOTH the size and the
+  // mattresses; before 12/11/2026 the size was never asked and the quote failed.
+  const mixedService=company==='fumigacion'&&Boolean(mixedServiceParts(next.slots.service));
+  const fields=company==='fumigacion'?(mixedService?['service','site','size','mattresses','location']:['service','site',mattressService?'mattresses':'size','location']):['service','detail','location'];
   const missing=fields.find(f=>f==='size'?!next.slots.area&&!next.slots.rooms&&!nonResidentialDimensions:!next.slots[f]||company==='fumigacion'&&f==='service'&&genericPestDescription(next.slots.service));
   const questions={service:company==='fumigacion'?missingPestReply(next):'¿Qué equipo necesitas revisar?',site:'¿En qué tipo de inmueble necesitas el servicio?',size:'¿Cuántas habitaciones o metros cuadrados tiene el lugar?',mattresses:furnitureExclusionForPresentation(next,e)?'¿Cuántos colchones están afectados?':'¿Cuántos colchones están afectados? Cuéntame también si hay chinches en bases de cama u otros muebles.',detail:'¿Qué falla presenta el equipo?',location:'¿En qué municipio y barrio necesitas el servicio?'};
   if(/[?¿]/.test(literalText)&&/\b(eso|lo anterior|lo que (?:me )?(?:dij|coment|indic|explic)|me habian|me hab[ií]as|mismo (?:precio|horario|servicio)|como qued|que qued)\w*/.test(t))
@@ -1023,6 +1040,22 @@ export class Engine {
       const newCase=currentNewCase||Boolean(batchNewSource);
       const newCaseSource=currentNewCase?e:batchNewSource;
       const caseState=newCase?{slots:{},asked:[],introduced:conv.state.introduced,caseId:c.company+':'+newCaseSource.id}:conv.state;
+      const intakeService=c.company==='fumigacion'&&caseState.quotedPrice?.accepted&&['name','address','details','confirm','correction'].includes(caseState.programIntake?.stage)&&!caseState.awaitingHumanReview&&!e.forwarded&&!e.quotedId&&literalIntakeTurn(e,c.company)&&!contextNeedsPersonalPriority(e.text,e)?extractSlots(e.text,c.company):null;
+      const acceptedService=normalize(caseState.quotedPrice?.slots?.service||caseState.slots.service||'');
+      const incomingService=normalize(intakeService?.service||'');
+      if(incomingService&&!['prevencion','fumigacion'].includes(incomingService)&&(serviceContentKey(incomingService)||incomingService)!==(serviceContentKey(acceptedService)||acceptedService)){
+        // Name/address collection must not hide a new pest behind the accepted
+        // single-service quote. Preserve that evidence and the draft for review.
+        caseState.awaitingHumanReview=true;
+        caseState.programIntake={...caseState.programIntake,stage:'review',preview:null};
+        caseState.requestedRegistrationScopeReview={sourceId:e.id,at:e.at,service:intakeService.service,...(intakeService.mattresses?{mattresses:intakeService.mattresses}:{})};
+        caseState.lastHandledSourceId=e.id;caseState.lastText=e.text;s.saveConversation(e.phone,caseState);
+        const question=routeCaseQuestion(s,c,{phone:e.phone,line:e.line,caseId:caseState.caseId,topic:'special-quotation',conditions:{kind:'registration-service-scope-changed',acceptedService,incomingService,sourceId:e.id},recipients:[SANDRA],source:e.id,
+          text:'El cliente añadió o cambió la plaga durante el registro. Cotización aceptada: '+acceptedService+'. Petición actual: «'+e.text.slice(0,900)+'». Conservar los datos; no registrar el servicio ni reutilizar ese precio para el nuevo alcance hasta que la jefe confirme el alcance y el valor.'});
+        s.queue(e.id+':reply',e.phone,e.line,'Lo que me cuentas cambia el alcance de la cotización. Conservé tus datos y lo revisaré con mi jefe antes de confirmar el valor y registrar el servicio.',false,conv.revision,caseState.caseId);
+        s.audit('OWN_REGISTRATION_SERVICE_SCOPE_REVIEW',e.id,{caseId:caseState.caseId,questionId:question.id,acceptedService,incomingService,businessWritten:false,acceptedQuotePreserved:true});
+        finish('REGISTRATION_SCOPE_REVIEW');return;
+      }
       const initialSource=!newCase&&!caseState.caseId&&c.company==='fumigacion'?pendingBatch.find(source=>source.line===e.line&&!source.fromMe&&!source.forwarded&&source.kind==='text'&&literalIntakeTextWithoutRegistrationFields(source.text).trim()&&(!/^(?:(?:mi|el) )?(?:nombre(?: completo)?|direccion|correo|telefono|documento|cedula)\s*(?::|=|es\b)/.test(normalize(source.text))||Object.keys(extractSlots(source.text,c.company)).length))?.id:null;
       caseState.caseId ||= reportedOrder || c.company+':'+(initialSource||e.id);
       if(c.company==='fumigacion'&&explicitMariaAdviserRequest(e)){
@@ -1229,7 +1262,13 @@ export class Engine {
       if(decision.serviceContentAnswer){
         const sameQuote=currentQuote&&!currentQuote.accepted&&priceNow?.id===currentQuote.entryId&&priceNow.priceCop===currentQuote.priceCop&&priceNow.source?.type==='direct_user_approved_schedule';
         const delivered=sameQuote&&s.db.prepare("SELECT * FROM outbox WHERE id=? AND phone=? AND line=? AND case_id=? AND state IN ('DELIVERED','READ')").get(ownQuoteOutboxId(s,decision.state,e.phone,e.line),e.phone,e.line,caseState.caseId);
-        if(delivered&&s.priceReplyStillValid(delivered))s.audit('MARIA_QUOTED_SERVICE_CONTENT',e.id,{guard:MARIA_SERVICE_CONTENT_GUARD,caseId:caseState.caseId,service:decision.serviceContentAnswer.service,quotationOutboxId:delivered.id,entryId:currentQuote.entryId,priceCop:currentQuote.priceCop,replacementQuoteIssued:false,businessWritten:false});
+        if(delivered&&s.priceReplyStillValid(delivered)){
+          // With a discount under the chief's decision, keep the explanation but
+          // never close it by re-offering the table price for acceptance.
+          const pendingDiscount=ownDiscountQuestion(s,e.phone,caseState.caseId);
+          if(pendingDiscount)decision={...decision,reply:serviceContentWithDiscountStatus(decision.reply,discountCommunicated(s,pendingDiscount))};
+          s.audit('MARIA_QUOTED_SERVICE_CONTENT',e.id,{guard:MARIA_SERVICE_CONTENT_GUARD,caseId:caseState.caseId,service:decision.serviceContentAnswer.service,quotationOutboxId:delivered.id,entryId:currentQuote.entryId,priceCop:currentQuote.priceCop,replacementQuoteIssued:false,businessWritten:false,discountStatusClosing:Boolean(pendingDiscount)});
+        }
         else decision=customerDecision(c.company,caseState,e,analysis,{skipServiceContent:true});
       }
       const incidentalPetNote=c.company==='fumigacion'&&mariaIncidentalPetMention(e);
@@ -1246,7 +1285,7 @@ export class Engine {
         // intake path; it does not confirm a summary or authorize a reminder.
         decision={state:{...decision.state,customerDeferral:{...deferral,active:false,resumedBy:{kind:'verified-own-quotation-acceptance',sourceId:e.id,at:e.at,line:e.line,textHash:createHash('sha256').update(e.text).digest('hex'),quotationSourceId:currentQuote.sourceId,entryId:priceNow.id,priceCop:priceNow.priceCop}}}};
       }
-      const explicitQuotationAcceptance=e.kind==='text'&&e.fromMe===false&&!e.forwarded&&!e.quotedId&&!caseState.programIntake&&!currentQuote?.accepted&&acceptsExplicitOrdinaryQuotation(e.text);
+      const explicitQuotationAcceptance=e.kind==='text'&&e.fromMe===false&&!e.forwarded&&!e.quotedId&&!caseState.programIntake&&!currentQuote?.accepted&&(acceptsExplicitOrdinaryQuotation(e.text)||acceptsColloquialQuotation(e.text));
       const naturalAcceptance=acceptsOrdinaryQuotation(e.text)||Boolean(amountAcceptance)||explicitQuotationAcceptance;
       const timingIssue=c.company==='fumigacion'&&e.kind==='text'&&!e.fromMe&&!e.forwarded&&!e.quotedId&&currentQuote?.accepted&&caseState.programIntake?.customerName&&caseState.programIntake?.address&&['name','address','details','confirm','correction'].includes(caseState.programIntake.stage)&&!caseState.awaitingHumanReview&&!contextNeedsPersonalPriority(e.text,e)&&calendarProgramPreferenceIssue(e.text,e.at);
       if(timingIssue){
@@ -1257,7 +1296,28 @@ export class Engine {
       // An affirmative amount without the quotation's delivery proof cannot
       // grant consent or silently issue a replacement quotation either.
       const unverifiedAmountAttempt=currentQuote&&!priceNow&&e.kind==='text'&&e.fromMe===false&&!e.forwarded&&!e.quotedId&&quotationAmountAffirmation(e.text,e.at)!==null;
-      const continuingQuote=!ownStaffPlanningReceipt(s,c,{phone:e.phone,line:e.line,caseId:caseState.caseId})&&!decision.serviceAccessFacts&&!informationalFaq&&!decision.invalidRequestedTiming&&!decision.state.customerDeferral?.active&&!decision.quoteClarification&&!decision.literalServiceContext&&!decision.observed&&c.company==='fumigacion'&&currentQuote&&priceNow?.id===currentQuote.entryId&&priceNow.priceCop===currentQuote.priceCop&&
+      // Política de la usuaria (12/11/2026): toda variación de precio la decide la
+      // jefe. Mientras exista una consulta de descuento para ESTE caso (pendiente,
+      // respondida o comunicada; no depende de la cotización ni de recordatorios),
+      // ninguna aceptación registra el precio de tabla: pasa a la asesora con el
+      // servicio, el total y la respuesta literal de la jefe.
+      // A scope change clears caseState.quotedPrice before this point, so the
+      // marker depends only on the case's discount question, not on the quote.
+      const discountCase=c.company==='fumigacion'&&!currentQuote?.accepted&&!caseState.programIntake&&ownDiscountQuestion(s,e.phone,caseState.caseId);
+      const discountQuotedCop=discountCase?(currentQuote?.priceCop??s.open(discountCase.body)?.conditions?.priceCop??null):null;
+      if(discountCase&&(naturalAcceptance||amountAcceptance||unverifiedAmountAttempt)&&!caseState.programIntake&&!caseState.awaitingHumanReview&&!e.forwarded){
+        const communicated=discountCommunicated(s,discountCase);
+        const approvedAndCommunicated=communicated&&discountCase.state==='ANSWERED';
+        // The adviser gets the chief's complete answer: a cut could hide a condition.
+        const chiefAnswer=discountCase.answer?String(s.open(discountCase.answer)):null;
+        const scope=[caseState.slots.service,caseState.slots.site,caseState.slots.rooms||caseState.slots.area,caseState.slots.mattresses,caseState.slots.location].filter(Boolean).join(', ');
+        decision={state:{...decision.state,awaitingHumanReview:true},reviewTopic:'commercial-discount-accepted',
+          reviewConditions:{kind:communicated?'chief-authorized-price-accepted':'discount-decision-pending-acceptance',caseId:caseState.caseId,discountQuestionId:discountCase.id,discountQuestionState:discountCase.state,chiefAnswerCommunicated:communicated},
+          review:'El cliente aceptó después de pedir descuento. Servicio: '+(scope||'según la cotización')+'. '+(discountQuotedCop?'Cotización de tabla consultada: $'+discountQuotedCop.toLocaleString('es-CO')+'. ':'')+(chiefAnswer?'Respuesta literal de la jefe: «'+chiefAnswer+'»'+(communicated?' (ya comunicada al cliente).':' (aún no comunicada al cliente).'):'La jefe aún no ha respondido la consulta de descuento.')+' Registrar y agendar únicamente con el precio expresamente aprobado por la jefe para el alcance actual y ya comunicado al cliente. Si la decisión está pendiente o en revisión, esperar la respuesta o aclaración de la jefe; no fijar ni confirmar un precio por cuenta propia.',
+          reviewQuestion:approvedAndCommunicated?'¿Quién registra y agenda este servicio con el precio aprobado?':'¿Quién conserva los datos y espera la decisión de la jefe para registrar y agendar con el valor aprobado?',
+          reply:approvedAndCommunicated?'¡Perfecto! Ya le paso tu confirmación a una asesora para agendar el servicio con el precio acordado. Te escribe en un momento.':'Perfecto, gracias. Mi jefe está revisando tu solicitud de descuento; le paso tu confirmación a una asesora para que conserve los datos y espere la decisión de mi jefe antes de confirmar el valor y agendar el servicio.'};
+      }
+      const continuingQuote=!discountCase&&!ownStaffPlanningReceipt(s,c,{phone:e.phone,line:e.line,caseId:caseState.caseId})&&!decision.serviceAccessFacts&&!informationalFaq&&!decision.invalidRequestedTiming&&!decision.state.customerDeferral?.active&&!decision.quoteClarification&&!decision.literalServiceContext&&!decision.observed&&c.company==='fumigacion'&&currentQuote&&priceNow?.id===currentQuote.entryId&&priceNow.priceCop===currentQuote.priceCop&&
         ((!decision.review&&!decision.courtesy)||(naturalAcceptance&&(decision.courtesy||decision.reviewTopic==='customer-question')))&&!specialQuotation(textWithoutLinks(literalIntakeTextWithoutRegistrationFields(e.text)),decision.state.slots)&&
         (currentQuote.accepted||naturalAcceptance);
       if(continuingQuote){
@@ -1301,8 +1361,34 @@ export class Engine {
         const selection=selectPrice(decision.state.slots,s.approvedPriceCatalogs(),null,{scheduleHash:businessPriceHashAt(e.at),issuedAt:e.at});
         if(selection.entry&&!e.forwarded&&!ambiguousIntake(e.text)&&!termiteFurnitureMention(e)&&!specialQuotation(textWithoutLinks(literalIntakeTextWithoutRegistrationFields(e.text)),decision.state.slots)){
           selectedPrice=selection.entry;
-          decision={state:{...decision.state,quotedPrice:{entryId:selectedPrice.id,priceCop:selectedPrice.priceCop,slots:{...decision.state.slots},sourceId:e.id,...(selectedPrice.source?.scheduleHash?{scheduleHash:selectedPrice.source.scheduleHash,issuedAt:e.at}:{})}},reply:priceText(selectedPrice)};
+          // Same unaccepted quote again ("¿cuánto vale?", "¿y cuánto me sale?"): never
+          // the identical text twice in a row; alternate with a short reminder.
+          const repeatedQuote=currentQuote&&!currentQuote.accepted&&currentQuote.entryId===selectedPrice.id&&currentQuote.priceCop===selectedPrice.priceCop;
+          if(discountCase&&(repeatedQuote||sameDiscountScope(s,discountCase,decision.state.slots,selectedPrice.priceCop))){
+            // A discount is with the chief: never re-offer the table price as if
+            // nothing happened, and keep the existing quote untouched.
+            const communicated=discountCommunicated(s,discountCase);
+            selectedPrice=null;
+            decision={state:{...decision.state},discountPendingReminder:true,reply:communicated?'El valor que te ofrecemos es el que te confirmó mi jefe en el mensaje anterior. Si te parece bien, respóndeme «sí» y una asesora agenda el servicio contigo.':'Mi jefe todavía está revisando tu solicitud de descuento. En cuanto me responda te confirmo el valor final.'};
+          }else if(discountCase){
+            // The scope changed after the discount request: no new table quote is
+            // published; the chief receives the new scope to decide the price.
+            const newScope=[decision.state.slots.service,decision.state.slots.site,decision.state.slots.rooms||decision.state.slots.area,decision.state.slots.mattresses,decision.state.slots.location].filter(Boolean).join(', ');
+            const tablePrice=selectedPrice.priceCop;selectedPrice=null;
+            const ten=Math.round(tablePrice*0.1),cop=n=>'$'+n.toLocaleString('es-CO');
+            // Same direct chief question as the first discount request, so her
+            // «Para el cliente» is relayed and the later "sí" goes to an adviser.
+            routeCaseQuestion(s,c,{phone:e.phone,line:e.line,caseId:caseState.caseId,topic:'commercial-discount-scope-change',
+              conditions:{kind:'scope-changed-after-discount-request',caseId:caseState.caseId,discountQuestionId:discountCase.id,previousPriceCop:discountQuotedCop,newTablePriceCop:tablePrice,slots:{...decision.state.slots}},
+              recipients:questionRecipients(c,'commercial-discount-scope-change'),source:e.id,
+              text:'María Ángel · consulta comercial (cambio de servicio). El cliente del contacto terminado en '+e.phone.slice(-4)+' pidió descuento'+(discountQuotedCop?' sobre una cotización de '+cop(discountQuotedCop):'')+' y después cambió el servicio; la consulta anterior correspondía a otro servicio.\nNuevo servicio: '+(newScope||'según el chat')+'.\nPrecio de tabla del nuevo alcance: '+cop(tablePrice)+'. Descuento máximo (10 %): '+cop(ten)+'. Total con descuento: '+cop(tablePrice-ten)+'.\nMensaje del cliente: «'+e.text.slice(0,500)+'».\n¿Autorizas alguna opción (el 10 % u otro precio) o debemos mantener el valor de tabla? Para que se lo envíe al cliente, responde citando este mensaje: «Para el cliente: …».'});
+            decision={state:{...decision.state},discountScopeChange:true,
+              reply:'Gracias. Como cambió el servicio, le paso los datos actualizados a mi jefe junto con tu solicitud de descuento y te confirmo el valor final en cuanto me responda.'};
+          }else{
+          const quoteReply=repeatedQuote?priceReminderText(selectedPrice,e.text,caseState.lastPriceReminder??priceText(selectedPrice)):priceText(selectedPrice);
+          decision={state:{...decision.state,lastPriceReminder:repeatedQuote?quoteReply:null,quotedPrice:{entryId:selectedPrice.id,priceCop:selectedPrice.priceCop,slots:{...decision.state.slots},sourceId:e.id,...(selectedPrice.source?.scheduleHash?{scheduleHash:selectedPrice.source.scheduleHash,issuedAt:e.at}:{})}},reply:quoteReply};
           s.audit('REVIEWED_PRICE_SELECTED',e.id,{entryId:selectedPrice.id,priceCop:selectedPrice.priceCop,quoteSources:selection.sourceIds,caseId:caseState.caseId,businessWritten:false});
+          }
         }else if(!selection.entry&&decision.question?.topic==='cotizacion-verificada'){
           const table=selectBusinessPrice(decision.state.slots,{scheduleHash:businessPriceHashAt(e.at)});
           decision.question={...decision.question,conditions:{...decision.question.conditions,quotationGapReason:table.reason||'REVIEWED_CASE_PRICE_REQUIRED'}};
@@ -1341,14 +1427,16 @@ export class Engine {
           if(staged){
             if(!missing.site)requests.push('Qué tipo de inmueble es.');
           }else if(normalize(missing.service).includes('chinches')){
-            if(!missing.site)requests.push('Qué tipo de inmueble es.');
+            const mixedIntake=Boolean(mixedServiceParts(missing.service));
+            if(mixedIntake&&(!missing.site||!missing.area&&!missing.rooms))requests.push(!missing.site&&!missing.area&&!missing.rooms?'Qué tipo de inmueble es y cuántas habitaciones o metros cuadrados tiene.':!missing.site?'Qué tipo de inmueble es.':'Cuántas habitaciones o metros cuadrados tiene.');
+            else if(!missing.site)requests.push('Qué tipo de inmueble es.');
             if(!missing.mattresses)requests.push(furnitureExclusionForPresentation(decision.state,e)?'Cuántos colchones están afectados.':'Cuántos colchones están afectados y si también hay chinches en bases de cama u otros muebles.');
           }else if(!staged&&(!missing.site||!missing.area&&!missing.rooms))requests.push(!missing.site&&!missing.area&&!missing.rooms?'Qué tipo de inmueble es y cuántas habitaciones o metros cuadrados tiene.':!missing.site?'Qué tipo de inmueble es.':'Cuántas habitaciones o metros cuadrados tiene.');
           if(!missing.location)requests.push(missing.locationDetails?'El municipio donde necesitas el servicio; ya conservé la ubicación indicada.':'El municipio y barrio o vereda donde necesitas el servicio.');
           if(requests.length){
             decision.reply='Para ayudarte con la cotización, cuéntame:\n'+requests.map(x=>'• '+x).join('\n');
             decision.state.initialIntakeAllRequested=!staged||Boolean(missing.area||missing.rooms);
-            const requested=staged?['service','site','location'].filter(field=>!missing[field]||field==='service'&&genericPestDescription(missing.service)):['service','site',normalize(missing.service).includes('chinches')?'mattresses':'size','location'].filter(field=>field==='size'?!missing.area&&!missing.rooms:!missing[field]||field==='service'&&genericPestDescription(missing.service));
+            const requested=staged?['service','site','location'].filter(field=>!missing[field]||field==='service'&&genericPestDescription(missing.service)):(mixedServiceParts(missing.service)?['service','site','size','mattresses','location']:['service','site',normalize(missing.service).includes('chinches')?'mattresses':'size','location']).filter(field=>field==='size'?!missing.area&&!missing.rooms:!missing[field]||field==='service'&&genericPestDescription(missing.service));
             decision.state.initialIntakeRequestedFields=requested;
             decision.state.asked=[...new Set([...decision.state.asked,...requested])];
           }
