@@ -1,7 +1,7 @@
 import prisma from './prisma';
 import type { Prisma } from '@/prisma/generated/prisma/client';
 import { createAuditLog } from './audit';
-import { pauseForStaff,resumeReception,phoneDigits, SANDRA_PHONE, type ReceptionEvent, type ReceptionTemplates, type ReceptionState } from './psychology-reception';
+import { pauseForStaff,resumeReception,phoneDigits, SANDRA_PHONE, PSYCHOLOGY_PHONE, type ReceptionEvent, type ReceptionTemplates, type ReceptionState } from './psychology-reception';
 import { ensurePsychologyConversation, sendPsychologyMessage, verifyPsychologyChannel } from './psychology-chatwoot';
 import { handleBookingMessage } from './psychology-bot-booking';
 import {randomUUID} from 'node:crypto';
@@ -20,6 +20,7 @@ import {handleRentalIntake} from './psychology-rental-intake';
 import {naturalBookingConfirmation,type ConfirmableProposal} from './psychology-booking-messages';
 import {recordPsychologyStaffTakeover,psychologyStaffSendAllowed,chiefStaffDecision,chiefMessageAddressesBot,chiefPresenceQuestion,chiefOpeningReply} from './psychology-staff-ownership';
 import {psychologyCommunicationIssue} from './psychology-communication';
+import {chiefStructuredCommand} from './psychology-chief-commands';
 import {handlePatientAvailability} from './psychology-patient-scheduling';
 
 type Tx=Prisma.TransactionClient;
@@ -45,6 +46,7 @@ export async function queuePsychologyMessage(tx:Tx,id:string,phone:string,conten
   await tx.$executeRaw`INSERT INTO "PsicologiaBotOutbox" (id,phone,content) VALUES (${id},${phone},${content}) ON CONFLICT DO NOTHING`;
 }
 async function adminMessage(tx:Tx,e:ReceptionEvent) {
+  if(e.fromMe||e.phone!==SANDRA_PHONE||e.kind!=='text')return;
   const policy=/^POLITICA PAGO (COMPLETO|MITAD CITA|ABONO 20000|REVISAR)$/i.exec(e.text.trim());
   if(policy) {
     const value=({COMPLETO:'FULL','MITAD CITA':'HALF_SESSION_FULL_PACKAGE','ABONO 20000':'DEPOSIT_20000',REVISAR:'REVIEW'} as Record<string,string>)[policy[1].toUpperCase()];
@@ -55,22 +57,38 @@ async function adminMessage(tx:Tx,e:ReceptionEvent) {
   }
   const command=/^(PAUSAR|REANUDAR)\s+(\+?[1-9][\d\s-]{7,20})$/i.exec(e.text.trim());
   if(command) {
-    const phone=phoneDigits(command[2]);if(!phone||phone===SANDRA_PHONE)return;
-    const previous=(await tx.$queryRaw<{stage:string;state:ReceptionState}[]>`SELECT stage,state FROM "PsicologiaBotConversation" WHERE phone=${phone} FOR UPDATE`)[0];
+    const phone=phoneDigits(command[2]);if(!phone||[SANDRA_PHONE,PSYCHOLOGY_PHONE].includes(phone))return;
+    const previous=(await tx.$queryRaw<{stage:string;state:ReceptionState}[]>`SELECT stage,state FROM "PsicologiaBotConversation" WHERE "tenantId"=4 AND phone=${phone} FOR UPDATE`)[0];
     const pause=command[1].toUpperCase()==='PAUSAR';
+    // A manual pause must not replace a clinical or no-contact protection that
+    // a subsequent ordinary resume could otherwise erase.
+    if(previous?.state.humanHold&&['urgent','optout'].includes(previous.state.humanHold.kind))return;
+    if(!pause){
+      // Repeated commands must not reset an already active stage or its source.
+      if(!previous||previous.stage!=='HUMAN')return;
+      if([previous.state.staffMessage?.at,previous.state.humanHold?.since].some(at=>at&&Date.parse(at)>=Date.parse(e.at)))return;
+      const laterStaff=await tx.$queryRaw<{id:string}[]>`SELECT h.id FROM "PsicologiaBotEvent" h
+        WHERE h."tenantId"=4 AND h.phone=${phone} AND h."fromMe"=true
+         AND (h."eventAt">=${new Date(e.at)} OR h."receivedAt">(SELECT "receivedAt" FROM "PsicologiaBotEvent" WHERE "tenantId"=4 AND id=${e.id}))
+         AND NOT EXISTS(SELECT 1 FROM "PsicologiaBotOutbox" b WHERE b."tenantId"=4 AND b.phone=h.phone
+          AND h.kind='text' AND h.text<>'' AND b.content=h.text AND b.status IN ('SENDING','ACCEPTED','UNCERTAIN')
+          AND b."attemptedAt" IS NOT NULL AND ABS(EXTRACT(EPOCH FROM h."eventAt"-b."attemptedAt"))<=120) LIMIT 1`;
+      if(laterStaff.length)return;
+    }
     const next=pause?{stage:'HUMAN',state:{...previous?.state,reason:'Pausa solicitada por Sandra',humanHold:{kind:'manual' as const,resumeStage:previous?.state.humanHold?.resumeStage||previous?.stage||'NEED',since:e.at}}}:{...resumeReception(previous?.state||{})};
     if(!pause){next.state.resumedFrom=e.id;next.state.staffReleasedAt=e.at;}
     const {stage,state}=next;
-    await tx.$executeRaw`INSERT INTO "PsicologiaBotConversation" (phone,stage,state) VALUES (${phone},${stage},${JSON.stringify(state)}::jsonb)
-      ON CONFLICT (phone) DO UPDATE SET stage=EXCLUDED.stage,state=EXCLUDED.state,"updatedAt"=NOW()`;
-    if(stage==='HUMAN')await tx.$executeRaw`UPDATE "PsicologiaBotOutbox" SET status='CANCELLED' WHERE phone=${phone} AND status='PENDING'`;
+    const changed=await tx.$executeRaw`INSERT INTO "PsicologiaBotConversation" ("tenantId",phone,stage,state) VALUES (4,${phone},${stage},${JSON.stringify(state)}::jsonb)
+      ON CONFLICT (phone) DO UPDATE SET stage=EXCLUDED.stage,state=EXCLUDED.state,"updatedAt"=NOW() WHERE "PsicologiaBotConversation"."tenantId"=4`;
+    if(!changed)return;
+    if(stage==='HUMAN')await tx.$executeRaw`UPDATE "PsicologiaBotOutbox" SET status='CANCELLED' WHERE "tenantId"=4 AND phone=${phone} AND status='PENDING'`;
     await queuePsychologyMessage(tx,e.id+':admin',SANDRA_PHONE,`${stage==='HUMAN'?'Atención automática pausada':'Atención automática habilitada para el próximo mensaje'}: +${phone}.`);
     await createAuditLog({tenantId:4,accion:'BOT_CONVERSATION_MODE',entidad:'WhatsApp',entidadId:phone,detalles:{stage,sourceEvent:e.id,actor:'Sandra verificada por canal'},tx});
   } else if(/^(ESTADO BOT|AYUDA BOT)$/i.test(e.text.trim())) {
     const rows=await tx.$queryRaw<{pending:bigint;uncertain:bigint;review:bigint}[]>`
-      SELECT (SELECT COUNT(*) FROM "PsicologiaBotEvent" WHERE status='PENDING') AS pending,
-      (SELECT COUNT(*) FROM "PsicologiaBotOutbox" WHERE status='UNCERTAIN') AS uncertain,
-      (SELECT COUNT(*) FROM "PsicologiaBotConversation" WHERE stage='HUMAN') AS review`;
+      SELECT (SELECT COUNT(*) FROM "PsicologiaBotEvent" WHERE "tenantId"=4 AND status='PENDING') AS pending,
+      (SELECT COUNT(*) FROM "PsicologiaBotOutbox" WHERE "tenantId"=4 AND status='UNCERTAIN') AS uncertain,
+      (SELECT COUNT(*) FROM "PsicologiaBotConversation" WHERE "tenantId"=4 AND stage='HUMAN') AS review`;
     await queuePsychologyMessage(tx,e.id+':status',SANDRA_PHONE,`Estado de recepción: ${rows[0].pending} eventos pendientes, ${rows[0].review} conversaciones con atención humana y ${rows[0].uncertain} envíos por verificar.\nPara tomar un chat: PAUSAR seguido del número. Para devolverlo al bot: REANUDAR seguido del número.`);
   }
 }
@@ -83,6 +101,11 @@ async function processOne(config:AutomationConfig,preparedEventId:string) {
     const row=rows[0];if(!row)return false;
     const e:ReceptionEvent={...row,at:row.eventAt.toISOString(),...(row.kind==='audio'&&row.transcript?{kind:'text',text:row.transcript}:{})};
     const chiefContext={kind:e.kind,text:e.text,quotedText:e.quotedText};
+    // Strip an authorized vocative only on the handler copy. Keep the source and
+    // chiefContext unchanged for interpretation, evidence and review messages.
+    const chiefCommand=chiefStructuredCommand(e);
+    let bookingEvent=chiefCommand?{...e,text:chiefCommand.text}:e;
+    let naturalConfirmation=false;
     let understanding:Understanding|null=null;
     if(row.analysis){try{understanding=parseUnderstanding(row.analysis)}catch{ /* Invalid model output has no authority. */ }}
     if(e.fromMe){
@@ -144,11 +167,11 @@ async function processOne(config:AutomationConfig,preparedEventId:string) {
         AND NOT EXISTS(SELECT 1 FROM "PsicologiaBotConversation" c WHERE c.phone=${e.phone} AND c.stage='HUMAN') LIMIT 8`;
       const last=await tx.$queryRaw<{content:string}[]>`SELECT content FROM "PsicologiaBotOutbox" WHERE phone=${e.phone} AND status='ACCEPTED' AND "attemptedAt"<=${new Date(e.at)} ORDER BY "createdAt" DESC,id DESC LIMIT 1`;
       const code=naturalBookingConfirmation(e,understanding,proposals,last[0]?.content||'');
-      if(code)e.text='CONFIRMAR '+code;
+      if(code){bookingEvent={...e,text:'CONFIRMAR '+code};naturalConfirmation=true;}
     }
     let bookingHandled=false;
     await tx.$executeRawUnsafe('SAVEPOINT bot_availability');
-    try{bookingHandled=await handlePatientAvailability(tx,e,understanding,queuePsychologyMessage);}
+    try{bookingHandled=await handlePatientAvailability(tx,bookingEvent,understanding,queuePsychologyMessage);}
     catch(error){
       await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT bot_availability');
       bookingHandled=true;
@@ -157,9 +180,9 @@ async function processOne(config:AutomationConfig,preparedEventId:string) {
       await createAuditLog({tenantId:4,accion:'BOT_AVAILABILITY_REVIEW',entidad:'WhatsAppEvento',entidadId:e.id,detalles:{requiresReview:true,appointmentConfirmed:false,partialWritesRolledBack:true},tx});
     }
     await tx.$executeRawUnsafe('RELEASE SAVEPOINT bot_availability');
-    if(!bookingHandled&&!e.fromMe&&e.kind==='text'&&/^(RESERVAR|CONFIRMAR|SOPORTE)\s/i.test(e.text)) {
+    if(!bookingHandled&&!e.fromMe&&e.kind==='text'&&(e.phone===SANDRA_PHONE?chiefCommand?.kind==='booking'||naturalConfirmation:/^(RESERVAR|CONFIRMAR|SOPORTE)\s/i.test(bookingEvent.text))) {
       await tx.$executeRawUnsafe('SAVEPOINT bot_booking');
-      try {bookingHandled=await handleBookingMessage(tx,e,queuePsychologyMessage);}
+      try {bookingHandled=await handleBookingMessage(tx,bookingEvent,queuePsychologyMessage);}
       catch (error) {
         await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT bot_booking');
         bookingHandled=true;
@@ -171,7 +194,7 @@ async function processOne(config:AutomationConfig,preparedEventId:string) {
     if(bookingHandled) { /* Confirmation/proposal handled without entering the sales conversation. */ }
     else if(e.phone===SANDRA_PHONE) {
       if(!e.fromMe){
-        if(/^(ESTADO BOT|AYUDA BOT)$|^(PAUSAR|REANUDAR|POLITICA PAGO)\s/i.test(e.text.trim()))await adminMessage(tx,e);
+        if(chiefCommand?.kind==='admin')await adminMessage(tx,{...e,text:chiefCommand.text});
         else if(row.analysisError){
           await tx.$executeRaw`UPDATE "PsicologiaBotConversation" SET state=state||${JSON.stringify({pendingInterpretationEvent:e.id})}::jsonb WHERE phone=${SANDRA_PHONE}`;
           await queuePsychologyMessage(tx,e.id+':ai-error',SANDRA_PHONE,row.kind==='audio'&&!row.transcript?'Sandra, no pude escuchar el audio. ¿Puedes enviarlo de nuevo o escribirme lo que necesitas?':'Sandra, recibí tu mensaje, pero tuve un problema al procesarlo. La solicitud quedó pendiente de revisión; no necesitas repetirla.');

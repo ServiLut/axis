@@ -1,5 +1,6 @@
 import type {Prisma} from '@/prisma/generated/prisma/client';
 import {pauseForStaff,resumeReception,SANDRA_PHONE,type ReceptionEvent,type ReceptionState} from './psychology-reception';
+import {chiefStructuredCommand} from './psychology-chief-commands';
 
 type Tx=Prisma.TransactionClient;
 
@@ -17,6 +18,7 @@ export function chiefOpeningReply(event:ReceptionEvent):string|null{
 /** A shared staff/chief chat is not automatically addressed to the assistant. */
 export function chiefAddressesBot(event:ReceptionEvent){
  if(event.fromMe||event.phone!==SANDRA_PHONE||event.kind!=='text')return false;
+ if(chiefStructuredCommand(event))return true;
  if(chiefOpeningReply(event))return true;
  const text=event.text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
  if(/^(estado bot|ayuda bot)$/.test(text))return true;

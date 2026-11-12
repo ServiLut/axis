@@ -8,6 +8,7 @@ import {readChiefKnowledge,readChiefCaseAnswers} from './psychology-knowledge';
 import {classifyReceptionHistory,staffObservation,type BotHistoryReference} from './psychology-staff-observation';
 import {chiefMessageAddressesBot,chiefPresenceQuestion,chiefOpeningReply,verifiedChiefQuestion} from './psychology-staff-ownership';
 import {SANDRA_PHONE} from './psychology-reception';
+import {chiefStructuredCommand} from './psychology-chief-commands';
 
 /** No network call while a database transaction or row lock is held. */
 export async function prepareNextPsychologyEvent(){
@@ -15,7 +16,7 @@ export async function prepareNextPsychologyEvent(){
   SELECT id,phone,"eventAt",kind,text,"fromMe",analysis,transcript,"analysisError","resumeOf","quotedText",to_jsonb("PsicologiaBotEvent")->>'quotedOutboxId' AS "quotedOutboxId" FROM "PsicologiaBotEvent" WHERE status='PENDING' ORDER BY "receivedAt",id LIMIT 1`;
  const row=rows[0];if(!row)return null;
  if(row.fromMe||row.analysis||row.analysisError||row.kind==='attachment')return row.id;
- if(row.kind==='text'&&/^(RESERVAR|CONFIRMAR|SOPORTE|PAUSAR|REANUDAR|POLITICA PAGO)\s|^(ESTADO BOT|AYUDA BOT)$/i.test(row.text.trim()))return row.id;
+ if(chiefStructuredCommand(row)||(row.kind==='text'&&row.phone!==SANDRA_PHONE&&/^(RESERVAR|CONFIRMAR|SOPORTE|PAUSAR|REANUDAR|POLITICA PAGO)\s|^(ESTADO BOT|AYUDA BOT)$/i.test(row.text.trim())))return row.id;
  if(row.kind==='text'&&/suicid|matarme|quitarme la vida|me quiero morir|me corte|me estoy cortando|sobredosis|no quiero vivir/i.test(row.text.normalize('NFD').replace(/[\u0300-\u036f]/g,'')))return row.id;
  const event={...row,at:row.eventAt.toISOString()};
  try{
@@ -27,6 +28,7 @@ export async function prepareNextPsychologyEvent(){
    await prisma.$executeRaw`UPDATE "PsicologiaBotEvent" SET transcript=${event.text} WHERE id=${row.id} AND status='PENDING'`;
    event.kind='text';
   }
+  if(chiefStructuredCommand(event))return row.id;
   if(event.quotedText?.trim()&&!event.quotedOutboxId){
    const candidates=await prisma.$queryRaw<{conversationId:bigint}[]>`SELECT DISTINCT "conversationId" FROM "PsicologiaBotOutbox"
     WHERE "tenantId"=4 AND phone=${event.phone} AND status='ACCEPTED' AND content=${event.quotedText.trim()}
