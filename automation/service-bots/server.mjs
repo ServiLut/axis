@@ -168,7 +168,7 @@ export function createBotServer(config,store,transport,engine) {
   };
   persistMariaKnowledge(config,store);
   initializeInactivityFollowup(config,store);
-  let draining=false,settingUpAi=false;
+  let draining=false,settingUpAi=false,settingUpFinancialReader=false;
   const run=async()=>{if(draining||settingUpAi)return {busy:true};draining=true;try{return await drain(store,config,transport,engine);}finally{draining=false;}};
   const scheduler=createDrainScheduler(config,store,run,{blocked:()=>settingUpAi||draining});
   const server=createServer(async(req,res)=>{
@@ -208,11 +208,11 @@ export function createBotServer(config,store,transport,engine) {
       let body;try{body=JSON.parse(raw);}catch{journalGap('INVALID_JSON');return reply(400,{error:'INVALID_JSON'});}
       if(req.url==='/financial-reader-setup'){
         if(!financialReader)return reply(403,{error:'OWN_FUMIGACION_FINANCIAL_READ_REQUIRED'});
-        if(draining||settingUpAi)return reply(409,{error:'OWN_FINANCIAL_READER_SETUP_BUSY'});
-        settingUpAi=true;
+        if(settingUpFinancialReader||settingUpAi)return reply(409,{error:'OWN_FINANCIAL_READER_SETUP_BUSY'});
+        settingUpFinancialReader=true;
         try{return reply(200,await financialReader.install(body));}
         catch{return reply(409,{error:'OWN_FINANCIAL_READER_SETUP_NOT_APPLIED'});}
-        finally{settingUpAi=false;}
+        finally{settingUpFinancialReader=false;}
       }
       const financialOperation={'/financial-reader-status':'status','/financial-reader-snapshots':'snapshots','/financial-reader-revalidate':'revalidate'}[req.url];
       if(financialOperation){
