@@ -59,6 +59,7 @@ import {createRetentionEligibilityAdapter} from './retention-eligibility.mjs';
 import {createRetentionDispatchRuntime,restoreRetentionNoteAccess,installRetentionNoteAccess} from './retention-dispatch.mjs';
 import {reviewContactAttention} from './attention-audit-readonly.mjs';
 import {createReviewedCustomerFollowupRuntime} from './reviewed-customer-followup.mjs';
+import {createMariaFinancialReaderRuntime} from './maria-financial-reader.mjs';
 
 // This is the direct human authorization for the current, manually reviewed
 // audit. It creates no campaign, source replay, handover or background sender.
@@ -152,6 +153,7 @@ export function createBotServer(config,store,transport,engine) {
     config.mariaTesaUnregistered={enabled:true,startsAt:value.startsAt};
   }
   restoreProgramSupervision(config,store);
+  const financialReader=config.company==='fumigacion'?createMariaFinancialReaderRuntime(config,store,{fetcher:transport.fetcher}):null;
   restoreRetentionProofAccess(config,store);
   if(config.company==='fumigacion')restoreRetentionNoteAccess(config,store);
   // All facts come from scoped internal readers. Their presence does not
@@ -196,7 +198,7 @@ export function createBotServer(config,store,transport,engine) {
     if(!(schedulingProof?ownSchedulingProofAuthorized(config,req.headers.authorization):retentionProof?retentionProofAuthorized(config,req.headers.authorization):authorized(req.headers.authorization,ingestion?config.webhookHash:config.authHash)))return reply(401,{error:'UNAUTHORIZED'});
     if(req.method!=='POST')return reply(405,{error:'POST_REQUIRED'});
     try {
-      const bodyLimit=req.url==='/notify-chief-document'?720000:req.url==='/webhook'&&config.company==='fumigacion'?FUMIGACION_WEBHOOK_BODY_LIMIT:20000;
+      const bodyLimit=req.url==='/financial-reader-setup'?65536:['/financial-reader-status','/financial-reader-snapshots','/financial-reader-revalidate'].includes(req.url)?8192:req.url==='/notify-chief-document'?720000:req.url==='/webhook'&&config.company==='fumigacion'?FUMIGACION_WEBHOOK_BODY_LIMIT:20000;
       // Decode once, after collecting bounded bytes. Decoding each network
       // chunk separately can split one UTF-8 letter into replacement characters.
       const chunks=[];let byteLength=0;
@@ -204,6 +206,21 @@ export function createBotServer(config,store,transport,engine) {
       for await(const chunk of req){const bytes=Buffer.isBuffer(chunk)?chunk:Buffer.from(chunk);chunks.push(bytes);byteLength+=bytes.length;if(byteLength>bodyLimit){journalGap('PAYLOAD_TOO_LARGE');return reply(413,{error:'PAYLOAD_TOO_LARGE'});}}
       const raw=Buffer.concat(chunks,byteLength).toString('utf8');
       let body;try{body=JSON.parse(raw);}catch{journalGap('INVALID_JSON');return reply(400,{error:'INVALID_JSON'});}
+      if(req.url==='/financial-reader-setup'){
+        if(!financialReader)return reply(403,{error:'OWN_FUMIGACION_FINANCIAL_READ_REQUIRED'});
+        if(draining||settingUpAi)return reply(409,{error:'OWN_FINANCIAL_READER_SETUP_BUSY'});
+        settingUpAi=true;
+        try{return reply(200,await financialReader.install(body));}
+        catch{return reply(409,{error:'OWN_FINANCIAL_READER_SETUP_NOT_APPLIED'});}
+        finally{settingUpAi=false;}
+      }
+      const financialOperation={'/financial-reader-status':'status','/financial-reader-snapshots':'snapshots','/financial-reader-revalidate':'revalidate'}[req.url];
+      if(financialOperation){
+        if(!financialReader)return reply(403,{error:'OWN_FUMIGACION_FINANCIAL_READ_REQUIRED'});
+        if(financialOperation==='status'&&(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).length))return reply(400,{error:'OWN_FINANCIAL_STATUS_EMPTY_BODY_REQUIRED'});
+        try{return reply(200,await financialReader[financialOperation](body));}
+        catch{return reply(409,{error:'OWN_FINANCIAL_READ_NOT_VERIFIED'});}
+      }
       if(schedulingProof){try{return reply(200,await schedulingProofForBackend(store,config,transport,body));}catch{return reply(409,{error:'OWN_SCHEDULING_PROOF_NOT_CURRENT'});}}
       if(req.url==='/own-order-scheduling-setup'){
         if(config.company!=='fumigacion')return reply(403,{error:'OWN_FUMIGACION_REQUIRED'});
