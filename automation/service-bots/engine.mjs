@@ -38,6 +38,7 @@ import {customerDeferralRequested,customerDeferralReply,customerDeferralResumeEv
 import {literalTermiteFurnitureScope,termiteFurnitureMention} from './maria-furniture-scope.mjs';
 import {ownCommercialCustomerTurn,COMMERCIAL_OBJECTION_GUARD} from './commercial-objections.mjs';
 import {MARIA_BOUNDED_FOLLOWUP_GUARD,MARIA_SERVICE_CONTENT_GUARD,followupVariant,numberConfirmation,splitNumberUnit,bareNumber,unitOnly,serviceContentKey,serviceContentText,serviceContentQuestion,serviceAreaQuestion,acceptsColloquialQuotation,serviceContentWithDiscountStatus,discountStatusText} from './maria-bounded-followup.mjs';
+import {isMariaCollectionsContext} from './maria-collections-context.mjs';
 
 export const MARIA_AUTONOMOUS_INTAKE_GUARD='literal-ordinary-intake-without-staff-delegation-v1';
 export const MARIA_AFTER_SERVICE_CONTINUITY_GUARD='own-same-case-stored-or-quoted-postservice-context-and-priority-preservation-v2';
@@ -918,7 +919,10 @@ export function customerDecision(company,state,e,analysis={},options={}) {
 }
 
 export class Engine {
-  constructor(store,config){this.store=store;this.config=config;initializeTesaStore(store);initializeWarrantyResponseEscalation(store,config);}
+  constructor(store,config,{collectionsContext=null}={}){
+    if(collectionsContext!==null&&!isMariaCollectionsContext(collectionsContext,store))throw Error('OWN_COLLECTION_CONTEXT_INSTANCE_REQUIRED');
+    this.store=store;this.config=config;this.collectionsContext=collectionsContext;initializeTesaStore(store);initializeWarrantyResponseEscalation(store,config);
+  }
   async process(e,analysis={}) {
     const s=this.store,c=this.config;
     return s.tx(()=>{
@@ -936,6 +940,22 @@ export class Engine {
       const trialCustomer=nativeTrialCustomerTurn(c,e);
       const internal=internalRecipients(c).includes(e.phone)&&!trialCustomer;
       if(knownInternalRecipient(e.phone)&&!internal&&!trialCustomer){finish('OBSERVED_INTERNAL_OUTSIDE_SCOPE');return;}
+      // The host explicitly injects the same durable, scoped adapter as the
+      // collector. Keep consuming its replies after new sends are disabled.
+      // Staff/internal turns stay on their existing routes; customer replies
+      // are captured before supersession/hold can discard financial evidence.
+      if(!internal&&this.collectionsContext){
+        let collection;
+        try{collection=this.collectionsContext.inspectIncoming(e);}
+        catch(error){
+          s.audit('OWN_COLLECTION_REPLY_SOURCE_REVIEW',e.id,{reason:/^COLLECTION_CONTEXT_[A-Z_]+$/.test(error?.message??'')?error.message:'COLLECTION_CONTEXT_SOURCE_UNAVAILABLE',businessWritten:false,customerReplyQueued:false,humanHoldReleased:false});
+          finish('REVIEW');return;
+        }
+        if(collection.consumed){
+          s.audit('OWN_COLLECTION_REPLY_REVIEW',e.id,{...collection,businessWritten:false,customerReplyQueued:false,humanHoldReleased:false});
+          finish('COLLECTION_REPLY_REVIEW');return;
+        }
+      }
       const ownChiefQuote=internal&&e.quotedId&&s.db.prepare("SELECT id FROM outbox WHERE phone=? AND line=? AND mid=? AND internal=1 AND state IN ('DELIVERED','READ')").get(e.phone,e.line,e.quotedId);
       const chiefPlan=internal&&parseChiefCommand(e,c,{quotedOwn:Boolean(ownChiefQuote)});
       const ownCaseQuestion=chiefPlan?.action==='unsupported'&&ownChiefQuote&&s.db.prepare("SELECT 1 FROM questions q JOIN outbox o ON (o.id=q.outbox_id OR EXISTS(SELECT 1 FROM question_routes r WHERE r.question_id=q.id AND r.outbox_id=o.id AND r.recipient=o.phone AND r.line=o.line)) WHERE o.phone=? AND o.line=? AND o.mid=? AND o.internal=1 AND o.state IN ('DELIVERED','READ') AND q.state IN ('PENDING','ANSWERED','ANSWER_REVIEW')").get(e.phone,e.line,e.quotedId);

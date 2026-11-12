@@ -60,6 +60,12 @@ import {createRetentionDispatchRuntime,restoreRetentionNoteAccess,installRetenti
 import {reviewContactAttention} from './attention-audit-readonly.mjs';
 import {createReviewedCustomerFollowupRuntime} from './reviewed-customer-followup.mjs';
 import {createMariaFinancialReaderRuntime} from './maria-financial-reader.mjs';
+import {createMariaCollectionsHost,MARIA_COLLECTIONS_HOST_GUARD,MARIA_COLLECTIONS_AUTHORITY_REFERENCE,MARIA_COLLECTIONS_AUTHORITY_MAX_EXPIRY} from './maria-collections-host.mjs';
+import {createMariaCollectionsContext,isMariaCollectionsContext} from './maria-collections-context.mjs';
+import {COLLECTION_SCOPE} from './maria-collections.mjs';
+
+const COLLECTIONS_AUTHORITY=Object.freeze({reference:MARIA_COLLECTIONS_AUTHORITY_REFERENCE,sourceHash:createHash('sha256').update('puedes hacer que maria revise el programa y revise cuales están pendientes por cobrar y le escriba a cada cliente realizando el respectivo cobro muy empático').digest('hex'),company:COLLECTION_SCOPE.company,tenantId:COLLECTION_SCOPE.tenantId,companyId:COLLECTION_SCOPE.companyId,expiresAt:Date.parse(MARIA_COLLECTIONS_AUTHORITY_MAX_EXPIRY),oneOff:true});
+const COLLECTIONS_HTTP_OPERATIONS=Object.freeze({'/collections-status':'status','/collections-review-install':'installReviewedRecord','/collections-prepare':'prepare','/collections-dispatch':'dispatch','/collections-delivery-proof':'proveDelivery','/collections-replies-review':'repliesReview'});
 
 // This is the direct human authorization for the current, manually reviewed
 // audit. It creates no campaign, source replay, handover or background sender.
@@ -96,11 +102,11 @@ function auditPrivateNativeCacheUnresolved(config,store,body,result,{startedAt,r
   }
 }
 
-export function createDrainScheduler(config,store,runner,{blocked=()=>false,setImmediateFn=setImmediate,setIntervalFn=setInterval,clearIntervalFn=clearInterval}={}){
+export function createDrainScheduler(config,store,runner,{blocked=()=>false,hasPendingCollections=()=>false,setImmediateFn=setImmediate,setIntervalFn=setInterval,clearIntervalFn=clearInterval}={}){
   const fast=config.company==='fumigacion'&&config.responseTargetMs===3000,key='verified-ingestion-drain-wake-v1';
   let running=false,scheduled=false,closed=false;
   const durableWake=()=>store.db.prepare('INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key,store.seal({at:Date.now(),source:'authenticated-own-ingestion'}));
-  const pending=()=>Boolean(store.db.prepare("SELECT 1 FROM events WHERE state='PENDING' AND (?=1 OR phone IN (?,?,?)) LIMIT 1").get(Number(config.enabled),SANDRA,'573233350137','573043332213'));
+  const pending=()=>Boolean(store.db.prepare("SELECT 1 FROM events WHERE state='PENDING' AND (?=1 OR phone IN (?,?,?)) LIMIT 1").get(Number(config.enabled),SANDRA,'573233350137','573043332213'))||hasPendingCollections();
   const execute=async()=>{
     scheduled=false;if(closed||running||blocked())return;
     running=true;store.db.prepare('DELETE FROM meta WHERE key=?').run(key);let result,failed=false;
@@ -154,6 +160,39 @@ export function createBotServer(config,store,transport,engine) {
   }
   restoreProgramSupervision(config,store);
   const financialReader=config.company==='fumigacion'?createMariaFinancialReaderRuntime(config,store,{fetcher:transport.fetcher}):null;
+  // A sender cannot exist without the actual Engine consuming the same durable
+  // reply context. Constructor authority/pins never come from an HTTP body.
+  const collectionsContext=engine?.collectionsContext;
+  const collectionsConsumer=()=>config.company==='fumigacion'&&store instanceof Store&&store.company==='fumigacion'&&engine instanceof Engine&&engine.constructor===Engine&&engine.process===Engine.prototype.process&&engine.store===store&&engine.config===config&&engine.collectionsContext===collectionsContext&&isMariaCollectionsContext(collectionsContext,store);
+  let collectionsHost=null,collectionsUnavailable='OWN_COLLECTIONS_CONSUMER_UNAVAILABLE';
+  if(collectionsConsumer()){
+    try{
+      const raw=process.env.BOT_COLLECTIONS_REVIEW_PINS_JSON??'[]',flag=process.env.BOT_COLLECTIONS_ENABLED;
+      if(typeof raw!=='string'||Buffer.byteLength(raw)>65536||flag!==undefined&&!['true','false'].includes(flag))throw Error('COLLECTIONS_CONFIGURATION_REQUIRED');
+      const catalogPins=JSON.parse(raw);
+      collectionsHost=createMariaCollectionsHost(config,store,transport,{authorization:COLLECTIONS_AUTHORITY,catalogPins,collectionsContext,enabled:flag==='true',financialFetch:transport.fetcher});
+    }catch{collectionsUnavailable='OWN_COLLECTIONS_CONFIGURATION_UNAVAILABLE';}
+  }
+  const collectionsUnavailableStatus=()=>({guard:MARIA_COLLECTIONS_HOST_GUARD,state:'NEEDS_REVIEW',dataStatus:'UNKNOWN',reason:collectionsUnavailable,enabled:false,catalogEntries:0,financialReaderConfigured:false,contextConfigured:collectionsConsumer(),automaticRetry:false,schedulerEnabled:false,productionReady:false,customerMessages:0,businessWrites:0});
+  const collectionAssociation=event=>collectionsConsumer()&&event?.fromMe===false&&COLLECTION_SCOPE.lines.includes(event.line)&&Boolean(store.db.prepare("SELECT 1 FROM maria_collection_contexts c JOIN outbox o ON o.id=c.outbox_id WHERE c.phone=? AND c.line IN ('573126944997','573126938721') AND c.attempt_at<=?+999 AND o.state IN ('SENDING','UNCERTAIN','ACCEPTED','DELIVERED','READ') LIMIT 1").get(event.phone,event.at));
+  const validateIncoming=body=>{
+    const ordinary=validateEvent(body,config);if(ordinary||config.enabled||!collectionsConsumer())return ordinary;
+    const candidate=validateEvent(body,{...config,enabled:true});return candidate&&collectionAssociation(candidate)?candidate:null;
+  };
+  const pendingCollections=()=>collectionsConsumer()&&Boolean(store.db.prepare("SELECT 1 FROM events e WHERE e.state='PENDING' AND e.from_me=0 AND e.line IN ('573126944997','573126938721') AND EXISTS(SELECT 1 FROM maria_collection_contexts c JOIN outbox o ON o.id=c.outbox_id WHERE c.phone=e.phone AND c.line IN ('573126944997','573126938721') AND c.attempt_at<=e.at+999 AND o.state IN ('SENDING','UNCERTAIN','ACCEPTED','DELIVERED','READ')) LIMIT 1").get());
+  const consumeCollectionReplies=async()=>{
+    if(!collectionsConsumer())return 0;
+    // Only durable attempted collection associations take this early path.
+    // Engine still verifies the original persisted source and every own gate.
+    // This preserves evidence even when public sending/history/model work is
+    // paused, without passing a payment reply through ordinary understanding.
+    const rows=store.db.prepare("SELECT e.id,e.phone,e.line,e.at,e.body FROM events e WHERE e.state='PENDING' AND e.from_me=0 AND e.line IN ('573126944997','573126938721') AND EXISTS(SELECT 1 FROM maria_collection_contexts c JOIN outbox o ON o.id=c.outbox_id WHERE c.phone=e.phone AND c.line IN ('573126944997','573126938721') AND c.attempt_at<=e.at+999 AND o.state IN ('SENDING','UNCERTAIN','ACCEPTED','DELIVERED','READ')) ORDER BY e.at,e.rowid LIMIT 30").all();
+    let processed=0;for(const row of rows){
+      try{const event=store.open(row.body);if(event?.id!==row.id||event.phone!==row.phone||event.line!==row.line||event.at!==row.at||event.fromMe!==false)throw Error('PERSISTED_COLLECTION_SOURCE_REQUIRED');await engine.process(event);}
+      catch{store.tx(()=>{if(store.db.prepare("UPDATE events SET state='REVIEW' WHERE id=? AND state='PENDING'").run(row.id).changes)store.audit('OWN_COLLECTION_REPLY_SOURCE_REVIEW',row.id,{reason:'OWN_COLLECTIONS_SOURCE_NOT_VERIFIED',businessWritten:false,customerReplyQueued:false,humanHoldReleased:false});});}
+      if(store.db.prepare('SELECT state FROM events WHERE id=?').get(row.id)?.state!=='PENDING')processed++;
+    }return processed;
+  };
   restoreRetentionProofAccess(config,store);
   if(config.company==='fumigacion')restoreRetentionNoteAccess(config,store);
   // All facts come from scoped internal readers. Their presence does not
@@ -169,12 +208,28 @@ export function createBotServer(config,store,transport,engine) {
   persistMariaKnowledge(config,store);
   initializeInactivityFollowup(config,store);
   let draining=false,settingUpAi=false,settingUpFinancialReader=false;
-  const run=async()=>{if(draining||settingUpAi)return {busy:true};draining=true;try{return await drain(store,config,transport,engine);}finally{draining=false;}};
-  const scheduler=createDrainScheduler(config,store,run,{blocked:()=>settingUpAi||draining});
+  const run=async()=>{
+    if(draining||settingUpAi)return {busy:true};draining=true;
+    try{
+      const collectionsProcessed=await consumeCollectionReplies();
+      // A bounded batch must not let its remaining replies reach ordinary
+      // history/model work. Continue on the existing scheduler's next tick.
+      if(pendingCollections()){scheduler.wake();return {processed:collectionsProcessed,collectionsPending:true};}
+      const result=await drain(store,config,transport,engine);return collectionsProcessed?{...result,processed:(result.processed??0)+collectionsProcessed}:result;
+    }finally{draining=false;}
+  };
+  const scheduler=createDrainScheduler(config,store,run,{blocked:()=>settingUpAi||draining,hasPendingCollections:pendingCollections});
   const server=createServer(async(req,res)=>{
     const serverReceivedAt=Date.now();
     const ingress=(event)=>{
-      const result=store.enqueue(event);
+      let result;
+      try{result=store.enqueue(event);}
+      catch(error){
+        const prior=store.db.prepare('SELECT phone,line,at,from_me FROM events WHERE id=?').get(event.id);
+        if(error?.message!=='EVENT_ID_CONFLICT'||!prior||!collectionAssociation({...prior,fromMe:prior.from_me===1}))throw error;
+        store.tx(()=>{store.db.prepare("UPDATE events SET state='REVIEW' WHERE id=? AND state='PENDING'").run(event.id);store.audit('OWN_COLLECTION_REPLY_SOURCE_REVIEW',event.id,{reason:'OWN_COLLECTIONS_SOURCE_ID_CONFLICT',businessWritten:false,customerReplyQueued:false,humanHoldReleased:false});});
+        return {duplicate:true,requiresReview:true};
+      }
       // Enqueue follows owner verification. Keep the actual HTTP receipt time
       // separately so that channel-check latency is included in measurements.
       if(config.company==='fumigacion')store.db.prepare('UPDATE events SET received_at=CASE WHEN received_at IS NULL OR received_at>? THEN ? ELSE received_at END WHERE id=?').run(serverReceivedAt,serverReceivedAt,event.id);
@@ -198,7 +253,8 @@ export function createBotServer(config,store,transport,engine) {
     if(!(schedulingProof?ownSchedulingProofAuthorized(config,req.headers.authorization):retentionProof?retentionProofAuthorized(config,req.headers.authorization):authorized(req.headers.authorization,ingestion?config.webhookHash:config.authHash)))return reply(401,{error:'UNAUTHORIZED'});
     if(req.method!=='POST')return reply(405,{error:'POST_REQUIRED'});
     try {
-      const bodyLimit=req.url==='/financial-reader-setup'?65536:['/financial-reader-status','/financial-reader-snapshots','/financial-reader-revalidate'].includes(req.url)?8192:req.url==='/notify-chief-document'?720000:req.url==='/webhook'&&config.company==='fumigacion'?FUMIGACION_WEBHOOK_BODY_LIMIT:20000;
+      const collectionsOperation=Object.hasOwn(COLLECTIONS_HTTP_OPERATIONS,req.url)?COLLECTIONS_HTTP_OPERATIONS[req.url]:null;
+      const bodyLimit=collectionsOperation?(collectionsOperation==='installReviewedRecord'?262144:8192):req.url==='/financial-reader-setup'?65536:['/financial-reader-status','/financial-reader-snapshots','/financial-reader-revalidate'].includes(req.url)?8192:req.url==='/notify-chief-document'?720000:req.url==='/webhook'&&config.company==='fumigacion'?FUMIGACION_WEBHOOK_BODY_LIMIT:20000;
       // Decode once, after collecting bounded bytes. Decoding each network
       // chunk separately can split one UTF-8 letter into replacement characters.
       const chunks=[];let byteLength=0;
@@ -206,6 +262,13 @@ export function createBotServer(config,store,transport,engine) {
       for await(const chunk of req){const bytes=Buffer.isBuffer(chunk)?chunk:Buffer.from(chunk);chunks.push(bytes);byteLength+=bytes.length;if(byteLength>bodyLimit){journalGap('PAYLOAD_TOO_LARGE');return reply(413,{error:'PAYLOAD_TOO_LARGE'});}}
       const raw=Buffer.concat(chunks,byteLength).toString('utf8');
       let body;try{body=JSON.parse(raw);}catch{journalGap('INVALID_JSON');return reply(400,{error:'INVALID_JSON'});}
+      if(collectionsOperation){
+        if(config.company!=='fumigacion')return reply(403,{error:'OWN_FUMIGACION_COLLECTIONS_REQUIRED'});
+        if(collectionsOperation==='status'&&(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).length))return reply(400,{error:'OWN_COLLECTIONS_STATUS_EMPTY_BODY_REQUIRED'});
+        if(!collectionsHost||!collectionsConsumer())return collectionsOperation==='status'?reply(200,collectionsUnavailableStatus()):reply(409,{error:'OWN_COLLECTIONS_NOT_VERIFIED'});
+        try{return reply(200,collectionsOperation==='status'?collectionsHost.status():await collectionsHost[collectionsOperation](body));}
+        catch{return reply(409,{error:'OWN_COLLECTIONS_NOT_VERIFIED'});}
+      }
       if(req.url==='/financial-reader-setup'){
         if(!financialReader)return reply(403,{error:'OWN_FUMIGACION_FINANCIAL_READ_REQUIRED'});
         if(settingUpFinancialReader||settingUpAi)return reply(409,{error:'OWN_FINANCIAL_READER_SETUP_BUSY'});
@@ -426,7 +489,7 @@ export function createBotServer(config,store,transport,engine) {
           await transport.verifyLineBinding(bound.phone);const result=suspendedObservation(event);
           return reply(202,{accepted:false,observed:true,...result,reason:'USER_AUTHORIZED_SUSPENDED_LINE'});
         }
-        const event=validateEvent(body,config);if(!event)return reply(202,{accepted:false,reason:'UNSUPPORTED_OR_STALE_OR_OUTSIDE_SCOPE'});
+        const event=validateIncoming(body);if(!event)return reply(202,{accepted:false,reason:'UNSUPPORTED_OR_STALE_OR_OUTSIDE_SCOPE'});
         await transport.verifyLine(event.line);const queued=ingress(event);reply(202,{accepted:true,...queued});if(!queued.duplicate)scheduler.wake();return;
       }
       if(req.url==='/recover-chief-event'){
@@ -462,6 +525,7 @@ export function createBotServer(config,store,transport,engine) {
         try{binding=operationalLineAllowed(config,own.phone)?await transport.verifyLine(own.phone):await transport.verifyLineBinding(own.phone);recordIntakeBinding(store,config,journalBody,{authenticated:true,verifiedBinding:binding,receivedAt:serverReceivedAt});}
         catch(error){recordIntakeBinding(store,config,journalBody,{authenticated:true,error,receivedAt:serverReceivedAt});throw error;}
         const parsed=decodeWebhook(journalBody,config);
+        if(!config.enabled&&collectionsConsumer())for(const value of decodeWebhook(journalBody,{...config,enabled:true}).events){const event=validateIncoming(value);if(event&&collectionAssociation(event)&&!parsed.events.some(p=>p.event.id===event.id))parsed.events.push(value);}
         if(!operationalLineAllowed(config,own.phone)){
           let observed=0;
           const unresolvedPrivateIdentity=observePrivateIdentity(store,{...body,data:privateRows},config,parsed);
@@ -482,7 +546,7 @@ export function createBotServer(config,store,transport,engine) {
         parsed.events.push(...decodePrivateNativeCachePairs(store,config,journalBody));
         const unresolvedPrivateIdentity=observePrivateIdentity(store,{...body,data:privateRows},config,parsed);
         const groupOperations=await ingestTesaWebhook(store,config,transport,body);
-        for(const value of parsed.events){const e=validateEvent(value,config);if(e){const r=ingress(e);accepted++;if(r.duplicate)duplicates++;}}
+        for(const value of parsed.events){const e=validateIncoming(value);if(e){const r=ingress(e);accepted++;if(r.duplicate)duplicates++;}}
         for(const d of parsed.deliveries){deliveryUpdates+=store.delivery(d.mid,own.phone,d.state);if(config.company==='fumigacion')recordDeliveryTiming(store,d.mid,own.phone,d.state);}
         reply(202,{accepted,duplicates,deliveryUpdates,groupOperations,unresolvedPrivateIdentity,intakeJournal});if(accepted>duplicates||groupOperations.caseAnswers)scheduler.wake();return;
       }
@@ -533,6 +597,6 @@ export function createBotServer(config,store,transport,engine) {
 
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href) {
   const config=configFromEnv();const store=new Store(config.database,config.company,config.encryptionKey);
-  const transport=new Transport(config),engine=new Engine(store,config);
+  const transport=new Transport(config),collectionsContext=config.company==='fumigacion'?createMariaCollectionsContext({store,enabled:true}):null,engine=collectionsContext?new Engine(store,config,{collectionsContext}):new Engine(store,config);
   createBotServer(config,store,transport,engine).listen(config.port,'0.0.0.0',()=>console.log(JSON.stringify({company:config.name,bot:config.bot,enabled:config.enabled,port:config.port})));
 }
