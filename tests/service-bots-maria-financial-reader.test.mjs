@@ -121,6 +121,13 @@ test('revalidation accepts UNCHANGED and legitimate same=true REVIEW conflicts, 
  f.rowsPatch=r=>r.sourceConflicts.push('CASH_DECLARATION_AND_RECORDED_PAID_DIFFER');const review=await f.runtime.revalidate(f.revalidation());assert.equal(review.status,'REVIEW');assert.equal(review.same,true);assert.equal(review.revalidationSucceeded,false);assert.equal(review.validUntil,null);
  f.rowsPatch=r=>r.financialFingerprint=sha('changed');const changed=await f.runtime.revalidate(f.revalidation());assert.equal(changed.same,false);assert.equal(changed.status,'REVIEW');
 });
+test('a missing recorded visit type remains null and never becomes service execution or debt proof',async t=>{
+ const f=fixture(t);f.rowsPatch=row=>{row.order.visitType=null;};
+ await f.setup();const result=await f.runtime.snapshots(f.orders(5));
+ assert.ok(result.snapshots.every(row=>row.order.visitType===null&&row.serviceExecutionVerified===false&&row.customerDebtVerified===false&&row.collectionAuthorizedByThisRead===false));
+ const checked=await f.runtime.revalidate(f.revalidation());assert.equal(checked.sendPermitted,false);
+ f.rowsPatch=row=>{row.order.visitType={label:'SERVICIO'};};await assert.rejects(f.runtime.snapshots(f.orders()));
+});
 test('revalidation cannot falsely assert a matching fingerprint, clean conflicts or permission to send',async t=>{
  const f=fixture(t);await f.setup();for(const patch of [d=>d.sendPermitted=true,d=>d.results[0].same=false,d=>d.results[0].requiresReview=true,d=>d.revalidationSucceeded=false,d=>d.status='REVIEW']){f.patch=patch;await assert.rejects(f.runtime.revalidate(f.revalidation()));}
 });
